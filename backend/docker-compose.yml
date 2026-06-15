@@ -1,0 +1,28 @@
+# ============================================================================
+# OPTIONAL — NOT REQUIRED FOR LOCAL DEV.
+# Local development uses a PostgreSQL installed DIRECTLY on the machine (see
+# backend/README.md). This file is kept only as an alternative for anyone who
+# prefers a containerised Postgres. If you use it, note it publishes 5432 — set
+# DATABASE_URL's port to 5432 to match. Start with: docker compose up -d
+# ============================================================================
+services:
+  db:
+    image: postgres:16
+    container_name: capimax_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: capimax
+      POSTGRES_PASSWORD: capimax
+      POSTGRES_DB: capimax
+    ports:
+      - "5432:5432"
+    volumes:
+      - capimax_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U capimax -d capimax"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  capimax_pgdata:

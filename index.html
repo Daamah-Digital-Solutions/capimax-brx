@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <title>Capimax BRX - Blockchain Real Estate Exchange</title>
+    <meta name="description" content="Invest in tokenized real estate assets. Secure, transparent, and accessible fractional ownership starting from $100.">
+    <meta name="author" content="Capimax BRX" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1a365d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Capimax" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Capimax BRX" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-TileColor" content="#1a365d" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    
+    <!-- PWA Icons -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/x-icon" href="https://storage.googleapis.com/gpt-engineer-file-uploads/xQgOVy6JGXYfdEXVyUwpUwHGsaV2/uploads/1768248482105-rt.jpg">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    
+    <!-- Open Graph -->
+    
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/xQgOVy6JGXYfdEXVyUwpUwHGsaV2/social-images/social-1768248538627-exchange.jpg">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@CapimaxBRX" />
+    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/xQgOVy6JGXYfdEXVyUwpUwHGsaV2/social-images/social-1768248538627-exchange.jpg">
+    
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <meta property="og:title" content="Capimax BRX - Blockchain Real Estate Exchange">
+  <meta name="twitter:title" content="Capimax BRX - Blockchain Real Estate Exchange">
+  <meta property="og:description" content="Invest in tokenized real estate assets. Secure, transparent, and accessible fractional ownership starting from $100.">
+  <meta name="twitter:description" content="Invest in tokenized real estate assets. Secure, transparent, and accessible fractional ownership starting from $100.">
+</head>
+
+  <body>
+    <script>
+      (function () {
+        var patterns = ["chrome-extension://","moz-extension://","safari-extension://","metamask","inpage.js","contentscript","failed to connect to metamask","ethereum","web3"];
+        function isExt(input, filename) {
+          try {
+            var s = (filename || "") + "\n";
+            if (input == null) s += "";
+            else if (typeof input === "string") s += input;
+            else if (input instanceof Error) s += (input.message || "") + "\n" + (input.stack || "");
+            else { try { s += JSON.stringify(input); } catch (e) { s += String(input); } }
+            s = s.toLowerCase();
+            for (var i = 0; i < patterns.length; i++) if (s.indexOf(patterns[i]) !== -1) return true;
+          } catch (e) {}
+          return false;
+        }
+        window.addEventListener("unhandledrejection", function (event) {
+          if (isExt(event.reason)) { event.preventDefault(); event.stopImmediatePropagation(); return false; }
+        }, true);
+        window.addEventListener("error", function (event) {
+          if (isExt(event.error || event.message, event.filename)) { event.preventDefault(); event.stopImmediatePropagation(); return false; }
+        }, true);
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

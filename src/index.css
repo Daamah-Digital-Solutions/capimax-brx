@@ -1,0 +1,285 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Capimax BRX Design System - Real Estate Tokenization Platform */
+
+@layer base {
+  /* Light Mode (Default) */
+  :root {
+    /* Core Light Palette */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    /* Card & Surface */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --card-elevated: 210 40% 98%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Gold Accent - Primary Brand */
+    --primary: 43 74% 49%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 43 74% 55%;
+
+    /* Silver Secondary */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    /* Muted Tones */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent - Lighter Gold */
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    /* Status Colors */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 6%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Borders & Inputs */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 43 74% 49%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 43 74% 49%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 43 74% 49%;
+
+    /* Custom Gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(43 74% 49%), hsl(38 80% 55%));
+    --gradient-navy: linear-gradient(180deg, hsl(210 40% 98%), hsl(210 40% 96%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(210 40% 98%));
+    --gradient-hero: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 50%, hsl(0 0% 100%) 100%);
+    
+    /* Shadows */
+    --shadow-gold: 0 4px 20px -4px hsla(43, 74%, 49%, 0.25);
+    --shadow-card: 0 4px 24px -8px hsla(0, 0%, 0%, 0.1);
+    --shadow-elevated: 0 8px 32px -8px hsla(0, 0%, 0%, 0.15);
+
+    /* Glass Effect */
+    --glass-bg: hsla(0, 0%, 100%, 0.8);
+    --glass-border: hsla(222, 47%, 11%, 0.08);
+  }
+
+  /* Dark Mode */
+  .dark {
+    /* Core Navy Palette */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    /* Card & Surface */
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --card-elevated: 222 47% 10%;
+
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Gold Accent - Primary Brand */
+    --primary: 43 74% 49%;
+    --primary-foreground: 222 47% 6%;
+    --primary-glow: 43 74% 55%;
+
+    /* Silver Secondary */
+    --secondary: 220 14% 20%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Muted Tones */
+    --muted: 222 30% 14%;
+    --muted-foreground: 215 20% 55%;
+
+    /* Accent - Lighter Gold */
+    --accent: 43 60% 45%;
+    --accent-foreground: 222 47% 6%;
+
+    /* Status Colors */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 210 40% 98%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 6%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+
+    /* Borders & Inputs */
+    --border: 222 30% 18%;
+    --input: 222 30% 15%;
+    --ring: 43 74% 49%;
+
+    /* Sidebar */
+    --sidebar-background: 222 47% 5%;
+    --sidebar-foreground: 210 40% 85%;
+    --sidebar-primary: 43 74% 49%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 12%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 30% 15%;
+    --sidebar-ring: 43 74% 49%;
+
+    /* Custom Gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(43 74% 49%), hsl(38 80% 55%));
+    --gradient-navy: linear-gradient(180deg, hsl(222 47% 8%), hsl(222 47% 4%));
+    --gradient-card: linear-gradient(145deg, hsl(222 47% 10%), hsl(222 47% 7%));
+    --gradient-hero: linear-gradient(135deg, hsl(222 47% 6%) 0%, hsl(222 47% 10%) 50%, hsl(222 47% 6%) 100%);
+    
+    /* Shadows */
+    --shadow-gold: 0 4px 20px -4px hsla(43, 74%, 49%, 0.25);
+    --shadow-card: 0 4px 24px -8px hsla(0, 0%, 0%, 0.5);
+    --shadow-elevated: 0 8px 32px -8px hsla(0, 0%, 0%, 0.6);
+
+    /* Glass Effect */
+    --glass-bg: hsla(222, 47%, 10%, 0.7);
+    --glass-border: hsla(210, 40%, 98%, 0.08);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+}
+
+@layer utilities {
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(43 74% 49%), hsl(38 80% 60%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-gold {
+    background: linear-gradient(135deg, hsl(43 74% 49%), hsl(38 80% 55%));
+  }
+
+  .bg-gradient-navy {
+    background: linear-gradient(180deg, hsl(222 47% 8%), hsl(222 47% 4%));
+  }
+
+  .bg-glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .dark .bg-glass {
+    background: hsla(222, 47%, 10%, 0.7);
+    border: 1px solid hsla(210, 40%, 98%, 0.08);
+  }
+
+  .shadow-gold {
+    box-shadow: 0 4px 20px -4px hsla(43, 74%, 49%, 0.25);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .border-gold {
+    border-color: hsl(43 74% 49%);
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 40px -10px hsla(43, 74%, 49%, 0.4);
+  }
+
+  /* Animations */
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 4s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background-size: 200% 100%;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* RTL Support */
+  [dir="rtl"] {
+    text-align: right;
+  }
+
+  /* Scrollbar Styling - Light Mode */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(210 40% 96%);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(215 16% 75%);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(43 74% 49%);
+  }
+
+  /* Scrollbar Styling - Dark Mode */
+  .dark ::-webkit-scrollbar-track {
+    background: hsl(222 47% 8%);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(222 30% 20%);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(43 74% 49%);
+  }
+}

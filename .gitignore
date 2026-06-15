@@ -1,0 +1,84 @@
+# =============================================================================
+# Capimax BRX — repository-wide ignore rules (frontend + backend).
+# Nested .gitignore files in backend/ and backend/blockchain/ also apply.
+# SECURITY: every secret-bearing file is excluded here. Never commit a real key.
+# =============================================================================
+
+# --- Secrets / environment (NEVER COMMIT) -----------------------------------
+# Real values live only on the machine that runs the app.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p8
+*.p12
+*.keystore
+id_rsa*
+secrets.*
+
+# --- Node / Vite (frontend) --------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Python / Django (backend) ----------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Django runtime / generated
+*.sqlite3
+db.sqlite3
+/backend/staticfiles/
+staticfiles/
+# Uploaded media (real KYC/KYB documents, certificates — PII; never commit).
+/backend/media/
+media/
+
+# Database dumps / backups
+*.sql.gz
+*.dump
+*.bak
+
+# --- Solidity / Hardhat (backend/blockchain) --------------------------------
+backend/blockchain/node_modules/
+backend/blockchain/artifacts/
+backend/blockchain/cache/
+backend/blockchain/coverage/
+backend/blockchain/coverage.json
+backend/blockchain/typechain-types/
+backend/blockchain/.openzeppelin/
+
+# --- Local tooling / editor config ------------------------------------------
+# Local Claude Code config (machine-specific paths + local permission grants).
+.claude/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db

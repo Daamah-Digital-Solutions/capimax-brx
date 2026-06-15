@@ -1,0 +1,35 @@
+# Capimax BRX backend — Phase 1 (FOUNDATION) dependencies.
+# Latest stable Django LTS (5.2). Pinned to compatible minor ranges.
+
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+djangorestframework-simplejwt>=5.4
+django-cors-headers>=4.7
+django-environ>=0.12
+
+# OAuth scaffolding (Google + Apple). SPEC §5.2 / §6.
+django-allauth>=65.3
+requests>=2.32          # allauth Google provider token exchange
+cryptography>=44.0      # allauth Apple provider client-secret signing
+
+# Read-API filtering for the property domain (Phase 2). SPEC §3.3 / §2.12.
+django-filter>=24,<26
+
+# Postgres driver (psycopg 3). SPEC §1.
+psycopg[binary]>=3.2
+
+# Blockchain — custodial wallets + on-chain tokenization (Phase 3 Wave 1).
+# TESTNET ONLY (BSC, chain id 97). web3.py for chain interaction, eth-account for
+# custodial keypair generation/signing. cryptography (already required above for
+# allauth) also provides Fernet for at-rest private-key encryption. SPEC §3.2.
+# Verified to install with prebuilt wheels on Python 3.14.
+web3>=7.0,<8
+eth-account>=0.13,<0.14
+
+# Certificates — PDF + QR (Phase 3 Wave 3). ReportLab (pure-Python PDF, no system
+# libs — chosen over WeasyPrint which needs cairo/pango), qrcode + Pillow for the
+# real scannable QR. SPEC §4.1 / §7C.5. Prebuilt wheels on Python 3.14.
+reportlab>=4.2
+qrcode>=8.0
+pillow>=11.0
+stripe==15.2.1

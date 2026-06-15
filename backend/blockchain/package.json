@@ -1,0 +1,19 @@
+{
+  "name": "capimax-brx-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capimax BRX property tokenization smart contracts. UNAUDITED — BSC Testnet only.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network bscTestnet"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.17"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.1.0"
+  }
+}
