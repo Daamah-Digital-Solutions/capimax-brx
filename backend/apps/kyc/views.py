@@ -121,11 +121,16 @@ class SumsubWebhookView(APIView):
 
         info = sumsub.parse_review(payload)
 
-        # Phase 6 Wave 1: business-level (KYB) applicants belong to the LP domain.
-        # Try LP routing FIRST; if it claims the event (an LP matched), we're done.
-        # A lazy import keeps apps.kyc decoupled from apps.lp at module load.
+        # Business-level (KYB) applicants belong to a verification domain keyed by the
+        # Sumsub level name: OWNER (Phase 7 Wave A) and LP (Phase 6 Wave 1). Try each
+        # in turn; the first that claims the event (a matching profile + its level)
+        # fully handles it. Each resolver only matches its own table / level name, so
+        # order is safe. Lazy imports keep apps.kyc decoupled at module load.
         from apps.lp.services import try_handle_kyb_webhook
+        from apps.owner.services import try_handle_owner_kyb_webhook
 
+        if try_handle_owner_kyb_webhook(info):
+            return Response({"ok": True, "matched": True, "domain": "owner"})
         if try_handle_kyb_webhook(info):
             return Response({"ok": True, "matched": True, "domain": "lp"})
 

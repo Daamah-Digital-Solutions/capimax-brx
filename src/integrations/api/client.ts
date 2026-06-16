@@ -577,4 +577,101 @@ export const lpApi = {
     rawRequest(`/lp/holdings/${holdingId}/`, { method: "PATCH", auth: true, body: payload }),
 };
 
+// --------------------------------------------------------------------------- //
+// Property Owner API (Phase 7 Wave A) — authenticated. OWNER_SURFACE.md.
+// Owner ENTITY verification (business KYB) only — mirrors lpApi's KYB subset. KYB
+// approval is automatic via the signed Sumsub webhook (owner business level); the
+// WebSDK access-token degrades to 503 (then the form/dev path) when keys are
+// deferred. Property submission / earnings are later waves and NOT touched here.
+// --------------------------------------------------------------------------- //
+export interface OwnerKybAccessToken {
+  configured: boolean;
+  token?: string;
+  code?: string;
+}
+
+export const ownerApi = {
+  /** The caller's owner profile, or null when none exists yet (404). */
+  profile: async (): Promise<any | null> => {
+    try {
+      return await rawRequest("/owner/profile/", { auth: true });
+    } catch (err) {
+      if ((err as ApiError).status === 404) return null;
+      throw err;
+    }
+  },
+  /** Apply as a property owner (idempotent server-side). */
+  apply: (payload: Record<string, unknown>) =>
+    rawRequest("/owner/profile/", { method: "POST", auth: true, body: payload }),
+  /** Persist business info → owner KYB under_review. */
+  submitKYB: (payload: Record<string, unknown>) =>
+    rawRequest("/owner/kyb/submit/", { method: "POST", auth: true, body: payload }),
+  /**
+   * Sumsub WebSDK access token for owner KYB. When the provider is unconfigured
+   * (keys deferred), the backend returns 503 + a machine code — we normalise that
+   * into `{ configured: false, code }` so the UI keeps the form/dev path, never throws.
+   */
+  kybAccessToken: async (): Promise<OwnerKybAccessToken> => {
+    try {
+      return (await rawRequest("/owner/kyb/access-token/", {
+        method: "POST",
+        auth: true,
+      })) as OwnerKybAccessToken;
+    } catch (err) {
+      const data = ((err as ApiError).data ?? {}) as { configured?: boolean; code?: string };
+      return { configured: false, code: data.code || "kyb_provider_unconfigured" };
+    }
+  },
+
+  // --- Property submission intake (Phase 7 Wave B) — gated to approved owners. --- //
+  /** The caller's property submissions (drafts + submitted). */
+  submissions: () => rawRequest("/owner/submissions/", { auth: true }) as Promise<any[]>,
+  /** One of the caller's submissions (owner-scoped; 404 otherwise). */
+  submission: (id: string) =>
+    rawRequest(`/owner/submissions/${id}/`, { auth: true }),
+  /** Create a new DRAFT submission. */
+  createSubmission: (payload: Record<string, unknown>) =>
+    rawRequest("/owner/submissions/", { method: "POST", auth: true, body: payload }),
+  /** Edit a draft submission's content (draft only, server-enforced). */
+  updateSubmission: (id: string, payload: Record<string, unknown>) =>
+    rawRequest(`/owner/submissions/${id}/`, { method: "PATCH", auth: true, body: payload }),
+  /** Transition a draft → submitted (server validates required documents). */
+  submitSubmission: (id: string) =>
+    rawRequest(`/owner/submissions/${id}/submit/`, { method: "POST", auth: true }),
+  /** A submission's documents. */
+  submissionDocuments: (id: string) =>
+    rawRequest(`/owner/submissions/${id}/documents/`, { auth: true }) as Promise<any[]>,
+  /** Upload a document to a draft submission (multipart). */
+  uploadSubmissionDocument: (id: string, file: File, documentType: string, documentName: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("document_type", documentType);
+    form.append("document_name", documentName);
+    return rawUpload(`/owner/submissions/${id}/documents/`, form);
+  },
+  /** Delete a document from a draft submission. */
+  deleteSubmissionDocument: (id: string, docId: string) =>
+    rawRequest(`/owner/submissions/${id}/documents/${docId}/`, { method: "DELETE", auth: true }),
+
+  // --- Owner earnings / ledger (Phase 7 Wave D) — primary-sale proceeds. --- //
+  /** The caller's primary-sale earnings per owned property + totals. */
+  earnings: () =>
+    rawRequest("/owner/earnings/", { auth: true }) as Promise<{
+      total_net_proceeds: number;
+      total_units_sold: number;
+      total_investors: number;
+      properties: Array<{
+        property_id: string;
+        property_name: string;
+        is_published: boolean;
+        token_supply: number;
+        units_sold: number;
+        investors: number;
+        gross_proceeds: number;
+        fees: number;
+        net_proceeds: number;
+      }>;
+    }>,
+};
+
 export { API_BASE_URL };

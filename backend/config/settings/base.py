@@ -274,6 +274,10 @@ SUMSUB_LEVEL_NAME = env("SUMSUB_LEVEL_NAME", default="basic-kyc-level")
 # Business-verification (KYB) level for Liquidity Providers (Phase 6 Wave 1). The
 # shared webhook distinguishes KYB applicants from investor KYC by this level name.
 SUMSUB_KYB_LEVEL_NAME = env("SUMSUB_KYB_LEVEL_NAME", default="basic-kyb-level")
+# Owner business-verification (KYB) level for Property Owners (Phase 7 Wave A). A
+# SEPARATE level from the LP's so the shared webhook routes owner applicants to the
+# owner domain (apps/owner) vs LP (apps/lp) vs investor KYC by this level name.
+SUMSUB_OWNER_KYB_LEVEL_NAME = env("SUMSUB_OWNER_KYB_LEVEL_NAME", default="owner-kyb-level")
 SUMSUB_BASE_URL = env("SUMSUB_BASE_URL", default="https://api.sumsub.com")
 # DEV-ONLY: when True AND DEBUG, POST /api/kyc/submit/ auto-approves immediately so
 # the gate can be exercised before Sumsub keys exist. Default OFF; production is

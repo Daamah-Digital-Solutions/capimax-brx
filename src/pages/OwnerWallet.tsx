@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
 import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
-import { WithdrawalDialog } from "@/components/wallet/WithdrawalDialog";
+import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
 import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
 import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
+import { walletsApi, ownerApi } from "@/integrations/api/client";
 import {
   Wallet,
   Building,
@@ -17,20 +18,41 @@ import {
   ArrowDownToLine,
   TrendingUp,
   DollarSign,
-  Clock,
+  Package,
 } from "lucide-react";
-
-// Mock data for owner wallet stats
-const ownerWalletStats = {
-  availableBalance: 187500,
-  pendingWithdrawals: 25000,
-  totalEarnings: 425000,
-  lastDistribution: "2024-12-15",
-};
 
 export default function OwnerWallet() {
   const { language } = useLanguage();
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
+
+  // Phase 7 Wave D: real owner balance + primary-sale earnings from Django.
+  const [availableBalance, setAvailableBalance] = useState(0);
+  const [totalEarnings, setTotalEarnings] = useState(0);
+  const [totalUnitsSold, setTotalUnitsSold] = useState(0);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [bal, earn, withdrawals] = await Promise.all([
+        walletsApi.balance().catch(() => ({ current_balance: 0, currency: "USD" })),
+        ownerApi.earnings().catch(() => ({ total_net_proceeds: 0, total_units_sold: 0 } as any)),
+        walletsApi.withdrawals().catch(() => [] as any[]),
+      ]);
+      setAvailableBalance(bal.current_balance || 0);
+      setTotalEarnings(earn.total_net_proceeds || 0);
+      setTotalUnitsSold(earn.total_units_sold || 0);
+      const pending = (withdrawals || [])
+        .filter((w: any) => w.status === "pending" || w.status === "processing")
+        .reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
+      setPendingWithdrawals(pending);
+    } catch {
+      /* keep prior values */
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   return (
     <MainLayout>
@@ -76,7 +98,7 @@ export default function OwnerWallet() {
                   </Badge>
                 </div>
                 <div className="text-2xl font-bold text-gradient-gold">
-                  ${ownerWalletStats.availableBalance.toLocaleString()}
+                  ${availableBalance.toLocaleString()}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
                   {language === "ar" ? "الرصيد المتاح للسحب" : "Available for withdrawal"}
@@ -87,10 +109,10 @@ export default function OwnerWallet() {
             <Card className="bg-card border-border">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <Clock className="w-5 h-5 text-amber-500" />
+                  <ArrowDownToLine className="w-5 h-5 text-amber-500" />
                 </div>
                 <div className="text-2xl font-bold text-foreground">
-                  ${ownerWalletStats.pendingWithdrawals.toLocaleString()}
+                  ${pendingWithdrawals.toLocaleString()}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
                   {language === "ar" ? "سحوبات معلقة" : "Pending Withdrawals"}
@@ -104,24 +126,26 @@ export default function OwnerWallet() {
                   <TrendingUp className="w-5 h-5 text-success" />
                 </div>
                 <div className="text-2xl font-bold text-success">
-                  ${ownerWalletStats.totalEarnings.toLocaleString()}
+                  ${totalEarnings.toLocaleString()}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {language === "ar" ? "إجمالي الأرباح" : "Total Earnings"}
+                  {language === "ar" ? "إجمالي أرباح المبيعات الأولية" : "Total Primary-Sale Earnings"}
                 </p>
               </CardContent>
             </Card>
 
+            {/* Real owner metric (units sold). NOTE: investor rental-yield
+                "distributions" are a SEPARATE, later domain — not shown as owner earnings. */}
             <Card className="bg-card border-border">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <DollarSign className="w-5 h-5 text-info" />
+                  <Package className="w-5 h-5 text-info" />
                 </div>
-                <div className="text-lg font-bold text-foreground">
-                  {ownerWalletStats.lastDistribution}
+                <div className="text-2xl font-bold text-foreground">
+                  {totalUnitsSold.toLocaleString()}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {language === "ar" ? "آخر توزيع" : "Last Distribution"}
+                  {language === "ar" ? "إجمالي الوحدات المباعة" : "Total Units Sold"}
                 </p>
               </CardContent>
             </Card>
@@ -180,7 +204,7 @@ export default function OwnerWallet() {
           {/* Visa Cards */}
           <div className="mt-6">
             <VisaCardsSection
-              walletBalance={ownerWalletStats.availableBalance}
+              walletBalance={availableBalance}
               roleLabel={{ en: "Property Owner", ar: "مالك عقار" }}
             />
           </div>
@@ -209,10 +233,11 @@ export default function OwnerWallet() {
         </div>
       </div>
 
-      <WithdrawalDialog 
-        open={withdrawalOpen} 
+      <OwnerWithdrawDialog
+        open={withdrawalOpen}
         onOpenChange={setWithdrawalOpen}
-        availableBalance={ownerWalletStats.availableBalance}
+        availableBalance={availableBalance}
+        onSuccess={refresh}
       />
     </MainLayout>
   );

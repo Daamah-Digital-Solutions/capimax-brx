@@ -174,6 +174,60 @@ def create_investment(*, user, prop: Property, token_amount: int, payment_method
 
 
 # --------------------------------------------------------------------------- #
+# Owner earnings — Phase 7 Wave D.
+# On a COMPLETED primary token sale, credit the property OWNER's internal balance
+# (UserBalance) with the NET proceeds = gross − (platform + management fees), reusing
+# the same balance/ledger stack investors & LPs use. Runs inside the mint atomic block
+# so the credit commits with the mint. Idempotent (one credit per investment) and safe
+# when the property has no linked owner (admin-seeded properties).
+# --------------------------------------------------------------------------- #
+OWNER_PRIMARY_SALE_SOURCE = "primary_sale"
+
+
+def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
+    """
+    Credit the property owner's net primary-sale proceeds, exactly once.
+
+    NET = amount_invested − (Property.fee_platform% + Property.fee_management%) — fees
+    are the per-property, admin-set rates (apps/properties/models.py:185-187), computed
+    server-side (never hardcoded). Returns the net credited, or None when skipped
+    (no linked owner / already credited / non-positive net).
+    """
+    from apps.wallets.models import BalanceTransaction
+    from apps.wallets.services import credit_user_balance
+
+    # LOCKED #5: admin-seeded property with no owner → credit no one (skip safely).
+    # (No platform-account routing this wave — flagged in DECISIONS.md.)
+    if not prop.submitted_by_id:
+        return None
+
+    # Keyed idempotency guard (mirrors the mint's per-investment idempotency): a given
+    # investment can only ever write ONE primary_sale credit, even on webhook replay.
+    reference = str(inv.id)
+    if BalanceTransaction.objects.filter(
+        source=OWNER_PRIMARY_SALE_SOURCE, reference=reference
+    ).exists():
+        return None
+
+    gross = Decimal(inv.amount_invested)
+    fee_percent = (prop.fee_platform or Decimal("0")) + (prop.fee_management or Decimal("0"))
+    fees = (gross * fee_percent / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    net = (gross - fees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if net <= 0:
+        return None
+
+    credit_user_balance(
+        prop.submitted_by, net,
+        source=OWNER_PRIMARY_SALE_SOURCE,
+        reference=reference,
+        memo=f"Primary sale: {inv.token_amount} {inv.token_symbol} of {prop.slug}",
+    )
+    return net
+
+
+# --------------------------------------------------------------------------- #
 # Part B — mint-tokens (REAL on-chain)
 # --------------------------------------------------------------------------- #
 def _deployed_on_this_chain(prop: Property):
@@ -270,9 +324,15 @@ def mint_investment(investment: Investment) -> dict:
         inv.wallet = wallet
         inv.save(update_fields=["tokens_minted", "minted_at", "wallet", "updated_at"])
 
+        # Phase 7 Wave D: a COMPLETED primary sale settled on-chain → credit the
+        # property owner's net proceeds (gross − fees) to their UserBalance, in the
+        # SAME atomic block so the credit commits with the mint. Idempotent + null-safe.
+        owner_net = _credit_owner_for_primary_sale(inv, prop)
+
     return {
         "minted": True,
         "tx_hash": result["tx_hash"],
         "block_number": result.get("block_number"),
         "ownership_token_id": str(token.id),
+        "owner_credited": None if owner_net is None else str(owner_net),
     }

@@ -28,6 +28,8 @@ urlpatterns = [
     path("api/lp/", include("apps.lp.urls")),
     # Investor peer secondary market (Phase 6 Wave 3): one-shot listings + on-chain settle. SPEC §2.8/§3.9.
     path("api/secondary-market/", include("apps.secondary_market.urls")),
+    # Property Owner onboarding (Phase 7 Wave A): owner profile + entity KYB (Sumsub). OWNER_SURFACE.md.
+    path("api/owner/", include("apps.owner.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

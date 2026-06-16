@@ -20,6 +20,7 @@ Modeling notes:
 """
 import uuid
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -189,6 +190,13 @@ class Property(models.Model):
     # catalogue management
     is_published = models.BooleanField(default=True, db_index=True)  # admin unpublish
     is_featured = models.BooleanField(default=False, db_index=True)  # Index featured
+    # Owner→Property link (Phase 7 Wave C). Set when this Property was materialized from
+    # an owner's reviewed PropertySubmission; NULL for the existing admin-seeded catalog
+    # (so seeded properties are unaffected). Wave D credits this owner on primary sales.
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="owned_properties",
+    )
     funded_date = models.DateField(
         null=True, blank=True
     )  # set when a deal closes (FundedProperties)

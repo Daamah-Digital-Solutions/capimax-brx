@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { 
+import { useState, useEffect } from "react";
+import {
   BarChart3,
   Download,
   Filter,
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ownerApi } from "@/integrations/api/client";
 import {
   Select,
   SelectContent,
@@ -26,30 +27,52 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const assetPerformance = [
-  { name: "Marina Bay Tower", nameAr: "برج مارينا باي", value: 2500000, occupancy: 95, yield: 9.5, status: "active" },
-  { name: "Palm Residences", nameAr: "مساكن النخلة", value: 5000000, progress: 65, yield: 0, status: "construction" },
-  { name: "Industrial Complex", nameAr: "المجمع الصناعي", value: 3200000, occupancy: 88, yield: 11.2, status: "active" },
-];
-
-const recentDistributions = [
-  { property: "Marina Bay Tower", propertyAr: "برج مارينا باي", amount: 23750, date: "2024-12-15", investors: 156 },
-  { property: "Industrial Complex", propertyAr: "المجمع الصناعي", amount: 35840, date: "2024-12-01", investors: 89 },
-];
-
-const ownerMetrics = {
-  totalAssetValue: 10700000,
-  totalInvestors: 312,
-  avgOccupancy: 91.5,
-  totalDistributed: 487500,
-  activeProperties: 2,
-  underConstruction: 1,
-};
+// Phase 7 Wave D: OwnerReports now renders REAL owner primary-sale earnings. Investor
+// rental-yield "distributions" are a SEPARATE, later domain — the Distributions tab
+// shows a pending-domain placeholder, never fabricated distribution amounts.
+interface EarningsProperty {
+  property_id: string;
+  property_name: string;
+  is_published: boolean;
+  token_supply: number;
+  units_sold: number;
+  investors: number;
+  gross_proceeds: number;
+  fees: number;
+  net_proceeds: number;
+}
 
 export default function OwnerReports() {
   const { t, language } = useLanguage();
+  const isAr = language === "ar";
   const [period, setPeriod] = useState("year");
   const [property, setProperty] = useState("all");
+  const [earnings, setEarnings] = useState({
+    total_net_proceeds: 0,
+    total_units_sold: 0,
+    total_investors: 0,
+    properties: [] as EarningsProperty[],
+  });
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const e = await ownerApi.earnings();
+        if (active) setEarnings({
+          total_net_proceeds: e.total_net_proceeds || 0,
+          total_units_sold: e.total_units_sold || 0,
+          total_investors: e.total_investors || 0,
+          properties: (e.properties as EarningsProperty[]) || [],
+        });
+      } catch {
+        /* keep zeros */
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const publishedCount = earnings.properties.filter((p) => p.is_published).length;
 
   return (
     <MainLayout>
@@ -86,47 +109,46 @@ export default function OwnerReports() {
             <div className="col-span-2 p-6 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl border border-primary/30 animate-fade-in">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">
-                  {language === "ar" ? "إجمالي قيمة الأصول" : "Total Asset Value"}
+                  {isAr ? "رأس المال المُجمَّع" : "Capital Raised"}
                 </span>
-                <Badge variant="success" className="gap-1">
-                  <ArrowUpRight className="w-3 h-3" />
-                  +8.5%
-                </Badge>
               </div>
               <div className="text-3xl font-bold text-gradient-gold">
-                ${(ownerMetrics.totalAssetValue / 1000000).toFixed(1)}M
+                ${earnings.total_net_proceeds.toLocaleString()}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isAr ? "صافي عائدات البيع الأولي" : "Net primary-sale proceeds"}
+              </p>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.05s" }}>
               <div className="text-sm text-muted-foreground mb-1">
-                {language === "ar" ? "المستثمرون" : "Investors"}
+                {isAr ? "المستثمرون" : "Investors"}
               </div>
-              <div className="text-2xl font-bold text-foreground">{ownerMetrics.totalInvestors}</div>
+              <div className="text-2xl font-bold text-foreground">{earnings.total_investors}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <div className="text-sm text-muted-foreground mb-1">
-                {language === "ar" ? "متوسط الإشغال" : "Avg. Occupancy"}
+                {isAr ? "الوحدات المباعة" : "Units Sold"}
               </div>
-              <div className="text-2xl font-bold text-foreground">{ownerMetrics.avgOccupancy}%</div>
+              <div className="text-2xl font-bold text-foreground">{earnings.total_units_sold.toLocaleString()}</div>
             </div>
 
+            {/* Investor rental-yield distributions are a SEPARATE, later domain — shown
+                as 0 here (no engine yet), never a fabricated figure. */}
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-muted-foreground mb-1">
-                {language === "ar" ? "التوزيعات" : "Distributed"}
+                {isAr ? "التوزيعات" : "Distributed"}
               </div>
-              <div className="text-2xl font-bold text-success">
-                ${(ownerMetrics.totalDistributed / 1000).toFixed(0)}K
-              </div>
+              <div className="text-2xl font-bold text-muted-foreground">$0</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.2s" }}>
               <div className="text-sm text-muted-foreground mb-1">
-                {language === "ar" ? "العقارات النشطة" : "Active Properties"}
+                {isAr ? "العقارات المنشورة" : "Published Properties"}
               </div>
               <div className="text-2xl font-bold text-foreground">
-                {ownerMetrics.activeProperties} / {ownerMetrics.activeProperties + ownerMetrics.underConstruction}
+                {publishedCount} / {earnings.properties.length}
               </div>
             </div>
           </div>
@@ -161,112 +183,76 @@ export default function OwnerReports() {
               </div>
             </div>
 
-            {/* Performance Tab */}
+            {/* Performance Tab — real per-property primary-sale earnings (Wave D). */}
             <TabsContent value="performance" className="space-y-6">
               <div className="grid gap-4">
-                {assetPerformance.map((asset, index) => (
-                  <div 
-                    key={index}
-                    className="bg-card rounded-2xl border border-border p-6 animate-fade-in"
-                    style={{ animationDelay: `${index * 0.05}s` }}
-                  >
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                          <Building2 className="w-6 h-6 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground">
-                            {language === "ar" ? asset.nameAr : asset.name}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            {asset.status === "active" ? (
-                              <Badge variant="success">{language === "ar" ? "نشط" : "Active"}</Badge>
-                            ) : (
-                              <Badge variant="construction">{language === "ar" ? "قيد البناء" : "Under Construction"}</Badge>
-                            )}
+                {earnings.properties.length === 0 ? (
+                  <div className="bg-card rounded-2xl border border-border p-10 text-center text-muted-foreground">
+                    {isAr ? "لا توجد عقارات منشورة بعد" : "No published properties yet"}
+                  </div>
+                ) : (
+                  earnings.properties.map((asset, index) => (
+                    <div
+                      key={asset.property_id}
+                      className="bg-card rounded-2xl border border-border p-6 animate-fade-in"
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                            <Building2 className="w-6 h-6 text-primary" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">{asset.property_name}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              {asset.is_published ? (
+                                <Badge variant="success">{isAr ? "منشور" : "Published"}</Badge>
+                              ) : (
+                                <Badge variant="construction">{isAr ? "غير منشور" : "Unpublished"}</Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-8">
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            {language === "ar" ? "القيمة" : "Value"}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-8">
+                          <div>
+                            <div className="text-xs text-muted-foreground">{isAr ? "صافي العائد" : "Net Raised"}</div>
+                            <div className="font-semibold text-success">${asset.net_proceeds.toLocaleString()}</div>
                           </div>
-                          <div className="font-semibold text-foreground">
-                            ${(asset.value / 1000000).toFixed(1)}M
+                          <div>
+                            <div className="text-xs text-muted-foreground">{isAr ? "الوحدات المباعة" : "Units Sold"}</div>
+                            <div className="font-semibold text-foreground">{asset.units_sold} / {asset.token_supply}</div>
                           </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            {asset.status === "active" 
-                              ? (language === "ar" ? "الإشغال" : "Occupancy")
-                              : (language === "ar" ? "التقدم" : "Progress")
-                            }
+                          <div>
+                            <div className="text-xs text-muted-foreground">{isAr ? "المستثمرون" : "Investors"}</div>
+                            <div className="font-semibold text-foreground">{asset.investors}</div>
                           </div>
-                          <div className="font-semibold text-foreground">
-                            {asset.status === "active" ? `${asset.occupancy}%` : `${asset.progress}%`}
+                          <div className="flex items-center">
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={`/property/${asset.property_id}`}>{isAr ? "تفاصيل" : "Details"}</a>
+                            </Button>
                           </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            {language === "ar" ? "العائد" : "Yield"}
-                          </div>
-                          <div className={cn(
-                            "font-semibold",
-                            asset.yield > 0 ? "text-success" : "text-muted-foreground"
-                          )}>
-                            {asset.yield > 0 ? `${asset.yield}%` : "N/A"}
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <Button variant="outline" size="sm">
-                            {language === "ar" ? "تفاصيل" : "Details"}
-                          </Button>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </TabsContent>
 
-            {/* Distributions Tab */}
+            {/* Distributions Tab — investor rental-yield distributions are a SEPARATE,
+                later domain. Placeholder (no fabricated figures) until that engine ships. */}
             <TabsContent value="distributions" className="space-y-6">
-              <div className="bg-card rounded-2xl border border-border overflow-hidden">
-                <div className="p-6 border-b border-border">
-                  <h3 className="font-display text-lg font-semibold text-foreground">
-                    {language === "ar" ? "سجل التوزيعات" : "Distribution History"}
-                  </h3>
-                </div>
-                <div className="divide-y divide-border">
-                  {recentDistributions.map((dist, index) => (
-                    <div key={index} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-success/10 rounded-xl flex items-center justify-center">
-                          <DollarSign className="w-5 h-5 text-success" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-foreground">
-                            {language === "ar" ? dist.propertyAr : dist.property}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {dist.date} • {dist.investors} {language === "ar" ? "مستثمر" : "investors"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-success">
-                          ${dist.amount.toLocaleString()}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {language === "ar" ? "موزع" : "Distributed"}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="bg-card rounded-2xl border border-border p-10 text-center">
+                <DollarSign className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <h3 className="font-display text-lg font-semibold text-foreground mb-1">
+                  {isAr ? "توزيعات المستثمرين" : "Investor Distributions"}
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  {isAr
+                    ? "توزيعات العائد الإيجاري لحاملي الرموز نطاق منفصل قادم. هذه الصفحة تعرض أرباح المالك من البيع الأولي فقط."
+                    : "Rental-yield distributions to token holders are a separate, upcoming domain. This page shows owner primary-sale earnings only."}
+                </p>
               </div>
             </TabsContent>
 
@@ -283,23 +269,11 @@ export default function OwnerReports() {
                     : "Detailed view of investor base across your assets"
                   }
                 </p>
-                <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+                <div className="max-w-xs mx-auto">
                   <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-2xl font-bold text-foreground">312</div>
+                    <div className="text-2xl font-bold text-foreground">{earnings.total_investors}</div>
                     <div className="text-xs text-muted-foreground">
-                      {language === "ar" ? "إجمالي" : "Total"}
-                    </div>
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-2xl font-bold text-foreground">45</div>
-                    <div className="text-xs text-muted-foreground">
-                      {language === "ar" ? "جدد" : "New"}
-                    </div>
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-2xl font-bold text-foreground">89%</div>
-                    <div className="text-xs text-muted-foreground">
-                      {language === "ar" ? "متكررون" : "Returning"}
+                      {isAr ? "إجمالي المستثمرين" : "Total Investors"}
                     </div>
                   </div>
                 </div>

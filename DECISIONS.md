@@ -670,6 +670,256 @@ partial fills) the mock implied — a later wave; the i18n keys + page structure
 The NEXT planned build is the **OWNER domain** (submit→review→publish + earnings/ledger), NOT the
 order book.
 
+## Phase 7 Wave A — Property Owner entity verification (owner KYB) — DELIVERED (2026-06-16, LOCKED)
+**Scope (THIS wave only):** owner ENTITY verification via Sumsub KYB, mirroring the LP KYB flow
+exactly. A user self-registers `role=owner` (RegisterRole.tsx "Property Owner" card → `?role=owner`,
+distinct from `?role=developer`), applies, completes business KYB (a SEPARATE Sumsub level), and is
+activated automatically — KYB GREEN → owner approved → `role_status` flipped ACTIVE, no admin in the
+normal path. **NOT built here (later waves):** property submission intake (SubmitProperty.tsx made
+real) + per-property title deeds, review→publish, owner earnings/ledger, the DEVELOPER role.
+
+**LOCKED decisions (product-owner):** (1) owner ≠ developer — built OWNER only; (2) owner needs **KYB**
+(the card "KYB + Title Docs" splits into entity-KYB here + a per-PROPERTY title deed at submission next
+wave — **no title-doc fields on OwnerProfile**); (3) KYB is **automatic via Sumsub** (owner business
+level), keys deferred/inert, `dev_grant_owner_kyb` to test before keys; (4) single role per user for v1;
+(5) frontend is the source of truth.
+
+**Backend (apps/owner, mirrors apps/lp):**
+- `OwnerProfile` (OneToOne user, `related_name="owner_profile"`, db_table `owner_profiles`): contact +
+  KYB block (`status` pending|approved|rejected|suspended; `kyb_status` not_started|documents_pending|
+  under_review|approved|rejected; business_type/registration_number/tax_id/address/description;
+  `sumsub_applicant_id`; kyb timestamps + reason). NO investor-tier/limit/payout fields; NO title docs.
+- `services.py` — `approve_kyb` is the single automation hinge (idempotent; `select_for_update`;
+  `transaction.on_commit(_activate_owner_role)` flips `role_status`→ACTIVE when `role==owner`);
+  `reject_kyb`; `submit_kyb` (creates owner-level Sumsub applicant when configured, else inert);
+  `try_handle_owner_kyb_webhook` + `_resolve_owner` (by applicant id, or owner-level + externalUserId).
+- Endpoints (owner-scoped): `GET/POST /api/owner/profile/` (apply, idempotent), `POST /api/owner/kyb/submit/`
+  (→ under_review), `POST /api/owner/kyb/access-token/` (Sumsub WebSDK token; **503** when keys deferred).
+- **Shared webhook EXTENDED** (`apps/kyc/views.py`): owner routing tried first, then LP, then investor
+  KYC fallthrough. Each resolver matches only its own table / Sumsub level name, so order is safe and
+  investor KYC + LP KYB are unaffected (proven by regression + cross-claim tests). `SumsubWebhookView`
+  now returns `domain: "owner"` for owner events.
+- `core.permissions.HasActivatedOwner` (mirrors HasActivatedLP; reads `owner_profile.status=='approved'`)
+  — gates the NEXT wave's submission to approved owners.
+- `SUMSUB_OWNER_KYB_LEVEL_NAME` (env, default `owner-kyb-level`) — a SEPARATE level from the LP's so the
+  shared webhook routes owner vs LP vs investor. `dev_grant_owner_kyb` (DEBUG-only, `--reject`/`--revoke`,
+  refuses in prod). Admin `OwnerProfileAdmin` = EXCEPTION approve/reject only (automation-first).
+
+**Frontend (smallest change set; mirrors lpApi/KycVerification):** `ownerApi` in client.ts
+(profile/apply/submitKYB/kybAccessToken); `useOwnerProfile` hook; `OwnerVerificationCard` (apply →
+business-info form → Start verification → Sumsub WebSDK when configured, else the dev-path notice with
+`dev_grant_owner_kyb`), mounted at the top of `OwnerDashboard.tsx` (`/my-assets`). Bilingual EN/AR. The
+dashboard's mock stats are untouched (later waves). No visible behavior change beyond the new KYB card.
+
+**Verified:** `makemigrations`/`migrate` clean; **full suite 189 green** (was 170; +19 owner tests incl.
+webhook owner-GREEN→approved+role-activated, RED→rejected, bad-signature→401-no-change, resolve-by-level,
+owner-can't-see-another's-profile, `HasActivatedOwner` allow/deny, dev_grant approve/revoke/refuse-in-prod,
+KYB access-token 503, **investor-KYC + LP-KYB unaffected / no cross-claim**). Frontend `tsc` clean for all
+new files (only the pre-existing VerifyCertificate.tsx Phase-3 errors remain — governance (e)). **Dev-path
+journey (real Postgres):** register `role=owner` (pending) → apply (201, pending) → `dev_grant_owner_kyb`
+→ owner approved + `role_status=active` + `role_verified_at` set → GET profile = approved (then cleaned up).
+**In-browser (`/my-assets`, authed owner):** the KYB card renders; filling the business form + Start
+verification advanced KYB → under_review and (keys deferred) surfaced the dev-path notice with
+`python manage.py dev_grant_owner_kyb --email <your-email>`; no console errors.
+
+**NEXT wave = Owner property submission intake** (SubmitProperty.tsx made real + per-PROPERTY title deed,
+gated by `HasActivatedOwner`), then **review→publish** (materialize a `Property` with `is_published=False`
+→ flip on approval), then **owner earnings/ledger** (credit the owner on each completed primary sale via
+`credit_user_balance`; reuse `UserBalance`/`Withdrawal`). The **DEVELOPER** role is a separate later domain
+that will reuse this owner KYB pattern.
+
+## Phase 7 Wave B — Property submission intake — DELIVERED (2026-06-16, LOCKED)
+**Scope (THIS wave only):** make property submission real — `SubmitProperty.tsx` captures all fields +
+documents (incl. the per-property **title deed**), persisting to Django `PropertySubmission` records gated
+to APPROVED owners. **NOT built here:** review→publish (Wave C — NO `Property` is created/published in this
+wave), owner earnings (Wave D), the investment-model picker (the form has none; admin assigns the model in
+Wave C), the developer role, media persistence (images/video/tour — the form's Step-5 placeholders are
+left as-is; the Wave-B model stores the fields + documents only — **flagged**, deferred).
+
+**LOCKED decisions:** (1) only `HasActivatedOwner` (approved KYB) owners can submit — a non-approved owner
+is routed to KYB gracefully (no raw 403); (2) NO investment-model field — admin assigns at review; store
+only what the form collects; (3) the per-property **title deed** = `document_type=="title"` uploaded at
+submission (the Step-4 required doc); (4) lifecycle `draft → submitted → under_review → approved → rejected`
+— this wave implements **draft/submitted** only (under_review/approved/rejected are set by Wave-C); NO
+Property published.
+
+**Backend (apps/owner):**
+- `PropertySubmission` (FK `submitter`, db_table `property_submissions`) — fields mirror SubmitProperty.tsx
+  EXACTLY: name, property_type, construction_status, description; country, city, district, address;
+  property_value_usd, min_investment, expected_yield, duration_years, distribution_model; `status`
+  (draft|submitted|under_review|approved|rejected), `review_notes`, `submitted_at`. All content fields
+  blank/nullable so a partial DRAFT saves. **No investment-model field.**
+- `SubmissionDocument` (FK submission, db_table `submission_documents`) — `document_type` ∈
+  {title, valuation, insurance, noc, financial, legal, other} (mirrors the Step-4 checklist ids), file +
+  size. Mirrors the LP KYB document pattern (server-stored, owner-only download).
+- `services.submit_submission` — draft→submitted; validates the **required** docs are present
+  (`REQUIRED_SUBMISSION_DOC_TYPES` = title + valuation + legal, the form's `required:true` items); raises
+  `MissingRequiredDocuments` (→ 400 `missing_required_documents` + the missing list). Idempotent. **Creates
+  NO Property.**
+- Endpoints — ALL `[IsAuthenticated, HasActivatedOwner]`, owner-scoped: `GET/POST /api/owner/submissions/`
+  (list mine / create draft), `GET /api/owner/submissions/{id}/`, `PATCH` (edit **draft only** → 409
+  `not_a_draft` otherwise), `POST .../{id}/submit/`, `POST/GET/DELETE .../{id}/documents/[{doc_id}/]` +
+  `.../download/` (documents mutable **draft only**). Cross-owner access → 404 (owner-scoped lookup).
+- Admin: `PropertySubmission` + `SubmissionDocument` READ views (inline docs) — the Wave-C review surface
+  builds on this; **NO publish action yet**, created via API only.
+
+**Frontend:** `ownerApi` extended (submissions CRUD + submit + document upload/list/delete in client.ts).
+`SubmitProperty.tsx` made real — controlled state for every field the existing 6-step wizard shows; the
+draft is lazily created on first Save/upload (then PATCHed); Step-4 Upload buttons do real
+multipart uploads (show ✓ + filename); Save as Draft; Submit for Review (blocked client+server when
+required docs missing, with the missing names); Step-6 confirm checkboxes gate submit. **KYB gate:** a
+non-approved owner sees a "complete verification first" card → `/my-assets`, never a raw 403. The exact
+6-step UI/fields are preserved; **no investment-model picker added**; English page kept (new gate/toasts
+bilingual). `OwnerDashboard.tsx` assets list now reads `GET /api/owner/submissions/` (real submissions with
+their status badge; the tabs filter the same list) — the mock earnings/stats cards are **left for Wave D
+(flagged in-code)**.
+
+**Verified:** `makemigrations`/`migrate` clean; **full suite 199 green** (was 189; +10 Wave-B tests:
+gate allows approved / denies pending + non-owner; create draft; submit blocked w/o required docs →
+succeeds with them; edit/doc-mutation draft-only; owner-scoped isolation; **NO Property row created**;
+no investor/LP regression). Frontend `tsc` clean for all changed files (only pre-existing
+VerifyCertificate.tsx errors remain). **In-browser journey (live backend, approved owner):** wizard renders
+(KYB gate passed), draft created, submit **blocked** `missing_required_documents` → after uploading
+title+valuation+legal **submitted** (submitted_at set), `/my-assets` shows "Browser Marina Tower" with the
+**Submitted** badge; DB confirms the submission + 3 docs and **0 Property rows** named for it (catalog
+untouched); a **pending** owner on `/submit-property` sees the KYB gate card (not the wizard); no console
+errors. (Test data cleaned up after.)
+
+**NEXT = Wave C (review→publish):** admin assigns the investment model + materializes a `Property`
+(`is_published=False` → flip True on approval) + deploys the token (existing `deploy_token_contract`);
+sets `under_review`/`approved`/`rejected` + `review_notes`. Then **Wave D = owner earnings/ledger**.
+
+## Phase 7 Wave C — Review → publish pipeline — DELIVERED (2026-06-16, LOCKED)
+**Scope (THIS wave only):** the ADMIN review pipeline that turns an approved `PropertySubmission` into a
+real, **published** `Property` in the catalog the investor marketplace reads. **NOT built:** owner earnings
+(Wave D), the developer role. The investor marketplace needed **NO change** — it already reads `Property`
+where `is_published=True`.
+
+**LOCKED decisions:** (1) **ADMIN reviews** each submission (no auto-publish — an investment property must
+be human-reviewed; admin is the sanctioned reviewer here, not an exception handler); (2) the **admin assigns
+the investment model** at review (the owner never picked one — the form has no picker); (3) on approval
+materialize a Property with **`is_published=False` FIRST** (never the model's default True), let
+`category`/`token_supply` auto-derive + `clean()` validate (0–100), **then flip `is_published=True`**;
+(4) **link owner→Property** (for Wave-D crediting); (5) lifecycle `submitted → under_review → approved
+(published) | rejected (review_notes)` — surfaced to the owner.
+
+**Backend (apps/owner + apps/properties):**
+- **Owner→Property link:** `Property.submitted_by` (FK user, **nullable** → existing admin-seeded catalog
+  unaffected) + `PropertySubmission.published_property` (FK Property, null) + `reviewed_at`. Migrations are
+  safe for existing rows (nullable). Wave D credits `Property.submitted_by` on primary sales.
+- **`services.publish_submission(submission, *, model, overrides, nested, deploy, reviewer)`** — atomic:
+  maps submission→Property fields via `_property_defaults_from` (+ admin `overrides`) with the assigned
+  `model`; creates the Property **unpublished first** (`is_published=False`, `submitted_by=owner`);
+  `_sync_derived()` + `full_clean()` validate economics & derive category/token_supply (raises
+  `ValidationError` on bad data → atomic rollback, NO Property); creates the per-model nested record when
+  `nested` given (installment/future/option/shared OneToOne); **then flips `is_published=True`**; optionally
+  deploys the token (existing `apps/chain.deploy_property_token`); approves + back-links the submission.
+  **Idempotent** — a submission already linked to a Property is returned unchanged (never double-publishes).
+  `reject_submission(...)` → status rejected + `review_notes`, creates NO Property.
+- **Admin review surface** (the sanctioned step) — `PropertySubmissionAdmin` actions **"Approve & publish
+  (assign investment model)"** (intermediate form: pick model + refine the catalog fields the 6-step form
+  never collected — Arabic copy, hero image, yield/risk/exit, country normalization — + a "deploy token"
+  checkbox → runs `publish_submission`) and **"Reject (record notes)"**. Single-submission (each property
+  needs its own fields). Template `admin/owner/review_submission.html`. Per-model nested detail beyond the
+  simple path is added via the Property admin inlines after publish.
+- **Owner-facing read:** `PropertySubmissionSerializer` now exposes `published_property_slug` + `reviewed_at`
+  so `GET /api/owner/submissions/{id}/` shows approved (with the live property's slug) / rejected (+ notes).
+
+**Frontend (smallest change set):** `OwnerDashboard.tsx` submission cards now show the outcome — **approved**:
+a "Published to the marketplace" banner + **View listing** link to `/property/{published_property_slug}`;
+**rejected**: the rejection reason. Reads the existing `GET /api/owner/submissions/`; layout unchanged.
+The investor Marketplace/PropertyDetail were **verified, not modified** (they read the same Django catalog).
+Bilingual EN/AR. Mock owner earnings/stats remain Wave D.
+
+**Verified:** `makemigrations`/`migrate` clean (nullable links, safe for existing rows); **full suite 211
+green** (was 199; +12 Wave-C: approval materializes exactly one Property is_published False→True; category/
+token_supply auto-derive from the assigned model; `clean()` rejects bad economics (atomic, no Property);
+owner→Property link set; **idempotent** (no double-create); draft can't publish; nested record created;
+**published property visible in `GET /api/properties/` only after publish**; rejection creates no Property +
+records notes; owner sees approved-slug / rejected-notes; **existing seeded property (no owner link) still
+works**; the **admin actions** render the form then publish / reject — all green; no investor/LP/payments
+regression). Frontend `tsc` clean for all changed files (only pre-existing VerifyCertificate.tsx errors).
+**End-to-end (real Postgres + live marketplace API):** approved submission → `publish_submission` →
+Property `wavec-…` (is_published True, category/token_supply derived, owner-linked), present in `GET
+/api/properties/` (public, no auth) and the PropertyDetail page (renders the Arabic `name_ar`); a rejected
+submission → no Property + notes shown to the owner; OwnerDashboard shows approved (View-listing link) +
+rejected (reason); no console errors. (Test data cleaned up.)
+- **Token contract DEPLOYED on-chain** to prove the deploy path end-to-end: tx
+  [`0x3c8a6159…3916ab`](https://testnet.bscscan.com/tx/0x3c8a6159e48160837fd694a60733b5aeb66ab6b6205c7407d738bdf40a3916ab),
+  token `0xDd0bDe3910e1Ff5bdaFc378B6DB8D70BCbe8459C` (same proven `deploy_property_token` path as the admin
+  "deploy token" checkbox / existing admin action). That test property was cleaned up afterward (the
+  testnet token is harmlessly orphaned under a unique random slug).
+
+**NEXT = Wave D (owner earnings/ledger):** credit `Property.submitted_by` on each COMPLETED primary sale
+(net of `fee_platform`/`fee_management`) via `credit_user_balance`; the owner withdraws via the existing
+`UserBalance`/`Withdrawal` stack. The **DEVELOPER** role remains a separate later domain reusing Waves A–C.
+
+## Phase 7 Wave D — Owner earnings / ledger + payout — DELIVERED (2026-06-16, LOCKED) → OWNER DOMAIN COMPLETE
+**Scope (THIS wave only):** credit the property OWNER on each completed PRIMARY token sale of their
+property (net of platform + management fees), reusing the `UserBalance`/`Withdrawal` stack, and wire the
+owner wallet/earnings UI to real Django. **CLOSES the owner domain.** **NOT touched:** investor
+distributions (separate mock domain — rental yield to token holders is NOT owner earnings), the developer
+role, investor/LP/payments settlement (beyond adding the owner-credit hook).
+
+**LOCKED decisions:** (1) **owner earnings = net primary-sale proceeds** = `amount_invested` − (platform +
+management fees), credited to the owner's `UserBalance`, computed server-side; (2) credited **on each
+COMPLETED primary sale** in the mint completion path, inside the atomic block, only when
+`payment_status == COMPLETED`; **idempotent** (one credit per investment, never double on webhook replay);
+(3) owner withdraws via the **existing** `UserBalance`/`Withdrawal` stack — no new mechanism; (4) owner
+earnings ≠ investor distributions — distributions stay a separate later mock domain; (5) admin-seeded
+properties (`submitted_by` null) sell fine and credit no owner (skip safely — **no platform-account routing
+this wave; flagged**).
+
+**Backend (apps/investments + apps/owner):**
+- **Owner-credit hook** — `_credit_owner_for_primary_sale(inv, prop)` runs inside `mint_investment`'s
+  `transaction.atomic()`, right after the REAL on-chain mint sets `tokens_minted=True`, so the credit
+  commits with the mint (`apps/investments/services.py`). **NET = gross − (Property.fee_platform% +
+  Property.fee_management%)** — the per-property, admin-set rates (`apps/properties/models.py:185-187`),
+  computed server-side, never hardcoded. **Idempotency:** a keyed guard — one `BalanceTransaction(source=
+  "primary_sale", reference=<investment id>)` per investment (belt-and-suspenders with the mint's own
+  `tokens_minted` short-circuit) → a replayed completion never double-credits. **Null-owner safe:** when
+  `prop.submitted_by_id` is None (seeded catalog), the credit is skipped (no crash, nobody credited).
+- **Owner earnings/ledger read** — `GET /api/owner/earnings/` (owner-scoped): per-owned-property
+  `{units_sold, investors, gross_proceeds, fees, net_proceeds, token_supply, is_published}` + totals
+  (`total_net_proceeds`, `total_units_sold`, `total_investors`), aggregated from COMPLETED+minted
+  Investments on the caller's `submitted_by` properties. Balance + payout reuse the existing
+  `GET /api/wallets/balance/` and `GET/POST /api/wallets/withdrawals/`.
+
+**Frontend (smallest change set):** `ownerApi.earnings()` added. **`OwnerWallet.tsx`** — the mock stat
+cards now show real `available balance` (wallets/balance), `pending withdrawals` (sum of pending
+withdrawals), `Total Primary-Sale Earnings` (earnings.total_net_proceeds), `Units Sold`; the **withdrawal
+action now uses the built Django flow** via a new `OwnerWithdrawDialog` (POST /api/wallets/withdrawals/),
+**replacing the legacy Supabase OTP `WithdrawalDialog`** on the owner wallet (flagged: the OTP variant
+remains only on not-yet-migrated investor pages — reconcile later). **`OwnerDashboard.tsx`** — Capital
+Raised / Investors / Units Sold cards now real (raised = net primary-sale proceeds); the 4th card is
+**Units Sold**, not a fabricated "distribution". **`OwnerReports.tsx`** — Capital Raised / Investors /
+Units Sold / Published metrics + the Asset-Performance list are real per-property earnings; the
+**Distributions tab is a "separate, upcoming domain" placeholder** (NO fabricated distribution figures);
+the "Distributed" metric shows $0. Bilingual EN/AR; layouts kept.
+
+**Verified:** no new migrations (no model changes). **Full suite 219 green** (was 211; +8 Wave-D: a
+completed primary sale credits the owner exactly net once; idempotent on replay; null-owner seeded sale
+doesn't crash + credits nobody; no distribution rows written; owner reads earnings + balance + withdraws
+via the shared stack; earnings owner-scoped; investor mint/economics unchanged). Frontend `tsc` clean for
+all changed files (only pre-existing VerifyCertificate.tsx errors). **End-to-end on REAL BSC Testnet:**
+published an owner property (Wave C, deploy=True) → investor bought 10 tokens (primary sale, COMPLETED →
+**real on-chain mint** tx
+[`0x3b0b12f4…02f41`](https://testnet.bscscan.com/tx/0x3b0b12f444492e59c1eb9c83916635590eff6578c8de8e6a9c4afa9eda402f41))
+→ owner `UserBalance` credited **NET = 980.00** (GROSS 1000 − 2% fees 20), `balance == net` ✓, exactly **one**
+primary_sale credit; **replay → `already=True`, balance still 980, still one credit** (idempotent); owner
+**withdrew** $500 (`WD-CEE522F604` pending) → balance **480.00**. In-browser (owner): OwnerWallet shows
+balance $980, Total Primary-Sale Earnings $980, Units Sold 10; OwnerDashboard shows Capital Raised $980 +
+Units Sold 10; no console errors. (Test data cleaned up; the testnet token/mint remain harmlessly.)
+
+**Confirmation:** investor/LP/payments settlement untouched except the additive owner-credit hook;
+investor distributions NOT built or conflated (placeholder only). **The OWNER DOMAIN is now COMPLETE:
+KYB (A) → submit (B) → review/publish (C) → earnings/payout (D).**
+
+**Remaining (post-owner-domain):** the **DEVELOPER** role (separate later domain, reuses the owner
+KYB+submit+review+earnings patterns); the **investor distributions engine** (rental-yield to token
+holders — `OwnershipToken.total_distributions` exists but nothing writes it); and the other mock domains
+(notifications, reports export, broker, partners, family, reinvestments, installments).
+
 ## Governance & roadmap (standing — keep across compacts)
 - **(a) Mainnet gating (REQUIRED).** Before any mainnet / real funds: (1) a **professional
   smart-contract AUDIT**, and (2) custodial keys moved to **KMS/HSM with hot/cold separation**
@@ -689,8 +939,15 @@ order book.
     (on-chain) DONE**; Wave 3 **investor PEER secondary market + investor withdrawal DONE** (see
     "Phase 6 Wave 1/2/3"). The on-chain `transfer`, escrow, and `UserBalance` core are reused across
     all of these.
-  - **NEXT PLANNED BUILD = Owner domain** — property submission intake → review → publish pipeline +
-    owner earnings/ledger.
+  - **Owner domain — COMPLETE** ✅ (Waves A–D): A **owner entity KYB** + B **property submission intake** +
+    C **review→publish** + D **owner earnings/payout** (see "Phase 7 Wave A/B/C/D" above). Owner credited
+    net primary-sale proceeds via `credit_user_balance` on COMPLETED+minted sales (idempotent, null-safe);
+    withdraws via the existing `UserBalance`/`Withdrawal` stack; wallet/earnings UI wired to real Django.
+    Proven end-to-end on BSC Testnet.
+  - **Remaining after the owner domain:** the **DEVELOPER** role (separate later domain reusing the owner
+    KYB+submit+review+earnings patterns); the **investor distributions engine** (rental-yield to token
+    holders — separate from owner earnings); other mock domains (notifications, reports export, broker,
+    partners, family, reinvestments, installments).
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
     `SecondaryMarket.tsx` implied — **DEFERRED, separately-scoped future wave, NOT the immediate
     next** (SPEC §7C.1; SECONDARY_MARKET_SURFACE.md). The peer market now ships real one-shot

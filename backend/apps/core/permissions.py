@@ -95,6 +95,26 @@ class HasActivatedLP(BasePermission):
         return bool(lp and lp.status == "approved")
 
 
+class HasActivatedOwner(BasePermission):
+    """
+    Gate requiring an APPROVED property-owner profile before privileged owner
+    capabilities (the next wave's property submission). Mirrors HasActivatedLP:
+    owner activation is automatic via the signed Sumsub KYB webhook (owner business
+    level) — no admin in the normal path (Phase 7 Wave A; OWNER_SURFACE.md).
+
+    The authoritative check is the OwnerProfile record (status == 'approved'), since
+    owner verification is a related entity, not just an auth role. Pair with
+    IsAuthenticated so an anonymous request is rejected by auth, not a missing
+    `.owner_profile`.
+    """
+
+    message = "Approved property-owner (KYB) status is required for this action."
+
+    def has_permission(self, request, view):
+        owner = getattr(request.user, "owner_profile", None)
+        return bool(owner and owner.status == "approved")
+
+
 class KYCApprovedPermission(BasePermission):
     """
     Gate requiring an APPROVED KYC record before sensitive actions (wallet creation,
