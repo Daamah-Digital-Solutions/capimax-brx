@@ -971,14 +971,27 @@ holders — `OwnershipToken.total_distributions` exists but nothing writes it); 
   - **Sumsub KYB (Phase 6 Wave 1, LP):** with the **business-level** keys/level → real WebSDK
     business verification + the REAL `applicantReviewed` business webhook → LP approved + role
     activated. Shares the `SUMSUB_*` keys; needs `SUMSUB_KYB_LEVEL_NAME` set. (Inert until keys land.)
+  - **Sumsub owner KYB (Phase 7 Wave A, Property Owner):** with the **owner-business-level** keys/level
+    → real WebSDK business verification + the REAL `applicantReviewed` business webhook → owner approved
+    + role activated. Shares the `SUMSUB_*` keys; needs the SEPARATE `SUMSUB_OWNER_KYB_LEVEL_NAME` set
+    (so the shared webhook routes owner vs LP vs investor). (Inert until keys land.)
   - **OAuth (Google/Apple):** social login scaffolded, inert until provider keys land (pre-existing).
 - **(e) Cleanup / tech-debt (recorded — not lost):**
-  - **Duplicate withdrawal flow.** The legacy **OTP `WithdrawalDialog`** (Supabase, `useWithdrawalRequests`
-    + bank/crypto/card + email OTP) still exists alongside the new **proceeds withdrawal** (LP-consistent,
-    debits `UserBalance` via `POST /api/wallets/withdrawals/`). They cover different balances and both
-    remain; **needs reconciliation** into one investor-withdrawal flow (decide OTP + rails) in a later pass.
-  - **`VerifyCertificate.tsx` TS `unknown` typing** (pre-existing since Phase 3) — untouched; clean up
+  - **(a) Duplicate withdrawal flow on INVESTOR pages.** The **Owner wallet now uses the built Django
+    flow** (`OwnerWithdrawDialog` → `POST /api/wallets/withdrawals/`, debits `UserBalance`; Phase 7 Wave D).
+    The legacy **OTP `WithdrawalDialog`** (Supabase, `useWithdrawalRequests` + bank/crypto/card + email OTP)
+    still exists on **investor** pages alongside the new proceeds withdrawal. They cover different balances;
+    **needs reconciliation** into one investor-withdrawal flow (decide OTP + rails) in a later pass.
+  - **(b) `VerifyCertificate.tsx` TS `unknown` typing** (pre-existing since Phase 3) — untouched; clean up
     when the certificate-verify surface is next revisited.
+  - **(c) Property-submission MEDIA not persisted (Phase 7 Wave B).** SubmitProperty.tsx Step 5 (images /
+    video / virtual-tour URL) remains visual placeholders — the Wave-B `PropertySubmission` model stores the
+    fields + documents (incl. the title deed) only. **Deferred:** add media persistence (image/video uploads
+    + tour URL) when the property data-room media surface is built.
+  - **(d) Null-owner primary sales credit nobody (Phase 7 Wave D).** Admin-seeded properties have
+    `Property.submitted_by = null`; a completed primary sale of one is **safe but credits no owner** (no
+    platform-account routing). **Product decision** if the platform later wants to capture those proceeds
+    to a platform account.
 
 ## KYC / KYB
 - Provider-driven, automatic approval via webhooks (Sumsub — WebSDK; see "Phase 4" above).
