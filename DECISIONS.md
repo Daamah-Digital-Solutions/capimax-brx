@@ -1083,6 +1083,33 @@ generalized `HasActivatedPropertySubmitter` gate; the submitter-agnostic publish
 earnings); the **bid/ask order book** (deferred); and the other mock domains (notifications, reports export,
 broker, partners, family, reinvestments, installments).
 
+## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 8 complete, commit `eaefd58`)
+Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
+
+**DELIVERED — five roles' worth of functionality, all proven on REAL BSC Testnet:**
+- **Investor** (Phase 3–4): KYC → custodial wallet → invest → **real on-chain token mint**; certificates (PDF+QR+public verify).
+- **Payments** (Phase 5 W1/W2): **Stripe** (card) + **NOW Payments** (crypto), both **signature-verified-webhook/IPN-gated → mint** (no raw card data on server; never mint without a verified callback). Code-complete, inert until keys.
+- **Liquidity Provider** (Phase 6 W1/W2): KYB (business Sumsub level) → activated LP; **LP market** with real on-chain settlement + escrow + internal balance.
+- **Investor peer secondary market + withdrawal** (Phase 6 W3): real one-shot listings, on-chain peer transfer, custodial gas top-up, `UserBalance` withdrawal.
+- **Owner** (Phase 7 A–D): entity **KYB → submit → admin review/publish (Property is_published F→T, model assigned) → earnings** (net-of-fees primary-sale credit, idempotent, withdraw).
+- **Developer** (Phase 8 A–D): **COMPLETE, built by reusing owner machinery** — separate `DeveloperProfile` + `HasActivatedDeveloper` (Sumsub developer level; the shared signed webhook is now **4-way**: developer/owner/LP/investor by distinct level name); generalized `HasActivatedPropertySubmitter` gate (owner **or** developer submits the **same** wizard); review/publish + earnings were **submitter-agnostic → ZERO code change**, proven on testnet (developer credited net-of-fees, withdrew). **Committed + pushed: commit `eaefd58`.**
+- **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
+
+**➡️ NEXT PLANNED BUILD = the investor DISTRIBUTIONS engine** (rental / appreciation yield paid to **token
+holders** — DISTINCT from owner/developer **primary-sale** earnings, which are seller proceeds). Evidence +
+seams that already exist: `OwnershipToken.last_distribution_date` + `OwnershipToken.total_distributions`
+([apps/wallets/models.py:129-130](backend/apps/wallets/models.py#L129)) are present but **nothing writes
+them yet**; **`apps/distributions` exists as an EMPTY STUB** (app registered, `models.py` has no models). The
+mock frontend surface is `Distributions.tsx` + the owner/developer reports' "Distributions" placeholder tab
+(deliberately $0, never fabricated). The build will be a separate domain that computes/records a distribution
+per holding and pays into the same `UserBalance` stack — to be designed in the upcoming distributions
+analysis pass. NOT started.
+
+**REMAINING after distributions** (unchanged): the **bid/ask ORDER BOOK + matching engine** (price
+discovery / partial fills — DEFERRED, the largest remaining piece; the peer market ships real one-shot
+listings, order-book i18n preserved); and the other **mock domains** (notifications, reports export, broker,
+partners, family, reinvestments, installments).
+
 ## Governance & roadmap (standing — keep across compacts)
 - **(a) Mainnet gating (REQUIRED).** Before any mainnet / real funds: (1) a **professional
   smart-contract AUDIT**, and (2) custodial keys moved to **KMS/HSM with hot/cold separation**
@@ -1166,6 +1193,13 @@ broker, partners, family, reinvestments, installments).
     `Property.submitted_by = null`; a completed primary sale of one is **safe but credits no owner** (no
     platform-account routing). **Product decision** if the platform later wants to capture those proceeds
     to a platform account.
+  - **(e) Internal "owner" naming now also serves developers (Phase 8 Wave C+D).** The primary-sale credit
+    + earnings code is submitter-agnostic but keeps owner-era names — `_credit_owner_for_primary_sale`,
+    `OWNER_PRIMARY_SALE_SOURCE` ([apps/investments/services.py](backend/apps/investments/services.py)),
+    `OwnerEarningsView` + `/api/owner/earnings/` ([apps/owner/views.py](backend/apps/owner/views.py)). These
+    correctly serve BOTH owners and developers (they read `Property.submitted_by`). **Cosmetic rename
+    (→ "submitter"/"primary-sale") DEFERRED** — renaming would churn verified owner code for no functional
+    gain; do it only if a later refactor touches these surfaces anyway.
 
 ## KYC / KYB
 - Provider-driven, automatic approval via webhooks (Sumsub — WebSDK; see "Phase 4" above).
