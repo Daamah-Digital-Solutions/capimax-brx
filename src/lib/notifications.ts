@@ -25,6 +25,12 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   withdrawal_requested: "financial",
   submission_published: "investment",
   submission_rejected: "alert",
+  // Partner assignment workflow (Phase 11 Wave B).
+  partner_assigned: "system",
+  partner_deliverable_submitted: "report",
+  partner_deliverable_approved: "report",
+  partner_revision_requested: "alert",
+  partner_assignment_completed: "report",
 };
 
 export function categoryOf(type: string): NotificationCategory {

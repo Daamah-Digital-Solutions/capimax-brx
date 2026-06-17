@@ -211,3 +211,196 @@ class PartnerProfile(models.Model):
         self.directory_status = PartnerDirectoryStatus.REJECTED
         self.directory_reviewed_at = timezone.now()
         self.directory_review_notes = (notes or "")[:500]
+
+
+# =========================================================================== #
+# Wave B — the assignment / deliverable WORK PORTAL (StrategicPartners.tsx).
+#
+# ADMIN-INITIATED (unlike the owner-initiated submission): an admin assigns a Property
+# to a KYB-approved partner with a service type + due date + an admin-defined set of
+# deliverables. The partner uploads a document per deliverable (reusing the owner
+# `SubmissionDocument` storage pattern) and submits for review; the admin approves each
+# deliverable or requests a revision (`review_notes` is the ONLY admin→partner channel —
+# one-way, NO messaging). Progress is DERIVED (approved ÷ total), the activity feed is
+# DERIVED from append-only `AssignmentEvent` rows. NON-EARNING: nothing here touches money.
+#
+# Status string VALUES match the frontend literals EXACTLY (StrategicPartners.tsx) so the
+# API serializes 1:1 — note `in-progress` carries a hyphen on purpose.
+# =========================================================================== #
+class PartnerServiceType(models.TextChoices):
+    VALUATION = "valuation", _("Valuation")
+    PROPERTY_MANAGEMENT = "property-management", _("Property Management")
+    INSURANCE = "insurance", _("Insurance")
+
+
+class AssignmentStatus(models.TextChoices):
+    PENDING = "pending", _("Pending")               # assigned, no work yet
+    IN_PROGRESS = "in-progress", _("In progress")   # partner has started uploading
+    SUBMITTED = "submitted", _("Submitted")         # partner marked ready for review
+    APPROVED = "approved", _("Approved")            # all deliverables approved (complete)
+    REVISION = "revision", _("Revision requested")  # admin asked for changes (side-state)
+
+
+class DeliverableStatus(models.TextChoices):
+    PENDING = "pending", _("Pending")
+    SUBMITTED = "submitted", _("Submitted")
+    APPROVED = "approved", _("Approved")
+    REVISION = "revision", _("Revision requested")
+
+
+class Assignment(models.Model):
+    """
+    A unit of service work an admin assigns to a KYB-approved partner against a Property.
+
+    The Property FK is SET_NULL + the display fields (`property_name`/`_ar`, `location`/
+    `_ar`) are denormalized so the portal still renders if the catalog row is later
+    removed. `assigned_by` is the admin who created it. NO money fields.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile, on_delete=models.CASCADE, related_name="assignments"
+    )
+    property = models.ForeignKey(
+        "properties.Property", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="partner_assignments",
+    )
+    # Denormalized property display (bilingual — matches AssignedAsset name/nameEn).
+    property_name = models.CharField(max_length=200, blank=True, default="")       # English
+    property_name_ar = models.CharField(max_length=200, blank=True, default="")    # Arabic
+    location = models.CharField(max_length=200, blank=True, default="")            # English
+    location_ar = models.CharField(max_length=200, blank=True, default="")         # Arabic
+
+    service_type = models.CharField(max_length=32, choices=PartnerServiceType.choices)
+    status = models.CharField(
+        max_length=16, choices=AssignmentStatus.choices,
+        default=AssignmentStatus.PENDING, db_index=True,
+    )
+    due_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")  # admin instructions at assign time
+    review_notes = models.TextField(blank=True, default="")  # admin→partner (revision)
+
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    assigned_at = models.DateTimeField(default=timezone.now)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "partner_assignments"
+        verbose_name = _("partner assignment")
+        verbose_name_plural = _("partner assignments")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"Assignment[{self.status}] {self.property_name} → {self.partner_id}"
+
+    def derived_progress(self) -> int:
+        """DERIVED: approved deliverables ÷ total, as an int percent (NOT stored).
+
+        A plain method (not a @property) on purpose — the FK field named `property`
+        shadows the `property` builtin inside this class body.
+        """
+        dels = list(self.deliverables.all())
+        if not dels:
+            return 0
+        approved = sum(1 for d in dels if d.status == DeliverableStatus.APPROVED)
+        return round(approved * 100 / len(dels))
+
+
+class Deliverable(models.Model):
+    """An admin-defined required output of an assignment (e.g. "Valuation Report")."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    assignment = models.ForeignKey(
+        Assignment, on_delete=models.CASCADE, related_name="deliverables"
+    )
+    name = models.CharField(max_length=200)                       # English
+    name_ar = models.CharField(max_length=200, blank=True, default="")  # Arabic
+    status = models.CharField(
+        max_length=16, choices=DeliverableStatus.choices,
+        default=DeliverableStatus.PENDING,
+    )
+    due_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "partner_deliverables"
+        verbose_name = _("deliverable")
+        verbose_name_plural = _("deliverables")
+        ordering = ("created_at",)
+
+    def __str__(self):
+        return f"{self.name} [{self.status}] ({self.assignment_id})"
+
+
+class DeliverableDocument(models.Model):
+    """
+    A file the partner uploads against a deliverable. Reuses the owner
+    `SubmissionDocument` storage pattern (FileField upload_to + file_size). `assignment`
+    is denormalized for fast partner-scoped lookups/downloads.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    deliverable = models.ForeignKey(
+        Deliverable, on_delete=models.CASCADE, related_name="documents"
+    )
+    assignment = models.ForeignKey(
+        Assignment, on_delete=models.CASCADE, related_name="documents"
+    )
+    file = models.FileField(upload_to="deliverable_documents/%Y/%m/", null=True, blank=True)
+    original_filename = models.CharField(max_length=255)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "deliverable_documents"
+        verbose_name = _("deliverable document")
+        verbose_name_plural = _("deliverable documents")
+        ordering = ("-uploaded_at",)
+
+    def __str__(self):
+        return f"{self.original_filename} ({self.deliverable_id})"
+
+
+class AssignmentEvent(models.Model):
+    """
+    Append-only audit row written at each assignment/deliverable transition. The portal's
+    activity feed is DERIVED from these (never a hand-written feed). One-way: the partner
+    cannot post here — only real transitions create events.
+    """
+
+    class EventType(models.TextChoices):
+        ASSIGNED = "assigned", _("Assigned")
+        UPLOADED = "uploaded", _("Deliverable uploaded")
+        SUBMITTED = "submitted", _("Submitted for review")
+        APPROVED = "approved", _("Deliverable approved")
+        REVISION_REQUESTED = "revision_requested", _("Revision requested")
+        COMPLETED = "completed", _("All deliverables completed")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    assignment = models.ForeignKey(
+        Assignment, on_delete=models.CASCADE, related_name="events"
+    )
+    event_type = models.CharField(max_length=24, choices=EventType.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    # Optional context for rendering (e.g. {"deliverable": "Valuation Report"}).
+    meta = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "partner_assignment_events"
+        verbose_name = _("assignment event")
+        verbose_name_plural = _("assignment events")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.event_type} ({self.assignment_id})"

@@ -16,10 +16,29 @@ TWO clearly-separated, INDEPENDENT admin responsibilities (PARTNERS_SURFACE.md):
 A partner can be KYB-approved yet directory-pending (or directory-rejected) and vice
 versa — the two states never touch each other.
 """
+from django import forms
 from django.contrib import admin, messages
+from django.template.response import TemplateResponse
 
-from .models import PartnerProfile
-from .services import approve_directory, approve_kyb, reject_directory, reject_kyb
+from apps.notifications.services import NotificationType, notify
+
+from .models import (
+    Assignment,
+    AssignmentEvent,
+    Deliverable,
+    DeliverableDocument,
+    PartnerProfile,
+    PartnerStatus,
+)
+from .services import (
+    _log_event,
+    approve_deliverable,
+    approve_directory,
+    approve_kyb,
+    reject_directory,
+    reject_kyb,
+    request_revision,
+)
 
 
 @admin.register(PartnerProfile)
@@ -99,3 +118,190 @@ class PartnerProfileAdmin(admin.ModelAdmin):
             f"Removed {n} partner(s) from the public directory.",
             messages.WARNING,
         )
+
+
+# =========================================================================== #
+# Wave B — assignment / deliverable workflow. The admin ASSIGNS work (the sanctioned
+# admin action, like property publication) and REVIEWS deliverables (approve / request
+# revision). Both write AssignmentEvents + fire notify() through the services.
+# =========================================================================== #
+class DeliverableInline(admin.TabularInline):
+    """Define the required deliverables AT ASSIGN TIME (admin-defined)."""
+
+    model = Deliverable
+    extra = 2
+    fields = ("name", "name_ar", "due_date", "status")
+    readonly_fields = ("status",)  # status is workflow-driven, never set by hand
+
+
+class AssignmentAdminForm(forms.ModelForm):
+    class Meta:
+        model = Assignment
+        fields = ("partner", "property", "service_type", "due_date", "notes")
+
+    def clean_partner(self):
+        partner = self.cleaned_data["partner"]
+        # Locked: only a KYB-approved partner may be assigned work.
+        if partner.status != PartnerStatus.APPROVED:
+            raise forms.ValidationError(
+                "This partner is not KYB-approved yet — they cannot be assigned work."
+            )
+        return partner
+
+
+@admin.register(Assignment)
+class AssignmentAdmin(admin.ModelAdmin):
+    """
+    Create = the ADMIN ASSIGN action: pick a KYB-approved partner + a Property + service
+    type + due date, and define the deliverables inline. On create we denormalize the
+    Property display fields, write the ASSIGNED event, and notify the partner.
+    """
+
+    form = AssignmentAdminForm
+    inlines = [DeliverableInline]
+    list_display = (
+        "property_name", "partner", "service_type", "status", "due_date",
+        "progress_display", "assigned_at",
+    )
+    list_filter = ("status", "service_type")
+    search_fields = ("property_name", "partner__user__email", "partner__company_name")
+    readonly_fields = (
+        "id", "status", "property_name", "property_name_ar", "location", "location_ar",
+        "review_notes", "assigned_by", "assigned_at", "submitted_at", "completed_at",
+        "created_at", "updated_at",
+    )
+
+    @admin.display(description="Progress")
+    def progress_display(self, obj):
+        return f"{obj.derived_progress()}%"
+
+    def get_readonly_fields(self, request, obj=None):
+        # On the ADD form, partner/property/service_type/due_date/notes must be editable.
+        if obj is None:
+            return ("id", "assigned_by", "assigned_at", "created_at", "updated_at")
+        # Once created, the core assignment is immutable from the admin (workflow-driven).
+        return self.readonly_fields + ("partner", "property", "service_type", "due_date", "notes")
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            # Denormalize the Property display fields + record the assigning admin.
+            prop = obj.property
+            if prop is not None:
+                obj.property_name = getattr(prop, "name", "") or ""
+                obj.property_name_ar = getattr(prop, "name_ar", "") or ""
+                obj.location = getattr(prop, "location", "") or ""
+                obj.location_ar = getattr(prop, "location_ar", "") or ""
+            obj.assigned_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if not change:
+            # Deliverables now exist (inline saved). Write the ASSIGNED event + notify the
+            # partner — the create_assignment side-effects, applied to the admin-built row.
+            assignment = form.instance
+            _log_event(
+                assignment, AssignmentEvent.EventType.ASSIGNED, actor=request.user,
+                meta={"property": assignment.property_name},
+            )
+            notify(
+                assignment.partner.user, NotificationType.PARTNER_ASSIGNED,
+                params={"property": assignment.property_name,
+                        "service_type": assignment.service_type},
+                action_url="/strategic-partners",
+            )
+            self.message_user(
+                request,
+                f"Assigned '{assignment.property_name}' to {assignment.partner.user.email} "
+                f"with {assignment.deliverables.count()} deliverable(s); the partner was notified.",
+                messages.SUCCESS,
+            )
+
+
+class _RevisionNotesForm(forms.Form):
+    review_notes = forms.CharField(
+        widget=forms.Textarea, label="Revision notes (shown to the partner)"
+    )
+
+
+@admin.register(Deliverable)
+class DeliverableAdmin(admin.ModelAdmin):
+    """The admin REVIEW surface: approve a deliverable, or request a revision (notes)."""
+
+    list_display = ("name", "assignment", "status", "due_date")
+    list_filter = ("status",)
+    search_fields = ("name", "assignment__property_name", "assignment__partner__user__email")
+    readonly_fields = ("id", "assignment", "status", "created_at", "updated_at")
+    actions = ["approve_selected", "request_revision_selected"]
+
+    def has_add_permission(self, request):
+        # Deliverables are defined at assign time (inline on the Assignment), never alone.
+        return False
+
+    @admin.action(description="Approve deliverable(s) (notifies partner; completes when all approved)")
+    def approve_selected(self, request, queryset):
+        n = 0
+        for deliverable in queryset:
+            approve_deliverable(deliverable, admin=request.user)
+            n += 1
+        self.message_user(request, f"Approved {n} deliverable(s).", messages.SUCCESS)
+
+    @admin.action(description="Request revision (record notes for the partner)")
+    def request_revision_selected(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request, "Select exactly ONE deliverable to request a revision.",
+                messages.WARNING,
+            )
+            return
+        deliverable = queryset.first()
+        if request.POST.get("apply"):
+            form = _RevisionNotesForm(request.POST)
+            if form.is_valid():
+                request_revision(
+                    deliverable, admin=request.user,
+                    review_notes=form.cleaned_data["review_notes"],
+                )
+                self.message_user(
+                    request, "Revision requested; the partner can see the notes.",
+                    messages.SUCCESS,
+                )
+                return
+        else:
+            form = _RevisionNotesForm()
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Request revision",
+            "intro": f"Request changes on '{deliverable.name}'. The partner is notified.",
+            "form": form,
+            "queryset": queryset,
+            "action_name": "request_revision_selected",
+            "submit_label": "Request revision",
+            "back_url": request.get_full_path(),
+            "opts": self.model._meta,
+        }
+        return TemplateResponse(request, "admin/partners/request_revision.html", context)
+
+
+@admin.register(DeliverableDocument)
+class DeliverableDocumentAdmin(admin.ModelAdmin):
+    list_display = ("original_filename", "deliverable", "assignment", "uploaded_at")
+    search_fields = ("original_filename", "assignment__property_name")
+    readonly_fields = (
+        "id", "deliverable", "assignment", "file", "original_filename", "file_size",
+        "uploaded_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(AssignmentEvent)
+class AssignmentEventAdmin(admin.ModelAdmin):
+    list_display = ("assignment", "event_type", "actor", "created_at")
+    list_filter = ("event_type",)
+    search_fields = ("assignment__property_name",)
+    readonly_fields = ("id", "assignment", "event_type", "actor", "meta", "created_at")
+
+    def has_add_permission(self, request):
+        return False

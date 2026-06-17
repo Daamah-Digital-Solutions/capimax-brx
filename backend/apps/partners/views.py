@@ -21,24 +21,45 @@ step (Django admin). Mirrors apps/developer/views.py (KYB subset). NO money anyw
 """
 import logging
 
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.permissions import HasActivatedPartner
 from apps.kyc import sumsub
 
-from .models import PartnerDirectoryStatus, PartnerProfile
+from .models import (
+    Assignment,
+    AssignmentEvent,
+    Deliverable,
+    DeliverableDocument,
+    PartnerDirectoryStatus,
+    PartnerProfile,
+)
 from .serializers import (
+    AssignmentEventSerializer,
+    AssignmentSerializer,
     PartnerApplySerializer,
     PartnerDirectorySerializer,
     PartnerKYBSubmitSerializer,
     PartnerProfileSerializer,
     PublicPartnerSerializer,
 )
-from .services import submit_kyb, update_directory_details
+from .services import (
+    submit_assignment,
+    submit_kyb,
+    update_directory_details,
+    upload_deliverable_document,
+)
 
 log = logging.getLogger(__name__)
+
+# Cap the derived activity feed so the portal list stays light.
+ACTIVITY_LIMIT = 50
 
 
 def _get_partner(user):
@@ -177,3 +198,114 @@ class PublicPartnerDirectoryView(APIView):
             .order_by("company_name")
         )
         return Response(PublicPartnerSerializer(qs, many=True).data)
+
+
+# =========================================================================== #
+# Wave B — the partner WORK PORTAL (StrategicPartners.tsx). All endpoints are gated
+# [IsAuthenticated, HasActivatedPartner] and SELF-SCOPED to the caller's own assignments
+# (cross-partner access → 404). Admin assignment + review happen in the Django admin
+# (the sanctioned admin surfaces). NO money anywhere.
+# =========================================================================== #
+def _partner_or_403(request):
+    """The caller's PartnerProfile (HasActivatedPartner already guaranteed it's approved)."""
+    return request.user.partner_profile
+
+
+def _own_assignment(request, assignment_id):
+    """Self-scoped lookup: only the caller-partner's own assignment (else 404)."""
+    partner = _partner_or_403(request)
+    return get_object_or_404(Assignment, pk=assignment_id, partner=partner)
+
+
+def _own_deliverable(request, deliverable_id):
+    """Self-scoped lookup: a deliverable on one of the caller-partner's assignments."""
+    partner = _partner_or_403(request)
+    return get_object_or_404(
+        Deliverable, pk=deliverable_id, assignment__partner=partner
+    )
+
+
+class PartnerAssignmentsView(APIView):
+    """GET the caller-partner's assignments + the derived activity feed."""
+
+    permission_classes = [IsAuthenticated, HasActivatedPartner]
+
+    def get(self, request):
+        partner = _partner_or_403(request)
+        assignments = (
+            Assignment.objects.filter(partner=partner)
+            .prefetch_related("deliverables", "deliverables__documents")
+        )
+        events = (
+            AssignmentEvent.objects.filter(assignment__partner=partner)
+            .select_related("assignment")[:ACTIVITY_LIMIT]
+        )
+        return Response({
+            "assignments": AssignmentSerializer(assignments, many=True).data,
+            "activity": AssignmentEventSerializer(events, many=True).data,
+        })
+
+
+class PartnerAssignmentDetailView(APIView):
+    """GET one of the caller-partner's own assignments (404 if not theirs)."""
+
+    permission_classes = [IsAuthenticated, HasActivatedPartner]
+
+    def get(self, request, assignment_id):
+        assignment = _own_assignment(request, assignment_id)
+        return Response(AssignmentSerializer(assignment).data)
+
+
+class DeliverableUploadView(APIView):
+    """POST (multipart): the partner uploads a document for one of their deliverables."""
+
+    permission_classes = [IsAuthenticated, HasActivatedPartner]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request, deliverable_id):
+        deliverable = _own_deliverable(request, deliverable_id)
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "A file is required.", "code": "no_file"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        upload_deliverable_document(
+            deliverable, file=upload,
+            original_filename=getattr(upload, "name", "document"),
+            file_size=getattr(upload, "size", None),
+            actor=request.user,
+        )
+        # Return the refreshed assignment so the UI updates status/progress/feed.
+        assignment = Assignment.objects.get(pk=deliverable.assignment_id)
+        return Response(
+            AssignmentSerializer(assignment).data, status=status.HTTP_201_CREATED
+        )
+
+
+class AssignmentSubmitView(APIView):
+    """POST: the partner marks an assignment ready for review (→ submitted)."""
+
+    permission_classes = [IsAuthenticated, HasActivatedPartner]
+
+    def post(self, request, assignment_id):
+        assignment = _own_assignment(request, assignment_id)
+        assignment = submit_assignment(assignment, actor=request.user)
+        return Response(AssignmentSerializer(assignment).data)
+
+
+class DeliverableDocumentDownloadView(APIView):
+    """Partner-scoped download of one of their own deliverable documents (blob)."""
+
+    permission_classes = [IsAuthenticated, HasActivatedPartner]
+
+    def get(self, request, document_id):
+        partner = _partner_or_403(request)
+        doc = get_object_or_404(
+            DeliverableDocument, pk=document_id, assignment__partner=partner
+        )
+        if not doc.file:
+            return Response({"detail": "No file."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(
+            doc.file.open("rb"), as_attachment=True, filename=doc.original_filename
+        )

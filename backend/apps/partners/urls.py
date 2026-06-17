@@ -2,6 +2,11 @@
 from django.urls import path
 
 from .views import (
+    AssignmentSubmitView,
+    DeliverableDocumentDownloadView,
+    DeliverableUploadView,
+    PartnerAssignmentDetailView,
+    PartnerAssignmentsView,
     PartnerKYBAccessTokenView,
     PartnerKYBSubmitView,
     PartnerProfileView,
@@ -14,4 +19,14 @@ urlpatterns = [
     path("profile/", PartnerProfileView.as_view(), name="partner-profile"),
     path("kyb/submit/", PartnerKYBSubmitView.as_view(), name="partner-kyb-submit"),
     path("kyb/access-token/", PartnerKYBAccessTokenView.as_view(), name="partner-kyb-access-token"),
+    # Assignment / deliverable work portal (Wave B) — self-scoped to the caller-partner.
+    path("assignments/", PartnerAssignmentsView.as_view(), name="partner-assignments"),
+    path("assignments/<uuid:assignment_id>/", PartnerAssignmentDetailView.as_view(),
+         name="partner-assignment-detail"),
+    path("assignments/<uuid:assignment_id>/submit/", AssignmentSubmitView.as_view(),
+         name="partner-assignment-submit"),
+    path("deliverables/<uuid:deliverable_id>/upload/", DeliverableUploadView.as_view(),
+         name="partner-deliverable-upload"),
+    path("deliverables/documents/<uuid:document_id>/download/",
+         DeliverableDocumentDownloadView.as_view(), name="partner-deliverable-download"),
 ]

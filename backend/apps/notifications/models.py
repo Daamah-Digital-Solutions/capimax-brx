@@ -38,6 +38,12 @@ class Notification(models.Model):
         # Submission review.
         SUBMISSION_PUBLISHED = "submission_published", _("Property submission published")
         SUBMISSION_REJECTED = "submission_rejected", _("Property submission rejected")
+        # Partner assignment workflow (Phase 11 Wave B). params.property = property name.
+        PARTNER_ASSIGNED = "partner_assigned", _("Assignment received")
+        PARTNER_DELIVERABLE_SUBMITTED = "partner_deliverable_submitted", _("Deliverable submitted (to admin)")
+        PARTNER_DELIVERABLE_APPROVED = "partner_deliverable_approved", _("Deliverable approved")
+        PARTNER_REVISION_REQUESTED = "partner_revision_requested", _("Revision requested")
+        PARTNER_ASSIGNMENT_COMPLETED = "partner_assignment_completed", _("Assignment completed")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

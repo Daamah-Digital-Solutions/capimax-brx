@@ -818,6 +818,45 @@ export interface PartnerKybAccessToken {
   code?: string;
 }
 
+// Wave B — assignment / deliverable work portal (StrategicPartners.tsx). Shaped to the
+// AssignedAsset/Deliverable mock so the page maps 1:1; `type`/`location` are localized on
+// the frontend from `service_type` + the bilingual fields. NON-EARNING — no money fields.
+export interface ApiDeliverable {
+  id: string;
+  name: string;        // Arabic (falls back to English)
+  nameEn: string;
+  status: "pending" | "submitted" | "approved" | "revision";
+  dueDate: string | null;
+  has_document: boolean;
+}
+export interface ApiAssignment {
+  id: string;
+  name: string;        // Arabic property name
+  nameEn: string;      // English property name
+  service_type: "valuation" | "property-management" | "insurance";
+  location: string;    // English
+  location_ar: string; // Arabic
+  assignedDate: string;
+  dueDate: string | null;
+  status: "pending" | "in-progress" | "submitted" | "approved" | "revision";
+  progress: number;
+  notes: string;
+  review_notes: string;
+  deliverables: ApiDeliverable[];
+}
+export interface ApiAssignmentEvent {
+  id: string;
+  event_type: "assigned" | "uploaded" | "submitted" | "approved" | "revision_requested" | "completed";
+  property: string;     // English
+  property_ar: string;  // Arabic
+  deliverable: string;
+  created_at: string;
+}
+export interface AssignmentsResponse {
+  assignments: ApiAssignment[];
+  activity: ApiAssignmentEvent[];
+}
+
 /** A public-directory row (Partners.tsx shape). Only directory-approved partners. */
 export interface PublicPartner {
   id: string;
@@ -871,6 +910,35 @@ export const partnerApi = {
   /** The PUBLIC partners directory (AllowAny) — only directory-approved partners. */
   directory: () =>
     rawRequest("/partners/directory/", {}) as Promise<PublicPartner[]>,
+
+  // --- Wave B: the partner's own assignments / deliverable work portal. ----- //
+  /** The caller-partner's assignments + the derived activity feed. */
+  assignments: () =>
+    rawRequest("/partner/assignments/", { auth: true }) as Promise<AssignmentsResponse>,
+  /** One of the caller-partner's own assignments. */
+  assignment: (id: string) =>
+    rawRequest(`/partner/assignments/${id}/`, { auth: true }) as Promise<ApiAssignment>,
+  /** Mark an assignment ready for review (→ submitted). */
+  submitAssignment: (id: string) =>
+    rawRequest(`/partner/assignments/${id}/submit/`, { method: "POST", auth: true }) as Promise<ApiAssignment>,
+  /**
+   * Upload a document for one deliverable (multipart). Returns the refreshed assignment
+   * (updated status/progress). Uses fetch directly for the FormData body.
+   */
+  uploadDeliverable: async (deliverableId: string, file: File): Promise<ApiAssignment> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE_URL}/partner/deliverables/${deliverableId}/upload/`, {
+      method: "POST",
+      headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
+      body: form,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw buildError((data as any)?.detail || `Upload failed (${res.status})`, res.status, data);
+    }
+    return (await res.json()) as ApiAssignment;
+  },
 };
 
 export { API_BASE_URL };

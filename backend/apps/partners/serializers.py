@@ -11,7 +11,13 @@ No Sumsub ids are exposed.
 """
 from rest_framework import serializers
 
-from .models import PartnerCategory, PartnerProfile
+from .models import (
+    Assignment,
+    AssignmentEvent,
+    Deliverable,
+    PartnerCategory,
+    PartnerProfile,
+)
 
 # Directory fields the partner may write (decision #3).
 _DIRECTORY_INPUT = (
@@ -118,3 +124,64 @@ class PublicPartnerSerializer(serializers.ModelSerializer):
     def get_verified(self, obj) -> bool:
         # The "verified" badge reflects entity verification (KYB approved).
         return obj.status == "approved"
+
+
+# --------------------------------------------------------------------------- #
+# Wave B — assignment / deliverable workflow (StrategicPartners.tsx). Shaped to the
+# frontend AssignedAsset/Deliverable mock so the page maps 1:1 (status strings already
+# match the frontend literals). `progress` is DERIVED; `type`/`location` are localized on
+# the frontend from `service_type` + the bilingual fields.
+# --------------------------------------------------------------------------- #
+class DeliverableSerializer(serializers.ModelSerializer):
+    nameEn = serializers.CharField(source="name")
+    name = serializers.SerializerMethodField()      # Arabic (falls back to English)
+    dueDate = serializers.DateField(source="due_date", allow_null=True)
+    has_document = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Deliverable
+        fields = ("id", "name", "nameEn", "status", "dueDate", "has_document")
+
+    def get_name(self, obj) -> str:
+        return obj.name_ar or obj.name
+
+    def get_has_document(self, obj) -> bool:
+        return obj.documents.exists()
+
+
+class AssignmentSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()       # Arabic (falls back to English)
+    nameEn = serializers.CharField(source="property_name")
+    assignedDate = serializers.DateTimeField(source="assigned_at")
+    dueDate = serializers.DateField(source="due_date", allow_null=True)
+    progress = serializers.SerializerMethodField()
+    deliverables = DeliverableSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Assignment
+        fields = (
+            "id", "name", "nameEn", "service_type", "location", "location_ar",
+            "assignedDate", "dueDate", "status", "progress", "notes", "review_notes",
+            "deliverables",
+        )
+
+    def get_name(self, obj) -> str:
+        return obj.property_name_ar or obj.property_name
+
+    def get_progress(self, obj) -> int:
+        return obj.derived_progress()
+
+
+class AssignmentEventSerializer(serializers.ModelSerializer):
+    """The derived activity-feed row. `event_type` + context → localized on the frontend."""
+
+    property = serializers.CharField(source="assignment.property_name")
+    property_ar = serializers.CharField(source="assignment.property_name_ar")
+    deliverable = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AssignmentEvent
+        fields = ("id", "event_type", "property", "property_ar", "deliverable", "created_at")
+
+    def get_deliverable(self, obj) -> str:
+        return (obj.meta or {}).get("deliverable", "")

@@ -948,6 +948,16 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.submission_published.body": "تمت الموافقة على عقارك {property} ونشره.",
     "notif.submission_rejected.title": "العقار يحتاج إلى مراجعة",
     "notif.submission_rejected.body": "لم تتم الموافقة على عقارك {property}. راجع ملاحظات المراجعة.",
+    "notif.partner_assigned.title": "مهمة جديدة",
+    "notif.partner_assigned.body": "تم إسناد {property} إليك لتقديم خدمة.",
+    "notif.partner_deliverable_submitted.title": "تم تقديم تسليم",
+    "notif.partner_deliverable_submitted.body": "تم رفع {deliverable} لـ {property} للمراجعة.",
+    "notif.partner_deliverable_approved.title": "تمت الموافقة على التسليم",
+    "notif.partner_deliverable_approved.body": "تمت الموافقة على {deliverable} لـ {property}.",
+    "notif.partner_revision_requested.title": "مطلوب مراجعة",
+    "notif.partner_revision_requested.body": "مطلوب تعديل {deliverable} لـ {property}.",
+    "notif.partner_assignment_completed.title": "اكتملت المهمة",
+    "notif.partner_assignment_completed.body": "تمت الموافقة على جميع تسليمات {property}.",
 
     // Support
     "support.title": "الدعم والمساعدة",
@@ -2362,6 +2372,16 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.submission_published.body": "Your property {property} has been approved and published.",
     "notif.submission_rejected.title": "Submission Needs Review",
     "notif.submission_rejected.body": "Your property submission {property} was not approved. Check the review notes.",
+    "notif.partner_assigned.title": "New Assignment",
+    "notif.partner_assigned.body": "You've been assigned {property} to deliver a service.",
+    "notif.partner_deliverable_submitted.title": "Deliverable Submitted",
+    "notif.partner_deliverable_submitted.body": "{deliverable} for {property} was uploaded for review.",
+    "notif.partner_deliverable_approved.title": "Deliverable Approved",
+    "notif.partner_deliverable_approved.body": "Your {deliverable} for {property} was approved.",
+    "notif.partner_revision_requested.title": "Revision Requested",
+    "notif.partner_revision_requested.body": "{deliverable} for {property} needs changes.",
+    "notif.partner_assignment_completed.title": "Assignment Complete",
+    "notif.partner_assignment_completed.body": "All deliverables for {property} were approved.",
 
     // Support
     "support.title": "Support & Help",

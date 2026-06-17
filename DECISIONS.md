@@ -1241,7 +1241,66 @@ admin approve/reject drives it (locked decision); editing an approved listing ke
 in v1). (2) The directory country filter chips on `Partners.tsx` stay the fixed UAE/UK/USA/all set; a partner
 whose country is outside that set still appears under "All". (3) Wave B (assignment/deliverable workflow) deferred.
 
-## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 11 Wave A complete)
+## Phase 11 — Partner role, Wave B: assignment + deliverable workflow (COMPLETE ✅)
+**Scope:** the service-vendor WORK PORTAL (StrategicPartners.tsx) — an admin ASSIGNS a Property to a KYB-approved
+partner with a service type + due date + admin-defined deliverables; the partner uploads a document per
+deliverable + submits; the admin approves each or requests a revision; a DERIVED activity feed + DERIVED progress;
+`notify()` at each transition. This CLOSES the partner domain. Still **NON-EARNING — no money anywhere** (a test
+asserts the partners app defines no money model and the workflow credits no balance).
+
+**ADMIN-INITIATED** (unlike the owner-initiated submission): assignment + review are the sanctioned ADMIN actions
+(like property publication). Automation-first does not apply — a human assigns work + reviews deliverables.
+
+**Backend (`apps/partners`, appended):**
+- `Assignment` (FK partner + FK `Property` SET_NULL + denormalized `property_name`/`_ar`/`location`/`_ar`,
+  `service_type` [valuation|property-management|insurance], `status`, `due_date`, `notes`, `assigned_by`,
+  `review_notes`, timestamps). `Deliverable` (FK assignment, `name`/`name_ar`, `status`, `due_date`).
+  `DeliverableDocument` (FK deliverable + assignment, `file` FileField `upload_to="deliverable_documents/%Y/%m/"`,
+  `original_filename`, `file_size` — reuses the owner `SubmissionDocument` storage pattern). `AssignmentEvent`
+  (append-only: assigned/uploaded/submitted/approved/revision_requested/completed + `actor` + `meta`) — the
+  activity-feed source. **Status string VALUES match the frontend literals EXACTLY** (incl. `in-progress` with a
+  hyphen) so the API serializes 1:1. **Progress is DERIVED** (`Assignment.derived_progress()` = approved ÷ total),
+  never stored.
+- Services: `create_assignment` (admin; requires KYB-approved partner → ASSIGNED event + notify partner),
+  `upload_deliverable_document` (partner; deliverable→submitted, assignment pending/revision→in-progress, UPLOADED
+  event + notify admin), `submit_assignment` (partner; →submitted, SUBMITTED event), `approve_deliverable` (admin;
+  →approved + when ALL approved →assignment approved + COMPLETED event + notify partner), `request_revision`
+  (admin; deliverable+assignment→revision, records `review_notes`, REVISION_REQUESTED event + notify partner). All
+  transitions are `@transaction.atomic` and `notify()` fires INSIDE the block (savepoint-wrapped → a notify
+  failure can NEVER roll back the transition).
+- 5 new `Notification.Type`s: `partner_assigned`/`partner_deliverable_approved`/`partner_revision_requested`/
+  `partner_assignment_completed` (→ partner) + `partner_deliverable_submitted` (→ admin/assigner).
+- Partner endpoints (`HasActivatedPartner`, self-scoped → cross-partner 404): `GET assignments/` (list + derived
+  activity), `GET assignments/{id}/`, `POST deliverables/{id}/upload/` (multipart), `POST assignments/{id}/submit/`,
+  `GET deliverables/documents/{id}/download/`. Admin: `AssignmentAdmin` add-form + `DeliverableInline` (define
+  deliverables at assign time; validates KYB-approved; denormalizes Property + writes ASSIGNED + notify on create)
+  and `DeliverableAdmin` with **approve** / **request-revision** (notes form) actions.
+
+**Frontend (smallest change set):** `partnerApi` assignment surface (`assignments`/`assignment`/`submitAssignment`/
+`uploadDeliverable`) + `useAssignments` hook (poll on mount + window focus, no realtime). `StrategicPartners.tsx`
+repointed off its `assignedAssets`/`activityLog` mocks → the real API, preserving the EXACT rendered shape (4
+summary stats, asset cards with status/progress/due-date, deliverable chips, deliverables/documents/activity tabs,
+EN/AR). Real upload (per-asset hidden file input → next actionable deliverable) + a conditional **Submit for
+review** button. The activity feed renders the derived `AssignmentEvent` list (event_type → localized label +
+`relativeTime`). 5 new `notif.*` EN/AR keys + `categoryOf` entries. `/developers` untouched.
+
+**Verification:** **+14 partner Wave-B tests; full suite 334 green** (was 320). Covers admin-assign → pending +
+deliverables + partner notified; cannot assign a non-KYB-approved partner; partner lists/sees ONLY own (cross-
+partner 404 on detail + upload); upload → deliverable submitted + assignment in-progress + admin notified;
+submit → submitted + event; approve-all → completed + completion notify; request-revision → revision + notes +
+notify; revision→reupload→in-progress; **progress derives (approved/total)**; **activity feed derives from
+events**; portal gated to KYB-approved; **notify-failure never breaks the transition**; **NO balance/ledger entry
+anywhere**. Dev-DB journey (assign 2 deliverables → upload+submit → approve d1 + revision d2 [50%] → reupload d2 +
+approve → 100%/completed): 8-event derived feed + the exact notification counts (partner assigned×1/approved×2/
+revision×1/completed×1, admin submitted×2), no `UserBalance`. Browser-verified: logged-in partner sees the
+assignment at 100% with both deliverables + the derived activity feed on `/strategic-partners` (no error boundary).
+
+**Flags (deliberate, Wave B):** (1) the per-asset "Upload Files" button uploads to the NEXT actionable deliverable
+(pending→revision); precise per-deliverable upload is a later refinement. (2) `service_type`/`location` are
+localized on the frontend from the code + bilingual fields (backend stays language-agnostic, like notifications).
+(3) The PARTNER DOMAIN IS NOW COMPLETE (KYB + directory → assignment/deliverable workflow).
+
+## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 11 COMPLETE: partner domain done)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
 **DELIVERED — five roles' worth of functionality, all proven on REAL BSC Testnet:**
@@ -1253,29 +1312,31 @@ Consolidated for compact-resilience — the per-phase sections above are authori
 - **Developer** (Phase 8 A–D): **COMPLETE, built by reusing owner machinery** — separate `DeveloperProfile` + `HasActivatedDeveloper` (Sumsub developer level; the shared signed webhook is now **4-way**: developer/owner/LP/investor by distinct level name); generalized `HasActivatedPropertySubmitter` gate (owner **or** developer submits the **same** wizard); review/publish + earnings were **submitter-agnostic → ZERO code change**, proven on testnet (developer credited net-of-fees, withdrew). **Committed + pushed: commit `eaefd58`.**
 - **Distributions** (Phase 9): **COMPLETE** — admin declares a property cash-yield pool → split **pro-rata by full `token_amount`** across current ACTIVE holders (cent-exact, remainder to largest) → each holder's `UserBalance` credited (`source="distribution"`, **internal-balance only, NO on-chain move**), `total_distributions`/`last_distribution_date` bumped; idempotent (one payout per holder/distribution). `Distributions.tsx` repointed to `GET /api/distributions/`. DISTINCT from primary-sale earnings. Proven via the dev-DB journey ($1000 → $500/$300/$200, Σ cent-exact, withdrawn) + 15 tests. See "Phase 9" above.
 - **Notifications** (Phase 10): **COMPLETE** — in-app notifications emitted server-side at all 11 event points (KYC/KYB, wallet, mint + earnings, distribution, secondary sale BOTH parties, withdrawal, submission publish/reject), **inside each host's atomic block** (a `notify()` failure can't break the event — savepoint-wrapped). Stored as **type + params + action_url** (no display strings); the frontend renders EN/AR from i18n by type. Self-scoped read + unread-count + mark-read/mark-all + **soft delete**. Bell + sidebar show the live unread count; `Notifications.tsx` repointed off its mock. In-app only (no email/SMS/push; prefs deferred). Proven via browser journey + 19 tests. See "Phase 10" above.
-- **Partner (Phase 11 Wave A): COMPLETE** ✅ — the SERVICE-VENDOR `role=partner` (thin NON-EARNING variant of
-  owner/developer; **no money ever**) now has an activation path: separate `PartnerProfile` + `HasActivatedPartner`
-  (Sumsub partner level; the shared signed webhook is now **5-way**: partner/developer/owner/LP/investor) + **two
-  INDEPENDENT states** — `kyb_status` (verification) and `directory_status` (public-directory visibility, a
-  separate admin approve/reject step; partner self-enters the directory data, admin never does). Public
-  `GET /api/partners/directory/` lists directory-approved partners only; `Partners.tsx` repointed off its mock.
-  +30 tests, full suite 320 green. See "Phase 11" above. **(Wave B = assignment/deliverable workflow — not built.)**
+- **Partner (Phase 11 A+B): COMPLETE** ✅ — the SERVICE-VENDOR `role=partner` (thin NON-EARNING variant of
+  owner/developer; **no money ever**). **Wave A:** activation path — separate `PartnerProfile` +
+  `HasActivatedPartner` (Sumsub partner level; the shared signed webhook is now **5-way**: partner/developer/owner/
+  LP/investor) + **two INDEPENDENT states** `kyb_status` (verification) and `directory_status` (public-directory
+  visibility, a separate admin approve/reject step; partner self-enters the directory data, admin never does);
+  public `GET /api/partners/directory/` + `Partners.tsx` repointed. **Wave B:** the work portal — admin ASSIGNS a
+  `Property`→partner (service type + due date + admin-defined deliverables) → partner uploads deliverable docs +
+  submits → admin approves / requests revision; DERIVED progress + DERIVED `AssignmentEvent` activity feed;
+  `notify()` per transition (failure-safe); `StrategicPartners.tsx` repointed off its mock. +44 partner tests,
+  full suite 334 green. See "Phase 11" above.
 - **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
 
-**➡️ NEXT PLANNED BUILD = the PARTNER domain Wave B** (the assignment/deliverable workflow — admin assigns a
-`Property`→partner with a service type + due date + admin-defined deliverables; partner uploads via a
-`SubmissionDocument`-style model; admin approves/requests revision; derived activity feed + progress; `notify()`
-per transition; one-way comms). Partner **Wave A (KYB + public directory) is COMPLETE** — see "Phase 11" above.
-NON-earning still holds for Wave B: **no money, no `UserBalance`, no withdrawal, ever.** Latest committed checkpoint
-on `origin/main` = **`16ff884`** (Phase 10); Phase 11 Wave A is implemented locally, not yet committed.
+**➡️ NEXT PLANNED BUILD = the remaining mock domains.** With the partner domain COMPLETE (Phase 11 A+B), the
+candidates are: **reports export, broker, family accounts, reinvestments, installments** (each a mock surface to
+make real, like the partner domain was), and the **bid/ask ORDER BOOK + matching engine** (the largest deferred
+piece). Latest committed checkpoint on `origin/main` = **`720904c`** (Phase 11 Wave A); Phase 11 Wave B is
+implemented locally, not yet committed.
 
-**REMAINING** (after partner Wave B): the other **mock domains** (reports export, broker, family,
-reinvestments, installments); and the **bid/ask ORDER BOOK + matching engine** (price discovery / partial fills —
-DEFERRED, the largest remaining piece; the peer market ships real one-shot listings, order-book i18n preserved).
+**REMAINING:** the other **mock domains** (reports export, broker, family, reinvestments, installments); and the
+**bid/ask ORDER BOOK + matching engine** (price discovery / partial fills — DEFERRED, the largest remaining piece;
+the peer market ships real one-shot listings, order-book i18n preserved).
 
-## Partner domain — Wave A COMPLETE ✅; Wave B = NEXT (scope DECIDED)
-**Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **Wave A (partner KYB + public directory)
-is BUILT — see "Phase 11" above.** The partner is a **SERVICE VENDOR** — a
+## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
+**Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"
+above.** The partner is a **SERVICE VENDOR** — a
 valuation / property-management / insurance firm the admin assigns work to. It is a **thin, NON-EARNING variant
 of owner/developer**: it reuses the KYB + document-upload + activation machinery but has **NO money flow — no
 `UserBalance`, no `Withdrawal`, no commission, EVER** (the frontend has zero money fields for partners). `role=
@@ -1296,14 +1357,14 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
   webhook is now **5-WAY** (partner + developer + owner + LP + investor, routed by distinct level name
   `SUMSUB_PARTNER_KYB_LEVEL_NAME`). `dev_grant_partner_kyb` (DEBUG-only). Public directory read endpoint
   (`directory_status==approved` only) + `Partners.tsx` repointed off its mock. Keys deferred/inert. See "Phase 11".
-- **Wave B (after A):** the **assignment / deliverable workflow** — a NEW **`Assignment`** model (admin assigns a
+- **Wave B — DONE ✅ (Phase 11):** the **assignment / deliverable workflow** — **`Assignment`** (admin assigns a
   `Property` → partner with a `service_type` (valuation/property-management/insurance) + `due_date` + admin-
-  defined deliverables); partner **uploads deliverables** via a `SubmissionDocument`-style **`DeliverableDocument`**
-  model; admin **approves / requests revision** (status: `pending→in-progress→submitted→approved`, `revision`
-  side-state); **activity feed derived from status transitions**; **`progress` derived** from deliverable statuses
-  (not stored); `notify()` (Phase 10) at each transition. **ONE-WAY communication — NO messaging**; the `revision`
-  status + an admin `review_notes` is the only admin→partner channel. The **admin assign action** + the
-  `Assignment` model are the only genuinely new pieces; everything else mirrors owner/developer.
+  defined deliverables); partner **uploads deliverables** via the `SubmissionDocument`-style **`DeliverableDocument`**;
+  admin **approves / requests revision** (status: `pending→in-progress→submitted→approved`, `revision` side-state);
+  **activity feed DERIVED from append-only `AssignmentEvent` rows**; **`progress` DERIVED** from deliverable
+  statuses (not stored); `notify()` (Phase 10, 5 new types) at each transition (failure-safe). **ONE-WAY — NO
+  messaging**; the `revision` status + an admin `review_notes` is the only admin→partner channel. `StrategicPartners.tsx`
+  repointed off its mock. NON-EARNING (no money model/credit anywhere). See "Phase 11" above.
 
 ## Governance & roadmap (standing — keep across compacts)
 - **(a) Mainnet gating (REQUIRED).** Before any mainnet / real funds: (1) a **professional
@@ -1342,12 +1403,13 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
   - **Notifications domain — COMPLETE** ✅ (Phase 10): in-app notifications emitted server-side at all event
     points inside their atomic blocks (notify-failure-safe), type+params+i18n, self-scoped read + bell/page wired,
     soft delete. See "Phase 10" above.
-  - **Partner domain — Wave A COMPLETE** ✅ (Phase 11), **Wave B NEXT:** SERVICE-VENDOR role, thin NON-EARNING
-    variant of owner/developer (NO money/`UserBalance`/withdrawal). Wave A (DONE) = partner KYB (`PartnerProfile`,
-    `HasActivatedPartner`, 5-way webhook) + INDEPENDENT `directory_status` (partner self-enters company details;
-    admin only approves directory visibility) + public directory endpoint. Wave B = admin-assigns-`Property`→
-    partner assignment/deliverable workflow (`Assignment` + `DeliverableDocument`, admin approve/request-revision,
-    derived activity feed + progress, one-way comms). See the "Partner domain" section above.
+  - **Partner domain — COMPLETE** ✅ (Phase 11 A+B): SERVICE-VENDOR role, thin NON-EARNING variant of owner/
+    developer (NO money/`UserBalance`/withdrawal). Wave A = partner KYB (`PartnerProfile`, `HasActivatedPartner`,
+    5-way webhook) + INDEPENDENT `directory_status` (partner self-enters company details; admin only approves
+    directory visibility) + public directory endpoint. Wave B = admin-assigns-`Property`→partner assignment/
+    deliverable workflow (`Assignment` + `Deliverable` + `DeliverableDocument` + append-only `AssignmentEvent`,
+    admin approve/request-revision, DERIVED activity feed + progress, `notify()` per transition, one-way comms).
+    See the "Phase 11" + "Partner domain" sections above.
   - **Remaining after the partner domain:** other mock domains (reports export, broker, family, reinvestments,
     installments); the **bid/ask order book** (deferred, below).
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock

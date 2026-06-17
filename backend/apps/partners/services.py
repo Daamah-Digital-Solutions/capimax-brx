@@ -21,11 +21,18 @@ import logging
 
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.models import Profile
 from apps.notifications.services import NotificationType, notify
 
 from .models import (
+    Assignment,
+    AssignmentEvent,
+    AssignmentStatus,
+    Deliverable,
+    DeliverableDocument,
+    DeliverableStatus,
     PartnerDirectoryStatus,
     PartnerKYBStatus,
     PartnerProfile,
@@ -206,3 +213,186 @@ def _resolve_partner(info: dict) -> PartnerProfile | None:
         if external:
             return PartnerProfile.objects.filter(user_id=external).first()
     return None
+
+
+# =========================================================================== #
+# Wave B — assignment / deliverable workflow. ADMIN assigns work; the partner uploads
+# deliverables + submits; the admin approves each or requests a revision. Each
+# transition writes an append-only AssignmentEvent (the activity feed source) and fires
+# notify() (Phase 10) INSIDE the transaction's atomic block — a notify failure can never
+# roll back or break a transition (savepoint-wrapped in notify()). NON-EARNING: nothing
+# here credits a balance.
+# =========================================================================== #
+class AssignmentError(Exception):
+    """A workflow transition was attempted from an invalid state."""
+
+
+def _log_event(assignment, event_type, *, actor=None, meta: dict | None = None) -> AssignmentEvent:
+    """Append one immutable event row (the derived activity feed reads these)."""
+    return AssignmentEvent.objects.create(
+        assignment=assignment, event_type=event_type, actor=actor, meta=meta or {}
+    )
+
+
+@transaction.atomic
+def create_assignment(
+    *, partner: PartnerProfile, prop, service_type: str, due_date=None,
+    notes: str = "", deliverables: list, admin=None,
+) -> Assignment:
+    """
+    ADMIN action: assign a Property to a KYB-approved partner with an admin-defined set
+    of deliverables. `deliverables` is a list of {name, name_ar?, due_date?} dicts.
+    Writes the ASSIGNED event + notifies the partner. The partner MUST be KYB-approved.
+    """
+    if partner.status != PartnerStatus.APPROVED:
+        raise AssignmentError("Partner must be KYB-approved before being assigned work.")
+
+    assignment = Assignment.objects.create(
+        partner=partner,
+        property=prop,
+        property_name=getattr(prop, "name", "") or "",
+        property_name_ar=getattr(prop, "name_ar", "") or "",
+        location=getattr(prop, "location", "") or "",
+        location_ar=getattr(prop, "location_ar", "") or "",
+        service_type=service_type,
+        due_date=due_date,
+        notes=notes or "",
+        assigned_by=admin,
+    )
+    for d in deliverables or []:
+        name = (d.get("name") or "").strip()
+        if not name:
+            continue
+        Deliverable.objects.create(
+            assignment=assignment,
+            name=name,
+            name_ar=(d.get("name_ar") or "").strip(),
+            due_date=d.get("due_date"),
+        )
+    _log_event(assignment, AssignmentEvent.EventType.ASSIGNED, actor=admin,
+               meta={"property": assignment.property_name})
+    notify(
+        partner.user, NotificationType.PARTNER_ASSIGNED,
+        params={"property": assignment.property_name, "service_type": service_type},
+        action_url="/strategic-partners",
+    )
+    return assignment
+
+
+@transaction.atomic
+def upload_deliverable_document(
+    deliverable: Deliverable, *, file, original_filename: str, file_size=None, actor=None,
+) -> DeliverableDocument:
+    """
+    PARTNER action: upload a document against one deliverable. The deliverable moves to
+    SUBMITTED, the assignment advances PENDING→IN_PROGRESS (and REVISION→IN_PROGRESS on a
+    re-upload). Writes the UPLOADED event + notifies the admin (deliverable submitted).
+    """
+    deliverable = Deliverable.objects.select_for_update().get(pk=deliverable.pk)
+    assignment = Assignment.objects.select_for_update().get(pk=deliverable.assignment_id)
+
+    doc = DeliverableDocument.objects.create(
+        deliverable=deliverable,
+        assignment=assignment,
+        file=file,
+        original_filename=original_filename or getattr(file, "name", "document"),
+        file_size=file_size if file_size is not None else getattr(file, "size", None),
+    )
+
+    deliverable.status = DeliverableStatus.SUBMITTED
+    deliverable.save(update_fields=["status", "updated_at"])
+
+    if assignment.status in (AssignmentStatus.PENDING, AssignmentStatus.REVISION):
+        assignment.status = AssignmentStatus.IN_PROGRESS
+        assignment.save(update_fields=["status", "updated_at"])
+
+    _log_event(assignment, AssignmentEvent.EventType.UPLOADED, actor=actor,
+               meta={"deliverable": deliverable.name, "property": assignment.property_name})
+    # The admin/assigner is the relevant party when a deliverable is submitted.
+    notify(
+        assignment.assigned_by, NotificationType.PARTNER_DELIVERABLE_SUBMITTED,
+        params={"deliverable": deliverable.name, "property": assignment.property_name},
+        action_url="/admin/partners/assignment/",
+    )
+    return doc
+
+
+@transaction.atomic
+def submit_assignment(assignment: Assignment, *, actor=None) -> Assignment:
+    """
+    PARTNER action: mark the assignment ready for review (IN_PROGRESS→SUBMITTED). Writes
+    the SUBMITTED event. Idempotent-ish: a no-op if already submitted/approved.
+    """
+    assignment = Assignment.objects.select_for_update().get(pk=assignment.pk)
+    if assignment.status in (AssignmentStatus.SUBMITTED, AssignmentStatus.APPROVED):
+        return assignment
+    assignment.status = AssignmentStatus.SUBMITTED
+    assignment.submitted_at = assignment.submitted_at or timezone.now()
+    assignment.save(update_fields=["status", "submitted_at", "updated_at"])
+    _log_event(assignment, AssignmentEvent.EventType.SUBMITTED, actor=actor,
+               meta={"property": assignment.property_name})
+    return assignment
+
+
+@transaction.atomic
+def approve_deliverable(deliverable: Deliverable, *, admin=None) -> Deliverable:
+    """
+    ADMIN action: approve one deliverable. Writes the APPROVED event + notifies the
+    partner. When ALL deliverables are approved, the assignment is marked APPROVED
+    (complete) → COMPLETED event + an all-completed notification to the partner.
+    """
+    deliverable = Deliverable.objects.select_for_update().get(pk=deliverable.pk)
+    assignment = Assignment.objects.select_for_update().get(pk=deliverable.assignment_id)
+
+    deliverable.status = DeliverableStatus.APPROVED
+    deliverable.save(update_fields=["status", "updated_at"])
+    _log_event(assignment, AssignmentEvent.EventType.APPROVED, actor=admin,
+               meta={"deliverable": deliverable.name, "property": assignment.property_name})
+    notify(
+        assignment.partner.user, NotificationType.PARTNER_DELIVERABLE_APPROVED,
+        params={"deliverable": deliverable.name, "property": assignment.property_name},
+        action_url="/strategic-partners",
+    )
+
+    # All deliverables approved → the assignment is complete.
+    dels = list(assignment.deliverables.all())
+    if dels and all(d.status == DeliverableStatus.APPROVED for d in dels):
+        if assignment.status != AssignmentStatus.APPROVED:
+            assignment.status = AssignmentStatus.APPROVED
+            assignment.completed_at = assignment.completed_at or timezone.now()
+            assignment.review_notes = ""
+            assignment.save(update_fields=["status", "completed_at", "review_notes", "updated_at"])
+            _log_event(assignment, AssignmentEvent.EventType.COMPLETED, actor=admin,
+                       meta={"property": assignment.property_name})
+            notify(
+                assignment.partner.user, NotificationType.PARTNER_ASSIGNMENT_COMPLETED,
+                params={"property": assignment.property_name},
+                action_url="/strategic-partners",
+            )
+    return deliverable
+
+
+@transaction.atomic
+def request_revision(deliverable: Deliverable, *, admin=None, review_notes: str = "") -> Deliverable:
+    """
+    ADMIN action: request changes on one deliverable (the ONLY admin→partner channel).
+    The deliverable + the assignment move to REVISION, `review_notes` is recorded, the
+    REVISION_REQUESTED event is written, and the partner is notified.
+    """
+    deliverable = Deliverable.objects.select_for_update().get(pk=deliverable.pk)
+    assignment = Assignment.objects.select_for_update().get(pk=deliverable.assignment_id)
+
+    deliverable.status = DeliverableStatus.REVISION
+    deliverable.save(update_fields=["status", "updated_at"])
+    assignment.status = AssignmentStatus.REVISION
+    assignment.review_notes = (review_notes or "")
+    assignment.save(update_fields=["status", "review_notes", "updated_at"])
+    _log_event(assignment, AssignmentEvent.EventType.REVISION_REQUESTED, actor=admin,
+               meta={"deliverable": deliverable.name, "property": assignment.property_name})
+    notify(
+        assignment.partner.user, NotificationType.PARTNER_REVISION_REQUESTED,
+        params={"deliverable": deliverable.name, "property": assignment.property_name,
+                "notes": review_notes or ""},
+        action_url="/strategic-partners",
+    )
+    return deliverable

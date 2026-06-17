@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,94 +15,37 @@ import {
   Calendar,
   User,
   FileText,
-  Eye,
-  Download,
-  MessageSquare,
+  Send,
+  ChevronRight,
   Filter,
   Search,
-  ChevronRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { PartnerVerificationCard } from "@/components/partner/PartnerVerificationCard";
+import { useAssignments } from "@/hooks/useAssignments";
+import { relativeTime } from "@/lib/notifications";
+import type { ApiAssignment } from "@/integrations/api/client";
+import { toast } from "sonner";
 
-interface AssignedAsset {
-  id: string;
-  name: string;
-  nameEn: string;
-  type: string;
-  location: string;
-  assignedDate: string;
-  dueDate: string;
-  status: "pending" | "in-progress" | "submitted" | "approved" | "revision";
-  progress: number;
-  deliverables: Deliverable[];
-}
+// service_type → localized badge label (the backend stays language-agnostic; mirrors the
+// Arabic labels the mock used: "تقييم عقاري" / "إدارة عقارية" / "تأمين عقاري").
+const SERVICE_LABEL: Record<string, { en: string; ar: string }> = {
+  valuation: { en: "Property Valuation", ar: "تقييم عقاري" },
+  "property-management": { en: "Property Management", ar: "إدارة عقارية" },
+  insurance: { en: "Property Insurance", ar: "تأمين عقاري" },
+};
 
-interface Deliverable {
-  id: string;
-  name: string;
-  nameEn: string;
-  status: "pending" | "submitted" | "approved" | "revision";
-  dueDate: string;
-}
-
-const assignedAssets: AssignedAsset[] = [
-  {
-    id: "1",
-    name: "برج المارينا السكني",
-    nameEn: "Marina Tower Residence",
-    type: "تقييم عقاري",
-    location: "دبي، الإمارات",
-    assignedDate: "2024-01-10",
-    dueDate: "2024-01-25",
-    status: "in-progress",
-    progress: 60,
-    deliverables: [
-      { id: "1", name: "تقرير التقييم", nameEn: "Valuation Report", status: "submitted", dueDate: "2024-01-20" },
-      { id: "2", name: "تحليل السوق", nameEn: "Market Analysis", status: "approved", dueDate: "2024-01-18" },
-      { id: "3", name: "صور العقار", nameEn: "Property Photos", status: "pending", dueDate: "2024-01-22" },
-    ],
-  },
-  {
-    id: "2",
-    name: "مجمع الواحة التجاري",
-    nameEn: "Oasis Commercial Complex",
-    type: "إدارة عقارية",
-    location: "أبوظبي، الإمارات",
-    assignedDate: "2024-01-05",
-    dueDate: "2024-02-05",
-    status: "pending",
-    progress: 20,
-    deliverables: [
-      { id: "1", name: "خطة الإدارة", nameEn: "Management Plan", status: "pending", dueDate: "2024-01-30" },
-      { id: "2", name: "تقرير الصيانة", nameEn: "Maintenance Report", status: "pending", dueDate: "2024-02-01" },
-    ],
-  },
-  {
-    id: "3",
-    name: "فندق النخيل",
-    nameEn: "Palm Hotel",
-    type: "تأمين عقاري",
-    location: "دبي، الإمارات",
-    assignedDate: "2024-01-01",
-    dueDate: "2024-01-15",
-    status: "approved",
-    progress: 100,
-    deliverables: [
-      { id: "1", name: "وثيقة التأمين", nameEn: "Insurance Policy", status: "approved", dueDate: "2024-01-12" },
-      { id: "2", name: "تقييم المخاطر", nameEn: "Risk Assessment", status: "approved", dueDate: "2024-01-10" },
-    ],
-  },
-];
-
-const activityLog = [
-  { id: "1", action: "تم رفع تقرير التقييم", asset: "برج المارينا", time: "منذ ساعتين" },
-  { id: "2", action: "تمت الموافقة على تحليل السوق", asset: "برج المارينا", time: "منذ 5 ساعات" },
-  { id: "3", action: "طلب مراجعة من المنصة", asset: "مجمع الواحة", time: "منذ يوم" },
-  { id: "4", action: "تم إكمال جميع التسليمات", asset: "فندق النخيل", time: "منذ 3 أيام" },
-];
+// AssignmentEvent.event_type → localized activity-feed action (derived, not stored).
+const EVENT_LABEL: Record<string, { en: string; ar: string }> = {
+  assigned: { en: "New assignment received", ar: "تم استلام مهمة جديدة" },
+  uploaded: { en: "Deliverable uploaded", ar: "تم رفع تسليم" },
+  submitted: { en: "Submitted for review", ar: "تم الإرسال للمراجعة" },
+  approved: { en: "Deliverable approved", ar: "تمت الموافقة على تسليم" },
+  revision_requested: { en: "Revision requested from the platform", ar: "طلب مراجعة من المنصة" },
+  completed: { en: "All deliverables completed", ar: "تم إكمال جميع التسليمات" },
+};
 
 export default function StrategicPartners() {
   const [activeTab, setActiveTab] = useState("assets");
@@ -110,11 +53,47 @@ export default function StrategicPartners() {
   const { t, isRTL, language } = useLanguage();
   const { user } = useAuth();
   // Phase 11 Wave A: a role=partner user does their entity KYB + fills their public-
-  // directory details here, before the (Wave B) assignment work portal below becomes
-  // meaningful. Mirrors how the developer KYB card surfaces on the owner dashboard.
+  // directory details here. Wave B: the assignment work portal below is now wired to the
+  // real /api/partner/assignments/ surface (mirrors how the developer KYB card surfaces).
   const isPartner = user?.profile?.role === "partner";
+  const { assignments, activity, uploadDeliverable, submitAssignment } = useAssignments();
 
-  const getStatusBadge = (status: AssignedAsset["status"]) => {
+  // Hidden per-asset file inputs (real deliverable upload, preserving the mock buttons).
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const serviceLabel = (code: string) =>
+    (language === "ar" ? SERVICE_LABEL[code]?.ar : SERVICE_LABEL[code]?.en) || code;
+
+  const filteredAssets = assignments.filter((a) => {
+    const q = searchTerm.toLowerCase();
+    return (
+      !q ||
+      a.name.toLowerCase().includes(q) ||
+      a.nameEn.toLowerCase().includes(q)
+    );
+  });
+
+  const handleUploadClick = (assetId: string) => fileInputs.current[assetId]?.click();
+
+  const handleFileChange = async (
+    asset: ApiAssignment,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    // Upload to the next deliverable still needing work (pending → revision).
+    const target =
+      asset.deliverables.find((d) => d.status === "pending" || d.status === "revision") ||
+      asset.deliverables.find((d) => d.status !== "approved");
+    if (!target) {
+      toast.info(language === "ar" ? "كل التسليمات مكتملة" : "All deliverables are complete");
+      return;
+    }
+    await uploadDeliverable(target.id, file);
+  };
+
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
         return <Badge variant="warning">{t("partners.statusPending")}</Badge>;
@@ -126,6 +105,8 @@ export default function StrategicPartners() {
         return <Badge variant="success">{t("partners.statusApproved")}</Badge>;
       case "revision":
         return <Badge variant="destructive">{t("partners.statusRevision")}</Badge>;
+      default:
+        return null;
     }
   };
 
@@ -148,7 +129,7 @@ export default function StrategicPartners() {
           <div className="flex items-center gap-2">
             <Badge variant="gold" className="px-4 py-2">
               <User className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-              {language === 'ar' ? 'شركة التقييم العقاري المتحدة' : 'United Real Estate Valuation Co.'}
+              {user?.email || (language === 'ar' ? 'شريك خدمات' : 'Service Partner')}
             </Badge>
           </div>
         </div>
@@ -164,7 +145,7 @@ export default function StrategicPartners() {
                 <Building2 className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">{assignedAssets.length}</p>
+                <p className="text-2xl font-bold text-foreground">{assignments.length}</p>
                 <p className="text-xs text-muted-foreground">{t("partners.assignedAssets")}</p>
               </div>
             </CardContent>
@@ -177,7 +158,7 @@ export default function StrategicPartners() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">
-                  {assignedAssets.filter((a) => a.status === "in-progress" || a.status === "pending").length}
+                  {assignments.filter((a) => a.status === "in-progress" || a.status === "pending").length}
                 </p>
                 <p className="text-xs text-muted-foreground">{t("partners.inProgress")}</p>
               </div>
@@ -191,7 +172,7 @@ export default function StrategicPartners() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">
-                  {assignedAssets.filter((a) => a.status === "approved").length}
+                  {assignments.filter((a) => a.status === "approved").length}
                 </p>
                 <p className="text-xs text-muted-foreground">{t("partners.completed")}</p>
               </div>
@@ -205,7 +186,7 @@ export default function StrategicPartners() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">
-                  {assignedAssets.filter((a) => a.status === "revision").length}
+                  {assignments.filter((a) => a.status === "revision").length}
                 </p>
                 <p className="text-xs text-muted-foreground">{t("partners.needsRevision")}</p>
               </div>
@@ -250,10 +231,24 @@ export default function StrategicPartners() {
               </Button>
             </div>
 
+            {filteredAssets.length === 0 && (
+              <Card className="bg-card/50 backdrop-blur border-border/50">
+                <CardContent className="p-12 text-center text-muted-foreground">
+                  {language === 'ar' ? 'لا توجد مهام مُسندة بعد' : 'No assignments yet'}
+                </CardContent>
+              </Card>
+            )}
+
             <div className="space-y-4">
-              {assignedAssets.map((asset) => (
+              {filteredAssets.map((asset) => (
                 <Card key={asset.id} className="bg-card/50 backdrop-blur border-border/50">
                   <CardContent className="p-6">
+                    <input
+                      type="file"
+                      hidden
+                      ref={(el) => (fileInputs.current[asset.id] = el)}
+                      onChange={(e) => handleFileChange(asset, e)}
+                    />
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -264,16 +259,25 @@ export default function StrategicPartners() {
 
                         <div className="flex flex-wrap items-center gap-4 text-sm">
                           <span className="flex items-center gap-1 text-muted-foreground">
-                            <Badge variant="outline">{asset.type}</Badge>
+                            <Badge variant="outline">{serviceLabel(asset.service_type)}</Badge>
                           </span>
                           <span className="flex items-center gap-1 text-muted-foreground">
-                            📍 {asset.location}
+                            📍 {language === 'ar' ? (asset.location_ar || asset.location) : asset.location}
                           </span>
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <Calendar className="w-4 h-4" />
-                            {t("partners.delivery")}: {asset.dueDate}
-                          </span>
+                          {asset.dueDate && (
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Calendar className="w-4 h-4" />
+                              {t("partners.delivery")}: {asset.dueDate}
+                            </span>
+                          )}
                         </div>
+
+                        {asset.status === "revision" && asset.review_notes && (
+                          <p className="mt-3 text-sm text-rose-500">
+                            {language === 'ar' ? 'ملاحظات المراجعة: ' : 'Revision notes: '}
+                            {asset.review_notes}
+                          </p>
+                        )}
 
                         <div className="mt-4">
                           <div className="flex items-center justify-between text-sm mb-2">
@@ -285,14 +289,21 @@ export default function StrategicPartners() {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-                          {t("partners.viewDetails")}
-                        </Button>
-                        <Button size="sm" className="bg-gradient-gold hover:opacity-90">
+                        <Button
+                          size="sm"
+                          className="bg-gradient-gold hover:opacity-90"
+                          disabled={asset.status === "approved"}
+                          onClick={() => handleUploadClick(asset.id)}
+                        >
                           <Upload className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
                           {t("partners.uploadFiles")}
                         </Button>
+                        {(asset.status === "in-progress" || asset.status === "revision") && (
+                          <Button variant="outline" size="sm" onClick={() => submitAssignment(asset.id)}>
+                            <Send className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                            {language === 'ar' ? 'إرسال للمراجعة' : 'Submit for review'}
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -337,7 +348,7 @@ export default function StrategicPartners() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-border/50">
-                  {assignedAssets.flatMap((asset) =>
+                  {assignments.flatMap((asset) =>
                     asset.deliverables.map((del) => (
                       <div
                         key={`${asset.id}-${del.id}`}
@@ -370,8 +381,8 @@ export default function StrategicPartners() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                          <span className="text-sm text-muted-foreground">{del.dueDate}</span>
-                          {getStatusBadge(del.status as AssignedAsset["status"])}
+                          {del.dueDate && <span className="text-sm text-muted-foreground">{del.dueDate}</span>}
+                          {getStatusBadge(del.status)}
                           <Button variant="ghost" size="icon">
                             <ChevronRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
                           </Button>
@@ -389,22 +400,40 @@ export default function StrategicPartners() {
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-lg">{t("partners.documents")}</CardTitle>
-                <Button size="sm">
-                  <Upload className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-                  {t("partners.uploadDocument")}
-                </Button>
               </CardHeader>
               <CardContent>
-                <div className="p-12 border-2 border-dashed border-border rounded-lg text-center">
-                  <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-foreground font-medium">{t("partners.dropFilesHere")}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{t("partners.fileTypes")}</p>
+                <div className="divide-y divide-border/50">
+                  {assignments.flatMap((asset) =>
+                    asset.deliverables
+                      .filter((del) => del.has_document)
+                      .map((del) => (
+                        <div key={`${asset.id}-${del.id}`} className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-foreground">{language === 'ar' ? del.name : del.nameEn}</h4>
+                              <p className="text-sm text-muted-foreground">{language === 'ar' ? asset.name : asset.nameEn}</p>
+                            </div>
+                          </div>
+                          {getStatusBadge(del.status)}
+                        </div>
+                      )),
+                  )}
+                  {assignments.every((a) => a.deliverables.every((d) => !d.has_document)) && (
+                    <div className="p-12 border-2 border-dashed border-border rounded-lg text-center">
+                      <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-foreground font-medium">{t("partners.dropFilesHere")}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t("partners.fileTypes")}</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Activity Log */}
+          {/* Activity Log — derived from the real AssignmentEvent feed. */}
           <TabsContent value="activity" className="mt-6">
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader>
@@ -412,16 +441,27 @@ export default function StrategicPartners() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-border/50">
-                  {activityLog.map((log) => (
-                    <div key={log.id} className="flex items-center gap-4 p-4">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                      <div className="flex-1">
-                        <p className="text-foreground">{log.action}</p>
-                        <p className="text-sm text-muted-foreground">{log.asset}</p>
-                      </div>
-                      <span className="text-sm text-muted-foreground">{log.time}</span>
+                  {activity.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground text-sm">
+                      {language === 'ar' ? 'لا يوجد نشاط بعد' : 'No activity yet'}
                     </div>
-                  ))}
+                  )}
+                  {activity.map((log) => {
+                    const action = (language === "ar" ? EVENT_LABEL[log.event_type]?.ar : EVENT_LABEL[log.event_type]?.en) || log.event_type;
+                    const asset = language === "ar" ? (log.property_ar || log.property) : log.property;
+                    return (
+                      <div key={log.id} className="flex items-center gap-4 p-4">
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                        <div className="flex-1">
+                          <p className="text-foreground">
+                            {action}{log.deliverable ? ` — ${log.deliverable}` : ""}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{asset}</p>
+                        </div>
+                        <span className="text-sm text-muted-foreground">{relativeTime(log.created_at, language)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

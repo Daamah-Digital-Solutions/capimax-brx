@@ -28,7 +28,7 @@ from io import StringIO
 
 from django.apps import apps as django_apps
 from django.core.management import call_command
-from django.test import override_settings
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -564,5 +564,280 @@ class PartnerNoMoneyTests(APITestCase):
         model_names = {m.__name__.lower() for m in django_apps.get_app_config("partners").get_models()}
         for forbidden in ("userbalance", "balance", "withdrawal", "earning", "payout", "wallet"):
             self.assertNotIn(forbidden, model_names)
-        # The only model in the partners app is the PartnerProfile.
-        self.assertEqual(model_names, {"partnerprofile"})
+        # The partners app is the KYB/directory profile + the Wave-B work-portal models —
+        # and NOTHING money-related (partners never earn).
+        self.assertEqual(
+            model_names,
+            {"partnerprofile", "assignment", "deliverable", "deliverabledocument",
+             "assignmentevent"},
+        )
+
+
+# =========================================================================== #
+# Wave B — assignment / deliverable workflow. Admin assigns work → partner uploads +
+# submits → admin approves / requests revision; derived progress + derived activity
+# feed; notify() at each transition (notify-failure-safe); NON-EARNING.
+# =========================================================================== #
+from unittest import mock
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+from apps.notifications.models import Notification
+from apps.properties.models import Property
+from apps.properties.tests import _valid_property_kwargs
+
+from .models import (
+    Assignment,
+    AssignmentEvent,
+    AssignmentStatus,
+    Deliverable,
+    DeliverableDocument,
+    DeliverableStatus,
+    PartnerServiceType,
+)
+from .services import (
+    AssignmentError,
+    approve_deliverable,
+    create_assignment,
+    request_revision,
+    submit_assignment,
+    upload_deliverable_document,
+)
+
+
+def _approved_partner(email):
+    """A user with role=partner and a KYB-APPROVED PartnerProfile (passes the portal gate)."""
+    user = _mk_user(email)
+    partner, _ = get_or_create_partner(user, defaults={"contact_name": "S", "email": user.email})
+    partner.mark_approved()
+    partner.company_name = "Vendor Co"
+    partner.save()
+    return user, partner
+
+
+def _property(slug="assign-prop-1"):
+    p = Property(**_valid_property_kwargs(slug=slug))
+    p.save()
+    return p
+
+
+def _admin_user(email="assign-admin@example.com"):
+    return User.objects.create_user(email=email, password="pw-12345-strong")
+
+
+_DELS = [
+    {"name": "Valuation Report", "name_ar": "تقرير التقييم"},
+    {"name": "Market Analysis", "name_ar": "تحليل السوق"},
+]
+
+
+def _pdf(name="deliverable.pdf"):
+    return SimpleUploadedFile(name, b"%PDF-1.4 fake", content_type="application/pdf")
+
+
+class AssignmentCreateTests(TestCase):
+    def test_admin_assign_creates_pending_with_deliverables_and_notifies(self):
+        admin = _admin_user()
+        user, partner = _approved_partner("assign1@example.com")
+        prop = _property()
+        a = create_assignment(
+            partner=partner, prop=prop, service_type=PartnerServiceType.VALUATION,
+            notes="Please value the tower.", deliverables=_DELS, admin=admin,
+        )
+        self.assertEqual(a.status, AssignmentStatus.PENDING)
+        self.assertEqual(a.deliverables.count(), 2)
+        self.assertEqual(a.property_name, prop.name)        # denormalized
+        self.assertEqual(a.property_name_ar, prop.name_ar)
+        # ASSIGNED event written + partner notified.
+        self.assertTrue(a.events.filter(event_type=AssignmentEvent.EventType.ASSIGNED).exists())
+        self.assertEqual(
+            Notification.objects.filter(
+                user=user, type=Notification.Type.PARTNER_ASSIGNED
+            ).count(), 1
+        )
+
+    def test_cannot_assign_non_kyb_approved_partner(self):
+        admin = _admin_user("a2@example.com")
+        user = _mk_user("pending-partner-assign@example.com")
+        partner, _ = get_or_create_partner(user, defaults={"contact_name": "S", "email": user.email})
+        prop = _property("assign-prop-2")
+        with self.assertRaises(AssignmentError):
+            create_assignment(
+                partner=partner, prop=prop, service_type=PartnerServiceType.VALUATION,
+                deliverables=_DELS, admin=admin,
+            )
+
+
+class PartnerPortalApiTests(APITestCase):
+    def setUp(self):
+        self.admin = _admin_user("portal-admin@example.com")
+        self.user, self.partner = _approved_partner("portal@example.com")
+        self.prop = _property("portal-prop")
+        self.assignment = create_assignment(
+            partner=self.partner, prop=self.prop, service_type=PartnerServiceType.VALUATION,
+            deliverables=_DELS, admin=self.admin,
+        )
+
+    def test_portal_requires_kyb_approved_partner(self):
+        # A user with no (or pending) partner profile is denied the portal.
+        outsider = _mk_user("outsider@example.com", role=Profile.Role.INVESTOR)
+        self.client.force_authenticate(outsider)
+        self.assertEqual(
+            self.client.get("/api/partner/assignments/").status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_partner_lists_only_own_assignments(self):
+        # A second partner has their own assignment; neither sees the other's.
+        other_user, other_partner = _approved_partner("portal-other@example.com")
+        create_assignment(
+            partner=other_partner, prop=_property("portal-prop-2"),
+            service_type=PartnerServiceType.INSURANCE, deliverables=_DELS, admin=self.admin,
+        )
+        self.client.force_authenticate(self.user)
+        resp = self.client.get("/api/partner/assignments/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {a["id"] for a in resp.data["assignments"]}
+        self.assertEqual(ids, {str(self.assignment.id)})
+
+    def test_cross_partner_detail_404(self):
+        other_user, _ = _approved_partner("portal-x@example.com")
+        self.client.force_authenticate(other_user)
+        resp = self.client.get(f"/api/partner/assignments/{self.assignment.id}/")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_upload_moves_status_and_notifies_admin(self):
+        deliverable = self.assignment.deliverables.first()
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            f"/api/partner/deliverables/{deliverable.id}/upload/",
+            {"file": _pdf()}, format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        deliverable.refresh_from_db()
+        self.assertEqual(deliverable.status, DeliverableStatus.SUBMITTED)
+        self.assertEqual(DeliverableDocument.objects.filter(deliverable=deliverable).count(), 1)
+        # Assignment advanced pending → in-progress.
+        self.assertEqual(resp.data["status"], AssignmentStatus.IN_PROGRESS)
+        # Admin (assigner) notified that a deliverable was submitted.
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.admin, type=Notification.Type.PARTNER_DELIVERABLE_SUBMITTED
+            ).count(), 1
+        )
+
+    def test_cross_partner_upload_404(self):
+        deliverable = self.assignment.deliverables.first()
+        other_user, _ = _approved_partner("portal-up-x@example.com")
+        self.client.force_authenticate(other_user)
+        resp = self.client.post(
+            f"/api/partner/deliverables/{deliverable.id}/upload/",
+            {"file": _pdf()}, format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_submit_marks_ready_for_review(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(f"/api/partner/assignments/{self.assignment.id}/submit/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], AssignmentStatus.SUBMITTED)
+        self.assertTrue(
+            self.assignment.events.filter(event_type=AssignmentEvent.EventType.SUBMITTED).exists()
+        )
+
+    def test_progress_is_derived_and_activity_feed_reflects_transitions(self):
+        d1, d2 = list(self.assignment.deliverables.all())
+        # Upload to one, approve it → 1/2 = 50%.
+        upload_deliverable_document(d1, file=_pdf(), original_filename="r.pdf", actor=self.user)
+        approve_deliverable(d1, admin=self.admin)
+        self.client.force_authenticate(self.user)
+        resp = self.client.get("/api/partner/assignments/")
+        asset = resp.data["assignments"][0]
+        self.assertEqual(asset["progress"], 50)
+        # Activity feed (derived from events) carries the real transitions.
+        event_types = {e["event_type"] for e in resp.data["activity"]}
+        self.assertIn("assigned", event_types)
+        self.assertIn("uploaded", event_types)
+        self.assertIn("approved", event_types)
+
+
+class AssignmentReviewTests(TestCase):
+    def setUp(self):
+        self.admin = _admin_user("review-admin@example.com")
+        self.user, self.partner = _approved_partner("review-partner@example.com")
+        self.assignment = create_assignment(
+            partner=self.partner, prop=_property("review-prop"),
+            service_type=PartnerServiceType.VALUATION, deliverables=_DELS, admin=self.admin,
+        )
+
+    def test_approving_all_deliverables_completes_assignment(self):
+        for d in self.assignment.deliverables.all():
+            approve_deliverable(d, admin=self.admin)
+        self.assignment.refresh_from_db()
+        self.assertEqual(self.assignment.status, AssignmentStatus.APPROVED)
+        self.assertIsNotNone(self.assignment.completed_at)
+        self.assertTrue(
+            self.assignment.events.filter(event_type=AssignmentEvent.EventType.COMPLETED).exists()
+        )
+        # Partner notified on each approval + once on completion.
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.user, type=Notification.Type.PARTNER_DELIVERABLE_APPROVED
+            ).count(), 2
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.user, type=Notification.Type.PARTNER_ASSIGNMENT_COMPLETED
+            ).count(), 1
+        )
+
+    def test_request_revision_moves_status_records_notes_notifies(self):
+        d1 = self.assignment.deliverables.first()
+        request_revision(d1, admin=self.admin, review_notes="Use the latest comparables.")
+        d1.refresh_from_db()
+        self.assignment.refresh_from_db()
+        self.assertEqual(d1.status, DeliverableStatus.REVISION)
+        self.assertEqual(self.assignment.status, AssignmentStatus.REVISION)
+        self.assertEqual(self.assignment.review_notes, "Use the latest comparables.")
+        self.assertTrue(
+            self.assignment.events.filter(
+                event_type=AssignmentEvent.EventType.REVISION_REQUESTED
+            ).exists()
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.user, type=Notification.Type.PARTNER_REVISION_REQUESTED
+            ).count(), 1
+        )
+
+    def test_revision_then_reupload_returns_to_in_progress(self):
+        d1 = self.assignment.deliverables.first()
+        request_revision(d1, admin=self.admin, review_notes="redo")
+        upload_deliverable_document(d1, file=_pdf(), original_filename="redo.pdf", actor=self.user)
+        d1.refresh_from_db()
+        self.assignment.refresh_from_db()
+        self.assertEqual(d1.status, DeliverableStatus.SUBMITTED)
+        self.assertEqual(self.assignment.status, AssignmentStatus.IN_PROGRESS)
+
+    def test_notify_failure_never_breaks_the_transition(self):
+        d1 = self.assignment.deliverables.first()
+        with mock.patch(
+            "apps.notifications.services.Notification.objects.create",
+            side_effect=Exception("boom"),
+        ):
+            approve_deliverable(d1, admin=self.admin)  # must NOT raise
+        d1.refresh_from_db()
+        self.assertEqual(d1.status, DeliverableStatus.APPROVED)  # transition committed
+        # The approval event still recorded; only the notification was swallowed.
+        self.assertTrue(
+            self.assignment.events.filter(event_type=AssignmentEvent.EventType.APPROVED).exists()
+        )
+
+    def test_no_balance_credited_anywhere_in_the_workflow(self):
+        from apps.wallets.models import BalanceTransaction, UserBalance
+        for d in self.assignment.deliverables.all():
+            upload_deliverable_document(d, file=_pdf(), original_filename="x.pdf", actor=self.user)
+            approve_deliverable(d, admin=self.admin)
+        # The partner never gets a balance or any ledger entry — NON-EARNING.
+        self.assertFalse(UserBalance.objects.filter(user=self.user).exists())
+        self.assertFalse(BalanceTransaction.objects.filter(balance__user=self.user).exists())
