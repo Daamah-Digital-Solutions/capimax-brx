@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { PartnerVerificationCard } from "@/components/partner/PartnerVerificationCard";
 
 interface AssignedAsset {
   id: string;
@@ -106,6 +108,11 @@ export default function StrategicPartners() {
   const [activeTab, setActiveTab] = useState("assets");
   const [searchTerm, setSearchTerm] = useState("");
   const { t, isRTL, language } = useLanguage();
+  const { user } = useAuth();
+  // Phase 11 Wave A: a role=partner user does their entity KYB + fills their public-
+  // directory details here, before the (Wave B) assignment work portal below becomes
+  // meaningful. Mirrors how the developer KYB card surfaces on the owner dashboard.
+  const isPartner = user?.profile?.role === "partner";
 
   const getStatusBadge = (status: AssignedAsset["status"]) => {
     switch (status) {
@@ -145,6 +152,9 @@ export default function StrategicPartners() {
             </Badge>
           </div>
         </div>
+
+        {/* Partner entity verification (KYB) + public-directory details — Phase 11 Wave A. */}
+        {isPartner && <PartnerVerificationCard />}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

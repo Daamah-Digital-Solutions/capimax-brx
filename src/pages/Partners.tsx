@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { partnerApi, type PublicPartner } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,144 +36,29 @@ interface Partner {
   verified: boolean;
 }
 
-const partners: Partner[] = [
-  // Developers
-  {
-    id: '1',
-    name: 'Elite Gate Properties',
-    nameAr: 'إيليت جيت للعقارات',
-    category: 'developers',
-    description: 'Premier real estate developer delivering exceptional residential and commercial projects.',
-    descriptionAr: 'مطور عقاري متميز يقدم مشاريع سكنية وتجارية استثنائية.',
-    logo: '/placeholder.svg',
-    country: 'UAE',
-    countryAr: 'الإمارات',
-    website: 'https://www.elitegateproperties.com',
-    verified: true
-  },
-  {
-    id: '2',
-    name: 'TDH Development',
-    nameAr: 'تي دي إتش للتطوير',
-    category: 'developers',
-    description: 'Innovative development company specializing in luxury real estate projects.',
-    descriptionAr: 'شركة تطوير مبتكرة متخصصة في المشاريع العقارية الفاخرة.',
-    logo: '/placeholder.svg',
-    country: 'UK',
-    countryAr: 'المملكة المتحدة',
-    website: 'https://www.tdhdevelopment.com',
-    verified: true
-  },
-  {
-    id: '3',
-    name: 'Capimax Development',
-    nameAr: 'كابيماكس للتطوير',
-    category: 'developers',
-    description: 'Strategic real estate development company with diverse portfolio across key markets.',
-    descriptionAr: 'شركة تطوير عقاري استراتيجية مع محفظة متنوعة في الأسواق الرئيسية.',
-    logo: '/placeholder.svg',
-    country: 'UAE',
-    countryAr: 'الإمارات',
-    website: 'https://www.capimaxgroup.com',
-    verified: true
-  },
-  // Hotels
-  {
-    id: '4',
-    name: 'Priminn Hotels',
-    nameAr: 'بريم إن للفنادق',
-    category: 'hotels',
-    description: 'Leading hospitality developer creating world-class hotel and resort destinations.',
-    descriptionAr: 'مطور ضيافة رائد يبتكر وجهات فندقية ومنتجعات عالمية المستوى.',
-    logo: '/placeholder.svg',
-    country: 'USA',
-    countryAr: 'أمريكا',
-    website: 'https://www.priminnhotel.com',
-    verified: true
-  },
-  // Property Management
-  {
-    id: '5',
-    name: 'Nova Property Management',
-    nameAr: 'نوفا لإدارة العقارات',
-    category: 'property-management',
-    description: 'Professional property management services ensuring optimal asset performance.',
-    descriptionAr: 'خدمات إدارة عقارات احترافية تضمن الأداء الأمثل للأصول.',
-    logo: '/placeholder.svg',
-    country: 'UK',
-    countryAr: 'المملكة المتحدة',
-    website: 'https://www.novapropertymanagement.com',
-    verified: true
-  },
-  // Insurance
-  {
-    id: '6',
-    name: 'Assurax Insurance',
-    nameAr: 'أشوراكس للتأمين',
-    category: 'insurance',
-    description: 'Comprehensive insurance solutions for real estate and investment protection.',
-    descriptionAr: 'حلول تأمين شاملة لحماية العقارات والاستثمارات.',
-    logo: '/placeholder.svg',
-    country: 'UK',
-    countryAr: 'المملكة المتحدة',
-    website: 'https://www.assuraxinsurance.com',
-    verified: true
-  },
-  {
-    id: '7',
-    name: 'HCC International Insurance',
-    nameAr: 'إتش سي سي للتأمين الدولي',
-    category: 'insurance',
-    description: 'International insurance provider specializing in property and asset coverage.',
-    descriptionAr: 'مزود تأمين دولي متخصص في تغطية العقارات والأصول.',
-    logo: '/placeholder.svg',
-    country: 'USA',
-    countryAr: 'أمريكا',
-    website: 'https://www.hccinternationalinsurance.com',
-    verified: true
-  },
-  // Valuation
-  {
-    id: '8',
-    name: 'CIM Financial Group',
-    nameAr: 'سي آي إم للمجموعة المالية',
-    category: 'valuation',
-    description: 'Professional valuation and financial advisory services for real estate assets.',
-    descriptionAr: 'خدمات تقييم واستشارات مالية احترافية للأصول العقارية.',
-    logo: '/placeholder.svg',
-    country: 'USA',
-    countryAr: 'أمريكا',
-    website: 'https://www.cimfinancialgroup.com',
-    verified: true
-  },
-  {
-    id: '9',
-    name: 'Capimax Financial Management',
-    nameAr: 'كابيماكس للإدارة المالية',
-    category: 'valuation',
-    description: 'Expert financial management and valuation services for investment properties.',
-    descriptionAr: 'خدمات إدارة مالية وتقييم متخصصة للعقارات الاستثمارية.',
-    logo: '/placeholder.svg',
-    country: 'UAE',
-    countryAr: 'الإمارات',
-    website: 'https://www.capimaxgroup.com',
-    verified: true
-  },
-  // Digital Finance
-  {
-    id: '10',
-    name: 'Nova Digital Finance',
-    nameAr: 'نوفا للتمويل الرقمي',
-    category: 'digital-finance',
-    description: 'Interest-free digital financing solutions for tokenized real estate investments.',
-    descriptionAr: 'حلول تمويل رقمية بدون فوائد للاستثمارات العقارية المرمزة.',
-    logo: '/placeholder.svg',
-    country: 'UAE',
-    countryAr: 'الإمارات',
-    website: 'https://www.novadf.com',
-    verified: true
-  }
-];
+const PLACEHOLDER_LOGO = '/placeholder.svg';
+
+/**
+ * Phase 11 Wave A: the public partners directory is now served by the backend
+ * (GET /api/partners/directory/, AllowAny) — only partners whose directory listing an
+ * admin has approved appear here. We map the API rows into the existing `Partner` shape
+ * so the rendered cards/search/filters are byte-for-byte the same as the prior mock.
+ */
+function mapPublicPartner(p: PublicPartner): Partner {
+  return {
+    id: p.id,
+    name: p.name ?? '',
+    nameAr: p.nameAr ?? '',
+    category: p.category ?? '',
+    description: p.description ?? '',
+    descriptionAr: p.descriptionAr ?? '',
+    logo: p.logo_url || PLACEHOLDER_LOGO,
+    country: p.country ?? '',
+    countryAr: p.countryAr ?? '',
+    website: p.website ?? '',
+    verified: p.verified,
+  };
+}
 
 const categories = [
   { id: 'all', label: 'All Partners', labelAr: 'جميع الشركاء', icon: Building2 },
@@ -196,6 +82,23 @@ export default function Partners() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeCountry, setActiveCountry] = useState('all');
+  const [partners, setPartners] = useState<Partner[]>([]);
+
+  // Poll-on-mount (no realtime, platform-wide). Public endpoint → directory-approved only.
+  useEffect(() => {
+    let active = true;
+    partnerApi
+      .directory()
+      .then((rows) => {
+        if (active) setPartners(rows.map(mapPublicPartner));
+      })
+      .catch(() => {
+        if (active) setPartners([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredPartners = partners.filter(partner => {
     const matchesSearch = partner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

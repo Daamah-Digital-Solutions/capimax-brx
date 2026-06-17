@@ -135,6 +135,28 @@ class HasActivatedDeveloper(BasePermission):
         return bool(developer and developer.status == "approved")
 
 
+class HasActivatedPartner(BasePermission):
+    """
+    Gate requiring an APPROVED strategic-partner profile before privileged partner
+    capabilities (the Wave B assignment/deliverable work portal). Mirrors
+    HasActivatedDeveloper: partner activation is automatic via the signed Sumsub KYB
+    webhook (partner business level) — no admin in the normal path (Phase 11 Wave A;
+    PARTNERS_SURFACE.md).
+
+    The authoritative check is the PartnerProfile record (status == 'approved'), since
+    partner verification is a related entity, not just an auth role. This is KYB ONLY —
+    it is INDEPENDENT of the public-directory visibility (directory_status), which gates
+    the public listing, not partner capabilities. Pair with IsAuthenticated so an
+    anonymous request is rejected by auth, not a missing `.partner_profile`.
+    """
+
+    message = "Approved strategic-partner (KYB) status is required for this action."
+
+    def has_permission(self, request, view):
+        partner = getattr(request.user, "partner_profile", None)
+        return bool(partner and partner.status == "approved")
+
+
 class HasActivatedPropertySubmitter(BasePermission):
     """
     Gate for the SHARED property-submission machinery (apps/owner: PropertySubmission +

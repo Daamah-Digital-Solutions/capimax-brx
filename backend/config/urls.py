@@ -32,6 +32,11 @@ urlpatterns = [
     path("api/owner/", include("apps.owner.urls")),
     # Property Developer onboarding (Phase 8 Wave A): developer profile + entity KYB (Sumsub). DEVELOPER_SURFACE.md.
     path("api/developer/", include("apps.developer.urls")),
+    # Strategic Partner onboarding (Phase 11 Wave A): partner profile + entity KYB (Sumsub)
+    # + directory-details entry. Auth-scoped to the caller's own profile. PARTNERS_SURFACE.md.
+    path("api/partner/", include("apps.partners.urls")),
+    # Public partners directory (Phase 11 Wave A): AllowAny; lists directory-approved partners only.
+    path("api/partners/", include("apps.partners.public_urls")),
     # Investor distributions (Phase 9): admin-declared pro-rata cash yield → holders' balances. DISTRIBUTIONS_SURFACE.md.
     path("api/distributions/", include("apps.distributions.urls")),
     # In-app notifications (Phase 10): self-scoped list + unread-count + mark-read + soft-delete. NOTIFICATIONS_SURFACE.md.

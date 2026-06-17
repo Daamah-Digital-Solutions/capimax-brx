@@ -1190,7 +1190,58 @@ with no scheduling, so nothing is pending/scheduled (honest, not fabricated; the
 future scheduling wave). (2) `yield` shown is the property's `expected_yield` (catalog figure), not a computed
 realized yield. (3) Single-role: a holder gets one payout per distribution (one ACTIVE position per property).
 
-## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 10 complete)
+## Phase 11 — Partner role, Wave A: partner KYB + public directory (COMPLETE ✅)
+**Scope (Wave A only):** the **STRANDED** `role=partner` (a SERVICE VENDOR — valuation / property-management /
+insurance firm) now has an activation path, mirroring developer KYB exactly. A **thin, NON-EARNING variant** of
+owner/developer: **NO money — no `UserBalance`, no `Withdrawal`, no earnings, EVER** (a test asserts the partners
+app defines only `PartnerProfile` and no money model). Wave B (assignment/deliverable workflow) is NOT built.
+
+**Two INDEPENDENT states (the key decision):**
+- `status`/`kyb_status` — the VERIFICATION gate (`HasActivatedPartner`; activates `role_status` when role=partner).
+  Driven automatically by the signed Sumsub webhook (partner business level). KYB approval does **NOT** publish.
+- `directory_status` (`pending|approved|rejected`, default pending) — whether the partner appears in the PUBLIC
+  directory. A **separate admin approve/reject** step, independent of KYB. The PARTNER fills the directory data
+  (`company_name`/`_ar`, `category`, `description`/`_ar`, `logo_url`, `country`/`_ar`, `website`); the **admin
+  NEVER enters data — only approves/rejects visibility**.
+
+**Backend (`apps/partners`):** `PartnerProfile` (mirrors `DeveloperProfile` KYB block + the directory fields +
+the independent `directory_status`/`directory_reviewed_at`/`directory_review_notes`); `services` =
+`approve_kyb`/`reject_kyb`/`submit_kyb` + `try_handle_partner_kyb_webhook`/`_resolve_partner` (mirror developer)
+**plus** `approve_directory`/`reject_directory` (directory-only, never touches KYB). Endpoints `/api/partner/`
+(self-scoped: profile GET/POST [POST = apply when none, else update own directory details], kyb/submit,
+kyb/access-token → 503 when keys deferred) + PUBLIC `/api/partners/directory/` (AllowAny, lists `directory_status
+== approved` only, lean shape, `verified` = KYB-approved). The shared signed Sumsub webhook is now **5-WAY**
+(partner → developer → owner → LP → investor, routed by distinct level name `SUMSUB_PARTNER_KYB_LEVEL_NAME`); each
+resolver matches only its own table/level so they never collide. `HasActivatedPartner` gate (KYB-based).
+`dev_grant_partner_kyb` (DEBUG-only, --reject/--revoke). Admin has **TWO clearly-separated, independent actions**:
+(1) KYB exception approve/reject, (2) approve/reject directory listing. `/developers` API hub UNTOUCHED.
+
+**Frontend (smallest change set):** `partnerApi` (profile/update/kyb/access-token + public `directory()`) +
+`usePartnerProfile` + `PartnerVerificationCard` (KYB flow mirroring the developer card + the partner's own
+directory-details form + the live `directory_status` badge), surfaced on `StrategicPartners.tsx` for
+`role=partner`. `Partners.tsx` repointed off its 10-item mock to `GET /api/partners/directory/`, mapping rows into
+the EXACT prior `Partner` card shape (name/category/country/website/verified + search + category/country filters,
+bilingual EN/AR preserved). No money UI anywhere.
+
+**Verification:** **+30 partner tests; full suite 320 green** (was 290). Covers: apply→pending + directory data;
+directory-details update; KYB submit→under_review; webhook GREEN→approved+role-activated (directory stays
+pending), RED→rejected, bad signature→401 no-change, resolve-by-level; **5-way cross-claim isolation explicit**
+(investor KYC + LP/owner/developer KYB all unaffected, and a partner event touches none of them);
+`dev_grant_partner_kyb` approve/revoke/refuse-in-prod; self-scoped (can't see another's profile);
+`HasActivatedPartner` allows approved + denies others (+ directory-approved-alone does NOT open the KYB gate);
+**directory INDEPENDENCE** (KYB-approved-but-pending NOT listed; `approve_directory`→appears; reject→stays out;
+public AllowAny returns only directory-approved); **no money model created**. Dev-DB journey: partner A
+apply→fill directory→KYB grant (role activated, directory still pending)→admin approve directory ⇒ appears in
+`/api/partners/directory/`; partner B KYB-approved but directory-pending ⇒ does NOT appear. Browser-verified on
+`/partners` (Arabic): "ليستد للتقييم" card renders (category/country/verified/Visit-Website, exact shape), the
+directory-pending partner is absent; `StrategicPartners.tsx` portal still renders for a guest (no card shown).
+
+**Flags (deliberate, Wave A):** (1) `directory_status` is reset by neither apply nor a directory edit — only the
+admin approve/reject drives it (locked decision); editing an approved listing keeps it approved (no auto re-review
+in v1). (2) The directory country filter chips on `Partners.tsx` stay the fixed UAE/UK/USA/all set; a partner
+whose country is outside that set still appears under "All". (3) Wave B (assignment/deliverable workflow) deferred.
+
+## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 11 Wave A complete)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
 **DELIVERED — five roles' worth of functionality, all proven on REAL BSC Testnet:**
@@ -1202,18 +1253,57 @@ Consolidated for compact-resilience — the per-phase sections above are authori
 - **Developer** (Phase 8 A–D): **COMPLETE, built by reusing owner machinery** — separate `DeveloperProfile` + `HasActivatedDeveloper` (Sumsub developer level; the shared signed webhook is now **4-way**: developer/owner/LP/investor by distinct level name); generalized `HasActivatedPropertySubmitter` gate (owner **or** developer submits the **same** wizard); review/publish + earnings were **submitter-agnostic → ZERO code change**, proven on testnet (developer credited net-of-fees, withdrew). **Committed + pushed: commit `eaefd58`.**
 - **Distributions** (Phase 9): **COMPLETE** — admin declares a property cash-yield pool → split **pro-rata by full `token_amount`** across current ACTIVE holders (cent-exact, remainder to largest) → each holder's `UserBalance` credited (`source="distribution"`, **internal-balance only, NO on-chain move**), `total_distributions`/`last_distribution_date` bumped; idempotent (one payout per holder/distribution). `Distributions.tsx` repointed to `GET /api/distributions/`. DISTINCT from primary-sale earnings. Proven via the dev-DB journey ($1000 → $500/$300/$200, Σ cent-exact, withdrawn) + 15 tests. See "Phase 9" above.
 - **Notifications** (Phase 10): **COMPLETE** — in-app notifications emitted server-side at all 11 event points (KYC/KYB, wallet, mint + earnings, distribution, secondary sale BOTH parties, withdrawal, submission publish/reject), **inside each host's atomic block** (a `notify()` failure can't break the event — savepoint-wrapped). Stored as **type + params + action_url** (no display strings); the frontend renders EN/AR from i18n by type. Self-scoped read + unread-count + mark-read/mark-all + **soft delete**. Bell + sidebar show the live unread count; `Notifications.tsx` repointed off its mock. In-app only (no email/SMS/push; prefs deferred). Proven via browser journey + 19 tests. See "Phase 10" above.
+- **Partner (Phase 11 Wave A): COMPLETE** ✅ — the SERVICE-VENDOR `role=partner` (thin NON-EARNING variant of
+  owner/developer; **no money ever**) now has an activation path: separate `PartnerProfile` + `HasActivatedPartner`
+  (Sumsub partner level; the shared signed webhook is now **5-way**: partner/developer/owner/LP/investor) + **two
+  INDEPENDENT states** — `kyb_status` (verification) and `directory_status` (public-directory visibility, a
+  separate admin approve/reject step; partner self-enters the directory data, admin never does). Public
+  `GET /api/partners/directory/` lists directory-approved partners only; `Partners.tsx` repointed off its mock.
+  +30 tests, full suite 320 green. See "Phase 11" above. **(Wave B = assignment/deliverable workflow — not built.)**
 - **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
 
-**➡️ NEXT PLANNED BUILD** — notifications are DONE (Phase 10). NEXT is **to be chosen by the user**. The largest
-remaining piece is the **bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
-`SecondaryMarket.tsx` implied — DEFERRED so far; the peer market already ships real one-shot listings (the
-order-book i18n keys/structure are preserved so it can return). The other remaining work is the **mock domains**
-(reports export, broker, partners, family, reinvestments, installments), each still frontend-only.
+**➡️ NEXT PLANNED BUILD = the PARTNER domain Wave B** (the assignment/deliverable workflow — admin assigns a
+`Property`→partner with a service type + due date + admin-defined deliverables; partner uploads via a
+`SubmissionDocument`-style model; admin approves/requests revision; derived activity feed + progress; `notify()`
+per transition; one-way comms). Partner **Wave A (KYB + public directory) is COMPLETE** — see "Phase 11" above.
+NON-earning still holds for Wave B: **no money, no `UserBalance`, no withdrawal, ever.** Latest committed checkpoint
+on `origin/main` = **`16ff884`** (Phase 10); Phase 11 Wave A is implemented locally, not yet committed.
 
-**REMAINING** (after notifications): the **bid/ask ORDER BOOK + matching engine** (price
-discovery / partial fills — DEFERRED, the largest remaining piece; the peer market ships real one-shot
-listings, order-book i18n preserved); and the other **mock domains** (reports export, broker,
-partners, family, reinvestments, installments).
+**REMAINING** (after partner Wave B): the other **mock domains** (reports export, broker, family,
+reinvestments, installments); and the **bid/ask ORDER BOOK + matching engine** (price discovery / partial fills —
+DEFERRED, the largest remaining piece; the peer market ships real one-shot listings, order-book i18n preserved).
+
+## Partner domain — Wave A COMPLETE ✅; Wave B = NEXT (scope DECIDED)
+**Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **Wave A (partner KYB + public directory)
+is BUILT — see "Phase 11" above.** The partner is a **SERVICE VENDOR** — a
+valuation / property-management / insurance firm the admin assigns work to. It is a **thin, NON-EARNING variant
+of owner/developer**: it reuses the KYB + document-upload + activation machinery but has **NO money flow — no
+`UserBalance`, no `Withdrawal`, no commission, EVER** (the frontend has zero money fields for partners). `role=
+partner` existed in core (`Profile.Role.PARTNER`, self-selectable, requires verification) but was **STRANDED** —
+no activation path — exactly the gap the developer role had pre-Phase-8; **Wave A (Phase 11) FIXED it.**
+
+- **Two INDEPENDENT partner states** (key decision): `kyb_status` (gates the Wave-B work portal, mirrors developer
+  KYB) **and** `directory_status` (`pending|approved|rejected`, gates appearing in the public `Partners.tsx`
+  directory). They are **independent** — a partner can be KYB-verified yet NOT directory-approved, or vice-versa.
+- **The partner fills their OWN company details** (`company_name`/`_ar`, `category`, `description`/`_ar`,
+  `logo_url`, `country`/`_ar`, `website`). **The admin NEVER enters directory data** — the admin only
+  approves/rejects directory visibility (`directory_status`). The public directory endpoint lists ONLY
+  `directory_status == approved` partners.
+
+- **Wave A — DONE ✅ (Phase 11):** partner KYB — separate **`PartnerProfile`** (mirrors `DeveloperProfile` KYB
+  shape: status + kyb_status machine + `sumsub_applicant_id` + `mark_kyb_submitted`/`mark_approved`), **plus** the
+  self-entered directory fields + `directory_status`. **`HasActivatedPartner`** gate. The shared signed Sumsub
+  webhook is now **5-WAY** (partner + developer + owner + LP + investor, routed by distinct level name
+  `SUMSUB_PARTNER_KYB_LEVEL_NAME`). `dev_grant_partner_kyb` (DEBUG-only). Public directory read endpoint
+  (`directory_status==approved` only) + `Partners.tsx` repointed off its mock. Keys deferred/inert. See "Phase 11".
+- **Wave B (after A):** the **assignment / deliverable workflow** — a NEW **`Assignment`** model (admin assigns a
+  `Property` → partner with a `service_type` (valuation/property-management/insurance) + `due_date` + admin-
+  defined deliverables); partner **uploads deliverables** via a `SubmissionDocument`-style **`DeliverableDocument`**
+  model; admin **approves / requests revision** (status: `pending→in-progress→submitted→approved`, `revision`
+  side-state); **activity feed derived from status transitions**; **`progress` derived** from deliverable statuses
+  (not stored); `notify()` (Phase 10) at each transition. **ONE-WAY communication — NO messaging**; the `revision`
+  status + an admin `review_notes` is the only admin→partner channel. The **admin assign action** + the
+  `Assignment` model are the only genuinely new pieces; everything else mirrors owner/developer.
 
 ## Governance & roadmap (standing — keep across compacts)
 - **(a) Mainnet gating (REQUIRED).** Before any mainnet / real funds: (1) a **professional
@@ -1249,8 +1339,17 @@ partners, family, reinvestments, installments).
   - **Distributions domain — COMPLETE** ✅ (Phase 9): admin-declared, pro-rata-by-`token_amount`, cent-exact,
     internal-balance cash credit (`source="distribution"`, NO on-chain move), idempotent; `Distributions.tsx`
     wired to `GET /api/distributions/`. Separate from owner/developer primary-sale earnings. See "Phase 9" above.
-  - **Remaining after the distributions domain:** the **bid/ask order book** (deferred, below); other mock
-    domains (notifications, reports export, broker, partners, family, reinvestments, installments).
+  - **Notifications domain — COMPLETE** ✅ (Phase 10): in-app notifications emitted server-side at all event
+    points inside their atomic blocks (notify-failure-safe), type+params+i18n, self-scoped read + bell/page wired,
+    soft delete. See "Phase 10" above.
+  - **Partner domain — Wave A COMPLETE** ✅ (Phase 11), **Wave B NEXT:** SERVICE-VENDOR role, thin NON-EARNING
+    variant of owner/developer (NO money/`UserBalance`/withdrawal). Wave A (DONE) = partner KYB (`PartnerProfile`,
+    `HasActivatedPartner`, 5-way webhook) + INDEPENDENT `directory_status` (partner self-enters company details;
+    admin only approves directory visibility) + public directory endpoint. Wave B = admin-assigns-`Property`→
+    partner assignment/deliverable workflow (`Assignment` + `DeliverableDocument`, admin approve/request-revision,
+    derived activity feed + progress, one-way comms). See the "Partner domain" section above.
+  - **Remaining after the partner domain:** other mock domains (reports export, broker, family, reinvestments,
+    installments); the **bid/ask order book** (deferred, below).
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
     `SecondaryMarket.tsx` implied — **DEFERRED, separately-scoped future wave, NOT the immediate
     next** (SPEC §7C.1; SECONDARY_MARKET_SURFACE.md). The peer market now ships real one-shot
@@ -1281,8 +1380,13 @@ partners, family, reinvestments, installments).
   - **Sumsub developer KYB (Phase 8 Wave A, Property Developer):** with the **developer-business-level**
     keys/level → real WebSDK business verification + the REAL `applicantReviewed` business webhook →
     developer approved + role activated. Shares the `SUMSUB_*` keys; needs the SEPARATE
-    `SUMSUB_DEVELOPER_KYB_LEVEL_NAME` set (so the **four-way** shared webhook routes developer vs owner vs
-    LP vs investor by distinct level name). (Inert until keys land.)
+    `SUMSUB_DEVELOPER_KYB_LEVEL_NAME` set (so the **five-way** shared webhook routes developer vs partner vs
+    owner vs LP vs investor by distinct level name). (Inert until keys land.)
+  - **Sumsub partner KYB (Phase 11 Wave A, Strategic Partner — BUILT):** the partner business level extends the
+    shared webhook to **FIVE-way** (partner vs developer vs owner vs LP vs investor), via the SEPARATE
+    `SUMSUB_PARTNER_KYB_LEVEL_NAME`. Same automatic-approval pattern; routing + isolation proven by tests. With
+    keys → real WebSDK business verification + the REAL `applicantReviewed` webhook → partner approved + role
+    activated. (Inert until keys land. NOTE: directory visibility is a SEPARATE admin step, not provider-driven.)
   - **OAuth (Google/Apple):** social login scaffolded, inert until provider keys land (pre-existing).
 - **(e) Cleanup / tech-debt (recorded — not lost):**
   - **(a) Duplicate withdrawal flow on INVESTOR pages.** The **Owner wallet now uses the built Django
@@ -1300,7 +1404,8 @@ partners, family, reinvestments, installments).
     `Property.submitted_by = null`; a completed primary sale of one is **safe but credits no owner** (no
     platform-account routing). **Product decision** if the platform later wants to capture those proceeds
     to a platform account.
-  - **(e) Internal "owner" naming now also serves developers (Phase 8 Wave C+D).** The primary-sale credit
+  - **(e) Internal "owner" naming now also serves developers (Phase 8 Wave C+D).** (Partners are NON-earning, so
+    they do NOT touch this earnings code.) The primary-sale credit
     + earnings code is submitter-agnostic but keeps owner-era names — `_credit_owner_for_primary_sale`,
     `OWNER_PRIMARY_SALE_SOURCE` ([apps/investments/services.py](backend/apps/investments/services.py)),
     `OwnerEarningsView` + `/api/owner/earnings/` ([apps/owner/views.py](backend/apps/owner/views.py)). These

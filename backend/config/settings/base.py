@@ -283,6 +283,10 @@ SUMSUB_OWNER_KYB_LEVEL_NAME = env("SUMSUB_OWNER_KYB_LEVEL_NAME", default="owner-
 # A SEPARATE level from the owner's and LP's so the shared webhook routes developer
 # applicants to the developer domain (apps/developer) by this distinct level name.
 SUMSUB_DEVELOPER_KYB_LEVEL_NAME = env("SUMSUB_DEVELOPER_KYB_LEVEL_NAME", default="developer-kyb-level")
+# Partner business-verification (KYB) level for Strategic Partners (Phase 11 Wave A). A
+# SEPARATE level from owner/developer/LP so the shared webhook routes partner applicants
+# to the partner domain (apps/partners) by this distinct level name.
+SUMSUB_PARTNER_KYB_LEVEL_NAME = env("SUMSUB_PARTNER_KYB_LEVEL_NAME", default="partner-kyb-level")
 SUMSUB_BASE_URL = env("SUMSUB_BASE_URL", default="https://api.sumsub.com")
 # DEV-ONLY: when True AND DEBUG, POST /api/kyc/submit/ auto-approves immediately so
 # the gate can be exercised before Sumsub keys exist. Default OFF; production is

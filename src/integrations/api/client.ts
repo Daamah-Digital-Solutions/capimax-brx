@@ -801,4 +801,76 @@ export const notificationsApi = {
     rawRequest(`/notifications/${id}/delete/`, { method: "POST", auth: true }),
 };
 
+// --------------------------------------------------------------------------- //
+// Strategic Partner API (Phase 11 Wave A) — partner ENTITY verification (business KYB)
+// + the partner's own public-directory details + the PUBLIC partners directory.
+// Mirrors developerApi for the KYB half: apply → submit business info → request a
+// Sumsub WebSDK token (partner business level); approval is driven by the signed webhook
+// on the backend. The partner is a SERVICE VENDOR (NON-EARNING) — NO money endpoints.
+//
+// TWO INDEPENDENT states the partner sees: `status`/`kyb_status` (verification) and
+// `directory_status` (whether they appear in the public directory — a separate admin
+// approve/reject step). PARTNERS_SURFACE.md.
+// --------------------------------------------------------------------------- //
+export interface PartnerKybAccessToken {
+  configured: boolean;
+  token?: string;
+  code?: string;
+}
+
+/** A public-directory row (Partners.tsx shape). Only directory-approved partners. */
+export interface PublicPartner {
+  id: string;
+  name: string | null;
+  nameAr: string | null;
+  category: string | null;
+  description: string | null;
+  descriptionAr: string | null;
+  logo_url: string | null;
+  country: string | null;
+  countryAr: string | null;
+  website: string | null;
+  verified: boolean;
+}
+
+export const partnerApi = {
+  /** The caller's partner profile, or null when none exists yet (404). */
+  profile: async (): Promise<any | null> => {
+    try {
+      return await rawRequest("/partner/profile/", { auth: true });
+    } catch (err) {
+      if ((err as ApiError).status === 404) return null;
+      throw err;
+    }
+  },
+  /** Apply as a partner (idempotent server-side); may carry directory fields. */
+  apply: (payload: Record<string, unknown>) =>
+    rawRequest("/partner/profile/", { method: "POST", auth: true, body: payload }),
+  /** Update the partner's own public-directory fields (no status change). */
+  updateDirectory: (payload: Record<string, unknown>) =>
+    rawRequest("/partner/profile/", { method: "POST", auth: true, body: payload }),
+  /** Persist business info → partner KYB under_review. */
+  submitKYB: (payload: Record<string, unknown>) =>
+    rawRequest("/partner/kyb/submit/", { method: "POST", auth: true, body: payload }),
+  /**
+   * Sumsub WebSDK access token for partner KYB. When the provider is unconfigured
+   * (keys deferred), the backend returns 503 + a machine code — we normalise that into
+   * `{ configured: false, code }` so the UI keeps the form/dev path, never throws.
+   */
+  kybAccessToken: async (): Promise<PartnerKybAccessToken> => {
+    try {
+      return (await rawRequest("/partner/kyb/access-token/", {
+        method: "POST",
+        auth: true,
+      })) as PartnerKybAccessToken;
+    } catch (err) {
+      const data = ((err as ApiError).data ?? {}) as { configured?: boolean; code?: string };
+      return { configured: false, code: data.code || "kyb_provider_unconfigured" };
+    }
+  },
+  /** The PUBLIC partners directory (AllowAny) — only directory-approved partners. */
+  directory: () =>
+    rawRequest("/partners/directory/", {}) as Promise<PublicPartner[]>,
+};
+
 export { API_BASE_URL };
