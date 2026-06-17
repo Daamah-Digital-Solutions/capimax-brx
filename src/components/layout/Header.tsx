@@ -2,6 +2,7 @@ import { Bell, Search, Menu, Globe, LogOut, User, Home, Landmark, Sun, Moon } fr
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadCount } from "@/hooks/useNotifications";
 import { useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
@@ -19,6 +20,7 @@ interface HeaderProps {
 export function Header({ onMenuToggle }: HeaderProps) {
   const { language, setLanguage, t } = useLanguage();
   const { user, signOut } = useAuth();
+  const { unreadCount } = useUnreadCount();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -168,9 +170,19 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </DropdownMenu>
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => navigate("/notifications")}
+            aria-label={t("notifications.title")}
+          >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-primary text-primary-foreground text-[10px] font-semibold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </Button>
 
           {/* Auth Actions */}

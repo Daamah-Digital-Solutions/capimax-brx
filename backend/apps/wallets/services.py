@@ -74,6 +74,10 @@ def get_or_create_custodial_wallet(user) -> tuple[UserWallet, bool]:
 
     # Explicitly drop the plaintext reference (defensive; GC would collect it anyway).
     del private_key_hex
+    # In-app notification (Phase 10) — only on first creation (this branch). Defensive
+    # helper: a notify failure never affects the wallet.
+    from apps.notifications.services import NotificationType, notify
+    notify(user, NotificationType.WALLET_CREATED, action_url="/wallet")
     return wallet, True
 
 
@@ -141,11 +145,13 @@ def request_withdrawal(user, amount, *, method: str, notes: str = ""):
 
     from .models import Withdrawal
 
+    from apps.notifications.services import NotificationType, notify
+
     with transaction.atomic():
         debit_user_balance(
             user, amount, source="withdrawal", memo="Withdrawal request"
         )
-        return Withdrawal.objects.create(
+        wd = Withdrawal.objects.create(
             user=user,
             amount=amount,
             method=method,
@@ -153,6 +159,12 @@ def request_withdrawal(user, amount, *, method: str, notes: str = ""):
             reference="WD-" + _uuid.uuid4().hex[:10].upper(),
             status=Withdrawal.Status.PENDING,
         )
+        notify(
+            user, NotificationType.WITHDRAWAL_REQUESTED,
+            params={"amount": str(amount), "reference": wd.reference},
+            action_url="/wallet",
+        )
+        return wd
 
 
 def debit_user_balance(user, amount, *, source: str, reference: str = "", memo: str = ""):

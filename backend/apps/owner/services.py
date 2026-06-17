@@ -25,6 +25,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.models import Profile
+from apps.notifications.services import NotificationType, notify
 
 from .models import (
     REQUIRED_SUBMISSION_DOC_TYPES,
@@ -81,6 +82,7 @@ def approve_kyb(owner: OwnerProfile, *, review_answer: str = "", source: str = "
     transaction.on_commit(lambda: _activate_owner_role(owner.user))
     if not already:
         log.info("Owner KYB approved (source=%s) for user %s", source, owner.user_id)
+        notify(owner.user, NotificationType.KYB_APPROVED, params={"role": "owner"})
     return owner
 
 
@@ -88,9 +90,12 @@ def approve_kyb(owner: OwnerProfile, *, review_answer: str = "", source: str = "
 def reject_kyb(owner: OwnerProfile, *, reason: str = "", review_answer: str = "",
                source: str = "webhook") -> OwnerProfile:
     owner = OwnerProfile.objects.select_for_update().get(pk=owner.pk)
+    already = owner.status == OwnerStatus.REJECTED
     owner.mark_rejected(reason=reason, review_answer=review_answer)
     owner.save()
     log.info("Owner KYB rejected (source=%s) for user %s", source, owner.user_id)
+    if not already:
+        notify(owner.user, NotificationType.KYB_REJECTED, params={"role": "owner"})
     return owner
 
 
@@ -368,6 +373,12 @@ def publish_submission(
         "Submission %s approved → Property %s (model=%s, deployed=%s) by reviewer %s",
         submission.id, prop.slug, model, bool(deploy_result), getattr(reviewer, "pk", None),
     )
+    # Notify the submitter (owner OR developer — submitter-agnostic). The idempotency
+    # guard above (already-published → early return) prevents a duplicate.
+    notify(
+        submission.submitter, NotificationType.SUBMISSION_PUBLISHED,
+        params={"property": submission.name, "slug": prop.slug}, action_url="/my-assets",
+    )
     return submission
 
 
@@ -387,4 +398,8 @@ def reject_submission(submission: PropertySubmission, *, review_notes: str = "",
     submission.reviewed_at = timezone.now()
     submission.save(update_fields=["status", "review_notes", "reviewed_at", "updated_at"])
     log.info("Submission %s rejected by reviewer %s", submission.id, getattr(reviewer, "pk", None))
+    notify(
+        submission.submitter, NotificationType.SUBMISSION_REJECTED,
+        params={"property": submission.name}, action_url="/my-assets",
+    )
     return submission

@@ -769,4 +769,36 @@ export const distributionsApi = {
     rawRequest("/distributions/", { auth: true }) as Promise<DistributionsResponse>,
 };
 
+// --------------------------------------------------------------------------- //
+// In-app notifications API (Phase 10) — authenticated, self-scoped. Backs the bell
+// + the Notifications page. The backend stores type + params + action_url (NO display
+// strings); the frontend renders EN/AR copy from its i18n layer keyed by `type`.
+// Emitted server-side at event points; no client create. NOTIFICATIONS_SURFACE.md.
+// --------------------------------------------------------------------------- //
+export interface ApiNotification {
+  id: string;
+  type: string;                       // event type (kyc_approved, distribution_credited, …)
+  params: Record<string, unknown>;    // interpolation values for the copy
+  action_url: string;
+  read: boolean;
+  created_at: string;
+}
+
+export const notificationsApi = {
+  /** The caller's notifications (own, not deleted, newest first). */
+  list: () => rawRequest("/notifications/", { auth: true }) as Promise<ApiNotification[]>,
+  /** The caller's unread count (drives the bell badge). */
+  unreadCount: () =>
+    rawRequest("/notifications/unread-count/", { auth: true }) as Promise<{ unread: number }>,
+  /** Mark one notification read. */
+  markRead: (id: string) =>
+    rawRequest(`/notifications/${id}/read/`, { method: "POST", auth: true }) as Promise<ApiNotification>,
+  /** Mark all the caller's unread notifications read. */
+  markAllRead: () =>
+    rawRequest("/notifications/mark-all-read/", { method: "POST", auth: true }) as Promise<{ updated: number }>,
+  /** Soft-delete one notification (hidden from the list). */
+  delete: (id: string) =>
+    rawRequest(`/notifications/${id}/delete/`, { method: "POST", auth: true }),
+};
+
 export { API_BASE_URL };

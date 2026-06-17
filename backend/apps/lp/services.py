@@ -21,6 +21,7 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.core.models import Profile
+from apps.notifications.services import NotificationType, notify
 
 from .models import KYBStatus, LiquidityProvider, LPStatus
 
@@ -62,6 +63,7 @@ def approve_kyb(lp: LiquidityProvider, *, review_answer: str = "", source: str =
     transaction.on_commit(lambda: _activate_lp_role(lp.user))
     if not already:
         log.info("LP KYB approved (source=%s) for user %s", source, lp.user_id)
+        notify(lp.user, NotificationType.KYB_APPROVED, params={"role": "lp"})
     return lp
 
 
@@ -69,9 +71,12 @@ def approve_kyb(lp: LiquidityProvider, *, review_answer: str = "", source: str =
 def reject_kyb(lp: LiquidityProvider, *, reason: str = "", review_answer: str = "",
                source: str = "webhook") -> LiquidityProvider:
     lp = LiquidityProvider.objects.select_for_update().get(pk=lp.pk)
+    already = lp.status == LPStatus.REJECTED
     lp.mark_rejected(reason=reason, review_answer=review_answer)
     lp.save()
     log.info("LP KYB rejected (source=%s) for user %s", source, lp.user_id)
+    if not already:
+        notify(lp.user, NotificationType.KYB_REJECTED, params={"role": "lp"})
     return lp
 
 

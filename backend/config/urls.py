@@ -34,6 +34,8 @@ urlpatterns = [
     path("api/developer/", include("apps.developer.urls")),
     # Investor distributions (Phase 9): admin-declared pro-rata cash yield → holders' balances. DISTRIBUTIONS_SURFACE.md.
     path("api/distributions/", include("apps.distributions.urls")),
+    # In-app notifications (Phase 10): self-scoped list + unread-count + mark-read + soft-delete. NOTIFICATIONS_SURFACE.md.
+    path("api/notifications/", include("apps.notifications.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

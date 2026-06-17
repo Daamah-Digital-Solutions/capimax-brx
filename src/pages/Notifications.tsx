@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useNotifications } from "@/hooks/useNotifications";
+import { categoryOf, renderNotificationCopy, relativeTime, type NotificationCategory } from "@/lib/notifications";
 import {
   Bell,
   BellOff,
@@ -24,98 +27,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-interface Notification {
-  id: string;
-  type: "financial" | "investment" | "report" | "system" | "alert";
-  title: string;
-  titleAr: string;
-  description: string;
-  descriptionAr: string;
-  timestamp: string;
-  read: boolean;
-  actionUrl?: string;
-  actionLabel?: string;
-  actionLabelEn?: string;
-}
-
-const notifications: Notification[] = [
-  {
-    id: "1",
-    type: "financial",
-    title: "Distribution Received",
-    titleAr: "تم استلام التوزيعات",
-    description: "You received $1,250 from Marina Tower investment",
-    descriptionAr: "تم استلام 1,250 دولار من استثمار برج المارينا",
-    timestamp: "2h ago",
-    read: false,
-    actionUrl: "/distributions",
-    actionLabel: "عرض التفاصيل",
-    actionLabelEn: "View Details",
-  },
-  {
-    id: "2",
-    type: "investment",
-    title: "New Property Listed",
-    titleAr: "عقار جديد متاح",
-    description: "A new property matching your preferences is now available",
-    descriptionAr: "عقار جديد يتوافق مع تفضيلاتك متاح الآن",
-    timestamp: "5h ago",
-    read: false,
-    actionUrl: "/marketplace",
-    actionLabel: "استعرض الآن",
-    actionLabelEn: "Browse Now",
-  },
-  {
-    id: "3",
-    type: "alert",
-    title: "Installment Due Tomorrow",
-    titleAr: "قسط مستحق غداً",
-    description: "Your next installment of $2,500 for Palm Residences is due",
-    descriptionAr: "القسط التالي بمبلغ 2,500 دولار لمشروع نخيل ريزيدنس مستحق",
-    timestamp: "1 day ago",
-    read: false,
-    actionUrl: "/installments",
-    actionLabel: "الدفع الآن",
-    actionLabelEn: "Pay Now",
-  },
-  {
-    id: "4",
-    type: "report",
-    title: "Q4 Report Available",
-    titleAr: "تقرير الربع الرابع متاح",
-    description: "New quarterly report for your investments is ready",
-    descriptionAr: "التقرير الفصلي الجديد لاستثماراتك جاهز",
-    timestamp: "3 days ago",
-    read: true,
-    actionUrl: "/reports",
-    actionLabel: "عرض التقرير",
-    actionLabelEn: "View Report",
-  },
-  {
-    id: "5",
-    type: "system",
-    title: "KYC Verification Complete",
-    titleAr: "اكتمال التحقق من الهوية",
-    description: "Your identity has been verified successfully",
-    descriptionAr: "تم التحقق من هويتك بنجاح",
-    timestamp: "1 week ago",
-    read: true,
-  },
-  {
-    id: "6",
-    type: "investment",
-    title: "Secondary Market Trade Executed",
-    titleAr: "تم تنفيذ صفقة السوق الثانوي",
-    description: "Your sell order for 5 units was executed at $1,150/unit",
-    descriptionAr: "تم تنفيذ أمر البيع الخاص بك لـ 5 وحدات بسعر 1,150 دولار/وحدة",
-    timestamp: "1 week ago",
-    read: true,
-    actionUrl: "/secondary-market",
-    actionLabel: "عرض التفاصيل",
-    actionLabelEn: "View Details",
-  },
-];
-
 const notificationSettingsData = [
   { id: "distributions", labelKey: "notifications.distributionsNotif", enabled: true },
   { id: "installments", labelKey: "notifications.installmentsNotif", enabled: true },
@@ -128,13 +39,14 @@ const notificationSettingsData = [
 
 export default function Notifications() {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
-  const [notifs, setNotifs] = useState(notifications);
+  // Phase 10: real notifications from the API (was a static mock array). Local UI
+  // settings stay local-only (channel/digest/per-type toggles are NOT persisted).
+  const { notifications: notifs, unreadCount, markRead, markAllRead, remove } = useNotifications();
   const [settings, setSettings] = useState(notificationSettingsData);
 
-  const unreadCount = notifs.filter((n) => !n.read).length;
-
-  const getTypeIcon = (type: Notification["type"]) => {
+  const getTypeIcon = (type: NotificationCategory) => {
     switch (type) {
       case "financial":
         return <DollarSign className="w-5 h-5 text-emerald-500" />;
@@ -149,7 +61,7 @@ export default function Notifications() {
     }
   };
 
-  const getTypeBg = (type: Notification["type"]) => {
+  const getTypeBg = (type: NotificationCategory) => {
     switch (type) {
       case "financial":
         return "bg-emerald-500/10";
@@ -164,22 +76,10 @@ export default function Notifications() {
     }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  };
-
-  const markAllRead = () => {
-    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifs((prev) => prev.filter((n) => n.id !== id));
-  };
-
   const filteredNotifs = notifs.filter((n) => {
     if (activeTab === "all") return true;
     if (activeTab === "unread") return !n.read;
-    return n.type === activeTab;
+    return categoryOf(n.type) === activeTab;
   });
 
   return (
@@ -249,28 +149,31 @@ export default function Notifications() {
                       </div>
                     ) : (
                       <div className="divide-y divide-border/50">
-                        {filteredNotifs.map((notif) => (
+                        {filteredNotifs.map((notif) => {
+                          const category = categoryOf(notif.type);
+                          const copy = renderNotificationCopy(notif, t);
+                          return (
                           <div
                             key={notif.id}
                             className={`flex items-start gap-4 p-4 hover:bg-muted/30 transition-colors ${
                               !notif.read ? "bg-primary/5" : ""
                             }`}
-                            onClick={() => markAsRead(notif.id)}
+                            onClick={() => markRead(notif.id)}
                           >
                             <div
-                              className={`w-10 h-10 rounded-lg ${getTypeBg(notif.type)} flex items-center justify-center shrink-0`}
+                              className={`w-10 h-10 rounded-lg ${getTypeBg(category)} flex items-center justify-center shrink-0`}
                             >
-                              {getTypeIcon(notif.type)}
+                              {getTypeIcon(category)}
                             </div>
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
                                   <h4 className="font-medium text-foreground">
-                                    {language === "ar" ? notif.titleAr : notif.title}
+                                    {copy.title}
                                   </h4>
                                   <p className="text-sm text-muted-foreground mt-0.5">
-                                    {language === "ar" ? notif.descriptionAr : notif.description}
+                                    {copy.description}
                                   </p>
                                 </div>
                                 {!notif.read && (
@@ -281,12 +184,21 @@ export default function Notifications() {
                               <div className="flex items-center justify-between mt-3">
                                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
-                                  {notif.timestamp}
+                                  {relativeTime(notif.created_at, language)}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                  {notif.actionUrl && (
-                                    <Button variant="ghost" size="sm" className="text-xs h-7">
-                                      {language === "ar" ? notif.actionLabel : notif.actionLabelEn || notif.actionLabel}
+                                  {notif.action_url && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-xs h-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        markRead(notif.id);
+                                        navigate(notif.action_url);
+                                      }}
+                                    >
+                                      {copy.actionLabel}
                                       <ChevronRight className="w-3 h-3 mr-1" />
                                     </Button>
                                   )}
@@ -296,7 +208,7 @@ export default function Notifications() {
                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      deleteNotification(notif.id);
+                                      remove(notif.id);
                                     }}
                                   >
                                     <Trash2 className="w-3 h-3" />
@@ -305,7 +217,8 @@ export default function Notifications() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>

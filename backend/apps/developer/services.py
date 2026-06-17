@@ -23,6 +23,7 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.core.models import Profile
+from apps.notifications.services import NotificationType, notify
 
 from .models import DeveloperKYBStatus, DeveloperProfile, DeveloperStatus
 
@@ -65,6 +66,7 @@ def approve_kyb(developer: DeveloperProfile, *, review_answer: str = "", source:
     transaction.on_commit(lambda: _activate_developer_role(developer.user))
     if not already:
         log.info("Developer KYB approved (source=%s) for user %s", source, developer.user_id)
+        notify(developer.user, NotificationType.KYB_APPROVED, params={"role": "developer"})
     return developer
 
 
@@ -72,9 +74,12 @@ def approve_kyb(developer: DeveloperProfile, *, review_answer: str = "", source:
 def reject_kyb(developer: DeveloperProfile, *, reason: str = "", review_answer: str = "",
                source: str = "webhook") -> DeveloperProfile:
     developer = DeveloperProfile.objects.select_for_update().get(pk=developer.pk)
+    already = developer.status == DeveloperStatus.REJECTED
     developer.mark_rejected(reason=reason, review_answer=review_answer)
     developer.save()
     log.info("Developer KYB rejected (source=%s) for user %s", source, developer.user_id)
+    if not already:
+        notify(developer.user, NotificationType.KYB_REJECTED, params={"role": "developer"})
     return developer
 
 

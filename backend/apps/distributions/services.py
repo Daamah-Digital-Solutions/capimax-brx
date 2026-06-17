@@ -22,6 +22,7 @@ from decimal import ROUND_DOWN, Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.notifications.services import NotificationType, notify
 from apps.wallets.models import OwnershipToken
 from apps.wallets.services import credit_user_balance
 
@@ -162,6 +163,18 @@ def _build_and_credit_payouts(dist: Distribution):
             h.total_distributions = (h.total_distributions or Decimal("0")) + payout.share_amount_usd
             h.last_distribution_date = now
             h.save(update_fields=["total_distributions", "last_distribution_date"])
+
+            # Phase 10: notify the holder (only on the newly-credited path — replay-safe
+            # via the `payout.credited` guard above).
+            notify(
+                user, NotificationType.DISTRIBUTION_CREDITED,
+                params={
+                    "property": dist.property_name or dist.property_id,
+                    "amount": str(payout.share_amount_usd),
+                    "period": dist.period_label or dist.pay_date.isoformat(),
+                },
+                action_url="/distributions",
+            )
 
         payout.credited = True
         payout.save(update_fields=["credited"])

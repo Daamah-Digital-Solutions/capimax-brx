@@ -49,6 +49,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useUnreadCount } from "@/hooks/useNotifications";
 import {
   Select,
   SelectContent,
@@ -117,7 +118,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "Live Exits Hub", icon: ArrowRightLeft, href: "/exits-hub" },
       { titleKey: "Security & Audit Log", icon: ShieldCheck, href: "/audit-log" },
       { titleKey: "nav.documents", icon: FileText, href: "/documents" },
-      { titleKey: "nav.notifications", icon: Bell, href: "/notifications", badge: "5" },
+      { titleKey: "nav.notifications", icon: Bell, href: "/notifications" },
       { titleKey: "nav.support", icon: HelpCircle, href: "/support" },
     ],
   },
@@ -219,6 +220,7 @@ const detectRoleFromPath = (pathname: string): UserRole | null => {
 export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const { t, language } = useLanguage();
+  const { unreadCount } = useUnreadCount();
   const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "public", "cards", "products", "products-uc", "platform", "legal"]);
   
   // Initialize role from localStorage or detect from current path
@@ -380,10 +382,18 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                         {isOpen && (
                           <>
                             <span className="flex-1">{t(item.titleKey)}</span>
-                            {item.badge && (
-                              <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
-                                {item.badge}
-                              </span>
+                            {item.href === "/notifications" ? (
+                              unreadCount > 0 && (
+                                <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
+                                  {unreadCount > 9 ? "9+" : unreadCount}
+                                </span>
+                              )
+                            ) : (
+                              item.badge && (
+                                <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
+                                  {item.badge}
+                                </span>
+                              )
                             )}
                           </>
                         )}

@@ -30,6 +30,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 
 from apps.chain import service as chain_service
 from apps.chain.exceptions import ChainError
+from apps.notifications.services import NotificationType, notify
 from apps.properties.models import Property
 from apps.wallets.models import OwnershipToken, UserWallet, WalletTransaction
 from apps.wallets.services import (
@@ -349,6 +350,20 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
             "status", "lp", "purchased_at", "completed_at", "settlement_tx_hash",
             "updated_at",
         ])
+
+        # Phase 10: notify BOTH parties (replay-safe — completed-guard returns early on
+        # a re-run). The buyer is the LP user.
+        notify(
+            listing.seller, NotificationType.SECONDARY_SALE_SELLER,
+            params={"property": listing.property_name, "tokens": listing.token_amount,
+                    "amount": str(listing.net_amount)},
+            action_url="/secondary-market",
+        )
+        notify(
+            lp.user, NotificationType.SECONDARY_SALE_BUYER,
+            params={"property": listing.property_name, "tokens": listing.token_amount},
+            action_url="/portfolio",
+        )
 
     return {
         "completed": True,

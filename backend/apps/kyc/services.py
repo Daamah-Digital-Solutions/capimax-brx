@@ -13,6 +13,7 @@ import logging
 
 from django.db import transaction
 
+from apps.notifications.services import NotificationType, notify
 from apps.wallets.services import get_or_create_custodial_wallet
 
 from .models import KYCStatus, UserKYC
@@ -52,6 +53,8 @@ def approve_kyc(kyc: UserKYC, *, review_answer: str = "", source: str = "webhook
     transaction.on_commit(lambda: _auto_create_wallet(kyc.user))
     if not already:
         log.info("KYC approved (source=%s) for user %s", source, kyc.user_id)
+        # Emit only on the state-changing path → no duplicate on webhook replay.
+        notify(kyc.user, NotificationType.KYC_APPROVED, action_url="/wallet")
     return kyc
 
 
@@ -59,9 +62,12 @@ def approve_kyc(kyc: UserKYC, *, review_answer: str = "", source: str = "webhook
 def reject_kyc(kyc: UserKYC, *, reason: str = "", review_answer: str = "",
                source: str = "webhook") -> UserKYC:
     kyc = UserKYC.objects.select_for_update().get(pk=kyc.pk)
+    already = kyc.status == KYCStatus.REJECTED
     kyc.mark_rejected(reason=reason, review_answer=review_answer)
     kyc.save()
     log.info("KYC rejected (source=%s) for user %s", source, kyc.user_id)
+    if not already:
+        notify(kyc.user, NotificationType.KYC_REJECTED, action_url="/kyc")
     return kyc
 
 

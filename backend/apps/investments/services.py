@@ -19,6 +19,7 @@ from rest_framework.exceptions import APIException, ValidationError
 from apps.certificates.services import create_provisional_certificate
 from apps.chain import service as chain_service
 from apps.chain.exceptions import ChainError
+from apps.notifications.services import NotificationType, notify
 from apps.properties.models import Property
 from apps.wallets.models import OwnershipToken, UserWallet, WalletTransaction
 
@@ -328,6 +329,20 @@ def mint_investment(investment: Investment) -> dict:
         # property owner's net proceeds (gross − fees) to their UserBalance, in the
         # SAME atomic block so the credit commits with the mint. Idempotent + null-safe.
         owner_net = _credit_owner_for_primary_sale(inv, prop)
+
+        # Phase 10: in-app notifications, inside the mint's atomic block so they commit
+        # with it. Only reached once per investment (the `tokens_minted` guard above).
+        notify(
+            inv.user, NotificationType.INVESTMENT_MINTED,
+            params={"property": prop.name, "slug": prop.slug, "tokens": inv.token_amount},
+            action_url="/portfolio",
+        )
+        if owner_net is not None and prop.submitted_by_id:
+            notify(
+                prop.submitted_by, NotificationType.EARNINGS_CREDITED,
+                params={"property": prop.name, "slug": prop.slug, "amount": str(owner_net)},
+                action_url="/owner-wallet",
+            )
 
     return {
         "minted": True,

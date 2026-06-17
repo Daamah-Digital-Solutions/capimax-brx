@@ -1078,8 +1078,63 @@ block 113768027) → **DEVELOPER `UserBalance` credited NET = 980.00** (GROSS 10
 entirely by reusing the owner machinery (separate `DeveloperProfile` + `HasActivatedDeveloper` for KYB; the
 generalized `HasActivatedPropertySubmitter` gate; the submitter-agnostic publish + earnings paths unchanged).
 
-**Remaining (post-distributions-domain):** the **bid/ask order book** (deferred); and the other mock domains
-(notifications, reports export, broker, partners, family, reinvestments, installments).
+**Remaining (post-notifications-domain):** the **bid/ask order book** (deferred); and the other mock domains
+(reports export, broker, partners, family, reinvestments, installments).
+
+## Phase 10 — In-app notifications (COMPLETE ✅)
+**What it is:** in-app notifications emitted server-side at every existing user-facing event point, read self-
+scoped by the user. Backs the bell + the `Notifications.tsx` page (was a static mock array; the header bell had a
+fake dot, the sidebar a hardcoded `badge: "5"`). **In-app ONLY** — no email/SMS/push/digest.
+
+**LOCKED decisions (as built):**
+1. **TYPE + PARAMS + i18n** — the backend stores a `type` enum + a small JSON `params` dict + `action_url`,
+   **NEVER display strings**. The frontend renders EN/AR copy from its i18n layer keyed by `type`, interpolating
+   `params` ([src/lib/notifications.ts](src/lib/notifications.ts) + `notif.*` keys in
+   [LanguageContext.tsx](src/contexts/LanguageContext.tsx)). Same philosophy as the Distributions repoint —
+   Arabic stays in `t()`.
+2. **IN-APP ONLY** (v1). The settings panel's channel/digest/per-type toggles stay **local-only UI** — no backend.
+3. **PREFERENCES DEFERRED** — all events emit; no `NotificationPreference` model.
+4. **SOFT DELETE** — the trash action sets `deleted=True` (hidden from the list), never a hard delete.
+5. **Read/unread** tracked; mark-one + mark-all read.
+6. **EMIT inside the host service's existing `transaction.atomic()`** so the notification commits with the event
+   (like `credit_user_balance`). A `notify()` failure can **NEVER** break the host — it's wrapped in a SAVEPOINT
+   and swallows errors ([services.notify](backend/apps/notifications/services.py)). Replay-safe: emitted only on
+   the state-changing path (the `already`/idempotency guards already present at each point).
+
+**Backend (`apps/notifications`, was an empty stub):** `Notification` model (user, `type` 13-value enum, `params`
+JSON, `action_url`, `read`, `deleted`, `created_at`; indexes on (user,read) + (user,created_at)) — [models.py]
+(backend/apps/notifications/models.py). `notify(user, type, *, params, action_url)` helper. Endpoints (self-
+scoped, `IsAuthenticated`): `GET /api/notifications/`, `GET …/unread-count/`, `POST …/<id>/read/`, `POST …/mark-
+all-read/`, `POST …/<id>/delete/` (soft). Admin read view. Migration `0001_initial`. **No create endpoint.**
+
+**Emit points wired (11 services, inside their atomic blocks):** KYC approve/reject ([kyc/services.py:53,64]
+(backend/apps/kyc/services.py#L53)); LP/owner/developer KYB approve/reject (lp/owner/developer `services.py`);
+wallet auto-create ([wallets/services.py](backend/apps/wallets/services.py)); mint complete + owner/developer
+primary-sale earnings ([investments/services.py:330](backend/apps/investments/services.py#L330)); distribution
+credited, per holder ([distributions/services.py](backend/apps/distributions/services.py)); secondary-market sale
+— **BOTH buyer and seller** (peer [secondary_market/services.py](backend/apps/secondary_market/services.py) + LP
+[lp/market_services.py](backend/apps/lp/market_services.py)); withdrawal requested ([wallets/services.py:133]
+(backend/apps/wallets/services.py#L133)); submission published/rejected ([owner/services.py:281,374]
+(backend/apps/owner/services.py#L281), submitter-agnostic → owner OR developer).
+
+**Frontend (smallest change set):** `notificationsApi` + `useNotifications`/`useUnreadCount`
+([src/hooks/useNotifications.ts](src/hooks/useNotifications.ts), refetch on mount + focus, NO realtime).
+[Notifications.tsx](src/pages/Notifications.tsx) repointed from the mock array to the API, copy rendered by
+type+params, tabs/icons via a type→category map ([src/lib/notifications.ts](src/lib/notifications.ts)), mark-
+read/mark-all/soft-delete wired, relative timestamps via `Intl.RelativeTimeFormat`. Header **bell** shows the
+real unread count + links to `/notifications`; **sidebar** badge replaced with the live count. EN/AR preserved.
+
+**Verification:** +19 notifications tests (emit at each point for the right user with the right type/params;
+secondary sale notifies BOTH parties; replay emits no duplicate; **notify failure never breaks the host event**;
+self-scoped read excludes others' + deleted; unread count; mark/mark-all/soft-delete; cross-user 404). **Full
+suite 290 green** (was 271; +19, no regressions — the in-service emits broke nothing). Browser journey: 3 real
+events (KYC approve → kyc_approved + wallet_created; declare distribution → distribution_credited) → page
+rendered all 3 in Arabic with interpolated params, **bell badge = 3** → mark-all-read → unread **0** → soft-
+delete → list **3→2** (row retained, hidden). Backend ground truth confirmed.
+
+**Flags (deliberate, v1):** (1) the page's channel (email/SMS) + digest + 7 per-type toggles are **local-only UI,
+not persisted** (no preferences backend). (2) In-app only — no email/SMS/push actually sent. (3) `action_url` is a
+fixed per-type deep link (e.g. distribution → `/distributions`), not a row-specific target.
 
 ## Phase 9 — Investor distributions engine (COMPLETE ✅)
 **What it is:** a periodic CASH yield an admin declares for a property — a money pool split PRO-RATA across the
@@ -1135,7 +1190,7 @@ with no scheduling, so nothing is pending/scheduled (honest, not fabricated; the
 future scheduling wave). (2) `yield` shown is the property's `expected_yield` (catalog figure), not a computed
 realized yield. (3) Single-role: a holder gets one payout per distribution (one ACTIVE position per property).
 
-## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 9 complete)
+## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 10 complete)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
 **DELIVERED — five roles' worth of functionality, all proven on REAL BSC Testnet:**
@@ -1146,17 +1201,18 @@ Consolidated for compact-resilience — the per-phase sections above are authori
 - **Owner** (Phase 7 A–D): entity **KYB → submit → admin review/publish (Property is_published F→T, model assigned) → earnings** (net-of-fees primary-sale credit, idempotent, withdraw).
 - **Developer** (Phase 8 A–D): **COMPLETE, built by reusing owner machinery** — separate `DeveloperProfile` + `HasActivatedDeveloper` (Sumsub developer level; the shared signed webhook is now **4-way**: developer/owner/LP/investor by distinct level name); generalized `HasActivatedPropertySubmitter` gate (owner **or** developer submits the **same** wizard); review/publish + earnings were **submitter-agnostic → ZERO code change**, proven on testnet (developer credited net-of-fees, withdrew). **Committed + pushed: commit `eaefd58`.**
 - **Distributions** (Phase 9): **COMPLETE** — admin declares a property cash-yield pool → split **pro-rata by full `token_amount`** across current ACTIVE holders (cent-exact, remainder to largest) → each holder's `UserBalance` credited (`source="distribution"`, **internal-balance only, NO on-chain move**), `total_distributions`/`last_distribution_date` bumped; idempotent (one payout per holder/distribution). `Distributions.tsx` repointed to `GET /api/distributions/`. DISTINCT from primary-sale earnings. Proven via the dev-DB journey ($1000 → $500/$300/$200, Σ cent-exact, withdrawn) + 15 tests. See "Phase 9" above.
+- **Notifications** (Phase 10): **COMPLETE** — in-app notifications emitted server-side at all 11 event points (KYC/KYB, wallet, mint + earnings, distribution, secondary sale BOTH parties, withdrawal, submission publish/reject), **inside each host's atomic block** (a `notify()` failure can't break the event — savepoint-wrapped). Stored as **type + params + action_url** (no display strings); the frontend renders EN/AR from i18n by type. Self-scoped read + unread-count + mark-read/mark-all + **soft delete**. Bell + sidebar show the live unread count; `Notifications.tsx` repointed off its mock. In-app only (no email/SMS/push; prefs deferred). Proven via browser journey + 19 tests. See "Phase 10" above.
 - **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
 
-**➡️ NEXT PLANNED BUILD** — distributions are DONE (Phase 9). NEXT is **to be chosen by the user**. The largest
+**➡️ NEXT PLANNED BUILD** — notifications are DONE (Phase 10). NEXT is **to be chosen by the user**. The largest
 remaining piece is the **bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
 `SecondaryMarket.tsx` implied — DEFERRED so far; the peer market already ships real one-shot listings (the
 order-book i18n keys/structure are preserved so it can return). The other remaining work is the **mock domains**
-(notifications, reports export, broker, partners, family, reinvestments, installments), each still frontend-only.
+(reports export, broker, partners, family, reinvestments, installments), each still frontend-only.
 
-**REMAINING** (after distributions): the **bid/ask ORDER BOOK + matching engine** (price
+**REMAINING** (after notifications): the **bid/ask ORDER BOOK + matching engine** (price
 discovery / partial fills — DEFERRED, the largest remaining piece; the peer market ships real one-shot
-listings, order-book i18n preserved); and the other **mock domains** (notifications, reports export, broker,
+listings, order-book i18n preserved); and the other **mock domains** (reports export, broker,
 partners, family, reinvestments, installments).
 
 ## Governance & roadmap (standing — keep across compacts)
@@ -1199,9 +1255,9 @@ partners, family, reinvestments, installments).
     `SecondaryMarket.tsx` implied — **DEFERRED, separately-scoped future wave, NOT the immediate
     next** (SPEC §7C.1; SECONDARY_MARKET_SURFACE.md). The peer market now ships real one-shot
     listings; the order-book i18n keys/structure are preserved so it can return.
-  - **Remaining mock domains** — notifications, reports, broker, partners, family, reinvestments,
-    installments — each currently frontend-only mock (SPEC §3.12 / §4.4). (The LP + investor secondary
-    markets are no longer mock — Phase 6 Wave 2/3; **distributions is no longer mock — Phase 9**.)
+  - **Remaining mock domains** — reports, broker, partners, family, reinvestments, installments — each
+    currently frontend-only mock (SPEC §3.12 / §4.4). (The LP + investor secondary markets are no longer
+    mock — Phase 6 Wave 2/3; **distributions — Phase 9**; **notifications — Phase 10**.)
 - **(d) REQUIRED pending — live-provider proof + provider keys (NOT dropped; track like the
   testnet deploy was).** Each layer below is CODE-COMPLETE and verified via unit tests + the
   DEBUG-simulate path; only the LIVE end-to-end proof against the real provider awaits keys.
