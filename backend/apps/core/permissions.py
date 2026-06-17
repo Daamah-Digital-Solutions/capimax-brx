@@ -115,6 +115,51 @@ class HasActivatedOwner(BasePermission):
         return bool(owner and owner.status == "approved")
 
 
+class HasActivatedDeveloper(BasePermission):
+    """
+    Gate requiring an APPROVED property-developer profile before privileged developer
+    capabilities (the next wave's property submission). Mirrors HasActivatedOwner:
+    developer activation is automatic via the signed Sumsub KYB webhook (developer
+    business level) — no admin in the normal path (Phase 8 Wave A; DEVELOPER_SURFACE.md).
+
+    The authoritative check is the DeveloperProfile record (status == 'approved'), since
+    developer verification is a related entity, not just an auth role. Pair with
+    IsAuthenticated so an anonymous request is rejected by auth, not a missing
+    `.developer_profile`.
+    """
+
+    message = "Approved property-developer (KYB) status is required for this action."
+
+    def has_permission(self, request, view):
+        developer = getattr(request.user, "developer_profile", None)
+        return bool(developer and developer.status == "approved")
+
+
+class HasActivatedPropertySubmitter(BasePermission):
+    """
+    Gate for the SHARED property-submission machinery (apps/owner: PropertySubmission +
+    SubmissionDocument). A submission is a submission regardless of submitter role, so
+    this passes for EITHER an approved property OWNER (Phase 7) OR an approved property
+    DEVELOPER (Phase 8 Wave B; DEVELOPER_SURFACE.md §5 — the developer is a thin variant
+    of the owner reusing the same wizard, which already collects `construction_status`).
+
+    The authoritative check is the related verification entity (OwnerProfile or
+    DeveloperProfile with status == 'approved') — single-role-per-user means a given
+    caller holds at most one. Pair with IsAuthenticated so an anonymous request is
+    rejected by auth, not a missing profile. Endpoints stay submitter-scoped (a caller
+    only ever sees/edits their own submissions), so opening the gate never crosses rows.
+    """
+
+    message = "Approved property-owner or property-developer (KYB) status is required for this action."
+
+    def has_permission(self, request, view):
+        owner = getattr(request.user, "owner_profile", None)
+        if owner and owner.status == "approved":
+            return True
+        developer = getattr(request.user, "developer_profile", None)
+        return bool(developer and developer.status == "approved")
+
+
 class KYCApprovedPermission(BasePermission):
     """
     Gate requiring an APPROVED KYC record before sensitive actions (wallet creation,

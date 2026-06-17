@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ownerApi } from "@/integrations/api/client";
 import { useOwnerProfile } from "@/hooks/useOwnerProfile";
+import { useDeveloperProfile } from "@/hooks/useDeveloperProfile";
+import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import {
@@ -74,7 +76,16 @@ export default function SubmitProperty() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const isArabic = language === "ar";
+  // The submission wizard is SHARED by the owner (Phase 7) and developer (Phase 8 Wave
+  // B) roles — a submission is a submission regardless of submitter role, and the gate
+  // accepts an approved OWNER or DEVELOPER. Drive the gate off whichever role this user
+  // holds (single role per user) and route a non-verified user to their own KYB card.
+  const { user } = useAuth();
+  const isDeveloper = user?.profile?.role === "developer";
   const { ownerProfile, loading: ownerLoading } = useOwnerProfile();
+  const { developerProfile, loading: developerLoading } = useDeveloperProfile();
+  const submitterProfile = isDeveloper ? developerProfile : ownerProfile;
+  const submitterLoading = isDeveloper ? developerLoading : ownerLoading;
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -105,7 +116,7 @@ export default function SubmitProperty() {
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const progress = (currentStep / steps.length) * 100;
-  const isApprovedOwner = ownerProfile?.status === "approved";
+  const isApprovedSubmitter = submitterProfile?.status === "approved";
 
   const nextStep = () => {
     if (currentStep < steps.length) setCurrentStep(currentStep + 1);
@@ -207,9 +218,10 @@ export default function SubmitProperty() {
     }
   };
 
-  // --- KYB gate: only APPROVED owners can submit (server-enforced; we pre-check to
-  // avoid a raw 403 and route the owner to verification). -------------------- //
-  if (ownerLoading) {
+  // --- KYB gate: only an APPROVED owner OR developer can submit (server-enforced via
+  // HasActivatedPropertySubmitter; we pre-check to avoid a raw 403 and route a
+  // non-verified user to their role's verification card). ------------------- //
+  if (submitterLoading) {
     return (
       <MainLayout>
         <div className="p-6 flex items-center gap-2 text-muted-foreground">
@@ -219,7 +231,7 @@ export default function SubmitProperty() {
       </MainLayout>
     );
   }
-  if (!isApprovedOwner) {
+  if (!isApprovedSubmitter) {
     return (
       <MainLayout>
         <div className="p-6">
@@ -229,12 +241,18 @@ export default function SubmitProperty() {
                 <ShieldCheck className="w-7 h-7 text-primary" />
               </div>
               <h2 className="text-xl font-display font-bold text-foreground">
-                {isArabic ? "أكمل توثيق المالك أولاً" : "Complete owner verification first"}
+                {isDeveloper
+                  ? isArabic ? "أكمل توثيق المطوّر أولاً" : "Complete developer verification first"
+                  : isArabic ? "أكمل توثيق المالك أولاً" : "Complete owner verification first"}
               </h2>
               <p className="text-muted-foreground">
-                {isArabic
-                  ? "يجب اعتماد توثيق المالك (KYB) قبل تقديم عقار. أكمل التوثيق من لوحة تحكم المالك."
-                  : "Your owner verification (KYB) must be approved before you can submit a property. Complete it from your owner dashboard."}
+                {isDeveloper
+                  ? isArabic
+                    ? "يجب اعتماد توثيق المطوّر (KYB) قبل تقديم عقار. أكمل التوثيق من لوحة التحكم."
+                    : "Your developer verification (KYB) must be approved before you can submit a property. Complete it from your dashboard."
+                  : isArabic
+                    ? "يجب اعتماد توثيق المالك (KYB) قبل تقديم عقار. أكمل التوثيق من لوحة تحكم المالك."
+                    : "Your owner verification (KYB) must be approved before you can submit a property. Complete it from your owner dashboard."}
               </p>
               <Button onClick={() => navigate("/my-assets")}>
                 {isArabic ? "الذهاب إلى التوثيق" : "Go to verification"}

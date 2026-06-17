@@ -22,7 +22,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import HasActivatedOwner
+from apps.core.permissions import HasActivatedPropertySubmitter
 from apps.kyc import sumsub
 
 from .models import OwnerProfile, PropertySubmission, SubmissionDocument, SubmissionStatus
@@ -141,20 +141,23 @@ class OwnerKYBAccessTokenView(APIView):
 
 
 # --------------------------------------------------------------------------- #
-# Property submission intake — Phase 7 Wave B. ALL gated [IsAuthenticated,
-# HasActivatedOwner] (KYB-gated, like investing requires approved KYC) and
-# OWNER-SCOPED (a caller only ever sees/edits their OWN submissions/documents). NO
-# Property row is created or published in this wave (that is Wave C).
+# Property submission intake — Phase 7 Wave B (owner) + Phase 8 Wave B (developer).
+# ALL gated [IsAuthenticated, HasActivatedPropertySubmitter] — an approved property
+# OWNER **or** an approved property DEVELOPER (KYB-gated, like investing requires
+# approved KYC) — and SUBMITTER-SCOPED (a caller only ever sees/edits their OWN
+# submissions/documents, regardless of role). The submission records `submitter`
+# generically; nothing here assumes the submitter is specifically an owner. NO Property
+# row is created or published in this wave (that is Wave C).
 # --------------------------------------------------------------------------- #
 def _get_submission(user, submission_id):
-    """Owner-scoped lookup: only the submitter's own submission (else 404)."""
+    """Submitter-scoped lookup: only the submitter's own submission (else 404)."""
     return get_object_or_404(PropertySubmission, pk=submission_id, submitter=user)
 
 
 class SubmissionsView(APIView):
     """GET the caller's submissions; POST to create a new DRAFT."""
 
-    permission_classes = [IsAuthenticated, HasActivatedOwner]
+    permission_classes = [IsAuthenticated, HasActivatedPropertySubmitter]
 
     def get(self, request):
         subs = PropertySubmission.objects.filter(submitter=request.user)
@@ -174,7 +177,7 @@ class SubmissionsView(APIView):
 class SubmissionDetailView(APIView):
     """GET one own submission; PATCH content (only while DRAFT)."""
 
-    permission_classes = [IsAuthenticated, HasActivatedOwner]
+    permission_classes = [IsAuthenticated, HasActivatedPropertySubmitter]
 
     def get(self, request, submission_id):
         sub = _get_submission(request.user, submission_id)
@@ -201,7 +204,7 @@ class SubmissionDetailView(APIView):
 class SubmissionSubmitView(APIView):
     """POST: transition a DRAFT → SUBMITTED (validates required documents present)."""
 
-    permission_classes = [IsAuthenticated, HasActivatedOwner]
+    permission_classes = [IsAuthenticated, HasActivatedPropertySubmitter]
 
     def post(self, request, submission_id):
         sub = _get_submission(request.user, submission_id)
@@ -219,7 +222,7 @@ class SubmissionSubmitView(APIView):
 class SubmissionDocumentsView(APIView):
     """GET the submission's documents; POST to upload one (multipart)."""
 
-    permission_classes = [IsAuthenticated, HasActivatedOwner]
+    permission_classes = [IsAuthenticated, HasActivatedPropertySubmitter]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request, submission_id):
@@ -255,7 +258,7 @@ class SubmissionDocumentsView(APIView):
 class SubmissionDocumentDetailView(APIView):
     """DELETE one of the caller's own submission documents (draft only)."""
 
-    permission_classes = [IsAuthenticated, HasActivatedOwner]
+    permission_classes = [IsAuthenticated, HasActivatedPropertySubmitter]
 
     def delete(self, request, submission_id, doc_id):
         sub = _get_submission(request.user, submission_id)
@@ -273,7 +276,7 @@ class SubmissionDocumentDetailView(APIView):
 class SubmissionDocumentDownloadView(APIView):
     """Owner-scoped download of a submission document (blob)."""
 
-    permission_classes = [IsAuthenticated, HasActivatedOwner]
+    permission_classes = [IsAuthenticated, HasActivatedPropertySubmitter]
 
     def get(self, request, submission_id, doc_id):
         sub = _get_submission(request.user, submission_id)

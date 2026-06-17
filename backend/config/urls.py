@@ -30,6 +30,8 @@ urlpatterns = [
     path("api/secondary-market/", include("apps.secondary_market.urls")),
     # Property Owner onboarding (Phase 7 Wave A): owner profile + entity KYB (Sumsub). OWNER_SURFACE.md.
     path("api/owner/", include("apps.owner.urls")),
+    # Property Developer onboarding (Phase 8 Wave A): developer profile + entity KYB (Sumsub). DEVELOPER_SURFACE.md.
+    path("api/developer/", include("apps.developer.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

@@ -920,6 +920,169 @@ KYB+submit+review+earnings patterns); the **investor distributions engine** (ren
 holders — `OwnershipToken.total_distributions` exists but nothing writes it); and the other mock domains
 (notifications, reports export, broker, partners, family, reinvestments, installments).
 
+## Phase 8 Wave A — Property Developer entity verification (developer KYB) — DELIVERED (2026-06-16, LOCKED)
+**Scope (THIS wave only):** a user who self-registers `?role=developer` (RegisterRole.tsx "Developer" card,
+distinct from `?role=owner`), applies, completes business KYB (a SEPARATE Sumsub level), and is activated
+automatically — KYB GREEN → developer approved → `role_status` ACTIVE, **no admin in the normal path**.
+**VERIFICATION ONLY.** **NOT built:** developer submission (next wave — reuses the owner wizard +
+`PropertySubmission`), review/publish, earnings, any staged-funding/milestone engine (the frontend has
+none — DEVELOPER_SURFACE.md §3/§5). **⚠️ NOT touched:** `/developers` + `DeveloperHub.tsx` (that is the
+API hub for SOFTWARE developers — a completely unrelated feature; left entirely alone, re-verified rendering).
+
+**LOCKED decisions (product-owner):** (1) the developer is a **THIN VARIANT of the owner** — reuse
+`apps/owner` patterns end-to-end; do NOT invent a staged-funding/milestone engine; developer proceeds will
+be the same lump primary-sale credit as the owner (later wave). (2) developer and owner are **SEPARATE
+roles** — a **separate `DeveloperProfile`** reusing the owner KYB structure/plumbing (not merged into
+`OwnerProfile`); DRY via identical service/serializer/view **patterns** + the shared webhook/level routing.
+(3) KYB is **AUTOMATIC** via a Sumsub **business level**, like owner/LP; keys deferred/inert; DEBUG-only
+`dev_grant_developer_kyb`. (4) **same required doc set** as the owner (deferred to the submission wave; not
+this one). (5) **single role per user** for v1. (6) **DO NOT** wire the property-developer role to
+`/developers`.
+
+**Backend — new `apps/developer` (mirrors `apps/owner` KYB subset):**
+- **`DeveloperProfile`** (OneToOne user, `related_name="developer_profile"`, table `developer_profiles`):
+  same shape as `OwnerProfile`'s KYB block (status + kyb_status machine + business fields + Sumsub linkage +
+  timestamps). NO staged-funding fields. `migration 0001`.
+- **Services** — `approve_kyb`/`reject_kyb`/`submit_kyb` + `try_handle_developer_kyb_webhook`/
+  `_resolve_developer`; `approve_kyb` is the automation hinge (webhook **and** dev command **and** admin all
+  converge here) and flips `role_status` ACTIVE only when `role == developer` (`_activate_developer_role`).
+- **Endpoints** (`/api/developer/`, developer-scoped): `GET/POST profile/` (apply=create, idempotent),
+  `POST kyb/submit/` (→ under_review), `POST kyb/access-token/` (developer business level; **503** when keys
+  deferred). **`HasActivatedDeveloper`** permission (reads `developer_profile.status == approved`) gates the
+  next wave. **Admin** = clearly-labelled EXCEPTION approve/reject (routes through `approve_kyb`).
+  `dev_grant_developer_kyb` (DEBUG-only, `--reject`/`--revoke`, refuses in prod).
+- **FOUR-WAY shared webhook** — `/api/kyc/webhook/sumsub/` now tries **developer → owner → LP → investor
+  KYC** in turn. Each resolver matches **only its own table OR its own distinct level name**
+  (`SUMSUB_DEVELOPER_KYB_LEVEL_NAME` default `developer-kyb-level`, vs owner `owner-kyb-level`, LP
+  `basic-kyb-level`, investor `basic-kyc-level`) — applicant ids are globally unique, level names disjoint,
+  so the four NEVER collide regardless of order. Bad/absent signature → 401, no change (unchanged).
+- Settings `SUMSUB_DEVELOPER_KYB_LEVEL_NAME`; `apps.developer` in INSTALLED_APPS; url mounted;
+  `.env.example` updated (NAME only, blank/placeholder).
+
+**Frontend (smallest change set):** `developerApi` (profile/apply/submitKYB/kybAccessToken) added to
+`client.ts`; **`useDeveloperProfile`** hook + **`DeveloperVerificationCard`** (mirror the owner versions,
+developer copy + HardHat icon, degrade-to-dev-path notice). **`OwnerDashboard.tsx`** (the merged
+"Owner / Developer" sidebar persona at `/my-assets`) now renders the **DeveloperVerificationCard when
+`user.profile.role === "developer"`, else the OwnerVerificationCard** — everything else on the page is
+shared. Bilingual EN/AR. `/developers` + `DeveloperHub.tsx` untouched.
+
+**Verified:** `makemigrations`/`migrate` clean (developer 0001). **Full suite 240 green** (was 219; +21
+developer: apply/idempotent/404, KYB submit→under_review, webhook developer-GREEN→approved+role-activated /
+RED→rejected / bad-sig→401-no-change / resolve-by-level, **four-way cross-claim isolation** — owner/LP/
+investor-KYC events NOT claimed by the developer handler and vice-versa, dev_grant approve/revoke/
+refuse-in-prod, HasActivatedDeveloper allow/deny, access-token 503). **Investor KYC + LP KYB + OWNER KYB
+all unaffected** (explicit no-regression tests). Frontend `tsc` clean. **Dev-path journey (no Sumsub keys),
+in-browser:** registered `?role=developer` → dashboard showed the **Developer** KYB card (owner card
+correctly absent) → **Apply** (UI) created the pending profile → card advanced to the business-info form →
+`dev_grant_developer_kyb` → reload → card reads **"معتمد / Approved" + "your entity is verified"** from
+Django; no console errors. `/developers` API hub re-verified rendering (untouched).
+
+**NEXT waves (all REUSE `apps/owner`):** developer **submission** (the SAME `SubmitProperty.tsx` wizard +
+`PropertySubmission`; generalize the submit gate to accept an approved developer OR owner) → **review/
+publish** (admin assigns an under-construction model; `submitted_by = developer`) → **earnings** (the SAME
+owner primary-sale credit verbatim — no staged funding).
+
+## Phase 8 Wave B — Developer property submission (REUSE owner machinery) — DELIVERED (2026-06-16, LOCKED)
+**Scope (THIS wave only):** let an APPROVED developer submit properties through the **same** owner
+submission machinery. The ONLY real change is generalizing the submit gate to accept an approved OWNER **or**
+DEVELOPER. **NOT built:** review/publish (Wave C), earnings (Wave D), staged funding, any parallel
+developer-submission model. **⚠️ NOT touched:** `/developers` / `DeveloperHub.tsx` (the unrelated software-dev
+API hub).
+
+**LOCKED decisions:** (1) reuse `apps/owner`'s `PropertySubmission` + `SubmissionDocument` + the same
+`SubmitProperty.tsx` wizard **verbatim** — a submission is a submission regardless of submitter role; NO
+parallel model, NO new endpoints (developer hits the same `/api/owner/submissions/*`). (2) the submit gate
+accepts an approved owner **or** developer; `PropertySubmission.submitter` records who submitted (already
+generic). (3) same fields + required docs (Title/Valuation/Legal) — the wizard already collects
+`construction_status` (what distinguishes a developer's UC asset). (4) single role per user — the gate
+accepts whichever activated role the caller holds.
+
+**Backend (gate generalization only — no model/migration changes):**
+- New **`HasActivatedPropertySubmitter`** permission (`apps/core/permissions.py`): passes for an approved
+  `owner_profile` OR `developer_profile` (single-role-per-user → at most one). Swapped into **all 6**
+  `PropertySubmission` views (`SubmissionsView`, `SubmissionDetailView`, `SubmissionSubmitView`,
+  `SubmissionDocumentsView`, `SubmissionDocumentDetailView`, `SubmissionDocumentDownloadView`) in
+  `apps/owner/views.py`, replacing the owner-only `HasActivatedOwner`. Endpoints stay **submitter-scoped**
+  (`filter(submitter=request.user)` / `_get_submission`), so opening the gate never crosses rows.
+- **Confirmed nothing assumes the submitter is an owner:** the whole submission/publish/earnings path reads
+  `submission.submitter` / `Property.submitted_by` generically — no code reads `submitter.owner_profile`
+  (grep-verified). So the Wave-C publish pipeline (`publish_submission` sets `submitted_by=submission.
+  submitter`) and Wave-D earnings (`submitted_by=request.user`) are already submitter-agnostic and will work
+  for a developer submitter unchanged — to be VERIFIED when those waves run, but no developer-specific code
+  is needed there.
+
+**Frontend (smallest change set):** `SubmitProperty.tsx` gate is now **role-aware** — drives off the
+developer profile when `user.profile.role === "developer"`, else the owner profile; an approved owner **or**
+developer reaches the **same** wizard, a non-verified user sees a role-appropriate "Complete
+owner/developer verification first" card routing to `/my-assets` (which already shows the right KYB card per
+role, Wave A). Submission CRUD still uses `ownerApi.*` (the shared machinery — no new client surface).
+`OwnerDashboard` lists a developer's submissions via the same `ownerApi.submissions()` (now gate-allowed).
+Bilingual EN/AR; layout unchanged. `/developers` untouched.
+
+**Verified:** no new migrations. **Full suite 248 green** (was 240; +8 Wave-B developer-submission tests;
+owner+developer focused run 78 green): approved developer creates/uploads/submits with required-doc enforcement; pending
+developer 403; approved **owner still works** (no regression); developer↔owner **cross-submitter isolation**
+(neither sees the other's submission); **NO Property created** on submit). Frontend `tsc` clean.
+**Dev-path journey, in-browser:** approved developer (`devjourney`, from Wave A) → `/submit-property`
+**reached the wizard** (not gated) → created a draft + uploaded title/valuation/legal + submitted → `GET
+/api/owner/submissions/` shows it **`submitted`**; **`published_property` is null, 0 Properties created**
+(intake only); `OwnerDashboard` lists "Dev Journey Tower" with a **Submitted** badge; no console errors.
+`/developers` API hub untouched.
+
+**NEXT:** **Wave C = review → publish** — likely already works since the publish pipeline is
+submitter-agnostic (admin assigns an under-construction model, `submitted_by=developer`); **verify** the
+admin review action + the published property links the developer. **Wave D = earnings** — reuse the owner
+primary-sale credit verbatim (`submitted_by` already covers a developer).
+
+## Phase 8 Wave C+D — Developer review→publish + earnings (VERIFICATION) — DELIVERED (2026-06-16, LOCKED) → DEVELOPER DOMAIN COMPLETE
+**Scope (THIS wave only):** PROVE the owner review→publish pipeline + primary-sale earnings credit work
+for a DEVELOPER submitter, fixing only real owner-specific assumptions. **Result: WORKED AS-IS — ZERO code
+changes needed.** **NOT built:** staged funding / milestone release (locked: the frontend has none); no
+developer-specific publish/earnings logic. **⚠️ NOT touched:** `/developers` / `DeveloperHub.tsx`; the
+investor marketplace (no change — it already reads `is_published=True`).
+
+**Audit — no owner-specific assumption gates behaviour (grep + read-verified):**
+- `publish_submission` ([apps/owner/services.py](backend/apps/owner/services.py)) sets
+  `submitted_by=submission.submitter` generically — no `owner_profile` read.
+- `_credit_owner_for_primary_sale` ([apps/investments/services.py:187](backend/apps/investments/services.py))
+  reads `prop.submitted_by_id` and credits `prop.submitted_by`; memo is "Primary sale: …" (no user-facing
+  "owner").
+- `OwnerEarningsView` ([apps/owner/views.py:297](backend/apps/owner/views.py)) is `[IsAuthenticated]` +
+  `filter(submitted_by=request.user)` — returns the caller's properties whatever their role.
+- The only "owner" strings (`_credit_owner_for_primary_sale`, `OWNER_PRIMARY_SALE_SOURCE`,
+  `OwnerEarningsView`) are **internal names** that don't gate behaviour → left as-is (renaming would churn
+  the owner code for no functional gain). **Per locked decision #3, no minimal generalization was required.**
+
+**Verified:** no migrations. **Full suite 256 green** (was 248; +8 Wave-C+D developer tests, chain mocked):
+publish a developer's UC submission (`installment` w/ nested schedule, `phasing`) → exactly one Property,
+`submitted_by=developer`, `is_published` False→True, `category` auto-derived `construction`, in the
+marketplace; developer sees approved+slug / rejected+notes; an investor primary buy credits the
+**developer** net-of-fees **once** (idempotent on replay), developer reads `/api/owner/earnings/` (980 net,
+10 units), withdraws via the shared `UserBalance`/`Withdrawal` stack (980→480); earnings developer-scoped;
+**owner flow unaffected** (no regression). Frontend untouched (the merged Owner/Developer persona already
+routes a developer to `/owner-wallet` + `/owner-reports`, which read `submitted_by` generically).
+
+**End-to-end on REAL BSC Testnet (developer submitter, zero code change):** approved developer → SUBMITTED
+submission → `publish_submission(model="phasing", deploy=True)` → Property `dev-testnet-uc` published
+(`is_published=True`, `submitted_by=developer`, `category=construction`, `token_supply=50000`) + **REAL
+token deploy** tx
+[`0x4a04c876…1fbf9`](https://testnet.bscscan.com/tx/0x4a04c876d754184c99c17e6cd08bc333c826cf922ab1e29417d77d2515f1fbf9)
+(contract `0x6E7A5228A403E3D07c41068Ac670289448FCEce7`, chain 97) → investor bought 10 tokens (primary,
+COMPLETED → **REAL on-chain mint** tx
+[`0xafa33ef2…80247`](https://testnet.bscscan.com/tx/0xafa33ef2f8b291886284bb658423e270098f3d0d682672db9b8b4ece44880247),
+block 113768027) → **DEVELOPER `UserBalance` credited NET = 980.00** (GROSS 1000 − 2% fees 20), exactly one
+`primary_sale` credit; **replay → already=True, balance still 980** (idempotent); developer **withdrew** $500
+(`WD-D0FAC380A6`) → balance **480.00**. (Test DB rows cleaned up; the on-chain deploy+mint remain on testnet.)
+
+**THE DEVELOPER ROLE IS NOW COMPLETE: KYB (A) → submit (B) → review/publish (C) → earnings (D)** — built
+entirely by reusing the owner machinery (separate `DeveloperProfile` + `HasActivatedDeveloper` for KYB; the
+generalized `HasActivatedPropertySubmitter` gate; the submitter-agnostic publish + earnings paths unchanged).
+
+**Remaining (post-developer-domain):** the **investor distributions engine** (rental-yield to token holders —
+`OwnershipToken.total_distributions` exists but nothing writes it; separate from owner/developer primary-sale
+earnings); the **bid/ask order book** (deferred); and the other mock domains (notifications, reports export,
+broker, partners, family, reinvestments, installments).
+
 ## Governance & roadmap (standing — keep across compacts)
 - **(a) Mainnet gating (REQUIRED).** Before any mainnet / real funds: (1) a **professional
   smart-contract AUDIT**, and (2) custodial keys moved to **KMS/HSM with hot/cold separation**
@@ -944,8 +1107,14 @@ holders — `OwnershipToken.total_distributions` exists but nothing writes it); 
     net primary-sale proceeds via `credit_user_balance` on COMPLETED+minted sales (idempotent, null-safe);
     withdraws via the existing `UserBalance`/`Withdrawal` stack; wallet/earnings UI wired to real Django.
     Proven end-to-end on BSC Testnet.
-  - **Remaining after the owner domain:** the **DEVELOPER** role (separate later domain reusing the owner
-    KYB+submit+review+earnings patterns); the **investor distributions engine** (rental-yield to token
+  - **Developer domain — COMPLETE** ✅ (thin variant of owner, reuses `apps/owner`): Wave A **developer
+    entity KYB** (separate `DeveloperProfile`, four-way shared webhook, `HasActivatedDeveloper`); Wave B
+    **property submission** (gate generalized to `HasActivatedPropertySubmitter` = owner OR developer; reuses
+    the owner wizard + `PropertySubmission` verbatim); Wave C+D **review→publish + earnings — WORKED AS-IS,
+    zero code change** (the publish pipeline + primary-sale credit + earnings read are submitter-agnostic;
+    `submitted_by=developer`). Proven end-to-end on BSC Testnet (deploy + mint + net credit + withdraw). NO
+    staged funding (the frontend has none). See "Phase 8 Wave A/B/C+D".
+  - **Remaining after the developer domain:** the **investor distributions engine** (rental-yield to token
     holders — separate from owner earnings); other mock domains (notifications, reports export, broker,
     partners, family, reinvestments, installments).
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
@@ -975,6 +1144,11 @@ holders — `OwnershipToken.total_distributions` exists but nothing writes it); 
     → real WebSDK business verification + the REAL `applicantReviewed` business webhook → owner approved
     + role activated. Shares the `SUMSUB_*` keys; needs the SEPARATE `SUMSUB_OWNER_KYB_LEVEL_NAME` set
     (so the shared webhook routes owner vs LP vs investor). (Inert until keys land.)
+  - **Sumsub developer KYB (Phase 8 Wave A, Property Developer):** with the **developer-business-level**
+    keys/level → real WebSDK business verification + the REAL `applicantReviewed` business webhook →
+    developer approved + role activated. Shares the `SUMSUB_*` keys; needs the SEPARATE
+    `SUMSUB_DEVELOPER_KYB_LEVEL_NAME` set (so the **four-way** shared webhook routes developer vs owner vs
+    LP vs investor by distinct level name). (Inert until keys land.)
   - **OAuth (Google/Apple):** social login scaffolded, inert until provider keys land (pre-existing).
 - **(e) Cleanup / tech-debt (recorded — not lost):**
   - **(a) Duplicate withdrawal flow on INVESTOR pages.** The **Owner wallet now uses the built Django

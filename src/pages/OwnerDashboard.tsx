@@ -29,8 +29,10 @@ import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { OwnerVerificationCard } from "@/components/owner/OwnerVerificationCard";
+import { DeveloperVerificationCard } from "@/components/developer/DeveloperVerificationCard";
 import { ownerApi } from "@/integrations/api/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
 // Phase 7 Wave B: real property submissions from Django.
@@ -137,7 +139,12 @@ const platformMessages = [
 export default function OwnerDashboard() {
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const { language } = useLanguage();
+  const { user } = useAuth();
   const isAr = language === "ar";
+  // The sidebar persona is merged "Owner / Developer" (both use /my-assets). Surface the
+  // verification card that matches the user's selected role (Phase 8 Wave A). Developer
+  // and owner are separate roles/KYB entities; everything else on this page is shared.
+  const isDeveloper = user?.profile?.role === "developer";
 
   // Real property submissions (Phase 7 Wave B) + owner primary-sale earnings (Wave D).
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -226,10 +233,11 @@ export default function OwnerDashboard() {
         </div>
 
         <div className="container py-8">
-          {/* Owner entity verification (KYB) — Phase 7 Wave A. Real Django-backed
-              onboarding entry; the dashboard stats below remain mock pending later waves. */}
+          {/* Entity verification (KYB) — real Django-backed onboarding entry. Owner
+              (Phase 7 Wave A) and Developer (Phase 8 Wave A) are separate roles/KYB
+              entities sharing this merged dashboard; show the card for the user's role. */}
           <div className="mb-8">
-            <OwnerVerificationCard />
+            {isDeveloper ? <DeveloperVerificationCard /> : <OwnerVerificationCard />}
           </div>
 
           {/* Stats Overview */}

@@ -674,4 +674,52 @@ export const ownerApi = {
     }>,
 };
 
+// --------------------------------------------------------------------------- //
+// Developer ENTITY verification (business KYB) only — Phase 8 Wave A. Mirrors
+// ownerApi's KYB subset exactly. KYB approval is automatic via the signed Sumsub
+// webhook (developer business level); the WebSDK access-token degrades to 503 (then
+// the form/dev path) when keys are deferred. Property submission / earnings are later
+// waves that REUSE the owner surfaces and are NOT touched here. (NOTE: unrelated to
+// the /developers API hub — that is for software developers, not the property role.)
+// --------------------------------------------------------------------------- //
+export interface DeveloperKybAccessToken {
+  configured: boolean;
+  token?: string;
+  code?: string;
+}
+
+export const developerApi = {
+  /** The caller's developer profile, or null when none exists yet (404). */
+  profile: async (): Promise<any | null> => {
+    try {
+      return await rawRequest("/developer/profile/", { auth: true });
+    } catch (err) {
+      if ((err as ApiError).status === 404) return null;
+      throw err;
+    }
+  },
+  /** Apply as a property developer (idempotent server-side). */
+  apply: (payload: Record<string, unknown>) =>
+    rawRequest("/developer/profile/", { method: "POST", auth: true, body: payload }),
+  /** Persist business info → developer KYB under_review. */
+  submitKYB: (payload: Record<string, unknown>) =>
+    rawRequest("/developer/kyb/submit/", { method: "POST", auth: true, body: payload }),
+  /**
+   * Sumsub WebSDK access token for developer KYB. When the provider is unconfigured
+   * (keys deferred), the backend returns 503 + a machine code — we normalise that into
+   * `{ configured: false, code }` so the UI keeps the form/dev path, never throws.
+   */
+  kybAccessToken: async (): Promise<DeveloperKybAccessToken> => {
+    try {
+      return (await rawRequest("/developer/kyb/access-token/", {
+        method: "POST",
+        auth: true,
+      })) as DeveloperKybAccessToken;
+    } catch (err) {
+      const data = ((err as ApiError).data ?? {}) as { configured?: boolean; code?: string };
+      return { configured: false, code: data.code || "kyb_provider_unconfigured" };
+    }
+  },
+};
+
 export { API_BASE_URL };
