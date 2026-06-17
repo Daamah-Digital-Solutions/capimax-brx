@@ -15,6 +15,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useDistributions } from "@/hooks/useDistributions";
 import {
   Select,
   SelectContent,
@@ -24,34 +25,26 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const distributionStats = {
-  totalReceived: 18750,
-  pendingAmount: 2850,
-  nextPaymentDate: "2025-01-15",
-  yearToDate: 12500,
-  averageMonthly: 1562,
-  propertiesDistributing: 4,
-};
-
-const distributions = [
-  { id: "1", property: "برج مارينا باي التجاري", propertyEn: "Marina Bay Commercial Tower", propertyId: "1", amount: 356, type: "quarterly", periodAr: "Q4 2024", periodEn: "Q4 2024", date: "2025-01-15", status: "pending", yield: 9.5 },
-  { id: "2", property: "المجمع الصناعي الحديث", propertyEn: "Modern Industrial Complex", propertyId: "3", amount: 840, type: "monthly", periodAr: "يناير 2025", periodEn: "January 2025", date: "2025-02-01", status: "scheduled", yield: 11.2 },
-  { id: "3", property: "برج مارينا باي التجاري", propertyEn: "Marina Bay Commercial Tower", propertyId: "1", amount: 356, type: "quarterly", periodAr: "Q3 2024", periodEn: "Q3 2024", date: "2024-12-15", status: "paid", yield: 9.5 },
-  { id: "4", property: "المجمع الصناعي الحديث", propertyEn: "Modern Industrial Complex", propertyId: "3", amount: 840, type: "monthly", periodAr: "ديسمبر 2024", periodEn: "December 2024", date: "2024-12-01", status: "paid", yield: 11.2 },
-  { id: "5", property: "برج المكاتب الذكي", propertyEn: "Smart Office Tower", propertyId: "4", amount: 425, type: "quarterly", periodAr: "Q4 2024", periodEn: "Q4 2024", date: "2024-11-20", status: "paid", yield: 8.5 },
-];
-
-const propertyDistributions = [
-  { id: "1", name: "برج مارينا باي التجاري", nameEn: "Marina Bay Commercial Tower", totalDistributed: 2136, annualYield: 9.5, frequencyAr: "ربع سنوي", frequencyEn: "Quarterly", nextPayment: "2025-01-15", status: "active" },
-  { id: "3", name: "المجمع الصناعي الحديث", nameEn: "Modern Industrial Complex", totalDistributed: 10080, annualYield: 11.2, frequencyAr: "شهري", frequencyEn: "Monthly", nextPayment: "2025-02-01", status: "active" },
-  { id: "4", name: "برج المكاتب الذكي", nameEn: "Smart Office Tower", totalDistributed: 1700, annualYield: 8.5, frequencyAr: "ربع سنوي", frequencyEn: "Quarterly", nextPayment: "2025-01-20", status: "active" },
-  { id: "6", name: "مركز التسوق الكبير", nameEn: "Grand Shopping Center", totalDistributed: 300, annualYield: 10.0, frequencyAr: "ربع سنوي", frequencyEn: "Quarterly", nextPayment: "2025-03-01", status: "active" },
-];
-
 export default function Distributions() {
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState("all");
   const [propertyFilter, setPropertyFilter] = useState("all");
+
+  // Phase 9: real payouts from GET /api/distributions/ (was static mock arrays).
+  // The response is pre-shaped to the exact objects this page renders.
+  const {
+    stats: distributionStats,
+    distributions,
+    byProperty: propertyDistributions,
+  } = useDistributions();
+
+  // Cadence label from the distribution `type` (monthly|quarterly|…), via i18n so
+  // Arabic copy stays in the translation layer (the mock carried hardcoded strings).
+  const freqLabel = (type: string) => {
+    if (type === "monthly") return t("distributions.monthly");
+    if (type === "quarterly") return t("distributions.quarterly");
+    return type;
+  };
 
   const filteredDistributions = distributions.filter(d => {
     if (filter === "all") return true;
@@ -207,7 +200,7 @@ export default function Distributions() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-muted-foreground">{language === "ar" ? dist.periodAr : dist.periodEn}</td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{dist.period}</td>
                           <td className="px-6 py-4 text-sm font-semibold text-success">+${dist.amount.toLocaleString()}</td>
                           <td className="px-6 py-4 text-sm text-foreground">{dist.yield}%</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{dist.date}</td>
@@ -255,7 +248,7 @@ export default function Distributions() {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground">{language === "ar" ? property.name : property.nameEn}</h3>
-                          <p className="text-sm text-muted-foreground">{language === "ar" ? property.frequencyAr : property.frequencyEn}</p>
+                          <p className="text-sm text-muted-foreground">{freqLabel(property.type)}</p>
                         </div>
                       </div>
                       <Badge variant="success">{property.annualYield}% {t("distributions.annual")}</Badge>
@@ -268,7 +261,7 @@ export default function Distributions() {
                       </div>
                       <div>
                         <div className="text-sm text-muted-foreground">{t("distributions.nextPayment")}</div>
-                        <div className="text-lg font-semibold text-foreground">{property.nextPayment}</div>
+                        <div className="text-lg font-semibold text-foreground">{property.nextPayment ?? "—"}</div>
                       </div>
                     </div>
 
@@ -307,7 +300,7 @@ export default function Distributions() {
                         </div>
                         <div>
                           <h4 className="font-semibold text-foreground">{language === "ar" ? dist.property : dist.propertyEn}</h4>
-                          <p className="text-sm text-muted-foreground">{language === "ar" ? dist.periodAr : dist.periodEn}</p>
+                          <p className="text-sm text-muted-foreground">{dist.period}</p>
                         </div>
                       </div>
                       <div className="text-right">

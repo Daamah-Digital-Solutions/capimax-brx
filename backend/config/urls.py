@@ -32,6 +32,8 @@ urlpatterns = [
     path("api/owner/", include("apps.owner.urls")),
     # Property Developer onboarding (Phase 8 Wave A): developer profile + entity KYB (Sumsub). DEVELOPER_SURFACE.md.
     path("api/developer/", include("apps.developer.urls")),
+    # Investor distributions (Phase 9): admin-declared pro-rata cash yield → holders' balances. DISTRIBUTIONS_SURFACE.md.
+    path("api/distributions/", include("apps.distributions.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

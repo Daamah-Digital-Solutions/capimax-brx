@@ -1078,12 +1078,64 @@ block 113768027) → **DEVELOPER `UserBalance` credited NET = 980.00** (GROSS 10
 entirely by reusing the owner machinery (separate `DeveloperProfile` + `HasActivatedDeveloper` for KYB; the
 generalized `HasActivatedPropertySubmitter` gate; the submitter-agnostic publish + earnings paths unchanged).
 
-**Remaining (post-developer-domain):** the **investor distributions engine** (rental-yield to token holders —
-`OwnershipToken.total_distributions` exists but nothing writes it; separate from owner/developer primary-sale
-earnings); the **bid/ask order book** (deferred); and the other mock domains (notifications, reports export,
-broker, partners, family, reinvestments, installments).
+**Remaining (post-distributions-domain):** the **bid/ask order book** (deferred); and the other mock domains
+(notifications, reports export, broker, partners, family, reinvestments, installments).
 
-## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 8 complete, commit `eaefd58`)
+## Phase 9 — Investor distributions engine (COMPLETE ✅)
+**What it is:** a periodic CASH yield an admin declares for a property — a money pool split PRO-RATA across the
+property's current ACTIVE token holders and credited to each holder's internal `UserBalance`. Backs the investor
+`Distributions.tsx` page (rental/appreciation yield). **DISTINCT from owner/developer PRIMARY-SALE earnings**
+(one-time seller proceeds, `source="primary_sale"`); distributions flow the OTHER way — to holders, recurring,
+`source="distribution"`.
+
+**LOCKED decisions (as built):**
+1. **ADMIN declares** (sanctioned admin action, like property publication — NOT an exception handler). No
+   owner-funded flow in v1 (the frontend has no owner-declare UI). Surface = a "Declare & distribute" button on
+   the Distribution admin changelist → intermediate form (property + pool + type + period_label + pay_date) →
+   `services.declare_distribution`.
+2. **Pro-rata by FULL `token_amount`** of ACTIVE holdings (NOT net of `locked_amount` — escrow is tradability,
+   not ownership). Holders **snapshot at declaration time**; each `DistributionPayout` freezes
+   `tokens_at_snapshot` + `ownership_pct_at_snapshot` (never recomputed later).
+3. **INTERNAL-BALANCE ONLY** — `wallets.credit_user_balance(..., source="distribution")`. **NO PropertyToken
+   call, no token transfer, no on-chain movement.** (Cash yield, not a token move — proven by a test asserting
+   `token_amount` unchanged + zero new `WalletTransaction`.)
+4. **Credited IMMEDIATELY on declare** (status `paid`). `Distribution` carries `status` + `pay_date` so the
+   frontend renders, but there is **NO scheduling/recurrence engine** (admin declares each period manually; the
+   Schedule tab just shows what's been declared).
+5. Each credited holding's **`OwnershipToken.total_distributions += share`** and **`last_distribution_date`** are
+   bumped (the pre-existing seams at [apps/wallets/models.py:129-130](backend/apps/wallets/models.py#L129) —
+   now written).
+6. **Cent-exact + idempotent:** shares floored to the cent, the remainder cent → the **largest** holder, so
+   `Σ shares == pool` exactly. One `DistributionPayout` per `(distribution, user)` (DB unique) + a `credited`
+   flag → a re-run never double-credits.
+
+**Backend (`apps/distributions`, was an empty stub):** `Distribution` + `DistributionPayout` models
+([models.py](backend/apps/distributions/models.py)); `declare_distribution` + `_build_and_credit_payouts`
+([services.py](backend/apps/distributions/services.py), atomic snapshot→split→credit→bump); `GET
+/api/distributions/` self-scoped read shaped to `Distributions.tsx`
+([views.py](backend/apps/distributions/views.py)); admin declare flow
+([admin.py](backend/apps/distributions/admin.py) + 2 templates). Migration `0001_initial`. Mounted at
+`api/distributions/`. **No write endpoint** — declaring is admin-only.
+
+**Frontend (smallest change set):** `distributionsApi.list()` + `useDistributions` hook;
+[Distributions.tsx](src/pages/Distributions.tsx) repointed from the two hardcoded mock arrays to the API,
+**preserving the exact rendered shape** (History / By-Property / Schedule tabs, summary cards, EN/AR). Cadence
+label moved to the i18n layer (`freqLabel` via `t()`) instead of hardcoded Arabic; period is a single
+language-neutral label. Empty state renders zeros (new investor sees no fabricated data). `tsc` clean.
+
+**Verification:** +15 distributions tests (pro-rata cent-exact, `source="distribution"`, token bump, idempotent
+no-double-credit, locked NOT subtracted, frozen snapshot, only-active holders, no-eligible-holders rollback, no
+token transfer, primary-sale isolation, self-scoped read). **Full suite 271 green** (was 256; +15). End-to-end
+dev-DB journey: 3 holders 50/30/20, declare $1000 → **$500 / $300 / $200, Σ = $1000.00 (cent-exact)**; re-run
+credit step → balance unchanged, tx count stays 1 (**idempotent**); holder A withdrew $500 via the existing
+`UserBalance`/`Withdrawal` stack → balance $0.00, `WD-…`. No on-chain movement (internal balance only).
+
+**Flags (deliberate, v1):** (1) summary "pending" card = $0 and "next payment" = blank — v1 credits immediately
+with no scheduling, so nothing is pending/scheduled (honest, not fabricated; the Schedule tab is empty until a
+future scheduling wave). (2) `yield` shown is the property's `expected_yield` (catalog figure), not a computed
+realized yield. (3) Single-role: a holder gets one payout per distribution (one ACTIVE position per property).
+
+## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 9 complete)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
 **DELIVERED — five roles' worth of functionality, all proven on REAL BSC Testnet:**
@@ -1093,19 +1145,16 @@ Consolidated for compact-resilience — the per-phase sections above are authori
 - **Investor peer secondary market + withdrawal** (Phase 6 W3): real one-shot listings, on-chain peer transfer, custodial gas top-up, `UserBalance` withdrawal.
 - **Owner** (Phase 7 A–D): entity **KYB → submit → admin review/publish (Property is_published F→T, model assigned) → earnings** (net-of-fees primary-sale credit, idempotent, withdraw).
 - **Developer** (Phase 8 A–D): **COMPLETE, built by reusing owner machinery** — separate `DeveloperProfile` + `HasActivatedDeveloper` (Sumsub developer level; the shared signed webhook is now **4-way**: developer/owner/LP/investor by distinct level name); generalized `HasActivatedPropertySubmitter` gate (owner **or** developer submits the **same** wizard); review/publish + earnings were **submitter-agnostic → ZERO code change**, proven on testnet (developer credited net-of-fees, withdrew). **Committed + pushed: commit `eaefd58`.**
+- **Distributions** (Phase 9): **COMPLETE** — admin declares a property cash-yield pool → split **pro-rata by full `token_amount`** across current ACTIVE holders (cent-exact, remainder to largest) → each holder's `UserBalance` credited (`source="distribution"`, **internal-balance only, NO on-chain move**), `total_distributions`/`last_distribution_date` bumped; idempotent (one payout per holder/distribution). `Distributions.tsx` repointed to `GET /api/distributions/`. DISTINCT from primary-sale earnings. Proven via the dev-DB journey ($1000 → $500/$300/$200, Σ cent-exact, withdrawn) + 15 tests. See "Phase 9" above.
 - **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
 
-**➡️ NEXT PLANNED BUILD = the investor DISTRIBUTIONS engine** (rental / appreciation yield paid to **token
-holders** — DISTINCT from owner/developer **primary-sale** earnings, which are seller proceeds). Evidence +
-seams that already exist: `OwnershipToken.last_distribution_date` + `OwnershipToken.total_distributions`
-([apps/wallets/models.py:129-130](backend/apps/wallets/models.py#L129)) are present but **nothing writes
-them yet**; **`apps/distributions` exists as an EMPTY STUB** (app registered, `models.py` has no models). The
-mock frontend surface is `Distributions.tsx` + the owner/developer reports' "Distributions" placeholder tab
-(deliberately $0, never fabricated). The build will be a separate domain that computes/records a distribution
-per holding and pays into the same `UserBalance` stack — to be designed in the upcoming distributions
-analysis pass. NOT started.
+**➡️ NEXT PLANNED BUILD** — distributions are DONE (Phase 9). NEXT is **to be chosen by the user**. The largest
+remaining piece is the **bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
+`SecondaryMarket.tsx` implied — DEFERRED so far; the peer market already ships real one-shot listings (the
+order-book i18n keys/structure are preserved so it can return). The other remaining work is the **mock domains**
+(notifications, reports export, broker, partners, family, reinvestments, installments), each still frontend-only.
 
-**REMAINING after distributions** (unchanged): the **bid/ask ORDER BOOK + matching engine** (price
+**REMAINING** (after distributions): the **bid/ask ORDER BOOK + matching engine** (price
 discovery / partial fills — DEFERRED, the largest remaining piece; the peer market ships real one-shot
 listings, order-book i18n preserved); and the other **mock domains** (notifications, reports export, broker,
 partners, family, reinvestments, installments).
@@ -1141,16 +1190,18 @@ partners, family, reinvestments, installments).
     zero code change** (the publish pipeline + primary-sale credit + earnings read are submitter-agnostic;
     `submitted_by=developer`). Proven end-to-end on BSC Testnet (deploy + mint + net credit + withdraw). NO
     staged funding (the frontend has none). See "Phase 8 Wave A/B/C+D".
-  - **Remaining after the developer domain:** the **investor distributions engine** (rental-yield to token
-    holders — separate from owner earnings); other mock domains (notifications, reports export, broker,
-    partners, family, reinvestments, installments).
+  - **Distributions domain — COMPLETE** ✅ (Phase 9): admin-declared, pro-rata-by-`token_amount`, cent-exact,
+    internal-balance cash credit (`source="distribution"`, NO on-chain move), idempotent; `Distributions.tsx`
+    wired to `GET /api/distributions/`. Separate from owner/developer primary-sale earnings. See "Phase 9" above.
+  - **Remaining after the distributions domain:** the **bid/ask order book** (deferred, below); other mock
+    domains (notifications, reports export, broker, partners, family, reinvestments, installments).
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
     `SecondaryMarket.tsx` implied — **DEFERRED, separately-scoped future wave, NOT the immediate
     next** (SPEC §7C.1; SECONDARY_MARKET_SURFACE.md). The peer market now ships real one-shot
     listings; the order-book i18n keys/structure are preserved so it can return.
-  - **Remaining mock domains** — distributions, notifications, reports, broker, partners, family,
-    reinvestments, installments — each currently frontend-only mock (SPEC §3.12 / §4.4). (The LP +
-    investor secondary markets are no longer mock — delivered in Phase 6 Wave 2/3.)
+  - **Remaining mock domains** — notifications, reports, broker, partners, family, reinvestments,
+    installments — each currently frontend-only mock (SPEC §3.12 / §4.4). (The LP + investor secondary
+    markets are no longer mock — Phase 6 Wave 2/3; **distributions is no longer mock — Phase 9**.)
 - **(d) REQUIRED pending — live-provider proof + provider keys (NOT dropped; track like the
   testnet deploy was).** Each layer below is CODE-COMPLETE and verified via unit tests + the
   DEBUG-simulate path; only the LIVE end-to-end proof against the real provider awaits keys.

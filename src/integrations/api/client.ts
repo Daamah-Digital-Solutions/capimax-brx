@@ -722,4 +722,51 @@ export const developerApi = {
   },
 };
 
+// --------------------------------------------------------------------------- //
+// Investor distributions API (Phase 9) — authenticated, READ-ONLY. SPEC §3.
+// Backs Distributions.tsx (rental/appreciation cash yield paid to token holders).
+// Declaring a distribution is an admin-only action (Django admin), never a client
+// write — so this exposes only the self-scoped read. DISTRIBUTIONS_SURFACE.md.
+// --------------------------------------------------------------------------- //
+export interface DistributionRow {
+  id: string;
+  propertyId: string;
+  property: string;    // Arabic name
+  propertyEn: string;  // English name
+  amount: number;
+  type: string;        // cadence: "monthly" | "quarterly" | …
+  period: string;      // e.g. "Q4 2024"
+  date: string;        // pay date (ISO)
+  status: string;      // "paid" in v1
+  yield: number;       // annual % (from the property)
+}
+export interface DistributionByProperty {
+  id: string;          // property slug
+  name: string;        // Arabic name
+  nameEn: string;      // English name
+  totalDistributed: number;
+  annualYield: number;
+  type: string;        // cadence
+  nextPayment: string | null;
+  status: string;      // "active"
+}
+export interface DistributionsResponse {
+  stats: {
+    totalReceived: number;
+    pendingAmount: number;
+    nextPaymentDate: string | null;
+    yearToDate: number;
+    averageMonthly: number;
+    propertiesDistributing: number;
+  };
+  distributions: DistributionRow[];
+  by_property: DistributionByProperty[];
+}
+
+export const distributionsApi = {
+  /** The caller's own distribution payouts: summary + history rows + per-property rollup. */
+  list: () =>
+    rawRequest("/distributions/", { auth: true }) as Promise<DistributionsResponse>,
+};
+
 export { API_BASE_URL };
