@@ -18,6 +18,8 @@ import {
   User
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { BrokerVerificationCard } from "@/components/broker/BrokerVerificationCard";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -93,6 +95,8 @@ const commissions = [
 ];
 
 export default function BrokerDashboard() {
+  const { user } = useAuth();
+  const isBroker = user?.profile?.role === "broker";
   const [copiedLink, setCopiedLink] = useState(false);
   const [filter, setFilter] = useState("all");
   const referralLink = "https://capimax.io/ref/BROKER123";
@@ -130,6 +134,14 @@ export default function BrokerDashboard() {
         </div>
 
         <div className="container py-8">
+          {/* Broker verification (Phase 12 Wave A): KYC + licence hinge + referral code.
+              Shown to role=broker users. Commission/stats below are Wave B mock data. */}
+          {isBroker && (
+            <div className="mb-8">
+              <BrokerVerificationCard />
+            </div>
+          )}
+
           {/* Stats Overview */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in">

@@ -25,7 +25,7 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string }
+    metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string }
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string }
+    metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string }
   ) => {
     try {
       await authApi.register({
@@ -86,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone: metadata?.phone,
         is_us_citizen: metadata?.is_us_citizen,
         role: metadata?.role, // selected role; backend validates + gates it
+        ref: metadata?.ref, // broker referral code (set-once linkage, server-side)
       });
       // Mirror Supabase email-confirmation: account created but NOT signed in yet.
       // Auth.tsx shows the "check your email" screen; the user logs in next.

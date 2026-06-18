@@ -70,6 +70,10 @@ class RegisterSerializer(serializers.Serializer):
     # Frontend role choice (RegisterRole.tsx -> Auth.tsx -> signUp). Optional;
     # absent/blank => investor.
     role = serializers.CharField(required=False, allow_blank=True)
+    # Broker referral code (Phase 12 Wave A). Optional; carried from a `/ref/<code>` link
+    # through the signup flow. If valid, the new user is linked SET-ONCE to that broker
+    # (broker.services.attribute_referral). Unknown/blank/own codes are silently ignored.
+    ref = serializers.CharField(required=False, allow_blank=True)
 
     def validate_email(self, value):
         value = value.lower().strip()
@@ -113,6 +117,14 @@ class RegisterSerializer(serializers.Serializer):
         Profile.objects.filter(user=user).update(**profile_fields)
         profile = Profile.objects.get(user=user)
         profile.apply_self_selected_role(selected_role)
+        # Broker referral attribution — set-once (first broker wins). Lazy import keeps
+        # apps.core decoupled from apps.broker at module load. A bad/own/unknown code is
+        # silently ignored inside attribute_referral; it never blocks registration.
+        ref = (validated_data.get("ref") or "").strip()
+        if ref:
+            from apps.broker.services import attribute_referral
+
+            attribute_referral(profile, ref)
         user.refresh_from_db()
         return user
 

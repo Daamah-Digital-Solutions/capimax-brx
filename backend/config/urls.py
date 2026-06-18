@@ -37,6 +37,10 @@ urlpatterns = [
     path("api/partner/", include("apps.partners.urls")),
     # Public partners directory (Phase 11 Wave A): AllowAny; lists directory-approved partners only.
     path("api/partners/", include("apps.partners.public_urls")),
+    # Broker onboarding (Phase 12 Wave A): apply + licence (admin-approved hinge) + referral
+    # attribution. Identity reuses /api/kyc/*. Auth-scoped to the caller's own profile +
+    # a public referral-code resolve. BROKER_SURFACE.md.
+    path("api/broker/", include("apps.broker.urls")),
     # Investor distributions (Phase 9): admin-declared pro-rata cash yield → holders' balances. DISTRIBUTIONS_SURFACE.md.
     path("api/distributions/", include("apps.distributions.urls")),
     # In-app notifications (Phase 10): self-scoped list + unread-count + mark-read + soft-delete. NOTIFICATIONS_SURFACE.md.

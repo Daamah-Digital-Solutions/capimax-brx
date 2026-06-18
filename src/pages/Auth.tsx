@@ -33,6 +33,12 @@ export default function Auth() {
   const { t, isRTL, language } = useLanguage();
   const urlMode = searchParams.get("mode") === "register" ? "register" : "login";
   const urlRole = (searchParams.get("role") as UserRole | null) ?? null;
+  // Broker referral code (Phase 12 Wave A): from ?ref= on this URL, or stashed by the
+  // /ref/<code> landing route in localStorage. Carried through signup → linked set-once.
+  const referralCode =
+    searchParams.get("ref") ||
+    (typeof window !== "undefined" ? localStorage.getItem("capimax_ref") : null) ||
+    undefined;
   const [mode, setMode] = useState<AuthMode>(urlMode);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>(urlRole ?? "investor");
@@ -90,6 +96,7 @@ export default function Auth() {
           phone: formData.phone,
           is_us_citizen: isUSCitizen,
           role: selectedRole,
+          ref: referralCode,
         });
 
         if (error) {
@@ -103,6 +110,9 @@ export default function Auth() {
             variant: "destructive",
           });
         } else {
+          // Referral code consumed at registration; clear the stash so it can't leak
+          // into a later, unrelated signup on the same browser.
+          if (typeof window !== "undefined") localStorage.removeItem("capimax_ref");
           // Show email verification message
           setShowVerificationMessage(true);
           toast({

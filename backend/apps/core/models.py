@@ -122,6 +122,20 @@ class Profile(models.Model):
     )
     role_verified_at = models.DateTimeField(blank=True, null=True)
 
+    # Referral attribution (Phase 12 Wave A; BROKER_SURFACE.md). When a user registers
+    # via a broker's referral link (`/ref/<code>`), this is set ONCE at registration to
+    # the referring broker and NEVER reassigned (first broker wins). It is the durable
+    # link Wave B's broker commission reads. SET_NULL so deleting a broker profile never
+    # cascades into the referred investors. Set only by broker.services.attribute_referral
+    # (registration path); never writable through any user-facing serializer.
+    referred_by_broker = models.ForeignKey(
+        "broker.BrokerProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referred_profiles",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)  # replaces update_updated_at trigger
 

@@ -1300,10 +1300,61 @@ assignment at 100% with both deliverables + the derived activity feed on `/strat
 localized on the frontend from the code + bilingual fields (backend stays language-agnostic, like notifications).
 (3) The PARTNER DOMAIN IS NOW COMPLETE (KYB + directory → assignment/deliverable workflow).
 
-## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 11 COMPLETE: partner domain done)
+## Phase 12 — Broker role, Wave A: HYBRID verification + referral attribution (COMPLETE ✅)
+**Source of truth:** BROKER_SURFACE.md (+ the verification analysis). The broker is a **referral-commission agent**
+— a **MONEY-earning** role (5% commission per the mock) — but **Wave A builds ONLY verification + attribution; NO
+commission/money is computed or credited** (locked decision #5). `role=broker` existed in core (self-selectable,
+requires verification) but was **STRANDED** with no activation path — exactly the developer/partner pre-build gap.
+
+**LOCKED decisions, as built:**
+1. **HYBRID verification.** IDENTITY reuses the EXISTING investor `UserKYC` (role-agnostic; flows through the shared
+   Sumsub webhook's investor FALLBACK resolver). **The webhook is UNTOUCHED — NO 6th KYB resolver** (a test guards
+   that `apps.broker.services` adds no `try_handle_*` handler). LICENCE + broker data live on a thin new
+   `BrokerProfile` (OneToOne user): `license_number/authority/expiry`, `license_document` (FileField),
+   `referral_code` (unique, auto-gen `BRK######`), `status` (pending|approved|rejected|suspended), licence
+   timestamps + `review_notes`, **commission accumulators DEFINED but NEVER written this wave** (`commission_rate`
+   default 5, `total_commission_earned`/`pending_commission` = 0).
+2. **Activation HINGE = admin licence-approval, gated on `user.kyc` approved.** `services.approve_license` REQUIRES
+   identity KYC already approved (raises `LicenseNotApprovable` otherwise) → status approved + `role_status` →
+   ACTIVE (`on_commit`) + `notify(BROKER_LICENSE_APPROVED)`. KYC approved ALONE does NOT activate the role. Reject →
+   `BROKER_LICENSE_REJECTED` + notes, role stays inactive. Mirrors the owner-publish / partner-directory admin
+   pattern, layered on personal KYC. `HasActivatedBroker` gates the broker portal (Wave B).
+3. **Referral attribution — SET-ONCE.** Each broker owns a unique `referral_code` → `/ref/<code>`. New field
+   `core.Profile.referred_by_broker` (FK `BrokerProfile`, `SET_NULL`, nullable). `services.attribute_referral`
+   sets it ONCE at registration (first broker wins; ignores unknown/own codes; never overwrites). Wired into
+   `RegisterSerializer` via an optional `ref` field. Public `GET /api/broker/referral/resolve/?code=` validates a
+   code at signup. This durable link is what Wave B's commission will read.
+
+**Endpoints** (`/api/broker/`, auth-scoped to own profile): `GET/POST profile/` (apply + read; mirrors `kyc_status`
+from the shared `UserKYC`), `POST license/submit/`, `POST license/upload/` (multipart), public `GET
+referral/resolve/`. **Admin:** `BrokerProfileAdmin` with the licence approve/reject actions (a `kyc_approved` column
+so the admin only approves on a KYC-verified broker). **Dev:** `dev_grant_kyc` (identity) + `dev_approve_broker_license`
+(the hinge; DEBUG-only, refuses prod, enforces the KYC-first guard). **NO webhook change, NO money model.**
+
+**Frontend (smallest change set):** `brokerApi` + `BrokerProfile`/`ReferralResolveResult` interfaces;
+`useBrokerProfile`; `BrokerVerificationCard` (REUSES the investor `<KycVerification/>` for identity + a licence
+form/upload + shows the referral code/link once approved); surfaced on `BrokerDashboard.tsx` for `role=broker`
+(the mock stats/commission stay untouched — Wave B); **referral capture** = a `/ref/:code` landing route
+(`ReferralCapture.tsx`) stashes the code → `/register?ref=`, `Auth.tsx` forwards it through `signUp` → `authApi.register`
+(`ref`), cleared on success. Notif i18n (EN/AR) + `TYPE_CATEGORY` for the 2 broker types. **`/developers` untouched.**
+
+**Tests:** +25 broker tests, **full suite 359 green**. Cover: apply→pending + unique auto `referral_code`; licence
+submit/upload; **KYC alone does NOT activate the role**; **hinge REQUIRES KYC** (raises otherwise) → approve flips
+`role_status` ACTIVE + notifies; reject + notes; **set-once attribution** (2nd code ignored, unknown/own ignored,
+never overwritten); register-with-`ref` links once; public resolve; `HasActivatedBroker` allows approved / denies
+others; **NO money written** (accumulators stay 0); broker app owns ONLY `BrokerProfile`; **webhook untouched**;
+dev command guards (KYC-first + refuses prod). Browser-checked: `/ref/<code>` stashes + redirects to
+`/register?ref=`, no console errors.
+
+**Flags (deliberate, Wave A):** (1) `BrokerDashboard`/`Referrals`/`Commissions` still render MOCK commission numbers
+— Wave B wires them to real data. (2) Licence document is admin-reviewed (Sumsub doesn't verify licences); approval
+is the sanctioned admin step, not automation. (3) Commission accumulator fields exist on `BrokerProfile` but are
+inert this wave.
+
+## Platform state snapshot + NEXT (as of 2026-06-17 — Phase 12 Wave A: broker verification + attribution done)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
-**DELIVERED — five roles' worth of functionality, all proven on REAL BSC Testnet:**
+**DELIVERED — six full roles + broker onboarding (investor, LP, owner, developer, partner, broker[verification] + the admin reviewer), all proven on REAL BSC Testnet / dev:**
 - **Investor** (Phase 3–4): KYC → custodial wallet → invest → **real on-chain token mint**; certificates (PDF+QR+public verify).
 - **Payments** (Phase 5 W1/W2): **Stripe** (card) + **NOW Payments** (crypto), both **signature-verified-webhook/IPN-gated → mint** (no raw card data on server; never mint without a verified callback). Code-complete, inert until keys.
 - **Liquidity Provider** (Phase 6 W1/W2): KYB (business Sumsub level) → activated LP; **LP market** with real on-chain settlement + escrow + internal balance.
@@ -1311,7 +1362,7 @@ Consolidated for compact-resilience — the per-phase sections above are authori
 - **Owner** (Phase 7 A–D): entity **KYB → submit → admin review/publish (Property is_published F→T, model assigned) → earnings** (net-of-fees primary-sale credit, idempotent, withdraw).
 - **Developer** (Phase 8 A–D): **COMPLETE, built by reusing owner machinery** — separate `DeveloperProfile` + `HasActivatedDeveloper` (Sumsub developer level; the shared signed webhook is now **4-way**: developer/owner/LP/investor by distinct level name); generalized `HasActivatedPropertySubmitter` gate (owner **or** developer submits the **same** wizard); review/publish + earnings were **submitter-agnostic → ZERO code change**, proven on testnet (developer credited net-of-fees, withdrew). **Committed + pushed: commit `eaefd58`.**
 - **Distributions** (Phase 9): **COMPLETE** — admin declares a property cash-yield pool → split **pro-rata by full `token_amount`** across current ACTIVE holders (cent-exact, remainder to largest) → each holder's `UserBalance` credited (`source="distribution"`, **internal-balance only, NO on-chain move**), `total_distributions`/`last_distribution_date` bumped; idempotent (one payout per holder/distribution). `Distributions.tsx` repointed to `GET /api/distributions/`. DISTINCT from primary-sale earnings. Proven via the dev-DB journey ($1000 → $500/$300/$200, Σ cent-exact, withdrawn) + 15 tests. See "Phase 9" above.
-- **Notifications** (Phase 10): **COMPLETE** — in-app notifications emitted server-side at all 11 event points (KYC/KYB, wallet, mint + earnings, distribution, secondary sale BOTH parties, withdrawal, submission publish/reject), **inside each host's atomic block** (a `notify()` failure can't break the event — savepoint-wrapped). Stored as **type + params + action_url** (no display strings); the frontend renders EN/AR from i18n by type. Self-scoped read + unread-count + mark-read/mark-all + **soft delete**. Bell + sidebar show the live unread count; `Notifications.tsx` repointed off its mock. In-app only (no email/SMS/push; prefs deferred). Proven via browser journey + 19 tests. See "Phase 10" above.
+- **Notifications** (Phase 10 + Phase 11 Wave B): **COMPLETE** — in-app notifications emitted server-side at **18 event points now** (Phase 10's 11: KYC/KYB, wallet, mint + earnings, distribution, secondary sale BOTH parties, withdrawal, submission publish/reject; **+ the 5 partner-workflow ones** from Wave B: partner assigned / deliverable submitted [→admin] / deliverable approved / revision requested / assignment completed; **+ the 2 broker-licence ones** from Phase 12: licence approved / rejected), **inside each host's atomic block** (a `notify()` failure can't break the event — savepoint-wrapped). Stored as **type + params + action_url** (no display strings); the frontend renders EN/AR from i18n by type. Self-scoped read + unread-count + mark-read/mark-all + **soft delete**. Bell + sidebar show the live unread count; `Notifications.tsx` repointed off its mock. In-app only (no email/SMS/push; prefs deferred). See "Phase 10" + "Phase 11" above.
 - **Partner (Phase 11 A+B): COMPLETE** ✅ — the SERVICE-VENDOR `role=partner` (thin NON-EARNING variant of
   owner/developer; **no money ever**). **Wave A:** activation path — separate `PartnerProfile` +
   `HasActivatedPartner` (Sumsub partner level; the shared signed webhook is now **5-way**: partner/developer/owner/
@@ -1322,17 +1373,29 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   submits → admin approves / requests revision; DERIVED progress + DERIVED `AssignmentEvent` activity feed;
   `notify()` per transition (failure-safe); `StrategicPartners.tsx` repointed off its mock. +44 partner tests,
   full suite 334 green. See "Phase 11" above.
+- **Broker (Phase 12 Wave A): verification + referral attribution BUILT** ✅ — the formerly-STRANDED `role=broker`
+  now has an activation path. **HYBRID verification:** identity reuses the investor `UserKYC` (webhook UNTOUCHED, no
+  6th resolver); a professional **LICENCE** on a thin `BrokerProfile` is approved by an **admin hinge gated on KYC
+  approved** → `role_status` ACTIVE + `HasActivatedBroker`. **Referral attribution:** unique `referral_code` →
+  `/ref/<code>`; `core.Profile.referred_by_broker` set SET-ONCE at registration (first broker wins). **NO money this
+  wave** (commission = Wave B). +25 tests, full suite **359 green**. See "Phase 12" above.
 - **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
 
-**➡️ NEXT PLANNED BUILD = the remaining mock domains.** With the partner domain COMPLETE (Phase 11 A+B), the
-candidates are: **reports export, broker, family accounts, reinvestments, installments** (each a mock surface to
-make real, like the partner domain was), and the **bid/ask ORDER BOOK + matching engine** (the largest deferred
-piece). Latest committed checkpoint on `origin/main` = **`720904c`** (Phase 11 Wave A); Phase 11 Wave B is
-implemented locally, not yet committed.
+**➡️ BROKER domain — analyzed (BROKER_SURFACE.md) + Wave A BUILT (Phase 12).** The broker IS earning (commission
+on referred investors' purchases) → it is a **MONEY domain**, BUT **Wave A built ONLY verification + referral
+attribution — NO money yet.** Verification is **HYBRID** (decided after the surface investigation): identity reuses
+the EXISTING investor `UserKYC` (role-agnostic, via the shared webhook's investor FALLBACK — NO 6th resolver, the
+Sumsub webhook is UNTOUCHED), and a professional **LICENCE** lives on a thin new `BrokerProfile`; an **admin
+licence-approval hinge** (gated on `user.kyc` approved) flips `role_status` → ACTIVE. Referral attribution:
+each broker has a unique `referral_code` → `/ref/<code>`; an investor registering via that link is linked
+SET-ONCE to the broker via `core.Profile.referred_by_broker`. See "Phase 12" below. **NEXT = Broker Wave B —
+COMMISSION** (credit the broker a configurable %, default 5%, **PLATFORM-borne**, on each completed PRIMARY sale by
+a referred investor, at the mint/settlement point, **idempotent**, reusing `UserBalance`/`BalanceTransaction`/
+`Withdrawal` + minting-grade safety) + wiring `BrokerDashboard`/`Referrals`/`Commissions` to real data.
 
-**REMAINING:** the other **mock domains** (reports export, broker, family, reinvestments, installments); and the
-**bid/ask ORDER BOOK + matching engine** (price discovery / partial fills — DEFERRED, the largest remaining piece;
-the peer market ships real one-shot listings, order-book i18n preserved).
+**REMAINING after broker Wave B:** the other **mock domains** (family accounts, reinvestments, installments, reports
+export); and the **bid/ask ORDER BOOK + matching engine** (price discovery / partial fills — DEFERRED, the largest
+remaining piece; the peer market ships real one-shot listings, order-book i18n preserved).
 
 ## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
 **Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"
@@ -1410,15 +1473,24 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
     deliverable workflow (`Assignment` + `Deliverable` + `DeliverableDocument` + append-only `AssignmentEvent`,
     admin approve/request-revision, DERIVED activity feed + progress, `notify()` per transition, one-way comms).
     See the "Phase 11" + "Partner domain" sections above.
-  - **Remaining after the partner domain:** other mock domains (reports export, broker, family, reinvestments,
-    installments); the **bid/ask order book** (deferred, below).
+  - **Broker domain — Wave A BUILT (Phase 12); Wave B = COMMISSION (NEXT):** analyzed → broker IS earning →
+    MONEY domain. **Wave A** built HYBRID verification (identity reuses investor `UserKYC`, webhook UNTOUCHED; a
+    LICENCE on a thin `BrokerProfile` approved by an admin hinge gated on KYC → `role_status` ACTIVE) + SET-ONCE
+    referral attribution (`referral_code` → `/ref/<code>` → `core.Profile.referred_by_broker`). **NO money yet.**
+    **Wave B** credits the broker a configurable % (default 5%, **PLATFORM-borne**) on each completed PRIMARY sale
+    by a referred investor, at the mint/settlement point, **idempotent**, reusing `UserBalance`/`Withdrawal` +
+    minting-grade safety; then wires `BrokerDashboard`/`Referrals`/`Commissions` to real data.
+  - **Remaining after broker Wave B:** other mock domains (family, reinvestments, installments, reports export);
+    the **bid/ask order book** (deferred, below).
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
     `SecondaryMarket.tsx` implied — **DEFERRED, separately-scoped future wave, NOT the immediate
     next** (SPEC §7C.1; SECONDARY_MARKET_SURFACE.md). The peer market now ships real one-shot
     listings; the order-book i18n keys/structure are preserved so it can return.
-  - **Remaining mock domains** — reports, broker, partners, family, reinvestments, installments — each
-    currently frontend-only mock (SPEC §3.12 / §4.4). (The LP + investor secondary markets are no longer
-    mock — Phase 6 Wave 2/3; **distributions — Phase 9**; **notifications — Phase 10**.)
+  - **Remaining mock domains** — family, reinvestments, installments, reports export — each currently frontend-only
+    mock (SPEC §3.12 / §4.4); **broker commission numbers** (`BrokerDashboard`/`Referrals`/`Commissions`) stay mock
+    until Wave B. (No longer mock: LP + investor secondary markets — Phase 6 Wave 2/3; **distributions — Phase 9**;
+    **notifications — Phase 10**; **partners — Phase 11 A+B**; **broker verification + referral attribution —
+    Phase 12 Wave A**.)
 - **(d) REQUIRED pending — live-provider proof + provider keys (NOT dropped; track like the
   testnet deploy was).** Each layer below is CODE-COMPLETE and verified via unit tests + the
   DEBUG-simulate path; only the LIVE end-to-end proof against the real provider awaits keys.

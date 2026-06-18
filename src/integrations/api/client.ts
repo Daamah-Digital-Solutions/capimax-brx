@@ -163,6 +163,7 @@ export const authApi = {
     phone?: string;
     is_us_citizen?: boolean;
     role?: string;
+    ref?: string; // broker referral code carried from a /ref/<code> link (Phase 12 Wave A)
   }): Promise<void> {
     // Creates the account. We intentionally do NOT log the user in here — the
     // frontend shows a "check your email" screen and the user signs in next,
@@ -939,6 +940,83 @@ export const partnerApi = {
     }
     return (await res.json()) as ApiAssignment;
   },
+};
+
+// --------------------------------------------------------------------------- //
+// Broker API (Phase 12 Wave A) — BROKER_SURFACE.md. HYBRID verification: identity reuses
+// the EXISTING investor KYC surface (/api/kyc/*); the broker-specific half is a
+// professional LICENCE (admin-approved hinge). Plus referral attribution.
+//
+// THIS WAVE has NO money/commission endpoints — only verification + the referral code.
+// --------------------------------------------------------------------------- //
+export interface BrokerProfile {
+  id: string;
+  user_id: string;
+  contact_name: string;
+  email: string;
+  phone: string | null;
+  status: "pending" | "approved" | "rejected" | "suspended";
+  applied_at: string;
+  approved_at: string | null;
+  rejected_at: string | null;
+  license_number: string | null;
+  license_authority: string | null;
+  license_expiry: string | null;
+  has_license_document: boolean;
+  license_submitted_at: string | null;
+  license_reviewed_at: string | null;
+  review_notes: string | null;
+  referral_code: string;
+  referral_link: string; // relative `/ref/<code>`; the UI prepends the origin
+  // Commission accumulators (Wave B; read-only, unwritten this wave).
+  commission_rate: string;
+  total_commission_earned: string;
+  pending_commission: string;
+  // Mirrored identity status from the shared UserKYC (NOT a broker field).
+  kyc_status: "pending" | "submitted" | "approved" | "rejected";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferralResolveResult {
+  valid: boolean;
+  broker_name?: string;
+}
+
+export const brokerApi = {
+  /** The caller's broker profile, or null when none exists yet (404). */
+  profile: async (): Promise<BrokerProfile | null> => {
+    try {
+      return (await rawRequest("/broker/profile/", { auth: true })) as BrokerProfile;
+    } catch (err) {
+      if ((err as ApiError).status === 404) return null;
+      throw err;
+    }
+  },
+  /** Apply as a broker (idempotent server-side). */
+  apply: (payload: { contact_name: string; email: string; phone?: string }) =>
+    rawRequest("/broker/profile/", { method: "POST", auth: true, body: payload }) as Promise<BrokerProfile>,
+  /** Persist licence number/authority/expiry (status stays pending until admin approves). */
+  submitLicense: (payload: { license_number: string; license_authority: string; license_expiry?: string | null }) =>
+    rawRequest("/broker/license/submit/", { method: "POST", auth: true, body: payload }) as Promise<BrokerProfile>,
+  /** Upload the licence document (multipart). Returns the refreshed profile. */
+  uploadLicense: async (file: File): Promise<BrokerProfile> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE_URL}/broker/license/upload/`, {
+      method: "POST",
+      headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
+      body: form,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw buildError((data as any)?.detail || `Upload failed (${res.status})`, res.status, data);
+    }
+    return (await res.json()) as BrokerProfile;
+  },
+  /** PUBLIC: validate a referral code at signup (no auth). */
+  resolveReferral: (code: string) =>
+    publicGet(`/broker/referral/resolve/?code=${encodeURIComponent(code)}`) as Promise<ReferralResolveResult>,
 };
 
 export { API_BASE_URL };

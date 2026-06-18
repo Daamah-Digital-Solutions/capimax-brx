@@ -62,6 +62,7 @@ import ExitsHub from "./pages/ExitsHub";
 import InstitutionalPackages from "./pages/InstitutionalPackages";
 import DeveloperHub from "./pages/DeveloperHub";
 import InvestorRelations from "./pages/InvestorRelations";
+import ReferralCapture from "./pages/ReferralCapture";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +96,8 @@ const App = () => (
           <Route path="/support" element={<Support />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/register" element={<RegisterRole />} />
+          {/* Broker referral landing (Phase 12 Wave A): stash code → registration. */}
+          <Route path="/ref/:code" element={<ReferralCapture />} />
           <Route path="/my-assets" element={<OwnerDashboard />} />
           <Route path="/owner-reports" element={<OwnerReports />} />
           <Route path="/owner-wallet" element={<OwnerWallet />} />

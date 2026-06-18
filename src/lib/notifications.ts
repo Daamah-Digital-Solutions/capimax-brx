@@ -31,6 +31,9 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   partner_deliverable_approved: "report",
   partner_revision_requested: "alert",
   partner_assignment_completed: "report",
+  // Broker licence verification (Phase 12 Wave A).
+  broker_license_approved: "system",
+  broker_license_rejected: "alert",
 };
 
 export function categoryOf(type: string): NotificationCategory {

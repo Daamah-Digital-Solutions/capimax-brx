@@ -157,6 +157,27 @@ class HasActivatedPartner(BasePermission):
         return bool(partner and partner.status == "approved")
 
 
+class HasActivatedBroker(BasePermission):
+    """
+    Gate requiring an APPROVED broker profile before privileged broker capabilities (the
+    Wave B commission/portal). Unlike the KYB roles, broker verification is HYBRID: the
+    identity half is the role-agnostic investor `UserKYC`, and the broker-specific half is
+    a professional LICENCE approved by an admin (the sanctioned hinge, services
+    .approve_license, which itself requires KYC approved). Phase 12 Wave A; BROKER_SURFACE.md.
+
+    The authoritative check is the BrokerProfile record (status == 'approved') — which only
+    reaches 'approved' once BOTH identity KYC and the licence are approved. Pair with
+    IsAuthenticated so an anonymous request is rejected by auth, not a missing
+    `.broker_profile`.
+    """
+
+    message = "Approved broker (KYC + licence) status is required for this action."
+
+    def has_permission(self, request, view):
+        broker = getattr(request.user, "broker_profile", None)
+        return bool(broker and broker.status == "approved")
+
+
 class HasActivatedPropertySubmitter(BasePermission):
     """
     Gate for the SHARED property-submission machinery (apps/owner: PropertySubmission +

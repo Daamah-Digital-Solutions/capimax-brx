@@ -958,6 +958,10 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.partner_revision_requested.body": "مطلوب تعديل {deliverable} لـ {property}.",
     "notif.partner_assignment_completed.title": "اكتملت المهمة",
     "notif.partner_assignment_completed.body": "تمت الموافقة على جميع تسليمات {property}.",
+    "notif.broker_license_approved.title": "تم اعتماد رخصة الوسيط",
+    "notif.broker_license_approved.body": "تم تفعيل حساب الوسيط الخاص بك. يمكنك الآن مشاركة رابط الإحالة.",
+    "notif.broker_license_rejected.title": "تم رفض رخصة الوسيط",
+    "notif.broker_license_rejected.body": "تم رفض رخصتك. {notes}",
 
     // Support
     "support.title": "الدعم والمساعدة",
@@ -2382,6 +2386,10 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.partner_revision_requested.body": "{deliverable} for {property} needs changes.",
     "notif.partner_assignment_completed.title": "Assignment Complete",
     "notif.partner_assignment_completed.body": "All deliverables for {property} were approved.",
+    "notif.broker_license_approved.title": "Broker Licence Approved",
+    "notif.broker_license_approved.body": "Your broker account is active. You can now share your referral link.",
+    "notif.broker_license_rejected.title": "Broker Licence Rejected",
+    "notif.broker_license_rejected.body": "Your licence was rejected. {notes}",
 
     // Support
     "support.title": "Support & Help",
