@@ -367,3 +367,183 @@ class DevCommandTests(TestCase):
 
         with self.assertRaises(CommandError):
             call_command("dev_approve_broker_license", "--email", self.user.email, stdout=StringIO())
+
+
+# =========================================================================== #
+# Wave B — broker COMMISSION: settlement-gated, idempotent, PLATFORM-BORNE ADDITIVE
+# (never reduces the owner net or the investor's tokens), distinct source, reuses the
+# UserBalance/Withdrawal stack. Mirrors the owner-earnings test pattern (apps/owner/tests).
+# =========================================================================== #
+from decimal import Decimal as _D
+from unittest import mock as _mock
+
+from apps.investments.models import Investment, PaymentStatus
+from apps.investments.services import mint_investment
+from apps.properties.models import Property, TokenMetadata
+from apps.properties.tests import _valid_property_kwargs
+from apps.wallets.models import BalanceTransaction, OwnershipToken, UserBalance
+from apps.wallets.services import get_or_create_custodial_wallet, request_withdrawal
+
+_FAKE_MINT_B = {"tx_hash": "0x" + "ef" * 32, "block_number": 777, "chain_id": 97}
+
+
+def _approved_broker(email):
+    user = _mk_user(email=email)
+    broker, _ = get_or_create_broker(user, defaults={"contact_name": "Bk", "email": user.email})
+    broker.status = BrokerStatus.APPROVED
+    broker.save(update_fields=["status"])
+    return broker
+
+
+def _deployed_property(owner=None, *, slug, total_value=_D("5000000"),
+                       fee_platform=_D("1.5"), fee_management=_D("0.5")):
+    p = Property(**_valid_property_kwargs(
+        slug=slug, total_value=total_value, fee_platform=fee_platform, fee_management=fee_management,
+    ))
+    if owner is not None:
+        p.submitted_by = owner
+    p.save()  # token_supply auto-derives = 50000
+    meta, _ = TokenMetadata.objects.get_or_create(property=p)
+    meta.deployed_contract_address = "0x" + "11" * 20
+    meta.deployment_chain_id = 97
+    meta.save()
+    return p
+
+
+def _completed_investment(buyer, prop, token_amount, *, broker=None):
+    if broker is not None:
+        prof = buyer.profile
+        prof.referred_by_broker = broker
+        prof.save(update_fields=["referred_by_broker"])
+    wallet, _ = get_or_create_custodial_wallet(buyer)
+    return Investment.objects.create(
+        user=buyer, property=prop, property_name=prop.name,
+        amount_invested=_D(token_amount) * prop.token_price, token_amount=token_amount,
+        token_symbol="BRX1", price_per_token=prop.token_price,
+        ownership_percentage=_D("0.1"), payment_method="card",
+        payment_status=PaymentStatus.COMPLETED, wallet=wallet,
+    )
+
+
+@_mock.patch("apps.investments.services.chain_service.mint", return_value=_FAKE_MINT_B)
+class BrokerCommissionTests(APITestCase):
+    def test_referred_sale_credits_broker_5pct_once(self, _m):
+        broker = _approved_broker("cbk1@ex.com")
+        owner = _mk_user(email="cown1@ex.com", role=Profile.Role.OWNER)
+        prop = _deployed_property(owner, slug="cprop1")
+        buyer = User.objects.create_user(email="cbuy1@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)  # gross 10*100 = 1000
+        result = mint_investment(inv)
+        self.assertTrue(result["minted"])
+        self.assertEqual(result["broker_credited"], "50.00")  # 5% of 1000
+        self.assertEqual(UserBalance.objects.get(user=broker.user).current_balance, _D("50.00"))
+        entries = BalanceTransaction.objects.filter(source="broker_commission", reference=str(inv.id))
+        self.assertEqual(entries.count(), 1)
+        self.assertEqual(entries.first().entry_type, "credit")
+        broker.refresh_from_db()
+        self.assertEqual(broker.total_commission_earned, _D("50.00"))
+
+    def test_idempotent_on_replay(self, _m):
+        broker = _approved_broker("cbk2@ex.com")
+        prop = _deployed_property(_mk_user(email="cown2@ex.com", role=Profile.Role.OWNER), slug="cprop2")
+        buyer = User.objects.create_user(email="cbuy2@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        mint_investment(inv)
+        again = mint_investment(inv)  # mint short-circuits (already minted)
+        self.assertTrue(again.get("already"))
+        self.assertEqual(UserBalance.objects.get(user=broker.user).current_balance, _D("50.00"))
+        self.assertEqual(
+            BalanceTransaction.objects.filter(source="broker_commission", reference=str(inv.id)).count(), 1
+        )
+
+    def test_non_referred_buyer_no_commission(self, _m):
+        _approved_broker("cbk3@ex.com")  # a broker exists, but this buyer wasn't referred
+        prop = _deployed_property(_mk_user(email="cown3@ex.com", role=Profile.Role.OWNER), slug="cprop3")
+        buyer = User.objects.create_user(email="cbuy3@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10)  # no broker=
+        result = mint_investment(inv)
+        self.assertIsNone(result["broker_credited"])
+        self.assertEqual(BalanceTransaction.objects.filter(source="broker_commission").count(), 0)
+
+    def test_inactive_broker_no_commission(self, _m):
+        broker = _approved_broker("cbk4@ex.com")
+        broker.status = BrokerStatus.REJECTED  # not active
+        broker.save(update_fields=["status"])
+        prop = _deployed_property(_mk_user(email="cown4@ex.com", role=Profile.Role.OWNER), slug="cprop4")
+        buyer = User.objects.create_user(email="cbuy4@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        result = mint_investment(inv)
+        self.assertIsNone(result["broker_credited"])
+        self.assertEqual(BalanceTransaction.objects.filter(source="broker_commission").count(), 0)
+
+    def test_additive_owner_net_and_investor_tokens_unchanged(self, _m):
+        # Same property/amount, with vs without a referring broker → the owner's net is
+        # IDENTICAL (commission is platform-borne, additive — it doesn't reduce owner net),
+        # and the investor receives their FULL tokens in both cases.
+        owner = _mk_user(email="cown5@ex.com", role=Profile.Role.OWNER)
+        prop_ref = _deployed_property(owner, slug="cprop5a")
+        prop_plain = _deployed_property(owner, slug="cprop5b")
+        broker = _approved_broker("cbk5@ex.com")
+        b_ref = User.objects.create_user(email="cbuy5a@ex.com", password="pw-12345-strong")
+        b_plain = User.objects.create_user(email="cbuy5b@ex.com", password="pw-12345-strong")
+        inv_ref = _completed_investment(b_ref, prop_ref, 10, broker=broker)
+        inv_plain = _completed_investment(b_plain, prop_plain, 10)
+        r_ref = mint_investment(inv_ref)
+        r_plain = mint_investment(inv_plain)
+        # Owner net identical with/without the broker (980 each at 2% fees).
+        self.assertEqual(r_ref["owner_credited"], r_plain["owner_credited"])
+        self.assertEqual(r_ref["owner_credited"], "980.00")
+        # Broker commission is EXTRA (off gross), only on the referred sale.
+        self.assertEqual(r_ref["broker_credited"], "50.00")
+        self.assertIsNone(r_plain["broker_credited"])
+        # Investor got their full 10 tokens (commission didn't reduce them).
+        wallet = b_ref.wallet
+        self.assertEqual(
+            OwnershipToken.objects.get(wallet=wallet, property_id=prop_ref.slug).token_amount, 10
+        )
+
+    def test_commission_source_isolated(self, _m):
+        # After a referred sale only the owner (primary_sale) + broker (broker_commission)
+        # credits exist — broker commission is NEVER conflated with primary_sale/distribution.
+        broker = _approved_broker("cbk6@ex.com")
+        prop = _deployed_property(_mk_user(email="cown6@ex.com", role=Profile.Role.OWNER), slug="cprop6")
+        buyer = User.objects.create_user(email="cbuy6@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        mint_investment(inv)
+        self.assertEqual(
+            set(BalanceTransaction.objects.values_list("source", flat=True)),
+            {"primary_sale", "broker_commission"},
+        )
+
+    def test_broker_reads_commissions_and_withdraws(self, _m):
+        broker = _approved_broker("cbk7@ex.com")
+        prop = _deployed_property(_mk_user(email="cown7@ex.com", role=Profile.Role.OWNER), slug="cprop7")
+        buyer = User.objects.create_user(email="cbuy7@ex.com", password="pw-12345-strong")
+        buyer.profile.full_name = "Referred Investor"
+        buyer.profile.save(update_fields=["full_name"])
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        mint_investment(inv)
+
+        # Read own commissions (re-fetch user so the cached pending broker_profile is dropped).
+        self.client.force_authenticate(User.objects.get(pk=broker.user_id))
+        res = self.client.get("/api/broker/commissions/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["stats"]["total_commission"], "50.00")
+        self.assertEqual(res.data["stats"]["this_month_commission"], "50.00")
+        self.assertEqual(res.data["stats"]["total_referrals"], 1)
+        self.assertEqual(res.data["stats"]["converted_referrals"], 1)
+        self.assertEqual(len(res.data["commissions"]), 1)
+        self.assertEqual(res.data["commissions"][0]["commission"], "50.00")
+        self.assertEqual(res.data["referrals"][0]["name"], "Referred Investor")
+
+        # Withdraw via the EXISTING UserBalance/Withdrawal stack.
+        wd = request_withdrawal(broker.user, _D("50.00"), method="bank")
+        self.assertEqual(UserBalance.objects.get(user=broker.user).current_balance, _D("0.00"))
+        self.assertEqual(wd.amount, _D("50.00"))
+
+    def test_commissions_endpoint_denies_non_broker(self, _m):
+        plain = User.objects.create_user(email="cplain@ex.com", password="pw-12345-strong")
+        self.client.force_authenticate(plain)
+        self.assertEqual(
+            self.client.get("/api/broker/commissions/").status_code, status.HTTP_403_FORBIDDEN
+        )

@@ -962,6 +962,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_license_approved.body": "تم تفعيل حساب الوسيط الخاص بك. يمكنك الآن مشاركة رابط الإحالة.",
     "notif.broker_license_rejected.title": "تم رفض رخصة الوسيط",
     "notif.broker_license_rejected.body": "تم رفض رخصتك. {notes}",
+    "notif.broker_commission_credited.title": "تم إضافة عمولة",
+    "notif.broker_commission_credited.body": "تم إضافة عمولة ${amount} من استثمار في {property}.",
 
     // Support
     "support.title": "الدعم والمساعدة",
@@ -2390,6 +2392,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_license_approved.body": "Your broker account is active. You can now share your referral link.",
     "notif.broker_license_rejected.title": "Broker Licence Rejected",
     "notif.broker_license_rejected.body": "Your licence was rejected. {notes}",
+    "notif.broker_commission_credited.title": "Commission Credited",
+    "notif.broker_commission_credited.body": "${amount} commission from an investment in {property}.",
 
     // Support
     "support.title": "Support & Help",

@@ -48,6 +48,9 @@ class Notification(models.Model):
         # these cover the SEPARATE admin licence-approval hinge that activates the role.
         BROKER_LICENSE_APPROVED = "broker_license_approved", _("Broker licence approved")
         BROKER_LICENSE_REJECTED = "broker_license_rejected", _("Broker licence rejected")
+        # Broker commission (Phase 12 Wave B). Money-in: a referred investor's primary
+        # sale settled → the broker is credited commission. params.amount/property.
+        BROKER_COMMISSION_CREDITED = "broker_commission_credited", _("Broker commission credited")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

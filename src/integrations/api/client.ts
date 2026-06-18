@@ -983,6 +983,40 @@ export interface ReferralResolveResult {
   broker_name?: string;
 }
 
+// Wave B commission ledger (broker-scoped). Amounts are decimal strings.
+export interface BrokerCommissionRow {
+  id: string;
+  referral: string;        // referred investor's display name
+  investor_email: string;
+  property: string;
+  amount: string;          // the investor's purchase amount
+  commission: string;      // the broker's commission
+  status: "paid";          // credited to the broker's balance at settlement
+  date: string;
+}
+export interface BrokerReferralRow {
+  id: string;
+  name: string;
+  email: string;
+  status: "invested" | "registered";
+  property: string;
+  amount: string;          // total invested by this referral
+  commission: string;      // total commission this referral generated
+  date: string;
+}
+export interface BrokerCommissions {
+  stats: {
+    total_referrals: number;
+    converted_referrals: number;
+    conversion_rate: number;
+    total_commission: string;
+    pending_commission: string;
+    this_month_commission: string;
+  };
+  referrals: BrokerReferralRow[];
+  commissions: BrokerCommissionRow[];
+}
+
 export const brokerApi = {
   /** The caller's broker profile, or null when none exists yet (404). */
   profile: async (): Promise<BrokerProfile | null> => {
@@ -1017,6 +1051,9 @@ export const brokerApi = {
   /** PUBLIC: validate a referral code at signup (no auth). */
   resolveReferral: (code: string) =>
     publicGet(`/broker/referral/resolve/?code=${encodeURIComponent(code)}`) as Promise<ReferralResolveResult>,
+  /** The caller-broker's commission ledger + totals + referred-investor roster (Wave B). */
+  commissions: () =>
+    rawRequest("/broker/commissions/", { auth: true }) as Promise<BrokerCommissions>,
 };
 
 export { API_BASE_URL };

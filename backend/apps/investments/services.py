@@ -229,6 +229,75 @@ def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
 
 
 # --------------------------------------------------------------------------- #
+# Broker commission — Phase 12 Wave B.
+# On a COMPLETED primary sale by an investor who was REFERRED by a broker, credit that
+# broker a configurable % (BrokerProfile.commission_rate, default 5) of the GROSS amount.
+# PLATFORM-BORNE + ADDITIVE: this does NOT reduce the investor's tokens or the owner's net
+# (it's an extra, separately-funded credit). Runs inside the SAME mint atomic block as the
+# owner credit, idempotent (one credit per investment), safe when there's no referring
+# broker / the broker isn't active. NO platform-account debit is modeled in v1 (flagged in
+# DECISIONS.md, like the null-owner primary-sale case).
+# --------------------------------------------------------------------------- #
+BROKER_COMMISSION_SOURCE = "broker_commission"
+
+
+def _credit_broker_commission(inv: Investment):
+    """
+    Credit the investor's referring broker their commission, exactly once.
+
+    Returns (broker, commission) when credited, or None when skipped (no referring
+    broker / broker not approved / already credited / non-positive). NEVER touches the
+    investor's tokens or the owner's net — it's a standalone additive credit.
+    """
+    from apps.broker.models import BrokerProfile, BrokerStatus
+    from apps.wallets.models import BalanceTransaction
+    from apps.wallets.services import credit_user_balance
+
+    # LOCKED #2a/#6: only when the investing user was referred by a broker.
+    profile = getattr(inv.user, "profile", None)
+    if profile is None or profile.referred_by_broker_id is None:
+        return None
+
+    # LOCKED #2b/#6: the referring broker must be currently APPROVED/active.
+    broker = BrokerProfile.objects.filter(pk=profile.referred_by_broker_id).first()
+    if broker is None or broker.status != BrokerStatus.APPROVED:
+        return None
+
+    # LOCKED #3: keyed idempotency — one broker_commission credit per investment, even on
+    # webhook/mint replay (mirrors the owner-credit guard exactly).
+    reference = str(inv.id)
+    if BalanceTransaction.objects.filter(
+        source=BROKER_COMMISSION_SOURCE, reference=reference
+    ).exists():
+        return None
+
+    # LOCKED #1: commission = gross amount × rate% (per-broker, server-side). Platform-borne
+    # + additive — computed off the GROSS, independent of the owner's fee math.
+    gross = Decimal(inv.amount_invested)
+    rate = Decimal(broker.commission_rate or 0)
+    commission = (gross * rate / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    if commission <= 0:
+        return None
+
+    credit_user_balance(
+        broker.user, commission,
+        source=BROKER_COMMISSION_SOURCE,
+        reference=reference,
+        memo=f"Referral commission ({rate}%): {inv.token_symbol} of {inv.property.slug}",
+    )
+
+    # LOCKED #4: bump the broker's accumulator in the SAME transaction (row-locked).
+    locked = BrokerProfile.objects.select_for_update().get(pk=broker.pk)
+    locked.total_commission_earned = (
+        Decimal(locked.total_commission_earned or 0) + commission
+    )
+    locked.save(update_fields=["total_commission_earned", "updated_at"])
+    return broker, commission
+
+
+# --------------------------------------------------------------------------- #
 # Part B — mint-tokens (REAL on-chain)
 # --------------------------------------------------------------------------- #
 def _deployed_on_this_chain(prop: Property):
@@ -330,6 +399,12 @@ def mint_investment(investment: Investment) -> dict:
         # SAME atomic block so the credit commits with the mint. Idempotent + null-safe.
         owner_net = _credit_owner_for_primary_sale(inv, prop)
 
+        # Phase 12 Wave B: if this investor was referred by an active broker, credit the
+        # broker their commission — ADDITIVE + platform-borne, in the SAME atomic block, so
+        # it commits with the mint. Idempotent + null-safe. Does NOT alter `owner_net` or
+        # the investor's tokens (computed/credited entirely independently above).
+        broker_result = _credit_broker_commission(inv)
+
         # Phase 10: in-app notifications, inside the mint's atomic block so they commit
         # with it. Only reached once per investment (the `tokens_minted` guard above).
         notify(
@@ -343,6 +418,13 @@ def mint_investment(investment: Investment) -> dict:
                 params={"property": prop.name, "slug": prop.slug, "amount": str(owner_net)},
                 action_url="/owner-wallet",
             )
+        if broker_result is not None:
+            broker, commission = broker_result
+            notify(
+                broker.user, NotificationType.BROKER_COMMISSION_CREDITED,
+                params={"property": prop.name, "slug": prop.slug, "amount": str(commission)},
+                action_url="/broker-dashboard",
+            )
 
     return {
         "minted": True,
@@ -350,4 +432,5 @@ def mint_investment(investment: Investment) -> dict:
         "block_number": result.get("block_number"),
         "ownership_token_id": str(token.id),
         "owner_credited": None if owner_net is None else str(owner_net),
+        "broker_credited": None if broker_result is None else str(broker_result[1]),
     }

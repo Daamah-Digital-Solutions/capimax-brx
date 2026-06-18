@@ -34,6 +34,8 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   // Broker licence verification (Phase 12 Wave A).
   broker_license_approved: "system",
   broker_license_rejected: "alert",
+  // Broker commission (Phase 12 Wave B) — money-in.
+  broker_commission_credited: "financial",
 };
 
 export function categoryOf(type: string): NotificationCategory {

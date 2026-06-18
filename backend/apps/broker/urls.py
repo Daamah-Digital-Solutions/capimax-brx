@@ -2,6 +2,7 @@
 from django.urls import path
 
 from .views import (
+    BrokerCommissionsView,
     BrokerLicenseSubmitView,
     BrokerLicenseUploadView,
     BrokerProfileView,
@@ -17,4 +18,6 @@ urlpatterns = [
     path("license/upload/", BrokerLicenseUploadView.as_view(), name="broker-license-upload"),
     # PUBLIC: referral-code validation at signup (AllowAny).
     path("referral/resolve/", ReferralResolveView.as_view(), name="broker-referral-resolve"),
+    # Commission ledger + totals + referred-investor roster (Wave B). Approved-broker only.
+    path("commissions/", BrokerCommissionsView.as_view(), name="broker-commissions"),
 ]

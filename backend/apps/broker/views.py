@@ -25,13 +25,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.permissions import HasActivatedBroker
+
 from .models import BrokerProfile
 from .serializers import (
     BrokerApplySerializer,
     BrokerLicenseSubmitSerializer,
     BrokerProfileSerializer,
 )
-from .services import resolve_referral_code, submit_license
+from .services import commission_ledger, resolve_referral_code, submit_license
 
 log = logging.getLogger(__name__)
 
@@ -146,3 +148,18 @@ class ReferralResolveView(APIView):
         if broker is None:
             return Response({"valid": False})
         return Response({"valid": True, "broker_name": broker.contact_name or "Broker"})
+
+
+class BrokerCommissionsView(APIView):
+    """
+    GET the caller-broker's commission ledger + totals + referred-investor roster
+    (Phase 12 Wave B). Gated to an APPROVED broker. The balance + withdrawal surface is
+    the EXISTING `/api/wallets/balance/` + `/api/wallets/withdrawals/` (the broker got a
+    custodial wallet + `UserBalance` at KYC) — this endpoint is the commission view only.
+    """
+
+    permission_classes = [IsAuthenticated, HasActivatedBroker]
+
+    def get(self, request):
+        broker = request.user.broker_profile
+        return Response(commission_ledger(broker))

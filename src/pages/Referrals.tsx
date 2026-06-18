@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useBrokerCommissions } from "@/hooks/useBrokerCommissions";
+import { useBrokerProfile } from "@/hooks/useBrokerProfile";
 import {
   Users,
   UserPlus,
@@ -35,59 +37,27 @@ interface Referral {
   commission?: number;
 }
 
-const referrals: Referral[] = [
-  {
-    id: "1",
-    name: "أحمد محمد",
-    email: "ahmed@example.com",
-    phone: "+971 50 XXX XXXX",
-    status: "invested",
-    date: "2024-01-15",
-    property: "برج المارينا",
-    investmentAmount: 25000,
-    commission: 625,
-  },
-  {
-    id: "2",
-    name: "سارة علي",
-    email: "sara@example.com",
-    phone: "+971 55 XXX XXXX",
-    status: "registered",
-    date: "2024-01-18",
-  },
-  {
-    id: "3",
-    name: "محمد خالد",
-    email: "mohammed@example.com",
-    phone: "+971 52 XXX XXXX",
-    status: "pending",
-    date: "2024-01-20",
-  },
-  {
-    id: "4",
-    name: "فاطمة أحمد",
-    email: "fatima@example.com",
-    phone: "+971 56 XXX XXXX",
-    status: "invested",
-    date: "2024-01-10",
-    property: "مجمع الواحة",
-    investmentAmount: 50000,
-    commission: 1500,
-  },
-  {
-    id: "5",
-    name: "عمر حسن",
-    email: "omar@example.com",
-    phone: "+971 58 XXX XXXX",
-    status: "rejected",
-    date: "2024-01-12",
-  },
-];
-
 export default function Referrals() {
   const { t, language } = useLanguage();
   const [searchTerm, setSearchTerm] = useState("");
-  const referralLink = "https://capimax.com/ref/BROKER123";
+
+  // Phase 12 Wave B — REAL referred-investor roster + the broker's own referral link.
+  const { data } = useBrokerCommissions();
+  const { brokerProfile } = useBrokerProfile();
+  const referralLink = brokerProfile?.referral_code
+    ? `${window.location.origin}/ref/${brokerProfile.referral_code}`
+    : "—";
+  const referrals: Referral[] = (data?.referrals ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    phone: "",   // investor phone is not exposed to the broker (flagged)
+    status: r.status, // "invested" | "registered"
+    date: r.date,
+    property: r.property || undefined,
+    investmentAmount: Number(r.amount) || undefined,
+    commission: Number(r.commission) || undefined,
+  }));
 
   const totalReferrals = referrals.length;
   const registeredCount = referrals.filter((r) => r.status === "registered" || r.status === "invested").length;

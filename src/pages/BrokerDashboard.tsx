@@ -15,11 +15,15 @@ import {
   CheckCircle2,
   Clock,
   Filter,
-  User
+  User,
+  Wallet
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { BrokerVerificationCard } from "@/components/broker/BrokerVerificationCard";
+import { useBrokerCommissions } from "@/hooks/useBrokerCommissions";
+import { walletsApi } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -35,17 +39,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const brokerStats = {
-  totalListings: 12,
-  activeListings: 8,
-  totalReferrals: 45,
-  convertedReferrals: 28,
-  totalCommission: 35000,
-  pendingCommission: 8500,
-  thisMonthCommission: 5200,
-  conversionRate: 62,
-};
-
+// Phase 12 Wave B: commission stats/referrals/commissions are now REAL (useBrokerCommissions).
+// `listings` stays mock — there is no broker-listing model yet (flagged in DECISIONS.md).
 const listings = [
   {
     id: "1",
@@ -79,33 +74,60 @@ const listings = [
   },
 ];
 
-const referrals = [
-  { id: 1, name: "أحمد محمد", email: "ahmed@email.com", property: "برج مارينا باي", status: "converted", amount: 5000, commission: 250, date: "2024-12-15" },
-  { id: 2, name: "سارة علي", email: "sara@email.com", property: "مساكن النخلة", status: "converted", amount: 10000, commission: 500, date: "2024-12-12" },
-  { id: 3, name: "خالد عبدالله", email: "khalid@email.com", property: "برج مارينا باي", status: "pending", amount: null, commission: null, date: "2024-12-10" },
-  { id: 4, name: "فاطمة حسن", email: "fatima@email.com", property: "مساكن النخلة", status: "converted", amount: 15000, commission: 750, date: "2024-12-08" },
-  { id: 5, name: "عمر سعيد", email: "omar@email.com", property: "المجمع الصناعي", status: "lost", amount: null, commission: null, date: "2024-12-05" },
-];
-
-const commissions = [
-  { id: 1, referral: "أحمد محمد", property: "برج مارينا باي", amount: 250, status: "paid", date: "2024-12-20" },
-  { id: 2, referral: "سارة علي", property: "مساكن النخلة", amount: 500, status: "paid", date: "2024-12-18" },
-  { id: 3, referral: "فاطمة حسن", property: "مساكن النخلة", amount: 750, status: "pending", date: "2025-01-05" },
-  { id: 4, referral: "محمد أحمد", property: "المجمع الصناعي", amount: 400, status: "paid", date: "2024-12-10" },
-];
-
 export default function BrokerDashboard() {
   const { user } = useAuth();
   const isBroker = user?.profile?.role === "broker";
-  const [copiedLink, setCopiedLink] = useState(false);
   const [filter, setFilter] = useState("all");
-  const referralLink = "https://capimax.io/ref/BROKER123";
 
-  const copyReferralLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+  // Phase 12 Wave B — REAL commission data (credited at the referred investor's mint/
+  // settlement; platform-borne, additive) + the withdrawable UserBalance.
+  const { data, balance, refresh } = useBrokerCommissions();
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  const withdraw = async () => {
+    if (balance <= 0) return;
+    setWithdrawing(true);
+    try {
+      await walletsApi.requestWithdrawal({ amount: balance, method: "bank" });
+      toast.success("Withdrawal requested");
+      await refresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Withdrawal failed");
+    } finally {
+      setWithdrawing(false);
+    }
   };
+
+  const s = data?.stats;
+  const brokerStats = {
+    totalListings: listings.length,
+    activeListings: listings.filter((l) => l.status === "active").length,
+    totalReferrals: s?.total_referrals ?? 0,
+    convertedReferrals: s?.converted_referrals ?? 0,
+    totalCommission: Number(s?.total_commission ?? 0),
+    pendingCommission: Number(s?.pending_commission ?? 0),
+    thisMonthCommission: Number(s?.this_month_commission ?? 0),
+    conversionRate: s?.conversion_rate ?? 0,
+  };
+  // Map the API rows to the existing render shape (status: invested→converted, registered→pending).
+  const referrals = (data?.referrals ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    property: r.property || "—",
+    status: r.status === "invested" ? "converted" : "pending",
+    amount: Number(r.amount) || null,
+    commission: Number(r.commission) || null,
+    date: r.date,
+  }));
+  const commissions = (data?.commissions ?? []).map((c) => ({
+    id: c.id,
+    referral: c.referral,
+    property: c.property,
+    amount: Number(c.commission),
+    status: c.status,
+    date: c.date,
+  }));
 
   return (
     <MainLayout>
@@ -122,12 +144,8 @@ export default function BrokerDashboard() {
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 <CreateVirtualCardButton roleLabel="Broker" />
-                <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                  <code className="text-sm text-foreground">{referralLink}</code>
-                  <Button variant="ghost" size="icon" onClick={copyReferralLink}>
-                    {copiedLink ? <CheckCircle2 className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
-                  </Button>
-                </div>
+                {/* The real referral code/link lives in the verification card below
+                    (shown once the broker is approved) — no hardcoded code here. */}
               </div>
             </div>
           </div>
@@ -354,23 +372,24 @@ export default function BrokerDashboard() {
                     </div>
                   </div>
 
-                  {/* Referral Link */}
+                  {/* Withdrawable balance — REAL UserBalance, paid out via the existing
+                      withdrawal stack (Phase 12 Wave B). */}
                   <div className="bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl border border-primary/30 p-6">
                     <div className="flex items-center gap-2 mb-4">
-                      <Link2 className="w-5 h-5 text-primary" />
-                      <h3 className="font-semibold text-foreground">رابط الإحالة</h3>
+                      <Wallet className="w-5 h-5 text-primary" />
+                      <h3 className="font-semibold text-foreground">الرصيد القابل للسحب / Withdrawable</h3>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      شارك هذا الرابط للحصول على عمولة 5% على كل استثمار
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 p-2 bg-background rounded text-sm text-foreground truncate">
-                        {referralLink}
-                      </code>
-                      <Button variant="hero" size="icon" onClick={copyReferralLink}>
-                        {copiedLink ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </Button>
+                    <div className="text-2xl font-bold text-gradient-gold mb-4">
+                      ${balance.toLocaleString()}
                     </div>
+                    <Button
+                      variant="hero"
+                      className="w-full"
+                      disabled={withdrawing || balance <= 0}
+                      onClick={withdraw}
+                    >
+                      {withdrawing ? "..." : "سحب الرصيد / Withdraw"}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -465,7 +484,7 @@ export default function BrokerDashboard() {
 
             <TabsContent value="wallet">
               <VisaCardsSection
-                walletBalance={brokerStats.totalCommission}
+                walletBalance={balance}
                 roleLabel={{ en: "Broker", ar: "وسيط" }}
               />
             </TabsContent>
