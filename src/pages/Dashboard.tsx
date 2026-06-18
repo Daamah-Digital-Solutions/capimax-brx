@@ -366,10 +366,12 @@ export default function Dashboard() {
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.45s" }}>
                 <h3 className="font-semibold text-foreground mb-4">{t("dashboard.quickActions")}</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button variant="outline" className="flex-col h-auto py-4 gap-2">
-                    <Wallet className="w-5 h-5" />
-                    <span className="text-xs">{t("dashboard.deposit")}</span>
-                  </Button>
+                  <Link to="/wallet" className="contents">
+                    <Button variant="outline" className="flex-col h-auto py-4 gap-2">
+                      <Wallet className="w-5 h-5" />
+                      <span className="text-xs">{t("dashboard.deposit")}</span>
+                    </Button>
+                  </Link>
                   <Link to="/secondary-market" className="contents">
                     <Button variant="outline" className="flex-col h-auto py-4 gap-2">
                       <TrendingUp className="w-5 h-5" />
@@ -382,10 +384,12 @@ export default function Dashboard() {
                       <span className="text-xs">{language === "ar" ? "إعادة استثمار" : "Reinvest"}</span>
                     </Button>
                   </Link>
-                  <Button variant="outline" className="flex-col h-auto py-4 gap-2">
-                    <FileText className="w-5 h-5" />
-                    <span className="text-xs">{t("nav.documents")}</span>
-                  </Button>
+                  <Link to="/documents" className="contents">
+                    <Button variant="outline" className="flex-col h-auto py-4 gap-2">
+                      <FileText className="w-5 h-5" />
+                      <span className="text-xs">{t("nav.documents")}</span>
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>

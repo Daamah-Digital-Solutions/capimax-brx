@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useBrokerCommissions } from "@/hooks/useBrokerCommissions";
 import { useBrokerProfile } from "@/hooks/useBrokerProfile";
+import { toast } from "sonner";
 import {
   Users,
   UserPlus,
@@ -47,6 +48,32 @@ export default function Referrals() {
   const referralLink = brokerProfile?.referral_code
     ? `${window.location.origin}/ref/${brokerProfile.referral_code}`
     : "—";
+  const hasLink = !!brokerProfile?.referral_code;
+
+  // Pure client-side (no backend): copy the real referral link / native share with copy fallback.
+  const copyLink = async () => {
+    if (!hasLink) return;
+    try {
+      await navigator.clipboard.writeText(referralLink);
+      toast.success(language === "ar" ? "تم نسخ الرابط" : "Link copied");
+    } catch {
+      toast.error(language === "ar" ? "تعذّر النسخ" : "Couldn't copy");
+    }
+  };
+  const shareLink = async () => {
+    if (!hasLink) return;
+    const shareData = { title: "Capimax BRX", url: referralLink };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(referralLink);
+        toast.success(language === "ar" ? "تم نسخ الرابط للمشاركة" : "Link copied to share");
+      }
+    } catch {
+      /* user dismissed the share sheet — no error toast needed */
+    }
+  };
   const referrals: Referral[] = (data?.referrals ?? []).map((r) => ({
     id: r.id,
     name: r.name,
@@ -179,10 +206,10 @@ export default function Referrals() {
               <div className="flex-1 p-3 bg-muted/50 rounded-lg font-mono text-sm text-muted-foreground truncate">
                 {referralLink}
               </div>
-              <Button variant="outline" size="icon" title={t("referrals.copy")}>
+              <Button variant="outline" size="icon" title={t("referrals.copy")} onClick={copyLink} disabled={!hasLink}>
                 <Copy className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="icon" title={t("referrals.share")}>
+              <Button variant="outline" size="icon" title={t("referrals.share")} onClick={shareLink} disabled={!hasLink}>
                 <Share2 className="w-4 h-4" />
               </Button>
             </div>

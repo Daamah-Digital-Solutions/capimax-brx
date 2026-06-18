@@ -889,8 +889,9 @@ this wave; flagged**).
 cards now show real `available balance` (wallets/balance), `pending withdrawals` (sum of pending
 withdrawals), `Total Primary-Sale Earnings` (earnings.total_net_proceeds), `Units Sold`; the **withdrawal
 action now uses the built Django flow** via a new `OwnerWithdrawDialog` (POST /api/wallets/withdrawals/),
-**replacing the legacy Supabase OTP `WithdrawalDialog`** on the owner wallet (flagged: the OTP variant
-remains only on not-yet-migrated investor pages — reconcile later). **`OwnerDashboard.tsx`** — Capital
+**replacing the legacy Supabase OTP `WithdrawalDialog`** on the owner wallet (the investor wallet was
+later migrated the same way — Phase 12 finishing; the OTP dialog is now fully unused, see cleanup (e)(a)).
+**`OwnerDashboard.tsx`** — Capital
 Raised / Investors / Units Sold cards now real (raised = net primary-sale proceeds); the 4th card is
 **Units Sold**, not a fabricated "distribution". **`OwnerReports.tsx`** — Capital Raised / Investors /
 Units Sold / Published metrics + the Asset-Performance list are real per-property earnings; the
@@ -1403,7 +1404,47 @@ broker-listing model). (3) The referred-investor roster exposes the investor's n
 (the frontend mock's own shape; the referral relationship is consensual) — investor phone is NOT exposed.
 (4) `pending_commission`=0 (commission credits immediately at settlement; no pending state).
 
-## Platform state snapshot + NEXT (as of 2026-06-18 — Phase 12 COMPLETE: broker domain done, verification → commission)
+## Phase 13 — Reports-export (CSV + PDF over EXISTING self-scoped data) (COMPLETE ✅)
+**Source of truth:** REPORTS_SURFACE.md. A reusable export service that renders ALREADY-served, self-scoped
+data into a downloadable file — **NO new business logic, NO new figures**, just formatting. Unlocks the
+Export/Download/Tax buttons that DASHBOARD_GAPS bucketed as `A-BLOCKED:reports-export`.
+
+**Built (`apps/reports`, no models — on-demand, no FileField caching):**
+- **Export service:** `export.to_csv(columns, rows)` (stdlib `csv`, UTF-8 **BOM** for Excel/Arabic) +
+  `pdf.render_statement_pdf(title, period, columns, rows, meta, disclaimer)` — a generic ReportLab
+  "statement" (header band + title/period/meta + paginated table + disclaimer footer), **REUSING the
+  certificates' ReportLab + brand stack** ([certificates/pdf.py](backend/apps/certificates/pdf.py)); NO new PDF lib.
+- **Per-context adapters** ([adapters.py](backend/apps/reports/adapters.py)) that fetch the caller's OWN data via the
+  SAME querysets the page endpoints use: **wallet** (`BalanceTransaction`), **distributions**
+  (`DistributionPayout` PAID), **owner-earnings** (mirrors `OwnerEarningsView`), **lp** (`LPTransaction`),
+  **broker-commissions** (`commission_ledger()`). Figures match the existing endpoints exactly.
+- **Endpoints** (`IsAuthenticated`, self-scoped, `FileResponse`): `GET /api/reports/<context>/export/?fmt=csv|pdf
+  [&year=YYYY][&period=...]` + `GET /api/reports/distributions/tax/?year=YYYY` (PDF). **NB: the param is `fmt`,
+  NOT `format`** — DRF reserves `?format=` for content negotiation and 404s on an unknown renderer.
+- **Tax report = INFORMATIONAL annual distribution-income summary (PDF)**, NOT a legal tax form — carries an
+  explicit "not a tax document / not tax advice / unaudited testnet" disclaimer.
+
+**Frontend:** `reportsApi` (blob download from the `FileResponse` + `Content-Disposition` filename) + a shared
+`useExport` hook (per-button spinner + EN/AR toast). **Buttons wired:** Wallet **Export** (CSV); Distributions
+**Export Statement** (PDF) + **Tax Report** (tax PDF); OwnerReports + OwnerDashboard **Export** (owner-earnings
+PDF); LPReports **Monthly/Quarterly/Annual** (LP PDF, period label) + **Export Data** (CSV); broker
+**Commissions Export** (CSV — hits the REAL `commission_ledger` even though the Commissions.tsx *table* is still
+mock). `/developers` untouched.
+
+**Tests:** +10 reports tests, **full suite 380 green**. Self-scoped (a user can't export another's rows);
+content-types (text/csv, application/pdf, `%PDF` magic); `year` filter; tax disclaimer; figures match the
+existing data (no fabricated totals); auth required; unknown context → 404. Dev journey (real Postgres, rolled
+back): wallet CSV = `distribution +840.00` / `withdrawal −200.00` (caller's real ledger, no other user's
+`999.00`); distributions + tax PDFs valid; cross-user self-scope proven.
+
+**Deferred (flagged — need a data layer first, NOT built):** **Reports.tsx "Export Full"** (its
+portfolioMetrics/recentReports are all MOCK — needs a real portfolio-analytics source / report catalog) +
+**Installments "Export Schedule"** (installments domain unbuilt). Both stay as-is.
+
+**DASHBOARD_GAPS `A-BLOCKED:reports-export` — CLOSED** for: Wallet, Distributions (statement + tax),
+OwnerReports, OwnerDashboard, LPReports ×4, broker Commissions. Still open (deferred): Reports.tsx, Installments.
+
+## Platform state snapshot + NEXT (as of 2026-06-18 — Phase 13: reports-export built; finishing phase continues)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
 **DELIVERED — six full roles + broker onboarding (investor, LP, owner, developer, partner, broker[verification] + the admin reviewer), all proven on REAL BSC Testnet / dev:**
@@ -1569,11 +1610,16 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
     activated. (Inert until keys land. NOTE: directory visibility is a SEPARATE admin step, not provider-driven.)
   - **OAuth (Google/Apple):** social login scaffolded, inert until provider keys land (pre-existing).
 - **(e) Cleanup / tech-debt (recorded — not lost):**
-  - **(a) Duplicate withdrawal flow on INVESTOR pages.** The **Owner wallet now uses the built Django
-    flow** (`OwnerWithdrawDialog` → `POST /api/wallets/withdrawals/`, debits `UserBalance`; Phase 7 Wave D).
-    The legacy **OTP `WithdrawalDialog`** (Supabase, `useWithdrawalRequests` + bank/crypto/card + email OTP)
-    still exists on **investor** pages alongside the new proceeds withdrawal. They cover different balances;
-    **needs reconciliation** into one investor-withdrawal flow (decide OTP + rails) in a later pass.
+  - **(a) Duplicate withdrawal flow on INVESTOR pages — CLOSED ✅ (Phase 12 finishing).** The investor
+    `Wallet.tsx` has been **repointed off mock to the real Django wallet backend** and now uses the **same
+    `OwnerWithdrawDialog` → `POST /api/wallets/withdrawals/`** flow as the owner wallet. The legacy Supabase-OTP
+    `WithdrawalDialog` is **removed from the investor wallet** and is now **fully unused** (no import anywhere —
+    `src/components/wallet/WithdrawalDialog.tsx` is dead code, safe to delete in a tidy-up). The investor wallet
+    now reads the **real `UserBalance`** (`GET /api/wallets/balance/`), the **real internal-balance ledger**
+    (new self-scoped read-only `GET /api/wallets/balance/transactions/` — distribution credits / secondary-sale
+    proceeds / broker commission / withdrawals, correct credit/debit signs + bilingual source labels) and the
+    **real `Withdrawal` list**; Refresh refetches all three. Investor wallet now MATCHES the owner wallet on
+    Django. (Deposit/top-up + Export remain mock — no deposit/report-export endpoint; flagged below.)
   - **(b) `VerifyCertificate.tsx` TS `unknown` typing** (pre-existing since Phase 3) — untouched; clean up
     when the certificate-verify surface is next revisited.
   - **(c) Property-submission MEDIA not persisted (Phase 7 Wave B).** SubmitProperty.tsx Step 5 (images /

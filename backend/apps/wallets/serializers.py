@@ -9,7 +9,13 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import OwnershipToken, UserWallet, WalletTransaction, Withdrawal
+from .models import (
+    BalanceTransaction,
+    OwnershipToken,
+    UserWallet,
+    WalletTransaction,
+    Withdrawal,
+)
 
 
 class OwnershipTokenSerializer(serializers.ModelSerializer):
@@ -107,3 +113,20 @@ class WithdrawalCreateSerializer(serializers.Serializer):
     )
     method = serializers.ChoiceField(choices=["bank", "crypto"])
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
+class BalanceTransactionSerializer(serializers.ModelSerializer):
+    """
+    Read-only view of an internal-balance ledger entry (Phase 6 Wave 2). Backs the
+    investor/owner wallet's REAL transaction history — `entry_type` (credit|debit) gives
+    the sign, `source` identifies the money movement (distribution / secondary_sale /
+    broker_commission / primary_sale / withdrawal / …) which the frontend localizes by
+    key (no stored display strings). Never written via the API.
+    """
+
+    amount = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = BalanceTransaction
+        fields = ("id", "entry_type", "amount", "source", "reference", "memo", "created_at")
+        read_only_fields = fields

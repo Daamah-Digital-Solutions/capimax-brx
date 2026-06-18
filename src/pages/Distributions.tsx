@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useDistributions } from "@/hooks/useDistributions";
+import { useExport } from "@/hooks/useExport";
+import { reportsApi } from "@/integrations/api/client";
 import {
   Select,
   SelectContent,
@@ -27,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Distributions() {
   const { t, language } = useLanguage();
+  const { exporting, run } = useExport();
   const [filter, setFilter] = useState("all");
   const [propertyFilter, setPropertyFilter] = useState("all");
 
@@ -70,11 +73,21 @@ export default function Distributions() {
                 <p className="text-muted-foreground">{t("distributions.subtitle")}</p>
               </div>
               <div className="flex items-center gap-3">
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={exporting !== null}
+                  onClick={() => run("statement", () => reportsApi.export("distributions", "pdf"))}
+                >
                   <Download className="w-4 h-4" />
                   {t("distributions.exportStatement")}
                 </Button>
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={exporting !== null}
+                  onClick={() => run("tax", () => reportsApi.tax())}
+                >
                   <FileText className="w-4 h-4" />
                   {t("distributions.taxReport")}
                 </Button>

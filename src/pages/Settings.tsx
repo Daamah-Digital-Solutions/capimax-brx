@@ -7,9 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { PWASettingsSection } from "@/components/settings/PWASettingsSection";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import {
   User,
   Shield,
@@ -43,22 +42,10 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState("profile");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Query to check if the current user is an admin
-  const { data: userProfile } = useQuery({
-    queryKey: ['user-profile-role'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
-      return data;
-    },
-  });
+  // Admin gate — read the real role from the Django session (AuthContext), not Supabase.
+  const { user } = useAuth();
 
-  const isAdmin = userProfile?.role === 'admin';
+  const isAdmin = user?.profile?.role === 'admin';
 
   return (
     <MainLayout>

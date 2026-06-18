@@ -23,6 +23,7 @@ from django.shortcuts import get_object_or_404
 from apps.core.permissions import KYCApprovedPermission
 
 from .models import (
+    BalanceTransaction,
     OwnershipToken,
     UserBalance,
     UserWallet,
@@ -30,6 +31,7 @@ from .models import (
     Withdrawal,
 )
 from .serializers import (
+    BalanceTransactionSerializer,
     OwnershipTokenSerializer,
     UserBalanceSerializer,
     UserWalletSerializer,
@@ -117,6 +119,24 @@ class UserBalanceView(APIView):
             "currency": balance.currency if balance else "USD",
         }
         return Response(UserBalanceSerializer(data).data)
+
+
+class BalanceTransactionsView(APIView):
+    """
+    GET /api/wallets/balance/transactions/ — the caller's internal-balance ledger
+    history (most recent first, capped). Self-scoped: a user only ever sees their OWN
+    entries. READ-ONLY — this surfaces the already-recorded credits/debits (distribution
+    credits, secondary-sale proceeds, broker commission, withdrawals, …); it never moves
+    money. Phase 12 finishing — backs the investor wallet's real transaction history.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        txs = BalanceTransaction.objects.filter(
+            balance__user=request.user
+        ).select_related("balance")[:100]
+        return Response(BalanceTransactionSerializer(txs, many=True).data)
 
 
 class WithdrawalsView(APIView):

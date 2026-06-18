@@ -21,7 +21,11 @@ from apps.core.models import User
 from .keys import FernetKeyManager, get_key_manager
 from .models import UserWallet, WalletKeyMaterial
 from .serializers import UserWalletSerializer
-from .services import get_or_create_custodial_wallet
+from .services import (
+    credit_user_balance,
+    debit_user_balance,
+    get_or_create_custodial_wallet,
+)
 
 # A fixed, valid test keypair so we can assert the EXACT plaintext key never leaks.
 _KNOWN_PRIVATE_KEY = "0x" + "11" * 32
@@ -210,3 +214,43 @@ class WalletApiTests(APITestCase):
             {"id", "wallet_address", "network", "wallet_type", "created_at"},
         )
         self.assertTrue(Web3.is_address(body["wallet_address"]))
+
+
+class BalanceTransactionHistoryTests(APITestCase):
+    """The read-only, self-scoped internal-balance ledger history (Phase 12 finishing)."""
+
+    def setUp(self):
+        from decimal import Decimal
+
+        self.user = User.objects.create_user(email="hist@ex.com", password="pw-12345-strong")
+        self.other = User.objects.create_user(email="hist-other@ex.com", password="pw-12345-strong")
+        # The caller's ledger: a distribution credit + a withdrawal debit.
+        credit_user_balance(self.user, Decimal("840.00"), source="distribution", reference="D1")
+        debit_user_balance(self.user, Decimal("200.00"), source="withdrawal", reference="W1")
+        # Another user's entry must never appear in the caller's history.
+        credit_user_balance(self.other, Decimal("999.00"), source="distribution", reference="DX")
+
+    def test_self_scoped_history_with_sources_and_signs(self):
+        self.client.force_authenticate(self.user)
+        res = self.client.get("/api/wallets/balance/transactions/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rows = res.data
+        self.assertEqual(len(rows), 2)  # only the caller's two entries
+        by_source = {r["source"]: r for r in rows}
+        self.assertEqual(by_source["distribution"]["entry_type"], "credit")
+        self.assertEqual(by_source["distribution"]["amount"], 840.0)
+        self.assertEqual(by_source["withdrawal"]["entry_type"], "debit")
+        self.assertEqual(by_source["withdrawal"]["amount"], 200.0)
+        # The other user's row is NOT visible.
+        self.assertNotIn("999", str(rows))
+
+    def test_history_is_read_only(self):
+        self.client.force_authenticate(self.user)
+        res = self.client.post("/api/wallets/balance/transactions/", {}, format="json")
+        self.assertIn(res.status_code, (405, 403))  # no write path
+
+    def test_history_requires_auth(self):
+        self.assertEqual(
+            self.client.get("/api/wallets/balance/transactions/").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )

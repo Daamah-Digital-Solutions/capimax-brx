@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   BarChart3,
   Download,
@@ -17,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ownerApi } from "@/integrations/api/client";
+import { ownerApi, reportsApi } from "@/integrations/api/client";
+import { useExport } from "@/hooks/useExport";
 import {
   Select,
   SelectContent,
@@ -45,6 +47,7 @@ interface EarningsProperty {
 export default function OwnerReports() {
   const { t, language } = useLanguage();
   const isAr = language === "ar";
+  const { exporting, run: runExport } = useExport();
   const [period, setPeriod] = useState("year");
   const [property, setProperty] = useState("all");
   const [earnings, setEarnings] = useState({
@@ -53,24 +56,36 @@ export default function OwnerReports() {
     total_investors: 0,
     properties: [] as EarningsProperty[],
   });
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Single loader reused by mount + the Refresh button (refetches the REAL owner earnings).
+  const load = useCallback(async (notify = false) => {
+    try {
+      const e = await ownerApi.earnings();
+      setEarnings({
+        total_net_proceeds: e.total_net_proceeds || 0,
+        total_units_sold: e.total_units_sold || 0,
+        total_investors: e.total_investors || 0,
+        properties: (e.properties as EarningsProperty[]) || [],
+      });
+      if (notify) toast.success(isAr ? "تم تحديث التقارير" : "Reports refreshed");
+    } catch {
+      if (notify) toast.error(isAr ? "تعذّر التحديث" : "Couldn't refresh");
+    }
+  }, [isAr]);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const e = await ownerApi.earnings();
-        if (active) setEarnings({
-          total_net_proceeds: e.total_net_proceeds || 0,
-          total_units_sold: e.total_units_sold || 0,
-          total_investors: e.total_investors || 0,
-          properties: (e.properties as EarningsProperty[]) || [],
-        });
-      } catch {
-        /* keep zeros */
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+    load();
+  }, [load]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await load(true);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const publishedCount = earnings.properties.filter((p) => p.is_published).length;
 
@@ -90,11 +105,16 @@ export default function OwnerReports() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <Button variant="outline" className="gap-2">
-                  <RefreshCw className="w-4 h-4" />
+                <Button variant="outline" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
+                  <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
                   {language === "ar" ? "تحديث" : "Refresh"}
                 </Button>
-                <Button variant="hero" className="gap-2">
+                <Button
+                  variant="hero"
+                  className="gap-2"
+                  disabled={exporting !== null}
+                  onClick={() => runExport("owner", () => reportsApi.export("owner-earnings", "pdf"))}
+                >
                   <Download className="w-4 h-4" />
                   {language === "ar" ? "تصدير التقرير" : "Export Report"}
                 </Button>

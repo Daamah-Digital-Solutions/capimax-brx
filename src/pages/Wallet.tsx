@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { 
+import { useState, useEffect, useCallback } from "react";
+import {
   Wallet as WalletIcon,
   ArrowUpRight,
   ArrowDownLeft,
@@ -44,24 +44,25 @@ import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard"
 import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
 import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
 import { SavedCardsManager } from "@/components/wallet/SavedCardsManager";
-import { WithdrawalDialog } from "@/components/wallet/WithdrawalDialog";
+// Phase 12 finishing: the investor wallet now uses the REAL Django flow + the shared
+// Django withdrawal dialog (replaces the legacy Supabase-OTP WithdrawalDialog).
+import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
+import { walletsApi, reportsApi, type BalanceTransactionRow } from "@/integrations/api/client";
+import { useExport } from "@/hooks/useExport";
+import { toast } from "sonner";
 
-const walletData = {
-  balance: 12500,
-  pendingDeposits: 0,
-  pendingWithdrawals: 0,
-  totalDeposited: 150000,
-  totalWithdrawn: 137500,
-  lastUpdated: "2025-01-03 14:30",
+// Internal-balance ledger source → bilingual label (rendered by source, NOT a stored
+// display string — same approach as Distributions/Notifications). Unknown sources are
+// humanized from the source key.
+const SOURCE_LABEL: Record<string, { en: string; ar: string }> = {
+  distribution: { en: "Distribution", ar: "توزيع أرباح" },
+  primary_sale: { en: "Primary sale proceeds", ar: "عائدات البيع الأولي" },
+  secondary_sale: { en: "Secondary sale proceeds", ar: "عائدات البيع الثانوي" },
+  lp_market_sale: { en: "Market sale proceeds", ar: "عائدات بيع السوق" },
+  lp_market_purchase: { en: "Market purchase", ar: "شراء من السوق" },
+  broker_commission: { en: "Referral commission", ar: "عمولة الإحالة" },
+  withdrawal: { en: "Withdrawal", ar: "سحب" },
 };
-
-const transactions = [
-  { id: "1", type: "deposit", method: "bank", amount: 5000, status: "completed", date: "2024-12-28", reference: "TXN-2024-001234" },
-  { id: "2", type: "investment", property: "Marina Bay Tower", propertyAr: "برج مارينا باي", amount: -3000, status: "completed", date: "2024-12-25", reference: "INV-2024-005678" },
-  { id: "3", type: "distribution", property: "Industrial Complex", propertyAr: "المجمع الصناعي", amount: 840, status: "completed", date: "2024-12-01", reference: "DIST-2024-001122" },
-  { id: "4", type: "withdrawal", method: "bank", amount: -2000, status: "completed", date: "2024-11-20", reference: "WDR-2024-003344" },
-  { id: "5", type: "deposit", method: "card", amount: 10000, status: "completed", date: "2024-11-15", reference: "TXN-2024-005566" },
-];
 
 const paymentMethods = [
   { id: "card", nameAr: "بطاقة ائتمان/خصم", nameEn: "Credit/Debit Card", icon: CreditCard, available: true },
@@ -75,41 +76,81 @@ const paymentMethods = [
 
 export default function Wallet() {
   const { t, language } = useLanguage();
+  const { exporting, run: runExport } = useExport();
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [depositStep, setDepositStep] = useState(1);
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [filter, setFilter] = useState("all");
+  const isAr = language === "ar";
 
-  const filteredTransactions = transactions.filter(t => {
+  // REAL Django data: internal balance + ledger history + withdrawals (self-scoped).
+  const [balance, setBalance] = useState(0);
+  const [ledger, setLedger] = useState<BalanceTransactionRow[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = useCallback(async (notify = false) => {
+    if (notify) setRefreshing(true);
+    try {
+      const [bal, txs, wds] = await Promise.all([
+        walletsApi.balance().catch(() => ({ current_balance: 0, currency: "USD" })),
+        walletsApi.balanceTransactions().catch(() => [] as BalanceTransactionRow[]),
+        walletsApi.withdrawals().catch(() => [] as any[]),
+      ]);
+      setBalance(Number(bal.current_balance) || 0);
+      setLedger(txs || []);
+      setWithdrawals(wds || []);
+      if (notify) toast.success(isAr ? "تم تحديث المحفظة" : "Wallet refreshed");
+    } catch {
+      if (notify) toast.error(isAr ? "تعذّر التحديث" : "Couldn't refresh");
+    } finally {
+      setLoading(false);
+      if (notify) setRefreshing(false);
+    }
+  }, [isAr]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Derived stat figures from the REAL ledger + withdrawals.
+  const totalDeposited = ledger
+    .filter((tx) => tx.entry_type === "credit")
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const totalWithdrawn = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+  const pendingWithdrawals = withdrawals
+    .filter((w) => w.status === "pending" || w.status === "processing")
+    .reduce((sum, w) => sum + Number(w.amount || 0), 0);
+  const lastUpdated = ledger[0]?.created_at
+    ? new Date(ledger[0].created_at).toLocaleString(isAr ? "ar" : "en")
+    : "—";
+
+  // Signed amount (credit = +, debit = −) straight from the authoritative entry_type.
+  const signedAmount = (tx: BalanceTransactionRow) =>
+    tx.entry_type === "credit" ? Number(tx.amount) : -Number(tx.amount);
+
+  const filteredTransactions = ledger.filter((tx) => {
     if (filter === "all") return true;
-    if (filter === "deposits") return t.type === "deposit";
-    if (filter === "withdrawals") return t.type === "withdrawal";
-    if (filter === "investments") return t.type === "investment";
-    if (filter === "distributions") return t.type === "distribution";
+    if (filter === "deposits") return tx.entry_type === "credit";
+    if (filter === "withdrawals") return tx.source.includes("withdrawal");
+    if (filter === "investments") return tx.entry_type === "debit" && !tx.source.includes("withdrawal");
+    if (filter === "distributions") return tx.source === "distribution";
     return true;
   });
 
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case "deposit": return <ArrowDownLeft className="w-4 h-4 text-success" />;
-      case "withdrawal": return <ArrowUpRight className="w-4 h-4 text-destructive" />;
-      case "investment": return <Building2 className="w-4 h-4 text-primary" />;
-      case "distribution": return <Coins className="w-4 h-4 text-success" />;
-      default: return <WalletIcon className="w-4 h-4" />;
-    }
+  const getTransactionIcon = (tx: BalanceTransactionRow) => {
+    if (tx.source.includes("withdrawal")) return <ArrowUpRight className="w-4 h-4 text-destructive" />;
+    if (tx.source === "distribution") return <Coins className="w-4 h-4 text-success" />;
+    if (tx.entry_type === "debit") return <Building2 className="w-4 h-4 text-primary" />;
+    return <ArrowDownLeft className="w-4 h-4 text-success" />;
   };
 
-  const getTransactionLabel = (tx: typeof transactions[0]) => {
-    const isAr = language === "ar";
-    switch (tx.type) {
-      case "deposit": return `${t("wallet.deposit")} - ${tx.method === "bank" ? t("wallet.depositBank") : t("wallet.depositCard")}`;
-      case "withdrawal": return `${t("wallet.withdraw")} - ${tx.method === "bank" ? t("wallet.depositBank") : t("wallet.depositCard")}`;
-      case "investment": return `${t("wallet.investment")} - ${isAr ? tx.propertyAr : tx.property}`;
-      case "distribution": return `${t("wallet.distribution")} - ${isAr ? tx.propertyAr : tx.property}`;
-      default: return t("wallet.transaction");
-    }
+  const getTransactionLabel = (tx: BalanceTransactionRow) => {
+    const mapped = SOURCE_LABEL[tx.source];
+    return mapped ? (isAr ? mapped.ar : mapped.en) : tx.source.replace(/_/g, " ");
   };
 
   const resetDepositFlow = () => {
@@ -157,16 +198,16 @@ export default function Wallet() {
                     <div className="w-14 h-14 bg-gradient-gold rounded-2xl flex items-center justify-center shadow-gold">
                       <WalletIcon className="w-7 h-7 text-primary-foreground" />
                     </div>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground">
-                      <RefreshCw className="w-4 h-4" />
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" onClick={() => refresh(true)} disabled={refreshing}>
+                      <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
                     </Button>
                   </div>
                   <div className="text-sm text-muted-foreground mb-1">{t("wallet.availableBalance")}</div>
                   <div className="text-4xl font-bold text-gradient-gold mb-2">
-                    ${walletData.balance.toLocaleString()}
+                    ${balance.toLocaleString()}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {t("wallet.lastUpdated")}: {walletData.lastUpdated}
+                    {t("wallet.lastUpdated")}: {lastUpdated}
                   </div>
                 </div>
 
@@ -178,15 +219,9 @@ export default function Wallet() {
                       </div>
                       <div>
                         <div className="text-sm text-muted-foreground">{t("wallet.totalDeposits")}</div>
-                        <div className="text-xl font-bold text-foreground">${walletData.totalDeposited.toLocaleString()}</div>
+                        <div className="text-xl font-bold text-foreground">${totalDeposited.toLocaleString()}</div>
                       </div>
                     </div>
-                    {walletData.pendingDeposits > 0 && (
-                      <Badge variant="warning" className="gap-1 mt-2">
-                        <Clock className="w-3 h-3" />
-                        ${walletData.pendingDeposits.toLocaleString()} {t("wallet.pending")}
-                      </Badge>
-                    )}
                   </div>
 
                   <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.1s" }}>
@@ -196,9 +231,15 @@ export default function Wallet() {
                       </div>
                       <div>
                         <div className="text-sm text-muted-foreground">{t("wallet.totalWithdrawals")}</div>
-                        <div className="text-xl font-bold text-foreground">${walletData.totalWithdrawn.toLocaleString()}</div>
+                        <div className="text-xl font-bold text-foreground">${totalWithdrawn.toLocaleString()}</div>
                       </div>
                     </div>
+                    {pendingWithdrawals > 0 && (
+                      <Badge variant="warning" className="gap-1 mt-2">
+                        <Clock className="w-3 h-3" />
+                        ${pendingWithdrawals.toLocaleString()} {t("wallet.pending")}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -222,7 +263,13 @@ export default function Wallet() {
                           <SelectItem value="distributions">{t("wallet.distributionsFilter")}</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button variant="outline" size="sm" className="gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={exporting !== null}
+                        onClick={() => runExport("wallet", () => reportsApi.export("wallet", "csv"))}
+                      >
                         <Download className="w-4 h-4" />
                         {t("wallet.export")}
                       </Button>
@@ -231,47 +278,59 @@ export default function Wallet() {
                 </div>
 
                 <div className="divide-y divide-border">
-                  {filteredTransactions.length === 0 ? (
+                  {loading ? (
+                    <div className="p-12 text-center text-muted-foreground">
+                      <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
+                      {isAr ? "جارٍ التحميل..." : "Loading..."}
+                    </div>
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="p-12 text-center">
                       <WalletIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-foreground mb-2">{t("wallet.noTransactions")}</h3>
                       <p className="text-muted-foreground">{t("wallet.noTransactionsDesc")}</p>
                     </div>
                   ) : (
-                    filteredTransactions.map((transaction) => (
+                    filteredTransactions.map((transaction) => {
+                      const amt = signedAmount(transaction);
+                      return (
                       <div key={transaction.id} className="p-4 hover:bg-muted/30 transition-colors flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className={cn(
                             "w-10 h-10 rounded-xl flex items-center justify-center",
-                            transaction.amount > 0 ? "bg-success/10" : "bg-muted"
+                            amt > 0 ? "bg-success/10" : "bg-muted"
                           )}>
-                            {getTransactionIcon(transaction.type)}
+                            {getTransactionIcon(transaction)}
                           </div>
                           <div>
                             <div className="font-medium text-foreground">{getTransactionLabel(transaction)}</div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{transaction.date}</span>
-                              <span>•</span>
-                              <span className="font-mono">{transaction.reference}</span>
+                              <span>{new Date(transaction.created_at).toLocaleDateString(isAr ? "ar" : "en")}</span>
+                              {transaction.reference && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono">{transaction.reference}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className={cn(
                             "text-lg font-semibold",
-                            transaction.amount > 0 ? "text-success" : "text-foreground"
+                            amt > 0 ? "text-success" : "text-foreground"
                           )}>
-                            {transaction.amount > 0 ? "+" : ""}{transaction.amount.toLocaleString()} USD
+                            {amt > 0 ? "+" : ""}{amt.toLocaleString()} USD
                           </div>
-                          <Badge variant={transaction.status === "completed" ? "success" : "warning"}>
-                            {transaction.status === "completed" ? t("wallet.completed") : t("wallet.pending")}
+                          <Badge variant="success">
+                            {t("wallet.completed")}
                           </Badge>
                           <Button variant="ghost" size="icon">
                             <Receipt className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -280,7 +339,7 @@ export default function Wallet() {
             {/* Sidebar */}
             <div className="space-y-6">
               <ReinvestReturnsCard
-                availableReturns={walletData.balance > 0 ? Math.min(walletData.balance, 4250) : 0}
+                availableReturns={balance > 0 ? Math.min(balance, 4250) : 0}
                 totalReinvested={2500}
                 totalBonus={175}
               />
@@ -428,11 +487,13 @@ export default function Wallet() {
           </DialogContent>
         </Dialog>
 
-        {/* Withdraw Dialog - New Enhanced Version */}
-        <WithdrawalDialog
+        {/* Withdraw — the real Django flow (shared with the owner wallet). Replaces the
+            legacy Supabase-OTP WithdrawalDialog. On success it refetches balance + history. */}
+        <OwnerWithdrawDialog
           open={showWithdraw}
           onOpenChange={setShowWithdraw}
-          availableBalance={walletData.balance}
+          availableBalance={balance}
+          onSuccess={refresh}
         />
       </div>
     </MainLayout>

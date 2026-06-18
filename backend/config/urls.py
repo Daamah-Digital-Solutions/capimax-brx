@@ -45,6 +45,9 @@ urlpatterns = [
     path("api/distributions/", include("apps.distributions.urls")),
     # In-app notifications (Phase 10): self-scoped list + unread-count + mark-read + soft-delete. NOTIFICATIONS_SURFACE.md.
     path("api/notifications/", include("apps.notifications.urls")),
+    # Reports-export (Phase 13): self-scoped CSV/PDF export of existing data (wallet ledger,
+    # distributions, owner earnings, LP tx, broker commissions) + an informational tax summary.
+    path("api/reports/", include("apps.reports.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

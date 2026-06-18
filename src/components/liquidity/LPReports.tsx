@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { LiquidityProvider, LPTransaction } from "@/hooks/useLiquidityProvider";
+import { useExport } from "@/hooks/useExport";
+import { reportsApi } from "@/integrations/api/client";
 import { FileText, Download, Calendar, TrendingUp, ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 interface LPReportsProps {
@@ -10,6 +12,7 @@ interface LPReportsProps {
 }
 
 export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
+  const { exporting, run } = useExport();
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -89,19 +92,39 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
         </CardHeader>
         <CardContent>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2">
+            <Button
+              variant="outline"
+              className="h-auto py-4 flex-col gap-2"
+              disabled={exporting !== null}
+              onClick={() => run("monthly", () => reportsApi.export("lp", "pdf", { period: isRTL ? "شهري" : "Monthly" }))}
+            >
               <Calendar className="w-5 h-5" />
               <span>{isRTL ? "تقرير شهري" : "Monthly Report"}</span>
             </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2">
+            <Button
+              variant="outline"
+              className="h-auto py-4 flex-col gap-2"
+              disabled={exporting !== null}
+              onClick={() => run("quarterly", () => reportsApi.export("lp", "pdf", { period: isRTL ? "ربع سنوي" : "Quarterly" }))}
+            >
               <Calendar className="w-5 h-5" />
               <span>{isRTL ? "تقرير ربع سنوي" : "Quarterly Report"}</span>
             </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2">
+            <Button
+              variant="outline"
+              className="h-auto py-4 flex-col gap-2"
+              disabled={exporting !== null}
+              onClick={() => run("annual", () => reportsApi.export("lp", "pdf", { period: isRTL ? "سنوي" : "Annual" }))}
+            >
               <Calendar className="w-5 h-5" />
               <span>{isRTL ? "تقرير سنوي" : "Annual Report"}</span>
             </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2">
+            <Button
+              variant="outline"
+              className="h-auto py-4 flex-col gap-2"
+              disabled={exporting !== null}
+              onClick={() => run("data", () => reportsApi.export("lp", "csv"))}
+            >
               <Download className="w-5 h-5" />
               <span>{isRTL ? "تصدير البيانات" : "Export Data"}</span>
             </Button>

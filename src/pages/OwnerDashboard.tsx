@@ -30,7 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { OwnerVerificationCard } from "@/components/owner/OwnerVerificationCard";
 import { DeveloperVerificationCard } from "@/components/developer/DeveloperVerificationCard";
-import { ownerApi } from "@/integrations/api/client";
+import { ownerApi, reportsApi } from "@/integrations/api/client";
+import { useExport } from "@/hooks/useExport";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -141,6 +142,7 @@ export default function OwnerDashboard() {
   const { language } = useLanguage();
   const { user } = useAuth();
   const isAr = language === "ar";
+  const { exporting, run: runExport } = useExport();
   // The sidebar persona is merged "Owner / Developer" (both use /my-assets). Surface the
   // verification card that matches the user's selected role (Phase 8 Wave A). Developer
   // and owner are separate roles/KYB entities; everything else on this page is shared.
@@ -217,7 +219,12 @@ export default function OwnerDashboard() {
                 <p className="text-muted-foreground">إدارة أصولك ومتابعة الأداء</p>
               </div>
               <div className="flex items-center gap-3">
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={exporting !== null}
+                  onClick={() => runExport("owner", () => reportsApi.export("owner-earnings", "pdf"))}
+                >
                   <Download className="w-4 h-4" />
                   تقرير شامل
                 </Button>

@@ -360,6 +360,17 @@ export const kycApi = {
   },
 };
 
+/** An internal-balance ledger entry (credit/debit). `source` localized on the frontend. */
+export interface BalanceTransactionRow {
+  id: string;
+  entry_type: "credit" | "debit";
+  amount: number;
+  source: string;   // distribution | secondary_sale | broker_commission | primary_sale | withdrawal | ...
+  reference: string;
+  memo: string;
+  created_at: string;
+}
+
 export const walletsApi = {
   /** The caller's custodial wallet, or null when none exists yet (404). */
   me: async (): Promise<Wallet | null> => {
@@ -384,6 +395,9 @@ export const walletsApi = {
       current_balance: number;
       currency: string;
     }>,
+  /** The caller's internal-balance ledger history (credits/debits, self-scoped). */
+  balanceTransactions: () =>
+    rawRequest("/wallets/balance/transactions/", { auth: true }) as Promise<BalanceTransactionRow[]>,
   /** The caller's withdrawal history. */
   withdrawals: () => rawRequest("/wallets/withdrawals/", { auth: true }) as Promise<any[]>,
   /** Request a withdrawal of internal balance (debits it + records a pending request). */
@@ -1054,6 +1068,52 @@ export const brokerApi = {
   /** The caller-broker's commission ledger + totals + referred-investor roster (Wave B). */
   commissions: () =>
     rawRequest("/broker/commissions/", { auth: true }) as Promise<BrokerCommissions>,
+};
+
+// --------------------------------------------------------------------------- //
+// Reports-export API (Phase 13) — self-scoped CSV/PDF downloads of EXISTING data.
+// The endpoints stream a FileResponse; we fetch it as a blob and trigger a browser
+// download (filename comes from Content-Disposition). NB: the format param is `fmt`
+// (not `format`, which DRF reserves for content negotiation).
+// --------------------------------------------------------------------------- //
+export const reportsApi = {
+  async download(path: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw buildError((data as any)?.detail || `Export failed (${res.status})`, res.status, data);
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get("Content-Disposition") || "";
+    const filename = /filename="?([^"]+)"?/.exec(cd)?.[1] || "capimax-report";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+  /** Export a report context as csv|pdf (optional year/period filter). */
+  export(
+    context: "wallet" | "distributions" | "owner-earnings" | "lp" | "broker-commissions",
+    fmt: "csv" | "pdf",
+    params?: { year?: number | string; period?: string },
+  ): Promise<void> {
+    const q = new URLSearchParams({ fmt });
+    if (params?.year) q.set("year", String(params.year));
+    if (params?.period) q.set("period", params.period);
+    return reportsApi.download(`/reports/${context}/export/?${q.toString()}`);
+  },
+  /** Informational annual distribution-income summary (PDF). NOT a tax document. */
+  tax(year?: number | string): Promise<void> {
+    const q = new URLSearchParams();
+    if (year) q.set("year", String(year));
+    return reportsApi.download(`/reports/distributions/tax/?${q.toString()}`);
+  },
 };
 
 export { API_BASE_URL };

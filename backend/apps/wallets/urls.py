@@ -2,6 +2,7 @@
 from django.urls import path
 
 from .views import (
+    BalanceTransactionsView,
     MyWalletView,
     UserBalanceView,
     WalletCreateView,
@@ -17,6 +18,8 @@ urlpatterns = [
     path("me/", MyWalletView.as_view(), name="wallet-me"),
     # Internal balance + investor withdrawal (Phase 6 Wave 3).
     path("balance/", UserBalanceView.as_view(), name="wallet-balance"),
+    # Read-only internal-balance ledger history (self-scoped). Phase 12 finishing.
+    path("balance/transactions/", BalanceTransactionsView.as_view(), name="wallet-balance-transactions"),
     path("withdrawals/", WithdrawalsView.as_view(), name="wallet-withdrawals"),
     path("<uuid:wallet_id>/tokens/", WalletTokensView.as_view(), name="wallet-tokens"),
     path(

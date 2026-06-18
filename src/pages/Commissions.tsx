@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useExport } from "@/hooks/useExport";
+import { reportsApi } from "@/integrations/api/client";
 import {
   DollarSign,
   TrendingUp,
@@ -91,6 +93,7 @@ const monthlyStats = [
 
 export default function Commissions() {
   const { t, language } = useLanguage();
+  const { exporting, run } = useExport();
   const [activeTab, setActiveTab] = useState("all");
 
   const totalEarned = commissions.reduce((sum, c) => sum + c.commissionAmount, 0);
@@ -128,7 +131,11 @@ export default function Commissions() {
             </h1>
             <p className="text-muted-foreground mt-1">{t("commissions.subtitle")}</p>
           </div>
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            disabled={exporting !== null}
+            onClick={() => run("commissions", () => reportsApi.export("broker-commissions", "csv"))}
+          >
             <Download className="w-4 h-4 mr-2" />
             {t("commissions.exportReport")}
           </Button>
