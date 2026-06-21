@@ -7,6 +7,7 @@ Payments phase); token MINTING is real (on-chain). Token economics follow the
 LOCKED policy: price = property.token_price (per-property, admin-set), ownership =
 token_amount / property.token_supply * 100 (NEVER the old hardcoded /1000).
 """
+import builtins
 import uuid
 
 from django.conf import settings
@@ -58,8 +59,40 @@ class Investment(models.Model):
         related_name="investments",
     )
 
+    # Installments (Wave B). A normal purchase leaves these falsy/null and behaves
+    # EXACTLY as before. For an installment purchase: the FULL position is still
+    # minted (token_amount = full, ownership = full/supply), but only the
+    # down-payment is CHARGED + CREDITED now (`charge_amount`), and the unpaid share
+    # of the minted tokens is held LOCKED (mint_investment sets OwnershipToken.locked_amount).
+    is_installment = models.BooleanField(default=False)
+    down_payment_amount = models.DecimalField(
+        max_digits=16, decimal_places=2, null=True, blank=True
+    )
+    installment_plan = models.ForeignKey(
+        "installments.InstallmentPlan",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="investments",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # NOTE: this model has a `property` FK field, which shadows the `property`
+    # builtin inside the class body — so the decorator must be `builtins.property`.
+    @builtins.property
+    def charge_amount(self):
+        """
+        The money charged/credited for THIS payment. The full price for a normal
+        purchase; the DOWN-PAYMENT for an installment purchase (Wave B). Both the
+        gated PSP charge and the owner/broker credit scope to this — so a normal
+        buy is unchanged (charge_amount == amount_invested) and an installment
+        credits only on money actually paid.
+        """
+        if self.is_installment and self.down_payment_amount is not None:
+            return self.down_payment_amount
+        return self.amount_invested
 
     class Meta:
         verbose_name = _("investment")

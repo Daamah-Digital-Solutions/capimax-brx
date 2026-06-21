@@ -239,6 +239,25 @@ export default function Installments() {
                             </div>
                           </div>
 
+                          {/* Token release split (full-mint-then-lock). Shown once the
+                              down-payment has minted the position. Honest: only the paid
+                              share is unlocked. */}
+                          {plan.tokenAmount != null && (
+                            <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-primary/5 border border-primary/20">
+                              <Lock className="w-4 h-4 text-primary shrink-0" />
+                              <div className="text-sm">
+                                <span className="font-semibold text-foreground">
+                                  {plan.releasedTokens} {language === "ar" ? "من" : "of"} {plan.tokenAmount}
+                                </span>{" "}
+                                <span className="text-muted-foreground">
+                                  {language === "ar"
+                                    ? "رمز محرَّر — يُحرَّر الباقي مع سداد الأقساط."
+                                    : "tokens released — the rest unlock as you pay."}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Payment Progress */}
                           <div className="grid sm:grid-cols-4 gap-4 mb-6">
                             <div className="p-3 bg-muted rounded-xl">

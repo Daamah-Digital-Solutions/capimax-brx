@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.properties.models import Property
+from apps.wallets.models import OwnershipToken
 
 from .models import InstallmentPayment, InstallmentPlan, InstallmentPaymentStatus
 
@@ -28,7 +29,7 @@ class InstallmentPlansView(APIView):
     def get(self, request):
         plans = list(
             InstallmentPlan.objects.filter(investor=request.user).prefetch_related(
-                "payments"
+                "payments", "investments"
             )
         )
 
@@ -57,15 +58,17 @@ class InstallmentPlansView(APIView):
             paid_installments = sum(
                 1 for p in payments if p.status == InstallmentPaymentStatus.PAID
             )
+            # Wave B: a CONFIRMED down-payment is tracked on the plan (down_paid_at).
+            down_paid = plan.down_paid_at is not None
             # Display schedule = a synthesized down-payment row (display-only; the DB keeps
             # the down-payment on the plan) followed by the N installment rows.
             display_payments = [
                 {
                     "sequence": 0,
                     "type": "down_payment",
-                    "date": plan.created_at.date().isoformat(),
+                    "date": (plan.down_paid_at or plan.created_at).date().isoformat(),
                     "amount": float(plan.down_payment_amount),
-                    "status": "pending",  # Wave A: nothing charged yet
+                    "status": "paid" if down_paid else "pending",
                 }
             ] + [
                 {
@@ -78,14 +81,31 @@ class InstallmentPlansView(APIView):
                 for p in payments
             ]
 
+            # Paid = the down-payment (once confirmed) + any paid installments (Wave C).
             paid_amount = sum(
                 (p.amount for p in payments if p.status == InstallmentPaymentStatus.PAID),
                 Decimal("0"),
-            )
-            # Wave A plans are draft → nothing paid; progress reflects RELEASED/paid value.
+            ) + (plan.down_payment_amount if down_paid else Decimal("0"))
+            # Released % == paid % (full-mint-then-lock: released share tracks money paid).
             progress = (
                 float((paid_amount / plan.total_amount) * 100) if plan.total_amount else 0.0
             )
+
+            # Real on-chain token split from the linked (down-payment) investment's
+            # OwnershipToken: released = token_amount − locked_amount. Until the down-payment
+            # confirms (mint), nothing is released.
+            inv = next(iter(plan.investments.all()), None)
+            token_amount_full = locked_tokens = released_tokens = None
+            if inv is not None:
+                token_amount_full = int(inv.token_amount)
+                if inv.tokens_minted and inv.wallet_id:
+                    otoken = OwnershipToken.objects.filter(
+                        wallet_id=inv.wallet_id, property_id=slug
+                    ).first()
+                    locked_tokens = min(int(otoken.locked_amount), token_amount_full) if otoken else 0
+                else:
+                    locked_tokens = token_amount_full  # not minted yet → all locked
+                released_tokens = token_amount_full - locked_tokens
 
             pending = next(
                 (p for p in payments if p.status == InstallmentPaymentStatus.PENDING), None
@@ -114,6 +134,11 @@ class InstallmentPlansView(APIView):
                     "durationMonths": plan.duration_months,
                     "nextDueDate": pending.due_date.isoformat() if pending else None,
                     "progress": round(progress, 2),
+                    "downPaid": down_paid,
+                    # Real on-chain token split (full-mint-then-lock). null until minted.
+                    "tokenAmount": token_amount_full,
+                    "releasedTokens": released_tokens,
+                    "lockedTokens": locked_tokens,
                     "payments": display_payments,
                 }
             )

@@ -273,7 +273,8 @@ class InvestmentApiTests(APITestCase):
             set(body[0].keys()),
             {
                 "id", "wallet_id", "property_id", "property_name", "token_symbol",
-                "token_amount", "token_value_usd", "ownership_percentage",
+                "token_amount", "locked_amount", "available_amount",
+                "token_value_usd", "ownership_percentage",
                 "acquisition_date", "last_distribution_date", "total_distributions",
                 "status", "created_at", "updated_at",
             },

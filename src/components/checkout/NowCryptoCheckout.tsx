@@ -30,6 +30,12 @@ export interface NowCryptoCheckoutProps {
   propertyId: string;
   tokenAmount: number;
   ready: boolean;
+  /** Installments (Wave B): when set, the server charges only the down-payment. */
+  installment?: {
+    down_payment_percent: number;
+    n_installments: number;
+    frequency: "monthly" | "quarterly";
+  };
   onRouteToKyc: () => void;
   onProcessing: () => void;
   onResult: (r: { status: "success" | "failed"; tokensMinted: boolean }) => void;
@@ -85,11 +91,20 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
     setNotConfigured(false);
     props.onProcessing();
     try {
-      // 1) Create the investment (PENDING for crypto — no mint yet).
+      // 1) Create the investment (PENDING for crypto — no mint yet). For an installment
+      // the server charges only the down-payment + mints-then-locks on the IPN.
       const created = await processInvestment({
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
         payment_method: "crypto",
+        ...(props.installment
+          ? {
+              is_installment: true,
+              down_payment_percent: props.installment.down_payment_percent,
+              n_installments: props.installment.n_installments,
+              frequency: props.installment.frequency,
+            }
+          : {}),
       });
       if (!created.success || !created.investment_id) {
         if (created.code === "kyc_required") {

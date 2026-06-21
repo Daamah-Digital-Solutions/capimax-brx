@@ -51,6 +51,10 @@ class InvestmentCreateView(APIView):
             prop=data["property"],
             token_amount=data["token_amount"],
             payment_method=data["payment_method"],
+            is_installment=data.get("is_installment", False),
+            down_payment_percent=data.get("down_payment_percent"),
+            n_installments=data.get("n_installments"),
+            frequency=data.get("frequency", "monthly"),
         )
         investment = result["investment"]
         return Response(

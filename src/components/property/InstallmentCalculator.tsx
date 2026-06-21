@@ -106,7 +106,17 @@ export function InstallmentCalculator({
   };
 
   const handleInvest = () => {
-    navigate(`/checkout?property=${propertyId}&units=${units}&type=installment&duration=${selectedDuration}`);
+    // Wave B: carry the full installment terms so Checkout charges the DOWN-PAYMENT
+    // (down% + n installments + frequency). This calculator's plan is monthly.
+    const params = new URLSearchParams({
+      property: propertyId,
+      units: String(units),
+      type: "installment",
+      down: String(downPaymentPercent),
+      duration: String(selectedDuration),
+      frequency: "monthly",
+    });
+    navigate(`/checkout?${params.toString()}`);
   };
 
   const durationLabel = (months: number) => {

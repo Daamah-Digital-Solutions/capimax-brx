@@ -81,6 +81,10 @@ class InstallmentPlan(models.Model):
         max_length=12, choices=InstallmentPlanStatus.choices,
         default=InstallmentPlanStatus.DRAFT, db_index=True,
     )
+    # Wave B: set when a CONFIRMED (webhook-gated) down-payment activates the plan.
+    # The down-payment is tracked here on the plan (not as an InstallmentPayment row —
+    # the schedule rows are the N financed installments only). Drives the released %.
+    down_paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

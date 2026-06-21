@@ -16,11 +16,26 @@ PAYMENT_METHODS = ["card", "apple_pay", "google_pay", "crypto", "pronova", "suku
 
 
 class InvestmentCreateSerializer(serializers.Serializer):
-    """Input for POST /api/investments/. Resolves the frontend string id → Property."""
+    """Input for POST /api/investments/. Resolves the frontend string id → Property.
+
+    Installments (Wave B): an installment purchase additionally sends
+    `is_installment` + the terms (`down_payment_percent`, `n_installments`,
+    `frequency`). The server charges only the DOWN-PAYMENT (computed cent-exact) and
+    mints the full position LOCKED on the confirmed webhook. Normal buys omit these.
+    """
 
     property_id = serializers.CharField()  # Property.slug (frontend string id)
     token_amount = serializers.IntegerField(min_value=1)
     payment_method = serializers.ChoiceField(choices=PAYMENT_METHODS)
+    # Installment terms (only required when is_installment).
+    is_installment = serializers.BooleanField(required=False, default=False)
+    down_payment_percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, allow_null=True
+    )
+    n_installments = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    frequency = serializers.ChoiceField(
+        choices=["monthly", "quarterly"], required=False, default="monthly"
+    )
 
     def validate(self, attrs):
         try:
@@ -30,6 +45,11 @@ class InvestmentCreateSerializer(serializers.Serializer):
                 {"property_id": "No published property with this id."}
             )
         attrs["property"] = prop
+        if attrs.get("is_installment"):
+            if attrs.get("down_payment_percent") is None or attrs.get("n_installments") is None:
+                raise serializers.ValidationError(
+                    {"installment": "down_payment_percent and n_installments are required for an installment."}
+                )
         return attrs
 
 
@@ -55,6 +75,10 @@ class InvestmentSerializer(serializers.ModelSerializer):
             "tokens_minted",
             "minted_at",
             "wallet_id",
+            # Installments (Wave B): so the checkout poll / portfolio can show the
+            # installment context + the down-payment that was actually charged.
+            "is_installment",
+            "down_payment_amount",
             "created_at",
             "updated_at",
         )

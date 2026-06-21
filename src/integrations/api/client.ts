@@ -239,11 +239,19 @@ export interface CreateInvestmentResult {
 }
 
 export const investmentsApi = {
-  /** Create an investment (simulated payment + auto-mint if a wallet exists). */
+  /**
+   * Create an investment. Normal buy: server charges the full price.
+   * Installment (Wave B): pass `is_installment` + the terms — the server charges only
+   * the DOWN-PAYMENT (settlement-gated) and mints the full position LOCKED on the webhook.
+   */
   create: (payload: {
     property_id: string;
     token_amount: number;
     payment_method: string;
+    is_installment?: boolean;
+    down_payment_percent?: number;
+    n_installments?: number;
+    frequency?: "monthly" | "quarterly";
   }) =>
     rawRequest("/investments/", {
       method: "POST",
@@ -815,7 +823,12 @@ export interface InstallmentPlanRow {
   frequency: "monthly" | "quarterly";
   durationMonths: number;
   nextDueDate: string | null;
-  progress: number;                 // released/paid % (0 in Wave A — nothing charged yet)
+  progress: number;                 // released/paid % (down-payment once confirmed; + installments in Wave C)
+  downPaid: boolean;                // the down-payment has confirmed (plan active)
+  // Real on-chain token split (full-mint-then-lock). null until the down-payment mints.
+  tokenAmount: number | null;
+  releasedTokens: number | null;
+  lockedTokens: number | null;
   payments: InstallmentSchedulePayment[];
 }
 

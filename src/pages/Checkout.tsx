@@ -54,6 +54,23 @@ export default function Checkout() {
   const propertyId = searchParams.get("property") || "1";
   const urlUnits = parseInt(searchParams.get("units") || "1");
 
+  // Installments (Wave B): the calculator passes type=installment + the terms. When set,
+  // the server charges only the DOWN-PAYMENT (not the full price) and mints the full
+  // position LOCKED on the confirmed webhook. Installments are settlement-gated → card/crypto.
+  const isInstallment = searchParams.get("type") === "installment";
+  const downPaymentPercent = Number(searchParams.get("down")) || 0;
+  const installmentCount = parseInt(searchParams.get("duration") || "0") || 0;
+  const installmentFrequency: "monthly" | "quarterly" =
+    searchParams.get("frequency") === "quarterly" ? "quarterly" : "monthly";
+  const installmentTerms =
+    isInstallment && downPaymentPercent > 0 && installmentCount > 0
+      ? {
+          down_payment_percent: downPaymentPercent,
+          n_installments: installmentCount,
+          frequency: installmentFrequency,
+        }
+      : undefined;
+
   // Phase 3 Wave 2: read the REAL property (token_price, token_supply, fees) from the
   // Phase-2 property API. Replaces the old inline 2-property table, the hardcoded
   // /1000 ownership, and the MAX_UNITS=100 cap (the approved token-economics fix).
@@ -183,7 +200,15 @@ export default function Checkout() {
   }, [units, unitPrice, platformRate, managementRate, property, propertyId]);
 
   const pronovaDiscount = selectedMethod === "pronova" ? investment.totalPayable * 0.05 : 0;
-  const finalAmount = investment.totalPayable - pronovaDiscount;
+  // The down-payment for an installment = full position × down% (display; the server is
+  // authoritative + cent-exact). The financed remainder is charged later (Wave C).
+  const downPaymentAmount = installmentTerms
+    ? Math.round(investment.investmentAmount * downPaymentPercent) / 100
+    : 0;
+  // The amount CHARGED now: the down-payment for an installment, else the full payable.
+  const finalAmount = installmentTerms
+    ? downPaymentAmount
+    : investment.totalPayable - pronovaDiscount;
 
   const handleUnitsChange = (newUnits: number) => {
     const clamped = Math.min(maxUnits, Math.max(MIN_UNITS, newUnits));
@@ -384,6 +409,40 @@ export default function Checkout() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Installments (Wave B): the DOWN-PAYMENT is what's charged now; the rest
+                      is scheduled. The investor mints the full position, locked, with the
+                      down-payment's share released. */}
+                  {installmentTerms && (
+                    <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">
+                          {isRTL ? "الدفعة المقدمة (تُدفع الآن)" : "Down payment (due now)"}
+                        </span>
+                        <span className="text-lg font-bold text-primary">
+                          ${downPaymentAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <span>{isRTL ? "نسبة الدفعة المقدمة" : "Down payment %"}</span>
+                        <span>{downPaymentPercent}%</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <span>{isRTL ? "عدد الأقساط لاحقاً" : "Installments scheduled"}</span>
+                        <span>
+                          {installmentCount} ·{" "}
+                          {installmentFrequency === "quarterly"
+                            ? isRTL ? "ربع سنوي" : "quarterly"
+                            : isRTL ? "شهري" : "monthly"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground pt-1 border-t border-primary/20">
+                        {isRTL
+                          ? "تُصدر كامل الرموز الآن ومقفلة؛ تُحرَّر حصة الدفعة المقدمة، ويُحرَّر الباقي مع سداد الأقساط."
+                          : "Your full tokens are minted now but locked; the down-payment's share is released, the rest unlocks as you pay."}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -479,6 +538,7 @@ export default function Checkout() {
                       tokenAmount={units}
                       finalAmount={finalAmount}
                       ready={termsAccepted && riskAccepted && !!property}
+                      installment={installmentTerms}
                       onRouteToKyc={routeToKyc}
                       onProcessing={() => setPaymentStatus("processing")}
                       onResult={handlePspResult}
@@ -488,6 +548,7 @@ export default function Checkout() {
                       propertyId={propertyId}
                       tokenAmount={units}
                       ready={termsAccepted && riskAccepted && !!property}
+                      installment={installmentTerms}
                       onRouteToKyc={routeToKyc}
                       onProcessing={() => setPaymentStatus("processing")}
                       onResult={handlePspResult}
@@ -502,6 +563,22 @@ export default function Checkout() {
                   >
                     {t("checkout.cancelPayment")}
                   </Button>
+                </div>
+              ) : isInstallment ? (
+                /* Installments are settlement-gated → require a real PSP (card or crypto).
+                   We never route an installment down the simulated generic-confirm path. */
+                <div className="flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
+                  <Lock className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      {isRTL ? "اختر البطاقة أو العملة الرقمية" : "Choose card or crypto"}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {isRTL
+                        ? "تتم خطط الأقساط عبر دفعة مقدمة آمنة بالبطاقة أو العملة الرقمية."
+                        : "Installment plans are paid via a secure down-payment by card or crypto."}
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-4">

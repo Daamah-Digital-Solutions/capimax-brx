@@ -10,6 +10,12 @@ interface InvestmentData {
   property_id: string; // Property.slug (frontend string id)
   token_amount: number; // whole tokens (1 token == one share)
   payment_method: string;
+  // Installments (Wave B): when set, the server charges only the down-payment and
+  // mints the full position LOCKED on the confirmed webhook.
+  is_installment?: boolean;
+  down_payment_percent?: number;
+  n_installments?: number;
+  frequency?: "monthly" | "quarterly";
 }
 
 interface InvestmentResult {

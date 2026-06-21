@@ -8,7 +8,7 @@ record a tx that didn't happen on a chain.
 """
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import transaction
@@ -64,12 +64,29 @@ def available_tokens(prop: Property) -> int:
 # --------------------------------------------------------------------------- #
 # Part A — process-investment
 # --------------------------------------------------------------------------- #
-def create_investment(*, user, prop: Property, token_amount: int, payment_method: str) -> dict:
+def create_investment(
+    *,
+    user,
+    prop: Property,
+    token_amount: int,
+    payment_method: str,
+    is_installment: bool = False,
+    down_payment_percent=None,
+    n_installments=None,
+    frequency="monthly",
+) -> dict:
     """
     Create an investment per the LOCKED token-economics policy, simulate payment,
     create the provisional certificate, and auto-mint if the user has a wallet.
 
-    Returns {investment, tokens_minted, certificate_generated}.
+    INSTALLMENTS (Wave B): when `is_installment`, the FULL position is still recorded
+    (token_amount + ownership from the full price), but the investment carries the
+    installment plan + the DOWN-PAYMENT (`down_payment_amount`) — and `charge_amount`
+    (the gated charge + the owner/broker credit basis) becomes the down-payment, not the
+    full price. Installments are ALWAYS settlement-gated (card/crypto only); the full
+    mint-then-LOCK + plan activation happen on the confirmed webhook (mint_investment).
+
+    Returns {investment, tokens_minted, certificate_generated, payment_required}.
     Raises ValidationError / DuplicateInvestmentError / OverPurchaseError.
     """
     token_amount = int(token_amount)
@@ -109,6 +126,37 @@ def create_investment(*, user, prop: Property, token_amount: int, payment_method
             Decimal("0.000001"), rounding=ROUND_HALF_UP
         )
 
+        # Installments (Wave B): build the plan + resolve the DOWN-PAYMENT. The full
+        # `amount` above stays the position value (token_amount × price); the gated
+        # charge is the down-payment. Installments are settlement-gated ONLY (the
+        # FULL-MINT-THEN-LOCK happens on the confirmed webhook), so they require a
+        # real PSP method — never the simulated branch.
+        installment_plan = None
+        down_payment_amount = None
+        if is_installment:
+            if payment_method not in WEBHOOK_PAID_METHODS:
+                raise ValidationError(
+                    {"payment_method": "Installments require a card or crypto payment."}
+                )
+            if locked_prop.model != "installment":
+                raise ValidationError(
+                    {"property": "This property is not an installment-model property."}
+                )
+            if down_payment_percent is None or n_installments is None:
+                raise ValidationError(
+                    {"installment": "down_payment_percent and n_installments are required."}
+                )
+            from apps.installments.services import build_installment_plan
+
+            installment_plan = build_installment_plan(
+                user, locked_prop,
+                total_amount=amount,  # the FULL position value is the plan total
+                down_payment_percent=down_payment_percent,
+                n_installments=n_installments,
+                frequency=frequency,
+            )
+            down_payment_amount = installment_plan.down_payment_amount
+
         # Dedup guard (SPEC §4.1): a second pending/processing within 60s.
         cutoff = timezone.now() - timezone.timedelta(seconds=DEDUP_WINDOW_SECONDS)
         if Investment.objects.filter(
@@ -132,6 +180,9 @@ def create_investment(*, user, prop: Property, token_amount: int, payment_method
             ownership_percentage=ownership,
             payment_method=payment_method,
             payment_status=PaymentStatus.PENDING,
+            is_installment=is_installment,
+            down_payment_amount=down_payment_amount,
+            installment_plan=installment_plan,
         )
 
         # Phase 5 Wave 1: REAL payment for the card method. The investment stays
@@ -143,7 +194,9 @@ def create_investment(*, user, prop: Property, token_amount: int, payment_method
         # yet): marked completed to drive the flow. ⚠️ Still simulated — NOW Payments
         # (crypto) is Wave 2; Pronova/Sukuk remain their manual flows.
         # TODO(Payments Wave 2+): replace the simulated branch per method.
-        defer_payment = payment_method in WEBHOOK_PAID_METHODS
+        # Installments are ALWAYS gated (real money; full-mint-then-lock on the webhook),
+        # so they never take the simulated auto-complete/auto-mint branch.
+        defer_payment = (payment_method in WEBHOOK_PAID_METHODS) or is_installment
         if not defer_payment:
             investment.payment_status = PaymentStatus.COMPLETED
             investment.save(update_fields=["payment_status", "updated_at"])
@@ -210,7 +263,10 @@ def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
     ).exists():
         return None
 
-    gross = Decimal(inv.amount_invested)
+    # Credit on the amount ACTUALLY PAID for this settlement: the full price normally,
+    # the DOWN-PAYMENT for an installment (`charge_amount`). So credits accrue as money
+    # arrives; later installments (Wave C) credit their share. Unchanged for normal buys.
+    gross = Decimal(inv.charge_amount)
     fee_percent = (prop.fee_platform or Decimal("0")) + (prop.fee_management or Decimal("0"))
     fees = (gross * fee_percent / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -271,9 +327,10 @@ def _credit_broker_commission(inv: Investment):
     ).exists():
         return None
 
-    # LOCKED #1: commission = gross amount × rate% (per-broker, server-side). Platform-borne
-    # + additive — computed off the GROSS, independent of the owner's fee math.
-    gross = Decimal(inv.amount_invested)
+    # LOCKED #1: commission = paid amount × rate% (per-broker, server-side). Platform-borne
+    # + additive — computed off the amount ACTUALLY PAID (`charge_amount`: full price
+    # normally, the DOWN-PAYMENT for an installment), independent of the owner's fee math.
+    gross = Decimal(inv.charge_amount)
     rate = Decimal(broker.commission_rate or 0)
     commission = (gross * rate / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -324,6 +381,10 @@ def mint_investment(investment: Investment) -> dict:
     """
     with transaction.atomic():
         # Lock the investment row → idempotency + no concurrent double-mint of it.
+        # NOTE: only select_related the NON-nullable `property` here — adding the
+        # nullable `installment_plan` would LEFT-JOIN it and Postgres forbids
+        # `FOR UPDATE` on the nullable side of an outer join. The plan is lazy-loaded
+        # below, only on the installment path.
         inv = Investment.objects.select_for_update().select_related("property").get(
             pk=investment.pk
         )
@@ -376,6 +437,26 @@ def mint_investment(investment: Investment) -> dict:
         )
         token.property_name = prop.name
         token.token_symbol = inv.token_symbol
+
+        # FULL-MINT-THEN-LOCK (Installments Wave B): the FULL token_amount is minted in
+        # ONE on-chain tx (above), but for an installment purchase only the DOWN-PAYMENT's
+        # proportional share is RELEASED — the unpaid remainder is held LOCKED (reusing the
+        # SAME OwnershipToken.locked_amount the LP/secondary markets honour, so locked
+        # tokens can't be listed/sold). released = floor(down_paid / total × token_amount);
+        # FLOOR so we NEVER release tokens that aren't paid for. Later installments (Wave C)
+        # release the rest. A normal purchase locks nothing (released == token_amount).
+        if inv.is_installment and inv.installment_plan_id:
+            plan_total = Decimal(inv.installment_plan.total_amount)
+            paid_now = Decimal(inv.charge_amount)
+            released = (
+                int((paid_now / plan_total * Decimal(inv.token_amount)).to_integral_value(rounding=ROUND_DOWN))
+                if plan_total > 0
+                else 0
+            )
+            released = max(0, min(int(inv.token_amount), released))
+            locked_share = int(inv.token_amount) - released
+            token.locked_amount = int(token.locked_amount) + locked_share
+
         token.save()
 
         WalletTransaction.objects.create(
@@ -393,6 +474,14 @@ def mint_investment(investment: Investment) -> dict:
         inv.minted_at = timezone.now()
         inv.wallet = wallet
         inv.save(update_fields=["tokens_minted", "minted_at", "wallet", "updated_at"])
+
+        # Installments Wave B: a CONFIRMED down-payment activates the plan (status active +
+        # down_paid_at). In the SAME atomic block as the mint; idempotent (no-op if already
+        # settled) and only reached once per investment (the tokens_minted guard above).
+        if inv.is_installment and inv.installment_plan_id:
+            from apps.installments.services import mark_down_payment_settled
+
+            mark_down_payment_settled(inv.installment_plan)
 
         # Phase 7 Wave D: a COMPLETED primary sale settled on-chain → credit the
         # property owner's net proceeds (gross − fees) to their UserBalance, in the

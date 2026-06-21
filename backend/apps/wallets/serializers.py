@@ -25,6 +25,10 @@ class OwnershipTokenSerializer(serializers.ModelSerializer):
     """
 
     wallet_id = serializers.UUIDField(read_only=True)
+    # Escrow/installment lock: shares not freely tradable (LP/secondary escrow OR an
+    # installment's unpaid, still-locked portion). `available_amount` = token_amount −
+    # locked_amount. Lets holdings honestly show "X of Y released" without a separate call.
+    available_amount = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = OwnershipToken
@@ -35,6 +39,8 @@ class OwnershipTokenSerializer(serializers.ModelSerializer):
             "property_name",
             "token_symbol",
             "token_amount",
+            "locked_amount",
+            "available_amount",
             "token_value_usd",
             "ownership_percentage",
             "acquisition_date",

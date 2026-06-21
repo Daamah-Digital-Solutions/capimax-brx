@@ -178,3 +178,18 @@ def build_installment_plan(
         ]
     )
     return plan
+
+
+def mark_down_payment_settled(plan: InstallmentPlan) -> InstallmentPlan:
+    """
+    Wave B: activate a plan on a CONFIRMED down-payment (settlement-gated). Idempotent —
+    a replayed webhook is a no-op once `down_paid_at` is set. Sets status ACTIVE +
+    `down_paid_at`; the N installment rows stay `pending` (charged in Wave C). NO money
+    or mint here — the caller (mint_investment) already settled the charge + minted-locked.
+    """
+    if plan.down_paid_at is not None:
+        return plan  # already settled — idempotent
+    plan.status = InstallmentPlanStatus.ACTIVE
+    plan.down_paid_at = timezone.now()
+    plan.save(update_fields=["status", "down_paid_at", "updated_at"])
+    return plan

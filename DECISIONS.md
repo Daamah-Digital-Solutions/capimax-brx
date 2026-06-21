@@ -1506,9 +1506,31 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   → `Installments.tsx` repointed off its full mock (schedule view only; **"Pay Now" disabled + flagged "coming soon"**).
   **+9 installments tests, full suite 389 green, tsc clean.** Dev journey: $1000 @ 30% down, 3 monthly → down $300 +
   [$233.33, $233.33, $233.34] = $1000.00 exactly, read back via the API (draft, no money/mint), rolled back.
-  **NEXT (Waves B+):** down-payment charge (gated PSP, reuse `apps/payments`) + FULL-MINT-THEN-LOCK on down-payment +
-  per-installment gated payments → release tranches; Checkout carry-through (read `type`/`duration`, charge down only);
-  missed-payment forfeiture; owner-credit/broker-commission/certificate cadence across the schedule.
+  **Wave B delivered — REAL money + on-chain mint (down-payment + FULL-MINT-THEN-LOCK):** the installment Checkout
+  now charges ONLY the down-payment via the SAME settlement-gated PSP path (Stripe/NOW webhook→IPN), and on the
+  CONFIRMED down-payment `mint_investment` mints the FULL `token_amount` in ONE on-chain tx but LOCKED — releasing only
+  the down-payment's proportional share (`released = floor(down_paid/total × token_amount)`; FLOOR so never release
+  unpaid tokens) and locking the remainder via the SAME `OwnershipToken.locked_amount` the LP/secondary markets honour
+  (so locked installment tokens can't be listed/sold — proven). Reuse, not rebuild: `Investment` gained
+  `is_installment` + `down_payment_amount` + `installment_plan` FK + a `charge_amount` property (= down for an
+  installment, = full price normally) — the gated charge AND the owner/broker credits all scope to `charge_amount`,
+  so **a normal buy is byte-identical** (charge_amount == amount_invested) and **owner-net + broker-commission credit
+  ONLY on the amount actually paid (the down-payment)** — the CHOSEN cadence (flagged): credits accrue as money
+  arrives; later installments credit their share (Wave C). Idempotent: the existing `tokens_minted` guard + keyed
+  `BalanceTransaction` guards mean a replayed webhook mints once, credits once, never double-locks. On confirmation the
+  plan flips draft→ACTIVE (`down_paid_at`). Frontend: Checkout reads `type`/`down`/`duration`/`frequency`, shows the
+  down-payment due-now + schedule, charges via the existing card/crypto components (installments are gated → card/crypto
+  only); the InstallmentCalculator button carries the terms; `Installments.tsx` + holdings show the released/locked
+  split ("X of Y tokens released"). **+7 Wave B tests (full-mint-then-lock split, owner/broker credit-on-down only +
+  idempotent, full-purchase UNCHANGED regression, locked-tokens-unsellable), full suite 396 green, tsc clean.** E2E
+  (mocked chain): $1000 @ 30% down → **$300 charged**, full **10 tokens minted once → 3 released / 7 locked**, owner
+  credited **$300 (not $1000)**, broker **5%×$300=$15**, replay idempotent.
+  **NEXT — Wave C:** per-installment gated payments → progressively release the next tranche of locked tokens + credit
+  owner/broker each installment's share (cadence already chosen). **Wave D:** missed-payment handling — grace/penalty +
+  forfeiture of still-locked tokens (internal-ledger, no on-chain clawback). Open flags: installment FEES (down charged
+  ex-fees in v1, like the full flow); whether locked/unpaid tokens should earn DISTRIBUTIONS (currently inherit the
+  escrow≠ownership "full token_amount" policy); merged OwnershipToken positions (one slug, full + installment) share a
+  single lock.
 
 **➡️ ALL 6 ROLES COMPLETE (investor/LP/owner/developer/partner/broker).** Latest on `origin/main` = **`e58190a`**
 (finishing cleanup: dead WithdrawalDialog removed + broker Commissions repoint). Phase 12 A+B, Phase 13, and all
@@ -1520,9 +1542,9 @@ remaining stubbed/mock controls to existing endpoints (per DASHBOARD_GAPS.md). T
 local-only).
 
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
-FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Waves B+** (Wave A plan/schedule + read is
-BUILT — see the Installments bullet above; the down-payment charge + full-mint-then-lock + per-installment payment +
-Pay-Now + export remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Waves C+** (Waves A+B BUILT — plan/schedule +
+down-payment charge + full-mint-then-lock + proportional owner/broker credit, see the Installments bullet above; the
+per-installment "Pay Now" payments + progressive release + missed-payment forfeiture + schedule export remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
 order-book i18n preserved). *(No longer deferred: reports-export — BUILT in Phase 13.)*
 
