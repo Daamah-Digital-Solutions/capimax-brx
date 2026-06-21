@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { 
-  X, 
-  ChevronDown, 
+import { useMemo, useState } from "react";
+import {
+  X,
+  ChevronDown,
   ChevronUp,
-  MapPin, 
-  Building2, 
+  MapPin,
+  Building2,
   TrendingUp,
   DollarSign,
   Clock,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { Property, PropertyCategory } from "@/data/properties";
 
 interface FilterSectionProps {
   title: string;
@@ -47,12 +48,22 @@ function FilterSection({ title, titleEn, icon: Icon, children, defaultOpen = tru
 
 interface MarketplaceFiltersProps {
   onClose: () => void;
+  // The live catalogue + active tab, so facet counts/options derive from real data
+  // (was hardcoded). Counts are scoped to the investable set of the current category.
+  properties: Property[];
+  activeCategory: PropertyCategory;
   selectedCountries: string[];
   setSelectedCountries: (val: string[]) => void;
   selectedStatus: string[];
   setSelectedStatus: (val: string[]) => void;
   selectedTypes: string[];
   setSelectedTypes: (val: string[]) => void;
+  selectedCities: string[];
+  setSelectedCities: (val: string[]) => void;
+  selectedRisk: string[];
+  setSelectedRisk: (val: string[]) => void;
+  selectedMinInvestment: number | null;
+  setSelectedMinInvestment: (val: number | null) => void;
   yieldRange: [number, number];
   setYieldRange: (val: [number, number]) => void;
   selectedExits?: string[];
@@ -62,14 +73,34 @@ interface MarketplaceFiltersProps {
   onReset: () => void;
 }
 
+// Bilingual labels for the known city ids (data uses normalized `p.city` ids).
+const cityLabels: Record<string, { en: string; ar: string }> = {
+  dubai: { en: "Dubai", ar: "دبي" },
+  abudhabi: { en: "Abu Dhabi", ar: "أبوظبي" },
+  riyadh: { en: "Riyadh", ar: "الرياض" },
+  jeddah: { en: "Jeddah", ar: "جدة" },
+  doha: { en: "Doha", ar: "الدوحة" },
+  manama: { en: "Manama", ar: "المنامة" },
+  muscat: { en: "Muscat", ar: "مسقط" },
+  neom: { en: "NEOM", ar: "نيوم" },
+};
+
 export function MarketplaceFilters({
   onClose,
+  properties,
+  activeCategory,
   selectedCountries,
   setSelectedCountries,
   selectedStatus,
   setSelectedStatus,
   selectedTypes,
   setSelectedTypes,
+  selectedCities,
+  setSelectedCities,
+  selectedRisk,
+  setSelectedRisk,
+  selectedMinInvestment,
+  setSelectedMinInvestment,
   yieldRange,
   setYieldRange,
   selectedExits,
@@ -79,7 +110,35 @@ export function MarketplaceFilters({
   onReset
 }: MarketplaceFiltersProps) {
   const { t, language } = useLanguage();
-  const [minInvestment, setMinInvestment] = useState([1000, 50000]);
+
+  // Investable universe for the active tab — mirrors the marketplace's own
+  // category counts (funded < 100). Facet counts/options derive from this.
+  const facetBase = useMemo(
+    () => properties.filter((p) => p.funded < 100 && p.category === activeCategory),
+    [properties, activeCategory]
+  );
+  const tally = (getter: (p: Property) => string): Record<string, number> =>
+    facetBase.reduce<Record<string, number>>((acc, p) => {
+      const k = getter(p);
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+  const countryCounts = useMemo(() => tally((p) => p.country), [facetBase]);
+  const assetCounts = useMemo(() => tally((p) => p.assetType), [facetBase]);
+  const cityCounts = useMemo(() => tally((p) => p.city), [facetBase]);
+  // Cities present in this tab (excluding portfolio "multi"), most-populous first.
+  const cityOptions = useMemo(
+    () =>
+      Object.keys(cityCounts)
+        .filter((id) => id !== "multi")
+        .sort((a, b) => cityCounts[b] - cityCounts[a])
+        .map((id) => ({
+          id,
+          count: cityCounts[id],
+          label: cityLabels[id]?.[language === "ar" ? "ar" : "en"] ?? id,
+        })),
+    [cityCounts, language]
+  );
 
   const exitTypes = [
     { id: "lp", label: language === "ar" ? "سوق LP" : "LP Market" },
@@ -93,26 +152,18 @@ export function MarketplaceFilters({
   ];
 
   const countries = [
-    { id: "uae", label: language === "ar" ? "الإمارات" : "UAE", labelEn: "UAE", count: 24 },
-    { id: "ksa", label: language === "ar" ? "السعودية" : "KSA", labelEn: "KSA", count: 18 },
-    { id: "qatar", label: language === "ar" ? "قطر" : "Qatar", labelEn: "Qatar", count: 8 },
-    { id: "bahrain", label: language === "ar" ? "البحرين" : "Bahrain", labelEn: "Bahrain", count: 5 },
-    { id: "oman", label: language === "ar" ? "عمان" : "Oman", labelEn: "Oman", count: 3 },
-  ];
-
-  const cities = [
-    { id: "dubai", label: language === "ar" ? "دبي" : "Dubai", count: 15 },
-    { id: "abudhabi", label: language === "ar" ? "أبوظبي" : "Abu Dhabi", count: 9 },
-    { id: "riyadh", label: language === "ar" ? "الرياض" : "Riyadh", count: 12 },
-    { id: "jeddah", label: language === "ar" ? "جدة" : "Jeddah", count: 6 },
-    { id: "doha", label: language === "ar" ? "الدوحة" : "Doha", count: 8 },
+    { id: "uae", label: language === "ar" ? "الإمارات" : "UAE", labelEn: "UAE" },
+    { id: "ksa", label: language === "ar" ? "السعودية" : "KSA", labelEn: "KSA" },
+    { id: "qatar", label: language === "ar" ? "قطر" : "Qatar", labelEn: "Qatar" },
+    { id: "bahrain", label: language === "ar" ? "البحرين" : "Bahrain", labelEn: "Bahrain" },
+    { id: "oman", label: language === "ar" ? "عمان" : "Oman", labelEn: "Oman" },
   ];
 
   const assetTypes = [
-    { id: "residential", label: t("property.residential"), labelEn: "Residential", count: 22 },
-    { id: "commercial", label: t("property.commercial"), labelEn: "Commercial", count: 18 },
-    { id: "industrial", label: t("property.industrial"), labelEn: "Industrial", count: 10 },
-    { id: "mixed", label: t("filters.mixedUse"), labelEn: "Mixed Use", count: 8 },
+    { id: "residential", label: t("property.residential"), labelEn: "Residential" },
+    { id: "commercial", label: t("property.commercial"), labelEn: "Commercial" },
+    { id: "industrial", label: t("property.industrial"), labelEn: "Industrial" },
+    { id: "mixed", label: t("filters.mixedUse"), labelEn: "Mixed Use" },
   ];
 
   const statusOptions = [
@@ -166,30 +217,41 @@ export function MarketplaceFilters({
                 />
                 <span className="text-sm">{country.label}</span>
               </div>
-              <span className="text-xs text-muted-foreground">{country.count}</span>
+              <span className="text-xs text-muted-foreground">{countryCounts[country.id] ?? 0}</span>
             </label>
           ))}
         </div>
       </FilterSection>
 
-      {/* City Filter */}
+      {/* City Filter — options + counts derived from the live catalogue */}
       <FilterSection title={t("filters.city")} titleEn="City" icon={Building2} defaultOpen={false}>
         <div className="space-y-2">
-          {cities.map((city) => (
-            <label
-              key={city.id}
-              className="flex items-center justify-between p-2 rounded-lg cursor-pointer hover:bg-muted transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <span className="text-sm">{city.label}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">{city.count}</span>
-            </label>
-          ))}
+          {cityOptions.length === 0 ? (
+            <p className="text-xs text-muted-foreground px-2">
+              {language === "ar" ? "لا توجد مدن في هذه الفئة" : "No cities in this category"}
+            </p>
+          ) : (
+            cityOptions.map((city) => (
+              <label
+                key={city.id}
+                className={cn(
+                  "flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors",
+                  selectedCities.includes(city.id) ? "bg-primary/10" : "hover:bg-muted"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedCities.includes(city.id)}
+                    onChange={() => toggleFilter(selectedCities, setSelectedCities, city.id)}
+                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm">{city.label}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{city.count}</span>
+              </label>
+            ))
+          )}
         </div>
       </FilterSection>
 
@@ -208,6 +270,7 @@ export function MarketplaceFilters({
               )}
             >
               {type.label}
+              <span className="ms-1.5 opacity-60">{assetCounts[type.id] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -266,7 +329,7 @@ export function MarketplaceFilters({
         </div>
       </FilterSection>
 
-      {/* Min Investment */}
+      {/* Min Investment — keeps properties whose entry minimum is at most the selection */}
       <FilterSection title={t("filters.minInvestment")} titleEn="Min Investment" icon={DollarSign}>
         <div className="grid grid-cols-2 gap-2">
           {[1000, 2500, 5000, 10000, 25000, 50000].map((amount) => (
@@ -274,11 +337,13 @@ export function MarketplaceFilters({
               key={amount}
               className={cn(
                 "p-2 rounded-lg text-sm transition-colors",
-                minInvestment[0] === amount
+                selectedMinInvestment === amount
                   ? "bg-primary text-primary-foreground"
                   : "bg-muted hover:bg-muted/80"
               )}
-              onClick={() => setMinInvestment([amount, minInvestment[1]])}
+              onClick={() =>
+                setSelectedMinInvestment(selectedMinInvestment === amount ? null : amount)
+              }
             >
               ${amount.toLocaleString()}
             </button>
@@ -292,7 +357,13 @@ export function MarketplaceFilters({
           {riskLevels.map((risk) => (
             <button
               key={risk.id}
-              className="flex-1 flex items-center justify-center gap-2 p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+              onClick={() => toggleFilter(selectedRisk, setSelectedRisk, risk.id)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 p-2 rounded-lg transition-colors",
+                selectedRisk.includes(risk.id)
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted hover:bg-muted/80"
+              )}
             >
               <span className={cn("w-2 h-2 rounded-full", risk.color)} />
               <span className="text-sm">{risk.label}</span>
@@ -344,10 +415,6 @@ export function MarketplaceFilters({
           </div>
         </FilterSection>
       )}
-
-      <Button variant="hero" className="w-full mt-6">
-        {t("filters.applyFilters")}
-      </Button>
     </div>
   );
 }

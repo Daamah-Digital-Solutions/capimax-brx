@@ -52,6 +52,9 @@ export default function Marketplace() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedExits, setSelectedExits] = useState<string[]>([]);
   const [selectedYieldTypes, setSelectedYieldTypes] = useState<string[]>([]);
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedRisk, setSelectedRisk] = useState<string[]>([]);
+  const [selectedMinInvestment, setSelectedMinInvestment] = useState<number | null>(null);
   const [yieldRange, setYieldRange] = useState<[number, number]>([0, 60]);
   const [search, setSearch] = useState("");
 
@@ -95,6 +98,9 @@ export default function Marketplace() {
       if (selectedTypes.length && !selectedTypes.includes(p.assetType)) return false;
       if (selectedExits.length && !selectedExits.includes(p.exitAvailability)) return false;
       if (selectedYieldTypes.length && !selectedYieldTypes.includes(p.yieldType)) return false;
+      if (selectedCities.length && !selectedCities.includes(p.city)) return false;
+      if (selectedRisk.length && !selectedRisk.includes(p.riskLevel)) return false;
+      if (selectedMinInvestment != null && p.minInvestment > selectedMinInvestment) return false;
       const roi = p.expectedYield ?? p.expectedGrowth ?? 0;
       if (roi < yieldRange[0] || roi > yieldRange[1]) return false;
       if (search) {
@@ -104,7 +110,7 @@ export default function Marketplace() {
       }
       return true;
     });
-  }, [properties, activeCategory, activeModel, selectedCountries, selectedStatus, selectedTypes, selectedExits, selectedYieldTypes, yieldRange, search]);
+  }, [properties, activeCategory, activeModel, selectedCountries, selectedStatus, selectedTypes, selectedExits, selectedYieldTypes, selectedCities, selectedRisk, selectedMinInvestment, yieldRange, search]);
 
   const isYieldActive = yieldRange[0] !== 0 || yieldRange[1] !== 60;
 
@@ -114,6 +120,9 @@ export default function Marketplace() {
     setSelectedTypes([]);
     setSelectedExits([]);
     setSelectedYieldTypes([]);
+    setSelectedCities([]);
+    setSelectedRisk([]);
+    setSelectedMinInvestment(null);
     setYieldRange([0, 60]);
   };
 
@@ -189,12 +198,20 @@ export default function Marketplace() {
                     <div className="mt-4">
                       <MarketplaceFilters
                         onClose={() => {}}
+                        properties={properties}
+                        activeCategory={activeCategory}
                         selectedCountries={selectedCountries}
                         setSelectedCountries={setSelectedCountries}
                         selectedStatus={selectedStatus}
                         setSelectedStatus={setSelectedStatus}
                         selectedTypes={selectedTypes}
                         setSelectedTypes={setSelectedTypes}
+                        selectedCities={selectedCities}
+                        setSelectedCities={setSelectedCities}
+                        selectedRisk={selectedRisk}
+                        setSelectedRisk={setSelectedRisk}
+                        selectedMinInvestment={selectedMinInvestment}
+                        setSelectedMinInvestment={setSelectedMinInvestment}
                         yieldRange={yieldRange}
                         setYieldRange={setYieldRange}
                         selectedExits={selectedExits}
@@ -289,12 +306,20 @@ export default function Marketplace() {
               <aside className="w-72 shrink-0 hidden lg:block animate-slide-in-left">
                 <MarketplaceFilters
                   onClose={() => setShowFilters(false)}
+                  properties={properties}
+                  activeCategory={activeCategory}
                   selectedCountries={selectedCountries}
                   setSelectedCountries={setSelectedCountries}
                   selectedStatus={selectedStatus}
                   setSelectedStatus={setSelectedStatus}
                   selectedTypes={selectedTypes}
                   setSelectedTypes={setSelectedTypes}
+                  selectedCities={selectedCities}
+                  setSelectedCities={setSelectedCities}
+                  selectedRisk={selectedRisk}
+                  setSelectedRisk={setSelectedRisk}
+                  selectedMinInvestment={selectedMinInvestment}
+                  setSelectedMinInvestment={setSelectedMinInvestment}
                   yieldRange={yieldRange}
                   setYieldRange={setYieldRange}
                   selectedExits={selectedExits}
@@ -307,7 +332,7 @@ export default function Marketplace() {
             )}
 
             <div className="flex-1">
-              {(selectedCountries.length > 0 || selectedStatus.length > 0 || selectedTypes.length > 0 || selectedExits.length > 0 || selectedYieldTypes.length > 0 || isYieldActive) && (
+              {(selectedCountries.length > 0 || selectedStatus.length > 0 || selectedTypes.length > 0 || selectedExits.length > 0 || selectedYieldTypes.length > 0 || selectedCities.length > 0 || selectedRisk.length > 0 || selectedMinInvestment != null || isYieldActive) && (
                 <div className="flex items-center gap-2 mb-6 flex-wrap">
                   {selectedCountries.map((c) => (
                     <Badge key={c} variant="gold" className="gap-1 pe-1">
@@ -317,6 +342,30 @@ export default function Marketplace() {
                       </button>
                     </Badge>
                   ))}
+                  {selectedCities.map((c) => (
+                    <Badge key={c} variant="gold" className="gap-1 pe-1">
+                      {c.charAt(0).toUpperCase() + c.slice(1)}
+                      <button className="hover:bg-primary/20 rounded p-0.5" onClick={() => setSelectedCities(selectedCities.filter(x => x !== c))}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  {selectedRisk.map((r) => (
+                    <Badge key={r} variant="gold" className="gap-1 pe-1">
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                      <button className="hover:bg-primary/20 rounded p-0.5" onClick={() => setSelectedRisk(selectedRisk.filter(x => x !== r))}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  {selectedMinInvestment != null && (
+                    <Badge variant="gold" className="gap-1 pe-1">
+                      ≤ ${selectedMinInvestment.toLocaleString()}
+                      <button className="hover:bg-primary/20 rounded p-0.5" onClick={() => setSelectedMinInvestment(null)}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  )}
                   {selectedTypes.map((t_) => (
                     <Badge key={t_} variant="gold" className="gap-1 pe-1">
                       {t_.charAt(0).toUpperCase() + t_.slice(1)}

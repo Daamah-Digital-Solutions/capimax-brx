@@ -1444,7 +1444,7 @@ portfolioMetrics/recentReports are all MOCK — needs a real portfolio-analytics
 **DASHBOARD_GAPS `A-BLOCKED:reports-export` — CLOSED** for: Wallet, Distributions (statement + tax),
 OwnerReports, OwnerDashboard, LPReports ×4, broker Commissions. Still open (deferred): Reports.tsx, Installments.
 
-## Platform state snapshot + NEXT (as of 2026-06-18 — Phase 13: reports-export built; finishing phase continues)
+## Platform state snapshot + NEXT (as of 2026-06-21 — all 6 roles COMPLETE; FINISHING phase underway)
 Consolidated for compact-resilience — the per-phase sections above are authoritative; this is the index.
 
 **DELIVERED — six full roles + broker onboarding (investor, LP, owner, developer, partner, broker[verification] + the admin reviewer), all proven on REAL BSC Testnet / dev:**
@@ -1476,14 +1476,30 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   one per investment), withdrawn via the existing `UserBalance`/`Withdrawal` stack; `GET /api/broker/commissions/`
   + `BrokerDashboard`/`Referrals` repointed off mock. +33 broker tests, full suite **367 green**. See "Phase 12".
 - **Core infra:** custodial `KeyManager` (Fernet; KMS/HSM seam), `apps/chain` (web3 deploy+mint+transfer, gas top-up seam), shared `UserBalance`/`BalanceTransaction`/`Withdrawal` ledger reused by every role.
+- **FINISHING phase (post-Phase-12, committed):** (1) **Investor `Wallet.tsx` repointed mock→real Django** — real
+  `UserBalance` + new self-scoped `GET /api/wallets/balance/transactions/` ledger + withdrawals; legacy Supabase-OTP
+  `WithdrawalDialog` swapped to the shared `OwnerWithdrawDialog` and the dead component **deleted** (cleanup (e)(a)
+  CLOSED). (2) **Batch-1 quick-wins** wired to existing endpoints: Settings admin-gate off Supabase → `useAuth`;
+  Dashboard Deposit/Documents routing; Referrals Copy/Share; Wallet & OwnerReports Refresh. (3) **Phase 13
+  reports-export** — reusable CSV + ReportLab PDF over existing self-scoped data; **8 export surfaces wired**
+  (wallet, distributions statement + tax, owner ×2, LP ×4, broker commissions). (4) **Broker `Commissions.tsx`
+  table repointed** off mock → `brokerApi.commissions()`. Suite **380 green**, tsc clean. Surface docs:
+  DASHBOARD_GAPS.md, FAMILY_SURFACE.md, REPORTS_SURFACE.md, SETTINGS_GAPS.md.
 
-**➡️ BROKER domain COMPLETE (Phase 12 A+B).** Latest on `origin/main` = **`6fc42da`** (Phase 12 Wave A); Wave B
-(commission) is built + green locally, not yet committed.
+**➡️ ALL 6 ROLES COMPLETE (investor/LP/owner/developer/partner/broker).** Latest on `origin/main` = **`e58190a`**
+(finishing cleanup: dead WithdrawalDialog removed + broker Commissions repoint). Phase 12 A+B, Phase 13, and all
+finishing work are committed/pushed.
 
-**NEXT PLANNED BUILD = the remaining MOCK domains** — **family accounts, reinvestments, installments, reports
-export** (each currently frontend-only mock, SPEC §3.12 / §4.4) — surface-investigate each first, like every domain.
-**Then the deferred bid/ask ORDER BOOK + matching engine** (price discovery / partial fills — the largest remaining
-piece; the peer market ships real one-shot listings today, order-book i18n preserved).
+**NEXT PLANNED BUILD = finish the INVESTOR dashboard, page by page** — sweep each investor-facing page to wire its
+remaining stubbed/mock controls to existing endpoints (per DASHBOARD_GAPS.md). The Settings page is scoped next
+(SETTINGS_GAPS.md: PATCH /auth/me + authenticated change-password + logout-all; notif/2FA/currency toggles deferred
+local-only).
+
+**STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
+FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments** (domain unbuilt; incl. Pay-Now + export),
+**deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
+order-book i18n preserved). *(No longer deferred: reports-export — BUILT in Phase 13.)*
 
 ## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
 **Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"
@@ -1568,16 +1584,19 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
     `mint_investment` credits the referring broker `commission_rate`% (default 5) of GROSS, **PLATFORM-borne +
     ADDITIVE** (owner net + investor tokens unchanged), settlement-gated, idempotent, withdrawn via the existing
     `UserBalance`/`Withdrawal` stack; `GET /api/broker/commissions/` + dashboards repointed off mock.
-  - **NEXT — remaining mock domains:** family, reinvestments, installments, reports export (surface-investigate each);
-    then the **bid/ask order book** (deferred, below).
+  - **NEXT — finish the investor dashboard page by page** (wire remaining stubs to existing endpoints; Settings
+    scoped next — SETTINGS_GAPS.md). Remaining MOCK domains still deferred: family, reinvestments, installments
+    (each needs its own data layer); then the **bid/ask order book** (deferred, below). **reports-export is BUILT
+    (Phase 13)** — no longer pending.
   - **Bid/ask ORDER BOOK + matching engine** (price discovery / partial fills) the mock
     `SecondaryMarket.tsx` implied — **DEFERRED, separately-scoped future wave, NOT the immediate
     next** (SPEC §7C.1; SECONDARY_MARKET_SURFACE.md). The peer market now ships real one-shot
     listings; the order-book i18n keys/structure are preserved so it can return.
-  - **Remaining mock domains** — family, reinvestments, installments, reports export — each currently frontend-only
-    mock (SPEC §3.12 / §4.4). (No longer mock: LP + investor secondary markets — Phase 6 Wave 2/3; **distributions —
-    Phase 9**; **notifications — Phase 10**; **partners — Phase 11 A+B**; **broker — Phase 12 A+B**, incl. real
-    commission credit + the `BrokerDashboard`/`Referrals`/`Commissions` numbers.)
+  - **Remaining mock domains** — family, reinvestments, installments — each currently frontend-only mock
+    (SPEC §3.12 / §4.4); plus deposit/top-up + broker payment-method (no endpoint). (No longer mock: LP + investor
+    secondary markets — Phase 6 Wave 2/3; **distributions — Phase 9**; **notifications — Phase 10**; **partners —
+    Phase 11 A+B**; **broker — Phase 12 A+B** incl. the `BrokerDashboard`/`Referrals`/`Commissions` numbers;
+    **investor wallet — finishing repoint**; **reports-export — Phase 13** [8 surfaces].)
 - **(d) REQUIRED pending — live-provider proof + provider keys (NOT dropped; track like the
   testnet deploy was).** Each layer below is CODE-COMPLETE and verified via unit tests + the
   DEBUG-simulate path; only the LIVE end-to-end proof against the real provider awaits keys.
@@ -1613,8 +1632,8 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
   - **(a) Duplicate withdrawal flow on INVESTOR pages — CLOSED ✅ (Phase 12 finishing).** The investor
     `Wallet.tsx` has been **repointed off mock to the real Django wallet backend** and now uses the **same
     `OwnerWithdrawDialog` → `POST /api/wallets/withdrawals/`** flow as the owner wallet. The legacy Supabase-OTP
-    `WithdrawalDialog` is **removed from the investor wallet** and is now **fully unused** (no import anywhere —
-    `src/components/wallet/WithdrawalDialog.tsx` is dead code, safe to delete in a tidy-up). The investor wallet
+    `WithdrawalDialog` is **removed from the investor wallet**, and the dead `src/components/wallet/WithdrawalDialog.tsx`
+    component was **DELETED** in the finishing cleanup (commit `e58190a`). The investor wallet
     now reads the **real `UserBalance`** (`GET /api/wallets/balance/`), the **real internal-balance ledger**
     (new self-scoped read-only `GET /api/wallets/balance/transactions/` — distribution credits / secondary-sale
     proceeds / broker commission / withdrawals, correct credit/debit signs + bilingual source labels) and the

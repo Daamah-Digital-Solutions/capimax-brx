@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useExport } from "@/hooks/useExport";
+import { useBrokerCommissions } from "@/hooks/useBrokerCommissions";
 import { reportsApi } from "@/integrations/api/client";
 import {
   DollarSign,
@@ -35,74 +36,55 @@ interface Commission {
   paidDate?: string;
 }
 
-const commissions: Commission[] = [
-  {
-    id: "1",
-    property: "برج المارينا السكني",
-    propertyEn: "Marina Tower Residence",
-    investor: "أحمد محمد",
-    investmentAmount: 25000,
-    commissionRate: 2.5,
-    commissionAmount: 625,
-    status: "paid",
-    date: "2024-01-15",
-    paidDate: "2024-01-20",
-  },
-  {
-    id: "2",
-    property: "مجمع الواحة التجاري",
-    propertyEn: "Oasis Commercial Complex",
-    investor: "فاطمة أحمد",
-    investmentAmount: 50000,
-    commissionRate: 3.0,
-    commissionAmount: 1500,
-    status: "paid",
-    date: "2024-01-10",
-    paidDate: "2024-01-15",
-  },
-  {
-    id: "3",
-    property: "برج المارينا السكني",
-    propertyEn: "Marina Tower Residence",
-    investor: "خالد العلي",
-    investmentAmount: 15000,
-    commissionRate: 2.5,
-    commissionAmount: 375,
-    status: "processing",
-    date: "2024-01-18",
-  },
-  {
-    id: "4",
-    property: "فندق النخيل الفاخر",
-    propertyEn: "Palm Luxury Hotel",
-    investor: "سارة حسين",
-    investmentAmount: 100000,
-    commissionRate: 3.5,
-    commissionAmount: 3500,
-    status: "pending",
-    date: "2024-01-22",
-  },
-];
-
-const monthlyStats = [
-  { month: "يناير", earned: 5500, paid: 4000 },
-  { month: "ديسمبر", earned: 4200, paid: 4200 },
-  { month: "نوفمبر", earned: 3800, paid: 3800 },
-  { month: "أكتوبر", earned: 2900, paid: 2900 },
-];
-
 export default function Commissions() {
   const { t, language } = useLanguage();
   const { exporting, run } = useExport();
   const [activeTab, setActiveTab] = useState("all");
 
-  const totalEarned = commissions.reduce((sum, c) => sum + c.commissionAmount, 0);
-  const totalPaid = commissions
-    .filter((c) => c.status === "paid")
-    .reduce((sum, c) => sum + c.commissionAmount, 0);
-  const totalPending = commissions
-    .filter((c) => c.status === "pending" || c.status === "processing")
-    .reduce((sum, c) => sum + c.commissionAmount, 0);
+  // Phase 12/finishing: REAL commission ledger from brokerApi.commissions() (was mock).
+  // The hook self-gates on an approved broker and returns empty data otherwise.
+  const { data, loading } = useBrokerCommissions();
+
+  // Map the real ledger rows → the page's render shape. The backend ledger has no Arabic
+  // property name and no per-row rate, so we mirror EN for both and derive the rate from
+  // commission/investment (display-only; no money logic). All credited rows are "paid".
+  const commissions: Commission[] = (data?.commissions ?? []).map((c) => {
+    const investmentAmount = Number(c.amount) || 0;
+    const commissionAmount = Number(c.commission) || 0;
+    return {
+      id: c.id,
+      property: c.property,
+      propertyEn: c.property,
+      investor: c.referral,
+      investmentAmount,
+      commissionRate: investmentAmount > 0 ? Number(((commissionAmount / investmentAmount) * 100).toFixed(1)) : 0,
+      commissionAmount,
+      status: (c.status as Commission["status"]) || "paid",
+      date: c.date,
+    };
+  });
+
+  // Monthly summary derived from the real rows (group by YYYY-MM; all credited = paid).
+  const monthlyMap = new Map<string, { earned: number }>();
+  for (const c of commissions) {
+    const key = (c.date || "").slice(0, 7); // YYYY-MM
+    if (!key) continue;
+    monthlyMap.set(key, { earned: (monthlyMap.get(key)?.earned ?? 0) + c.commissionAmount });
+  }
+  const monthlyStats = [...monthlyMap.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 6)
+    .map(([key, v]) => ({
+      month: new Date(`${key}-01`).toLocaleDateString(language === "ar" ? "ar" : "en", { month: "long" }),
+      earned: v.earned,
+      paid: v.earned,
+    }));
+
+  const stats = data?.stats;
+  const totalEarned = Number(stats?.total_commission ?? 0);
+  const totalPending = Number(stats?.pending_commission ?? 0);
+  // Credited commissions land in the broker's balance immediately, so earned == paid (v1).
+  const totalPaid = totalEarned - totalPending;
 
   const getStatusBadge = (status: Commission["status"]) => {
     switch (status) {
@@ -163,7 +145,7 @@ export default function Commissions() {
                   <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                 </div>
                 <span className="text-emerald-500 text-sm font-medium">
-                  +{((totalPaid / totalEarned) * 100).toFixed(0)}%
+                  +{totalEarned > 0 ? ((totalPaid / totalEarned) * 100).toFixed(0) : 0}%
                 </span>
               </div>
               <p className="text-3xl font-bold text-foreground">${totalPaid.toLocaleString()}</p>
@@ -208,7 +190,12 @@ export default function Commissions() {
               <TabsContent value={activeTab}>
                 <Card className="bg-card/50 backdrop-blur border-border/50">
                   <CardContent className="p-0">
-                    {filteredCommissions.length === 0 ? (
+                    {loading ? (
+                      <div className="p-12 text-center text-muted-foreground">
+                        <Clock className="w-8 h-8 mx-auto mb-3 animate-spin" />
+                        {language === "ar" ? "جارٍ التحميل..." : "Loading..."}
+                      </div>
+                    ) : filteredCommissions.length === 0 ? (
                       <div className="p-12 text-center">
                         <DollarSign className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                         <p className="text-foreground font-medium">{t("commissions.noCommissions")}</p>

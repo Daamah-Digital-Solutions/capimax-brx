@@ -27,7 +27,7 @@ at implementation. Line numbers are from the audit pass.
 - `src/pages/PropertyDetail.tsx:1122` — **Add to Favorites** — no-handler — A:favorites (no favorites domain).
 
 ### B — CLEANUP
-- **`src/pages/Wallet.tsx:432` — `WithdrawalDialog` (investor withdraw) — LEGACY SUPABASE-OTP — B.** ⚠️ The marquee item: the owner wallet already moved to the Django `OwnerWithdrawDialog`; the **investor** withdraw still uses the old Supabase OTP dialog. Repoint to `walletsApi.requestWithdrawal`.
+- ~~`src/pages/Wallet.tsx:432` — `WithdrawalDialog` (investor withdraw) — LEGACY SUPABASE-OTP — B.~~ ✅ **CLOSED** — investor Wallet repointed to the shared Django `OwnerWithdrawDialog`; the dead `WithdrawalDialog.tsx` component was deleted.
 - `src/pages/PropertyDetail.tsx:880` — **Add to Wallet** (SPV tab) — toast-only (3s "added"), informational MetaMask-add dialog, no real action — B (decorative/misleading).
 - `src/pages/Dashboard.tsx:206` — **View All** (holdings) — no-handler — B (decorative).
 - `src/pages/Dashboard.tsx:254` — **By Region** (allocation filter) — no-handler — B (decorative).
@@ -40,6 +40,18 @@ at implementation. Line numbers are from the audit pass.
 - `src/pages/Dashboard.tsx:385` — **Documents** (quick action) — no-handler — C (route to portfolio certificates).
 
 **Verified-wired (no gap):** SecondaryMarket buy/sell/withdraw (`useSecondaryMarket`); VerifyCertificate (`certificatesApi.verify`); CertificatesSection refresh; Portfolio token-details.
+
+### MARKETPLACE filters — ✅ ALL CLOSED (frontend-only, over the already-fetched `properties[]`)
+Wired the five dead/decorative filter controls; no new endpoints. Verified live in-browser
+(catalogue served by Django): Risk `low` 7→3, City `Dubai` 7→2, reset→7, no console errors.
+- ~~`MarketplaceFilters.tsx:273` — **Min Investment** buttons — wrote a local state never read by the parent filter (dead).~~ ✅ **CLOSED** — lifted to `selectedMinInvestment` in `Marketplace.tsx`; predicate keeps `p.minInvestment ≤ selection`. (Wired & correct; won't visibly narrow the current seed — every property's `minInvestment` is $100 — but narrows once entry minimums vary.)
+- ~~`MarketplaceFilters.tsx:293` — **Risk Level** buttons — no `onClick` (decorative).~~ ✅ **CLOSED** — `selectedRisk[]` multi-toggle + predicate on `p.riskLevel`.
+- ~~`MarketplaceFilters.tsx:184` — **City** checkboxes — no `checked`/`onChange` (mock).~~ ✅ **CLOSED** — `selectedCities[]` + predicate on the normalized `p.city` id; **options + counts now derived from the live catalogue** (the old hardcoded list had wrong ids). Unknown cities fall back to their raw id label.
+- ~~Country / asset / city **count badges** — hardcoded (24/18/8…).~~ ✅ **CLOSED** — derived live from `properties` scoped to the active category (mirrors the category-tab convention).
+- ~~`MarketplaceFilters.tsx:348` — **"Apply Filters"** button — no-op (filters are reactive).~~ ✅ **DELETED**.
+- Active-filter chip bar extended with removable City / Risk / `≤ $min` chips for parity.
+
+**Still deferred (Marketplace):** `GlobalStats.tsx` — all 8 stat cards are hardcoded mock (32 / $127M / 9.8% …) with a no-op `cursor-pointer`. **A:platform-stats** — needs a stats-aggregation endpoint; out of scope for a frontend-only pass.
 
 ---
 
@@ -89,7 +101,7 @@ at implementation. Line numbers are from the audit pass.
 - `src/pages/Listings.tsx:337` — **Message** (per listing) — no-handler + mock — A:broker-listings / messaging.
 - `src/pages/Commissions.tsx:131` — **Export Report** — no-handler + mock — A:reports-export.
 - `src/pages/Commissions.tsx:295` — **Update Payment** (bank/payout method) — no-handler + hardcoded bank — A:payment-method (no model).
-- `src/pages/Commissions.tsx` (whole page) — **still MOCK** — not repointed to `brokerApi.commissions` — A/B (BrokerDashboard was repointed; this older standalone page wasn't).
+- `src/pages/Commissions.tsx` (table + stats + monthly summary) — ✅ **CLOSED (finishing cleanup)** — repointed off mock to `brokerApi.commissions()` via `useBrokerCommissions` (loading/empty states, bilingual). (The `Update Payment` card + `Filter` button below remain — separate A:payment-method / placeholder items.)
 
 ### B — CLEANUP
 - `src/pages/Referrals.tsx:203` — **Filter** icon — no-handler — B (placeholder).
@@ -165,7 +177,7 @@ at implementation. Line numbers are from the audit pass.
 - **favorites**, **messaging / stakeholder updates**, **support-tickets**, **notification-prefs**, **audit-log** — small satellite features with no backend.
 
 ### Highest-value CLEANUP
-1. **Investor `Wallet.tsx:432` legacy Supabase-OTP `WithdrawalDialog`** → repoint to `walletsApi.requestWithdrawal` (the Django owner flow already exists to copy).
+1. **Investor `Wallet.tsx` legacy Supabase-OTP `WithdrawalDialog`** → ✅ **CLOSED** — Wallet repointed to the shared Django `OwnerWithdrawDialog`; the dead `src/components/wallet/WithdrawalDialog.tsx` was **deleted** (finishing cleanup).
 2. **`Settings.tsx` + `AuditLog.tsx` still import Supabase** → repoint or gate.
 3. **`VerifyCertificate.tsx`** TS/wiring errors (confirm current state).
 4. Decorative "View All" / duplicate theme buttons → wire or remove.
