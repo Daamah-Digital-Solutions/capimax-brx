@@ -29,7 +29,6 @@ import {
   Globe,
   Info,
   Wallet,
-  Plus,
   Link2,
   ShieldCheck,
   AlertCircle,
@@ -41,14 +40,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { InstallmentCalculator } from "@/components/property/InstallmentCalculator";
 import { PropertyModelSection } from "@/components/property/PropertyModelSection";
@@ -212,8 +203,6 @@ export default function PropertyDetail() {
   const { t, language, isRTL } = useLanguage();
   const [selectedImage, setSelectedImage] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [showAddToPortfolio, setShowAddToPortfolio] = useState(false);
-  const [tokenAdded, setTokenAdded] = useState(false);
 
   // Catalogue property from the API (replaces synchronous properties.ts lookup).
   // Fetched for every id; for ids "1"/"2" the inline `propertyDatabase` legacy
@@ -402,18 +391,23 @@ export default function PropertyDetail() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleAddToPortfolio = () => {
-    setShowAddToPortfolio(false);
-    setTokenAdded(true);
-    setTimeout(() => setTokenAdded(false), 3000);
-  };
-
   const propertyName = language === "ar" ? currentProperty.nameAr : currentProperty.name;
   const propertyLocation = language === "ar" ? currentProperty.locationAr : currentProperty.location;
   const propertyDescription = language === "ar" ? currentProperty.descriptionAr : currentProperty.description;
   const duration = language === "ar" ? currentProperty.durationAr : currentProperty.duration;
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
   const isUnderConstruction = currentProperty.isUnderConstruction;
+
+  // "Verify on Blockchain" must only appear when the Django catalogue carries a real,
+  // verified token contract. The legacy inline `tokenDetails` is mock, so we source the
+  // explorer link from the API's tokenMetadata and hide the button otherwise.
+  // NOTE: the authoritative on-chain field is the model's `deployed_contract_address`,
+  // which the detail serializer does not expose yet — prefer it once it's serialized.
+  const tokenMeta = (catalogueProperty as unknown as {
+    tokenMetadata?: { contractAddress?: string; explorerUrl?: string; verified?: boolean };
+  } | null)?.tokenMetadata;
+  const onChainExplorerUrl =
+    tokenMeta?.verified && tokenMeta?.contractAddress ? tokenMeta.explorerUrl : undefined;
 
   return (
     <MainLayout>
@@ -862,37 +856,22 @@ export default function PropertyDetail() {
                         </div>
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex flex-wrap gap-3 pt-2">
-                        <Button 
-                          variant="hero" 
-                          className="gap-2"
-                          onClick={() => window.open(currentProperty.tokenDetails.explorerUrl, '_blank')}
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          {t("propertyDetail.verifyOnBlockchain")}
-                          <span className="text-xs opacity-80">Verify on Blockchain</span>
-                        </Button>
-                        
-                        <Button 
-                          variant="gold-outline" 
-                          className="gap-2"
-                          onClick={() => setShowAddToPortfolio(true)}
-                          disabled={tokenAdded}
-                        >
-                          {tokenAdded ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 text-success" />
-                              {t("propertyDetail.addedToWallet")}
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="w-4 h-4" />
-                              {t("propertyDetail.addToWallet")}
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                      {/* Action Buttons — the on-chain verify link only renders when the
+                          Django catalogue carries a real, verified token contract.
+                          (The legacy "Add to Wallet" toast-only action was removed.) */}
+                      {onChainExplorerUrl && (
+                        <div className="flex flex-wrap gap-3 pt-2">
+                          <Button
+                            variant="hero"
+                            className="gap-2"
+                            onClick={() => window.open(onChainExplorerUrl, "_blank")}
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            {t("propertyDetail.verifyOnBlockchain")}
+                            <span className="text-xs opacity-80">Verify on Blockchain</span>
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1093,21 +1072,22 @@ export default function PropertyDetail() {
                     </div>
                   </div>
 
-                  {/* Investment Input */}
+                  {/* Unit price (informational). The real quantity selector lives on the
+                      Checkout page — this replaces a dead, misleading stepper that did
+                      nothing and showed a hardcoded total. */}
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-foreground mb-2">{t("propertyDetail.numberOfUnits")}</label>
-                    <div className="flex items-center gap-2">
-                      <button className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium">-</button>
-                      <input
-                        type="number"
-                        defaultValue="1"
-                        className="flex-1 h-10 bg-muted rounded-lg text-center font-semibold outline-none focus:ring-2 focus:ring-primary"
-                      />
-                      <button className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium">+</button>
+                    <label className="block text-sm font-medium text-foreground mb-2">{t("propertyDetail.unitPrice")}</label>
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <span className="text-sm text-muted-foreground">{t("propertyDetail.unitPrice")}</span>
+                      <span className="font-semibold text-foreground">
+                        ${currentProperty.tokenDetails.tokenPrice.toLocaleString()}
+                      </span>
                     </div>
-                    <div className="text-center mt-2 text-sm text-muted-foreground">
-                      {t("propertyDetail.total")}: <span className="font-semibold text-foreground">$1,000</span>
-                    </div>
+                    <p className="text-center mt-2 text-xs text-muted-foreground">
+                      {language === "ar"
+                        ? "تحدِّد عدد الوحدات في صفحة الدفع."
+                        : "Choose the number of units at checkout."}
+                    </p>
                   </div>
 
                   {/* CTA */}
@@ -1144,81 +1124,6 @@ export default function PropertyDetail() {
           </div>
         </div>
 
-        {/* Add Token to Portfolio Dialog */}
-        <Dialog open={showAddToPortfolio} onOpenChange={setShowAddToPortfolio}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="font-display text-xl">{t("propertyDetail.addTokenTitle")}</DialogTitle>
-              <DialogDescription>
-                Add Token to My Portfolio
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-6 py-4">
-              {/* Token Preview */}
-              <div className="p-4 bg-muted rounded-xl">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-gradient-gold rounded-xl flex items-center justify-center shadow-gold">
-                    <Blocks className="w-7 h-7 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">{propertyName}</h4>
-                    <p className="text-sm text-muted-foreground">{language === "ar" ? currentProperty.name : currentProperty.nameAr}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs">{currentProperty.tokenDetails.network}</Badge>
-                      <Badge variant="info" className="text-xs">{currentProperty.tokenDetails.standard}</Badge>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Confirmation Info */}
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 bg-primary/5 rounded-lg">
-                  <Link2 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-foreground">{t("propertyDetail.linkToken")}</p>
-                    <p className="text-muted-foreground">{t("propertyDetail.linkTokenDesc")}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3 p-3 bg-primary/5 rounded-lg">
-                  <Wallet className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-foreground">{t("propertyDetail.trackWallet")}</p>
-                    <p className="text-muted-foreground">{t("propertyDetail.trackWalletDesc")}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3 bg-primary/5 rounded-lg">
-                  <ExternalLink className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-foreground">{t("propertyDetail.verifyLink")}</p>
-                    <p className="text-muted-foreground">{t("propertyDetail.verifyLinkDesc")}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Smart Contract Address */}
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">{t("propertyDetail.contractAddress")}</p>
-                <code className="text-xs font-mono text-foreground break-all">
-                  {currentProperty.tokenDetails.contractAddress}
-                </code>
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowAddToPortfolio(false)}>
-                {t("propertyDetail.cancel")}
-              </Button>
-              <Button variant="hero" onClick={handleAddToPortfolio} className="gap-2">
-                <Plus className="w-4 h-4" />
-                {t("propertyDetail.confirmAdd")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </MainLayout>
   );

@@ -28,7 +28,7 @@ at implementation. Line numbers are from the audit pass.
 
 ### B — CLEANUP
 - ~~`src/pages/Wallet.tsx:432` — `WithdrawalDialog` (investor withdraw) — LEGACY SUPABASE-OTP — B.~~ ✅ **CLOSED** — investor Wallet repointed to the shared Django `OwnerWithdrawDialog`; the dead `WithdrawalDialog.tsx` component was deleted.
-- `src/pages/PropertyDetail.tsx:880` — **Add to Wallet** (SPV tab) — toast-only (3s "added"), informational MetaMask-add dialog, no real action — B (decorative/misleading).
+- ~~`src/pages/PropertyDetail.tsx:880` — **Add to Wallet** (SPV tab) — toast-only (3s "added"), informational MetaMask-add dialog, no real action — B.~~ ✅ **CLOSED** — button + dialog **removed** (PropertyDetail finishing).
 - `src/pages/Dashboard.tsx:206` — **View All** (holdings) — no-handler — B (decorative).
 - `src/pages/Dashboard.tsx:254` — **By Region** (allocation filter) — no-handler — B (decorative).
 - `src/pages/Dashboard.tsx:346` — **View All Activity** — no-handler — B (decorative).
@@ -52,6 +52,17 @@ Wired the five dead/decorative filter controls; no new endpoints. Verified live 
 - Active-filter chip bar extended with removable City / Risk / `≤ $min` chips for parity.
 
 **Still deferred (Marketplace):** `GlobalStats.tsx` — all 8 stat cards are hardcoded mock (32 / $127M / 9.8% …) with a no-op `cursor-pointer`. **A:platform-stats** — needs a stats-aggregation endpoint; out of scope for a frontend-only pass.
+
+### PROPERTYDETAIL finishing — ✅ fake traps neutralized (frontend-only)
+The invest flow ("Invest Now" → real Checkout: payment + on-chain mint) is confirmed real and was **NOT touched**. The whole **installment flow** (the "Invest with Installments" button + `InstallmentCalculator`) was **deliberately left as-is** — see the installments note below.
+- ~~Ready-sidebar **units stepper** + hardcoded **"$1,000" total** ([:1100](src/pages/PropertyDetail.tsx)) — dead fake quantity selector.~~ ✅ **CLOSED** — replaced with an informational unit-price row + "choose quantity at checkout" note (the real selector lives on Checkout). Verified live: no number input, no `$1,000`.
+- ~~**Add to Wallet** + confirm dialog ([:880](src/pages/PropertyDetail.tsx)/[:1215](src/pages/PropertyDetail.tsx)) — toast-only.~~ ✅ **REMOVED** (button + dialog + dead state/handler/imports).
+- ~~**Verify on Blockchain** ([:867](src/pages/PropertyDetail.tsx)) — linked to a MOCK contract address.~~ ✅ **GATED** — now renders only when the Django catalogue carries a **verified** `tokenMetadata.contractAddress`, opening that `explorerUrl`; hidden otherwise. ⚠️ Caveat: the authoritative on-chain field `Property.deployed_contract_address` ([models.py:480](backend/apps/properties/models.py:480)) is **not serialized** by the detail endpoint, so the gate currently keys on the (dev-seeded) `tokenMetadata`. When the on-chain deploy pipeline is finalized, expose + switch the gate to `deployed_contract_address`.
+- **Document "Verify" buttons** ([PropertyDetail.tsx:985](src/pages/PropertyDetail.tsx), [PropertyDataRoom.tsx:638](src/components/property/PropertyDataRoom.tsx)) — **reclassified from C → A:property-documents.** The only verify route is `/verify/:code` ([App.tsx:128](src/App.tsx)), which verifies **investor ownership certificates by code**; property documents carry no such code, so routing there would 404 / error. Needs a document-verify surface (part of a property-documents domain). Left untouched pending decision.
+
+**Still BLOCKED on PropertyDetail (flagged, not built):** Add to Favorites (`A:favorites`); document **Eye/Download** + Insurance **View Cert/Download Policy** + DataRoom Eye/Download (`A:property-documents` — no doc storage/serving); **Reports-tab** downloads (`A:property-reports`). The SPV/financials/token tabs for ids `"1"`/`"2"` remain inline mock (structural; not in this pass).
+
+> **Installments is a PLANNED DOMAIN, not a gap to hide.** The `Installments.tsx` items below (Pay Now, Export Schedule, Filter) and the PropertyDetail installment calculator/button are the surface of the **next full domain build** (a core investment model, like KYC/payments/LP were). They are intentionally left intact — do **not** neutralize or stub them as "fake traps." They get real backing in their own phase.
 
 ---
 
