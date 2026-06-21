@@ -70,6 +70,7 @@ LOCAL_APPS = [
 DOMAIN_STUB_APPS = [
     "apps.properties",
     "apps.investments",
+    "apps.installments",
     "apps.wallets",
     "apps.certificates",
     "apps.payments",

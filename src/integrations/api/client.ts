@@ -785,6 +785,60 @@ export const distributionsApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// Installments API (Wave A) — authenticated, self-scoped. Backs the investor
+// Installments.tsx page: the caller's own installment PLANS + their cent-exact
+// schedules. READ-ONLY this wave — there is NO "pay installment" endpoint yet
+// (the down-payment charge + full-mint-then-lock + per-installment payments are
+// later waves). INSTALLMENTS_SURFACE.md.
+// --------------------------------------------------------------------------- //
+export interface InstallmentSchedulePayment {
+  sequence: number;                 // 0 = synthesized down-payment display row; 1..N = installments
+  type: "down_payment" | "installment";
+  date: string;                     // ISO date
+  amount: number;
+  status: "pending" | "paid" | "missed";
+}
+
+export interface InstallmentPlanRow {
+  id: string;
+  propertyId: string;               // Property.slug (links to /property/:slug)
+  property: string;                 // AR name
+  propertyEn: string;               // EN name
+  status: "draft" | "active" | "completed" | "defaulted";
+  totalAmount: number;
+  downPayment: number;
+  downPaymentPercent: number;
+  installmentAmount: number;
+  totalInstallments: number;
+  paidInstallments: number;
+  remainingInstallments: number;
+  frequency: "monthly" | "quarterly";
+  durationMonths: number;
+  nextDueDate: string | null;
+  progress: number;                 // released/paid % (0 in Wave A — nothing charged yet)
+  payments: InstallmentSchedulePayment[];
+}
+
+export interface InstallmentsResponse {
+  stats: {
+    totalCommitment: number;
+    totalPaid: number;
+    remainingAmount: number;
+    nextPaymentAmount: number;
+    nextPaymentDate: string | null;
+    activePlans: number;
+    completedPlans: number;
+  };
+  plans: InstallmentPlanRow[];
+}
+
+export const installmentsApi = {
+  /** The caller's own installment plans + schedules (read-only this wave). */
+  plans: () =>
+    rawRequest("/installments/plans/", { auth: true }) as Promise<InstallmentsResponse>,
+};
+
+// --------------------------------------------------------------------------- //
 // In-app notifications API (Phase 10) — authenticated, self-scoped. Backs the bell
 // + the Notifications page. The backend stores type + params + action_url (NO display
 // strings); the frontend renders EN/AR copy from its i18n layer keyed by `type`.

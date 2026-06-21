@@ -1484,7 +1484,31 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   reports-export** — reusable CSV + ReportLab PDF over existing self-scoped data; **8 export surfaces wired**
   (wallet, distributions statement + tax, owner ×2, LP ×4, broker commissions). (4) **Broker `Commissions.tsx`
   table repointed** off mock → `brokerApi.commissions()`. Suite **380 green**, tsc clean. Surface docs:
-  DASHBOARD_GAPS.md, FAMILY_SURFACE.md, REPORTS_SURFACE.md, SETTINGS_GAPS.md.
+  DASHBOARD_GAPS.md, FAMILY_SURFACE.md, REPORTS_SURFACE.md, SETTINGS_GAPS.md, INSTALLMENTS_SURFACE.md.
+  Finishing also covered **Marketplace filters** (city/risk/min-investment + live facet counts) and
+  **PropertyDetail** fake-trap cleanup (dead stepper, Add-to-Wallet, gated Verify-on-Blockchain).
+
+- **INSTALLMENTS domain — STARTED (Wave A: plan + schedule model + read; NO money/mint).** A core investment
+  model, now under a full domain build. **LOCKED ARCHITECTURE for later waves: token release = FULL-MINT-THEN-LOCK**
+  — on down-payment the FULL `token_amount` is minted ONCE but locked, and a released amount grows as installments
+  clear (the investor's "ownership growing" UI = released %, NOT N separate mints; reuses the `OwnershipToken`
+  locked/released concept; matches the Nova Finance pledge notice). **NO progressive minting.** A missed installment
+  leaves tokens locked (no on-chain clawback) — forfeiture is an internal-ledger concern in a later wave.
+  **Wave A delivered** (`apps/installments`, new app): per-INVESTOR `InstallmentPlan` (FK investor + property,
+  total/down/percent/n/installment_amount/frequency/duration/status `draft|active|completed|defaulted`) +
+  `InstallmentPayment` child per scheduled installment (sequence/due_date/amount/status `pending|paid|missed`/paid_at),
+  DISTINCT from the per-PROPERTY `properties.InstallmentSchedule` (advertised terms only). `build_installment_plan()`
+  validates installment-eligibility (`Property.model == "installment"`) + computes a **CENT-EXACT** schedule
+  (down + N equal installments of the financed remainder; final row absorbs the rounding remainder so
+  `down + Σ installments == total` to the cent) → creates the plan `draft` + rows `pending`. **NO money, NO mint,
+  NO token movement this wave** (asserted in tests: no BalanceTransaction / OwnershipToken / Investment / chain call).
+  Self-scoped `GET /api/installments/plans/` + admin read; frontend `installmentsApi.plans()` + `useInstallmentPlans`
+  → `Installments.tsx` repointed off its full mock (schedule view only; **"Pay Now" disabled + flagged "coming soon"**).
+  **+9 installments tests, full suite 389 green, tsc clean.** Dev journey: $1000 @ 30% down, 3 monthly → down $300 +
+  [$233.33, $233.33, $233.34] = $1000.00 exactly, read back via the API (draft, no money/mint), rolled back.
+  **NEXT (Waves B+):** down-payment charge (gated PSP, reuse `apps/payments`) + FULL-MINT-THEN-LOCK on down-payment +
+  per-installment gated payments → release tranches; Checkout carry-through (read `type`/`duration`, charge down only);
+  missed-payment forfeiture; owner-credit/broker-commission/certificate cadence across the schedule.
 
 **➡️ ALL 6 ROLES COMPLETE (investor/LP/owner/developer/partner/broker).** Latest on `origin/main` = **`e58190a`**
 (finishing cleanup: dead WithdrawalDialog removed + broker Commissions repoint). Phase 12 A+B, Phase 13, and all
@@ -1496,8 +1520,9 @@ remaining stubbed/mock controls to existing endpoints (per DASHBOARD_GAPS.md). T
 local-only).
 
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
-FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments** (domain unbuilt; incl. Pay-Now + export),
-**deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Waves B+** (Wave A plan/schedule + read is
+BUILT — see the Installments bullet above; the down-payment charge + full-mint-then-lock + per-installment payment +
+Pay-Now + export remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
 order-book i18n preserved). *(No longer deferred: reports-export — BUILT in Phase 13.)*
 

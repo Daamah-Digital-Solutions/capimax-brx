@@ -18,6 +18,8 @@ urlpatterns = [
     path("api/wallets/", include("apps.wallets.urls")),
     # Investments (Phase 3 Wave 2): create + mint. SPEC §4.1.
     path("api/investments/", include("apps.investments.urls")),
+    # Installments (Wave A): per-investor plan + schedule, self-scoped read. No money/mint yet.
+    path("api/installments/", include("apps.installments.urls")),
     # Certificates (Phase 3 Wave 3): generate PDF + list + download + public verify. SPEC §4.1/§4.2.
     path("api/certificates/", include("apps.certificates.urls")),
     # Investor KYC (Phase 4): status + submit + WebSDK access-token + signed webhook. SPEC §3.4.
