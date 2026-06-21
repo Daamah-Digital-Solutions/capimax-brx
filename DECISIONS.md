@@ -1525,12 +1525,19 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   idempotent, full-purchase UNCHANGED regression, locked-tokens-unsellable), full suite 396 green, tsc clean.** E2E
   (mocked chain): $1000 @ 30% down → **$300 charged**, full **10 tokens minted once → 3 released / 7 locked**, owner
   credited **$300 (not $1000)**, broker **5%×$300=$15**, replay idempotent.
-  **NEXT — Wave C:** per-installment gated payments → progressively release the next tranche of locked tokens + credit
-  owner/broker each installment's share (cadence already chosen). **Wave D:** missed-payment handling — grace/penalty +
-  forfeiture of still-locked tokens (internal-ledger, no on-chain clawback). Open flags: installment FEES (down charged
-  ex-fees in v1, like the full flow); whether locked/unpaid tokens should earn DISTRIBUTIONS (currently inherit the
-  escrow≠ownership "full token_amount" policy); merged OwnershipToken positions (one slug, full + installment) share a
-  single lock.
+  **NEXT — Wave C (per-installment payment + progressive release):** each scheduled installment is a SEPARATE gated
+  charge (reuse the same Stripe/NOW webhook→IPN path); on confirmation, progressively move that installment's tranche
+  locked→released (`locked_amount` down), mark the `InstallmentPayment` row `paid`, and credit owner-net + broker on
+  THAT installment's amount (the chosen accrue-on-paid cadence, continued). **DECIDED for Wave C: distributions accrue
+  on RELEASED tokens only — locked/unpaid installment tokens do NOT earn** (this REVERSES the current inherited
+  escrow≠ownership "full token_amount" distribution rule FOR installment locks; `apps/distributions` will subtract the
+  installment-locked portion). Complete the plan (status `completed`) when the final installment clears.
+  **Wave D (last):** missed-payment handling — grace/penalty + FORFEITURE of still-locked tokens (internal-ledger, no
+  on-chain clawback — tokens were already minted-locked).
+  **Open flags to preserve:** (1) installment FEES — the down-payment is charged EX-FEES in v1 (mirrors the full flow,
+  where fees come off the owner's net); (2) MERGED OwnershipToken positions — one slug holding a full buy + an
+  installment share a single `locked_amount` (fine for v1; revisit if it distorts the Wave-C released math).
+  (Distributions-on-locked is no longer open — DECIDED released-only above.)
 
 **➡️ ALL 6 ROLES COMPLETE (investor/LP/owner/developer/partner/broker).** Latest on `origin/main` = **`e58190a`**
 (finishing cleanup: dead WithdrawalDialog removed + broker Commissions repoint). Phase 12 A+B, Phase 13, and all
@@ -1546,7 +1553,10 @@ FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Waves C+**
 down-payment charge + full-mint-then-lock + proportional owner/broker credit, see the Installments bullet above; the
 per-installment "Pay Now" payments + progressive release + missed-payment forfeiture + schedule export remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
-order-book i18n preserved). *(No longer deferred: reports-export — BUILT in Phase 13.)*
+order-book i18n preserved), and the **small satellite mini-domains** (no backend) flagged in DASHBOARD_GAPS.md:
+**GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**
+(PropertyDetail/DataRoom doc preview/download/verify + the doc "Verify" buttons — no document storage/serving), and
+**favorites** (Add-to-Favorites). *(No longer deferred: reports-export — BUILT in Phase 13.)*
 
 ## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
 **Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"
