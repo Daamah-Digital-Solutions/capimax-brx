@@ -36,6 +36,20 @@ class Payment(models.Model):
     investment = models.ForeignKey(
         "investments.Investment", on_delete=models.CASCADE, related_name="payments"
     )
+    # Installments Wave C: when set, this charge funds ONE scheduled installment of an
+    # active plan (NOT the down-payment/full purchase). The `investment` above is then the
+    # plan's down-payment investment (the position holding the locked tokens) — kept for
+    # context + the broker/owner credit basis. A normal purchase / down-payment leaves this
+    # NULL and behaves EXACTLY as before. On a confirmed webhook the gated core routes an
+    # installment payment to `settle_installment_payment` (progressive release + per-
+    # installment credit) instead of `mint_investment` — there is NO second mint.
+    installment_payment = models.ForeignKey(
+        "installments.InstallmentPayment",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
     provider = models.CharField(
         max_length=16, choices=PaymentProvider.choices, default=PaymentProvider.STRIPE
     )

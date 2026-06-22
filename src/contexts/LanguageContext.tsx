@@ -964,6 +964,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_license_rejected.body": "تم رفض رخصتك. {notes}",
     "notif.broker_commission_credited.title": "تم إضافة عمولة",
     "notif.broker_commission_credited.body": "تم إضافة عمولة ${amount} من استثمار في {property}.",
+    "notif.installment_paid.title": "تم سداد القسط",
+    "notif.installment_paid.body": "تم سداد القسط {sequence} من {total} لـ {property} — تم تحرير {released} من {tokens} رمز.",
 
     // Support
     "support.title": "الدعم والمساعدة",
@@ -2394,6 +2396,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_license_rejected.body": "Your licence was rejected. {notes}",
     "notif.broker_commission_credited.title": "Commission Credited",
     "notif.broker_commission_credited.body": "${amount} commission from an investment in {property}.",
+    "notif.installment_paid.title": "Installment Paid",
+    "notif.installment_paid.body": "Installment {sequence} of {total} for {property} — {released} of {tokens} tokens released.",
 
     // Support
     "support.title": "Support & Help",

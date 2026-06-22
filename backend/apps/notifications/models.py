@@ -51,6 +51,9 @@ class Notification(models.Model):
         # Broker commission (Phase 12 Wave B). Money-in: a referred investor's primary
         # sale settled → the broker is credited commission. params.amount/property.
         BROKER_COMMISSION_CREDITED = "broker_commission_credited", _("Broker commission credited")
+        # Installments (Wave C). A confirmed scheduled installment cleared → released
+        # tokens grow. params.sequence/total/released/tokens/property.
+        INSTALLMENT_PAID = "installment_paid", _("Installment paid")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

@@ -193,3 +193,205 @@ def mark_down_payment_settled(plan: InstallmentPlan) -> InstallmentPlan:
     plan.down_paid_at = timezone.now()
     plan.save(update_fields=["status", "down_paid_at", "updated_at"])
     return plan
+
+
+# --------------------------------------------------------------------------- #
+# Wave C — per-installment gated payment settlement + progressive token release.
+#
+# Each installment is its OWN gated charge (reusing the Stripe/NOW webhook→IPN path, like
+# the down-payment). On a CONFIRMED installment, settle_installment_payment moves more of
+# the already-minted position from LOCKED → RELEASED (NO new mint, NO clawback), credits
+# the owner/broker on THAT installment's amount, and completes the plan on the final one.
+# --------------------------------------------------------------------------- #
+def _down_paid(plan: InstallmentPlan) -> Decimal:
+    """The confirmed down-payment contribution to paid-so-far (0 until it settles)."""
+    return Decimal(plan.down_payment_amount) if plan.down_paid_at else Decimal("0")
+
+
+def _released_for(total_paid: Decimal, total: Decimal, token_amount: int) -> int:
+    """
+    FLOOR(total_paid / total × token_amount), clamped to [0, token_amount]. FLOOR so we
+    NEVER release tokens that aren't paid for (the locked remainder stays un-sellable).
+    """
+    if total <= 0 or token_amount <= 0:
+        return 0
+    raw = (Decimal(total_paid) / Decimal(total) * Decimal(token_amount)).to_integral_value(
+        rounding=ROUND_DOWN
+    )
+    return max(0, min(int(token_amount), int(raw)))
+
+
+def settle_installment_payment(installment_payment_id) -> dict:
+    """
+    Settle ONE confirmed (webhook/IPN-gated) installment payment. Idempotent — a replay
+    no-ops once the row is PAID. In ONE atomic block:
+      * mark the InstallmentPayment row `paid` (+ paid_at),
+      * PROGRESSIVELY RELEASE: released = floor(total_paid/total × token_amount); reduce the
+        position's OwnershipToken.locked_amount by the incremental release (NO new mint),
+      * credit owner-net + broker-commission on THIS installment's amount (keyed on the
+        InstallmentPayment id → its own idempotency, separate from the down-payment/others),
+      * when the final installment clears → plan status `completed` (released == full).
+
+    NO new mint, NO token clawback — only locked→released movement on the already-minted
+    position. The decrement rides ON TOP of any market-listing escrow on the same token
+    (that escrow is paid-for and stays locked); we only ever release THIS plan's share.
+    Returns a small dict describing what moved (for the gated core + tests).
+    """
+    from apps.investments.models import Investment
+    from apps.investments.services import credit_broker_share, credit_owner_share
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
+    from apps.wallets.models import OwnershipToken
+
+    with transaction.atomic():
+        ip = InstallmentPayment.objects.select_for_update().get(pk=installment_payment_id)
+        if ip.status == InstallmentPaymentStatus.PAID:
+            return {"settled": True, "already": True, "sequence": ip.sequence}
+
+        # Lock the plan → serialize concurrent installment settlements of the SAME plan, so
+        # the cumulative released math + the completed-transition can't race.
+        plan = InstallmentPlan.objects.select_for_update().get(pk=ip.plan_id)
+
+        # The minted position holding the tokens (the down-payment investment). Lazy-loaded
+        # off the plan — NOT select_related on a locked row (the nullable-join FOR UPDATE trap).
+        inv = (
+            Investment.objects.select_related("property")
+            .filter(installment_plan_id=plan.id)
+            .order_by("created_at")
+            .first()
+        )
+
+        total = Decimal(plan.total_amount)
+        # Paid-so-far BEFORE this installment (down once confirmed + already-paid rows; `ip`
+        # is still pending here, so it is naturally excluded from the sum).
+        already_paid = sum(
+            (Decimal(p.amount) for p in plan.payments.all()
+             if p.status == InstallmentPaymentStatus.PAID),
+            Decimal("0"),
+        )
+        total_paid_before = _down_paid(plan) + already_paid
+
+        # Mark this installment paid.
+        ip.status = InstallmentPaymentStatus.PAID
+        ip.paid_at = timezone.now()
+        ip.save(update_fields=["status", "paid_at"])
+        total_paid_after = total_paid_before + Decimal(ip.amount)
+
+        # PROGRESSIVE RELEASE on the already-minted position (no new mint).
+        released_before = released_after = token_total = 0
+        if inv is not None and inv.tokens_minted and inv.wallet_id:
+            token_total = int(inv.token_amount)
+            released_before = _released_for(total_paid_before, total, token_total)
+            released_after = _released_for(total_paid_after, total, token_total)
+            delta = released_after - released_before
+            if delta > 0:
+                token = (
+                    OwnershipToken.objects.select_for_update()
+                    .filter(wallet_id=inv.wallet_id, property_id=inv.property.slug)
+                    .first()
+                )
+                if token is not None:
+                    token.locked_amount = max(0, int(token.locked_amount) - delta)
+                    token.save(update_fields=["locked_amount", "updated_at"])
+
+        # Per-installment owner + broker credit on THIS installment's amount, keyed on the
+        # InstallmentPayment id (independent idempotency from the down-payment + other rows).
+        owner_net = broker_result = None
+        if inv is not None:
+            tag = f"installment {ip.sequence}/{plan.number_of_installments} of {inv.property.slug}"
+            owner_net = credit_owner_share(
+                inv, inv.property, gross=ip.amount, reference=str(ip.id),
+                memo=f"Primary sale ({tag})",
+            )
+            broker_result = credit_broker_share(
+                inv, gross=ip.amount, reference=str(ip.id),
+                memo=f"Referral commission ({tag})",
+            )
+
+        # Final installment cleared → complete the plan. By the floor math, total_paid_after
+        # == total ⇒ released_after == token_total ⇒ the position is fully unlocked for this plan.
+        remaining = (
+            plan.payments.exclude(pk=ip.pk)
+            .exclude(status=InstallmentPaymentStatus.PAID)
+            .exists()
+        )
+        completed = not remaining
+        if completed:
+            plan.status = InstallmentPlanStatus.COMPLETED
+            plan.save(update_fields=["status", "updated_at"])
+
+        # Notifications (same atomic block; only on the newly-settled path).
+        if inv is not None:
+            notify(
+                plan.investor, Notification.Type.INSTALLMENT_PAID,
+                params={
+                    "property": inv.property.name, "slug": inv.property.slug,
+                    "sequence": ip.sequence, "total": plan.number_of_installments,
+                    "released": released_after, "tokens": token_total,
+                },
+                action_url="/installments",
+            )
+            if owner_net is not None and inv.property.submitted_by_id:
+                notify(
+                    inv.property.submitted_by, Notification.Type.EARNINGS_CREDITED,
+                    params={"property": inv.property.name, "slug": inv.property.slug,
+                            "amount": str(owner_net)},
+                    action_url="/owner-wallet",
+                )
+            if broker_result is not None:
+                broker, commission = broker_result
+                notify(
+                    broker.user, Notification.Type.BROKER_COMMISSION_CREDITED,
+                    params={"property": inv.property.name, "slug": inv.property.slug,
+                            "amount": str(commission)},
+                    action_url="/broker-dashboard",
+                )
+
+    return {
+        "settled": True,
+        "sequence": ip.sequence,
+        "released": released_after,
+        "released_delta": released_after - released_before,
+        "token_amount": token_total,
+        "plan_completed": completed,
+        "owner_credited": None if owner_net is None else str(owner_net),
+        "broker_credited": None if broker_result is None else str(broker_result[1]),
+    }
+
+
+def installment_locked_tokens(user_id, property_slug) -> int:
+    """
+    Tokens currently LOCKED (unpaid) across a holder's ACTIVE installment plans for one
+    property = Σ over active plans of (position token_amount − released), where
+    released = floor(total_paid/total × token_amount).
+
+    The distribution engine subtracts THIS from a holding's full token_amount so an
+    installment holder earns yield only on the RELEASED (paid) share. It is computed from
+    the authoritative plan/payment rows — NOT from OwnershipToken.locked_amount, which also
+    carries market-listing escrow (paid-for tokens that DO still earn). Returns 0 for a
+    normal holder (no active installment plan) and for a fully-paid/completed plan
+    (released == full), so distributions are unchanged for everyone but mid-plan holders.
+    """
+    locked = 0
+    plans = (
+        InstallmentPlan.objects.filter(
+            investor_id=user_id,
+            property__slug=property_slug,
+            status=InstallmentPlanStatus.ACTIVE,
+        )
+        .select_related("property")
+        .prefetch_related("payments", "investments")
+    )
+    for plan in plans:
+        inv = next(iter(plan.investments.all()), None)
+        if inv is None or not inv.tokens_minted:
+            continue  # not minted → no OwnershipToken to dock anyway
+        token_total = int(inv.token_amount)
+        total_paid = _down_paid(plan) + sum(
+            (Decimal(p.amount) for p in plan.payments.all()
+             if p.status == InstallmentPaymentStatus.PAID),
+            Decimal("0"),
+        )
+        released = _released_for(total_paid, Decimal(plan.total_amount), token_total)
+        locked += max(0, token_total - released)
+    return locked

@@ -36,6 +36,8 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   broker_license_rejected: "alert",
   // Broker commission (Phase 12 Wave B) — money-in.
   broker_commission_credited: "financial",
+  // Installments (Wave C) — a scheduled installment cleared → tokens released.
+  installment_paid: "financial",
 };
 
 export function categoryOf(type: string): NotificationCategory {

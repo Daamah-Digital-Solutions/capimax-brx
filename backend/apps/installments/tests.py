@@ -339,3 +339,222 @@ class WaveBFullPurchaseUnchangedTests(TestCase):
         self.assertEqual(token.available_amount, 10)
         bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
         self.assertEqual(bt.amount, Decimal("1000.00"))  # owner credited on FULL gross
+
+
+# =====================================================================
+# WAVE C — per-installment gated payment + progressive locked→released
+# =====================================================================
+from apps.wallets.models import WalletTransaction  # noqa: E402
+
+from .services import installment_locked_tokens, settle_installment_payment  # noqa: E402
+
+
+class WaveCInstallmentSettlementTests(TestCase):
+    """
+    $1000 @ 30% down, 3 monthly installments (233.33 / 233.33 / 233.34), 10 tokens, fees 0.
+    Down (Wave B) → 3 released / 7 locked; then each installment progressively releases.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-c@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-c@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        self.prop = _deployed_installment_property("inst-c", self.owner)
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        self.inv = res["investment"]
+        _confirm_and_mint(self.inv)  # down → 3 released / 7 locked, plan active
+        self.plan = self.inv.installment_plan
+        self.rows = list(
+            InstallmentPayment.objects.filter(plan=self.plan).order_by("sequence")
+        )
+
+    def _token(self):
+        return OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+
+    def test_progressive_release_floor_correct(self):
+        # Start: 3 released / 7 locked (down).
+        self.assertEqual(self._token().locked_amount, 7)
+
+        settle_installment_payment(self.rows[0].id)  # +233.33 → paid 533.33 → floor 5.33 = 5
+        self.assertEqual(self._token().locked_amount, 5)
+        self.rows[0].refresh_from_db()
+        self.assertEqual(self.rows[0].status, InstallmentPaymentStatus.PAID)
+        self.assertIsNotNone(self.rows[0].paid_at)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.ACTIVE)  # not done yet
+
+        settle_installment_payment(self.rows[1].id)  # paid 766.66 → floor 7.66 = 7
+        self.assertEqual(self._token().locked_amount, 3)
+
+        settle_installment_payment(self.rows[2].id)  # final → paid 1000 → 10 released
+        token = self._token()
+        self.assertEqual(token.locked_amount, 0)
+        self.assertEqual(token.available_amount, 10)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.COMPLETED)
+
+    def test_no_new_mint_on_installment(self):
+        # The position was minted ONCE on the down-payment. Settling installments moves
+        # locked→released only — NO new on-chain mint (no extra WalletTransaction).
+        mint_txs_before = WalletTransaction.objects.filter(tx_type="mint").count()
+        for r in self.rows:
+            settle_installment_payment(r.id)
+        self.assertEqual(
+            WalletTransaction.objects.filter(tx_type="mint").count(), mint_txs_before
+        )
+        self.inv.refresh_from_db()
+        self.assertEqual(self.inv.token_amount, 10)  # unchanged
+
+    def test_owner_credited_per_installment_totals_full(self):
+        for r in self.rows:
+            settle_installment_payment(r.id)
+        credits = BalanceTransaction.objects.filter(
+            balance__user=self.owner, source="primary_sale"
+        )
+        # 4 tranches: down + 3 installments, each keyed to its own reference.
+        self.assertEqual(credits.count(), 4)
+        total = sum((c.amount for c in credits), Decimal("0"))
+        # fees 0 → net == gross; down + Σ installments == the full $1000, cent-exact.
+        self.assertEqual(total, Decimal("1000.00"))
+        # each installment credit keyed on the InstallmentPayment id
+        for r in self.rows:
+            self.assertTrue(
+                BalanceTransaction.objects.filter(
+                    source="primary_sale", reference=str(r.id)
+                ).exists()
+            )
+
+    def test_broker_credited_per_installment(self):
+        from apps.broker.models import BrokerProfile, BrokerStatus
+
+        broker_user = User.objects.create_user(email="brk-c@example.com", password="pw12345!")
+        broker = BrokerProfile.objects.create(
+            user=broker_user, contact_name="Brk", email="brk-c@example.com",
+            status=BrokerStatus.APPROVED, commission_rate=Decimal("5"),
+        )
+        # Re-run the whole plan with a referred investor so commission accrues per tranche.
+        investor2 = User.objects.create_user(email="inv-c2@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(investor2)
+        investor2.profile.referred_by_broker = broker
+        investor2.profile.save(update_fields=["referred_by_broker"])
+        prop2 = _deployed_installment_property("inst-c2", self.owner)
+        res = create_investment(
+            user=investor2, prop=prop2, token_amount=10, payment_method="card",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        inv2 = res["investment"]
+        _confirm_and_mint(inv2)  # down → 5% of 300 = 15.00
+        rows2 = list(InstallmentPayment.objects.filter(plan=inv2.installment_plan).order_by("sequence"))
+        for r in rows2:
+            settle_installment_payment(r.id)
+        commissions = BalanceTransaction.objects.filter(
+            balance__user=broker_user, source="broker_commission"
+        )
+        self.assertEqual(commissions.count(), 4)  # down + 3 installments
+        # 5% of 300 + 5% of 233.33 + 5% of 233.33 + 5% of 233.34
+        # = 15.00 + 11.67 + 11.67 + 11.67 = 50.01 (per-tranche rounding; ≈ 5% of $1000).
+        total = sum((c.amount for c in commissions), Decimal("0"))
+        self.assertEqual(total, Decimal("50.01"))
+
+    def test_replayed_installment_settles_once(self):
+        settle_installment_payment(self.rows[0].id)
+        self.assertEqual(self._token().locked_amount, 5)
+        # Replay (e.g. a re-delivered webhook) — must be a no-op.
+        res = settle_installment_payment(self.rows[0].id)
+        self.assertTrue(res.get("already"))
+        self.assertEqual(self._token().locked_amount, 5)  # not released again
+        self.assertEqual(
+            BalanceTransaction.objects.filter(
+                source="primary_sale", reference=str(self.rows[0].id)
+            ).count(),
+            1,
+        )
+
+    def test_gated_core_routes_installment_to_settle_not_mint(self):
+        # A Payment carrying installment_payment → _complete_payment settles (no mint).
+        from apps.payments.models import Payment, PaymentState
+        from apps.payments.services import _complete_payment
+
+        payment = Payment.objects.create(
+            investment=self.inv, provider="stripe", amount=self.rows[0].amount,
+            currency="usd", installment_payment=self.rows[0],
+            stripe_payment_intent_id="pi_inst_test_1",
+        )
+        mint_before = WalletTransaction.objects.filter(tx_type="mint").count()
+        out = _complete_payment(payment)
+        self.assertTrue(out["settled"])
+        self.assertFalse(out["minted"])
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentState.SUCCEEDED)
+        self.assertEqual(self._token().locked_amount, 5)  # released grew 3→5
+        self.assertEqual(
+            WalletTransaction.objects.filter(tx_type="mint").count(), mint_before
+        )
+
+    def test_locked_tokens_unsellable_until_released(self):
+        from apps.secondary_market.services import create_listing
+
+        settle_installment_payment(self.rows[0].id)  # 5 released / 5 locked
+        with self.assertRaises(Exception):
+            create_listing(
+                user=self.investor,
+                data={"property_id": self.prop.slug, "token_amount": 6, "unit_price": 100},
+            )
+        listing = create_listing(
+            user=self.investor,
+            data={"property_id": self.prop.slug, "token_amount": 5, "unit_price": 100},
+        )
+        self.assertEqual(listing.token_amount, 5)
+
+
+class WaveCDistributionsOnReleasedTests(TestCase):
+    """Decision #4: distributions accrue on RELEASED (paid) tokens; unpaid-locked earn nothing."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-d@example.com", password="pw12345!")
+        self.a = User.objects.create_user(email="a-d@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.a)
+        self.prop = _deployed_installment_property("inst-d", self.owner)
+        res = create_investment(
+            user=self.a, prop=self.prop, token_amount=10, payment_method="card",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        self.inv = res["investment"]
+        _confirm_and_mint(self.inv)  # A: 3 released / 7 locked
+        # A normal full holder of the SAME property (no installment plan) → earns on full.
+        self.b = User.objects.create_user(email="b-d@example.com", password="pw12345!")
+        wb, _ = get_or_create_custodial_wallet(self.b)
+        OwnershipToken.objects.create(
+            wallet=wb, property_id=self.prop.slug, property_name=self.prop.name,
+            token_symbol=self.inv.token_symbol, token_amount=7, locked_amount=0,
+            token_value_usd=Decimal("700"),
+        )
+
+    def _balance(self, user):
+        from apps.wallets.models import UserBalance
+        bal = UserBalance.objects.filter(user=user).first()
+        return bal.current_balance if bal else Decimal("0")
+
+    def test_mid_plan_holder_earns_on_released_only(self):
+        from apps.distributions.services import declare_distribution
+
+        # earning: A=3 (released), B=7 (full). total 10. Pool $100 → A $30, B $70.
+        self.assertEqual(installment_locked_tokens(self.a.id, self.prop.slug), 7)
+        declare_distribution(self.prop.slug, Decimal("100.00"))
+        self.assertEqual(self._balance(self.a), Decimal("30.00"))
+        self.assertEqual(self._balance(self.b), Decimal("70.00"))
+
+    def test_fully_paid_holder_earns_on_full_no_regression(self):
+        from apps.distributions.services import declare_distribution
+
+        # Pay A's plan in full → A released 10, lock 0 → earns on the full position.
+        for r in InstallmentPayment.objects.filter(plan=self.inv.installment_plan).order_by("sequence"):
+            settle_installment_payment(r.id)
+        self.assertEqual(installment_locked_tokens(self.a.id, self.prop.slug), 0)
+        # earning: A=10, B=7. total 17. Pool $170 → A $100, B $70.
+        declare_distribution(self.prop.slug, Decimal("170.00"))
+        self.assertEqual(self._balance(self.a), Decimal("100.00"))
+        self.assertEqual(self._balance(self.b), Decimal("70.00"))

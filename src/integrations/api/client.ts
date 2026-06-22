@@ -845,10 +845,44 @@ export interface InstallmentsResponse {
   plans: InstallmentPlanRow[];
 }
 
+/** Wave C: the gated charge for the NEXT due installment (Stripe client_secret OR NOW address). */
+export interface PayNextStripeResult {
+  provider: "stripe";
+  client_secret: string;
+  publishable_key: string;
+  payment_id: string;
+  installment_payment_id: string;
+  sequence: number;
+  amount: string;
+}
+export interface PayNextNowResult {
+  provider: "nowpayments";
+  payment_id: string;
+  pay_address: string;
+  pay_amount: string | null;
+  pay_currency: string;
+  installment_payment_id: string;
+  sequence: number;
+  amount: string;
+}
+export type PayNextResult = PayNextStripeResult | PayNextNowResult;
+
 export const installmentsApi = {
-  /** The caller's own installment plans + schedules (read-only this wave). */
+  /** The caller's own installment plans + schedules. */
   plans: () =>
     rawRequest("/installments/plans/", { auth: true }) as Promise<InstallmentsResponse>,
+  /**
+   * Wave C: start a GATED charge for the plan's NEXT due installment. Card returns a Stripe
+   * client_secret (confirmed in-browser); crypto returns a real NOW deposit address. On the
+   * confirmed webhook/IPN the server progressively releases locked→released tokens + credits
+   * the owner/broker on that installment — there is NO new mint.
+   */
+  payNext: (planId: string, provider: "stripe" | "nowpayments", payCurrency?: string) =>
+    rawRequest(`/installments/plans/${planId}/pay-next/`, {
+      method: "POST",
+      auth: true,
+      body: { provider, ...(payCurrency ? { pay_currency: payCurrency } : {}) },
+    }) as Promise<PayNextResult>,
 };
 
 // --------------------------------------------------------------------------- //

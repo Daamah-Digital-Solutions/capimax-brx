@@ -9,7 +9,11 @@ SAFETY / INVARIANTS:
   * INTERNAL BALANCE ONLY — credit_user_balance, no PropertyToken / on-chain movement.
   * Cent-exact: Σ(rounded shares) == pool_amount (floor each, remainder cent to the
     largest holder).
-  * Full token_amount (locked_amount NOT subtracted — escrow ≠ ownership).
+  * Pro-rata by RELEASED (paid) tokens: full token_amount MINUS the installment-unpaid
+    lock (Installments Wave C). Market-listing escrow is NOT subtracted — escrowed tokens
+    are paid-for and DO still earn; only installment-UNPAID tokens are excluded (yield is
+    on actually-paid ownership). For normal/fully-paid holders the installment lock is 0,
+    so earning == token_amount and behaviour is unchanged.
   * Idempotent: one DistributionPayout per (distribution, holder); a re-run skips
     already-credited payouts and never double-credits.
   * Atomic: the whole declare (snapshot + payouts + credits + token-field bumps)
@@ -95,7 +99,7 @@ def _build_and_credit_payouts(dist: Distribution):
     # Snapshot AT declaration time. Order by token_amount DESC so the rounding remainder
     # deterministically lands on the LARGEST holder. select_related avoids per-holder
     # user lookups; the rows are locked for the duration of the atomic block.
-    holdings = list(
+    all_holdings = list(
         OwnershipToken.objects.select_for_update()
         .select_related("wallet__user")
         .filter(
@@ -105,18 +109,38 @@ def _build_and_credit_payouts(dist: Distribution):
         )
         .order_by("-token_amount", "id")
     )
-    if not holdings:
+    if not all_holdings:
         return None
 
-    total_tokens = sum(h.token_amount for h in holdings)
+    # EARNING tokens = full token_amount − installment-UNPAID lock (Installments Wave C).
+    # Market-listing escrow is NOT subtracted (escrowed tokens are paid-for and DO earn);
+    # only installment-unpaid tokens are excluded. Computed from the authoritative plan
+    # rows — 0 for normal/fully-paid holders, so earning == token_amount for them. Holders
+    # whose entire position is still unpaid-locked earn nothing this round (excluded from
+    # the split), so re-rank by earning to keep the rounding remainder on the largest EARNER.
+    from apps.installments.services import installment_locked_tokens
+
+    earning = {}
+    for h in all_holdings:
+        locked = installment_locked_tokens(h.wallet.user_id, dist.property_id)
+        earning[h.id] = max(0, int(h.token_amount) - int(locked))
+    holdings = sorted(
+        (h for h in all_holdings if earning[h.id] > 0),
+        key=lambda h: (-earning[h.id], str(h.id)),
+    )
+
+    total_tokens = sum(earning[h.id] for h in holdings)
+    if total_tokens <= 0:
+        # No RELEASED (paid) ownership to distribute to — nothing is credited (rolled back).
+        return None
     pool = Decimal(dist.pool_amount_usd).quantize(CENTS)
 
     # Floor each holder's raw share to the cent; the unallocated remainder (always ≥ 0
-    # because flooring under-allocates) goes to the largest holder (index 0).
+    # because flooring under-allocates) goes to the largest earner (index 0).
     shares: list[Decimal] = []
     allocated = Decimal("0")
     for h in holdings:
-        raw = pool * Decimal(h.token_amount) / Decimal(total_tokens)
+        raw = pool * Decimal(earning[h.id]) / Decimal(total_tokens)
         share = raw.quantize(CENTS, rounding=ROUND_DOWN)
         shares.append(share)
         allocated += share
@@ -129,7 +153,7 @@ def _build_and_credit_payouts(dist: Distribution):
     for h, share in zip(holdings, shares):
         user = h.wallet.user
         pct = (
-            Decimal(h.token_amount) / Decimal(total_tokens) * Decimal("100")
+            Decimal(earning[h.id]) / Decimal(total_tokens) * Decimal("100")
         ).quantize(Decimal("0.000001"))
 
         payout, created = DistributionPayout.objects.get_or_create(
@@ -137,7 +161,7 @@ def _build_and_credit_payouts(dist: Distribution):
             user=user,
             defaults={
                 "holding": h,
-                "tokens_at_snapshot": h.token_amount,
+                "tokens_at_snapshot": earning[h.id],
                 "ownership_pct_at_snapshot": pct,
                 "share_amount_usd": share,
                 "credited": False,

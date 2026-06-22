@@ -1525,19 +1525,38 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   idempotent, full-purchase UNCHANGED regression, locked-tokens-unsellable), full suite 396 green, tsc clean.** E2E
   (mocked chain): $1000 @ 30% down → **$300 charged**, full **10 tokens minted once → 3 released / 7 locked**, owner
   credited **$300 (not $1000)**, broker **5%×$300=$15**, replay idempotent.
-  **NEXT — Wave C (per-installment payment + progressive release):** each scheduled installment is a SEPARATE gated
-  charge (reuse the same Stripe/NOW webhook→IPN path); on confirmation, progressively move that installment's tranche
-  locked→released (`locked_amount` down), mark the `InstallmentPayment` row `paid`, and credit owner-net + broker on
-  THAT installment's amount (the chosen accrue-on-paid cadence, continued). **DECIDED for Wave C: distributions accrue
-  on RELEASED tokens only — locked/unpaid installment tokens do NOT earn** (this REVERSES the current inherited
-  escrow≠ownership "full token_amount" distribution rule FOR installment locks; `apps/distributions` will subtract the
-  installment-locked portion). Complete the plan (status `completed`) when the final installment clears.
-  **Wave D (last):** missed-payment handling — grace/penalty + FORFEITURE of still-locked tokens (internal-ledger, no
-  on-chain clawback — tokens were already minted-locked).
-  **Open flags to preserve:** (1) installment FEES — the down-payment is charged EX-FEES in v1 (mirrors the full flow,
-  where fees come off the owner's net); (2) MERGED OwnershipToken positions — one slug holding a full buy + an
-  installment share a single `locked_amount` (fine for v1; revisit if it distorts the Wave-C released math).
-  (Distributions-on-locked is no longer open — DECIDED released-only above.)
+  **Wave C delivered — per-installment gated payment + PROGRESSIVE release + distributions-on-released:** each
+  scheduled installment is now a SEPARATE settlement-gated charge reusing the SAME Stripe/NOW machinery —
+  `POST /api/installments/plans/<id>/pay-next/` (KYC-gated, self-scoped, ACTIVE-plan only) starts a Stripe intent / NOW
+  payment for the next-due `InstallmentPayment.amount`; the `Payment` carries a new nullable `installment_payment` FK,
+  so the SHARED webhook core (`payments.services._complete_payment`) ROUTES an installment payment to
+  `installments.services.settle_installment_payment` instead of `mint_investment` — **NO second mint, NO clawback**. On
+  confirmation, in ONE atomic block (plan row-locked → serialized per-plan): mark the row `paid`+`paid_at`;
+  **progressively release** `released = floor(total_paid/total × token_amount)` by DECREMENTing `OwnershipToken
+  .locked_amount` by the incremental tranche (rides ON TOP of any market-listing escrow — that escrow is paid-for and
+  stays locked); credit owner-net + broker-commission on THAT installment's amount keyed on the `InstallmentPayment`
+  id (its own idempotency, separate from the down-payment); and on the FINAL installment flip the plan `completed`
+  (released == full). The Wave-B credit helpers were refactored into reusable `credit_owner_share` / `credit_broker_share`
+  `(gross, reference)` cores so the down-payment/full path stays byte-identical. **Distributions-on-released DELIVERED:**
+  `apps/distributions` now splits pro-rata by EARNING tokens = `token_amount − installment_locked_tokens(user, slug)`
+  (the unpaid installment lock, computed from the authoritative plan rows — NOT the raw `locked_amount`, so market-listing
+  escrow still earns); 0 for normal/fully-paid holders ⇒ **no regression** (existing distribution tests green unchanged).
+  Frontend: `installmentsApi.payNext()` + a new bilingual `InstallmentPayDialog` (Stripe Elements card + NOW crypto,
+  polls the plan until the paid count grows); `Installments.tsx` "Pay Now" is now ENABLED on ACTIVE plans (disabled with a
+  hint until the down-payment confirms) and the stale "coming soon" banner is gone; new `installment_paid` notification
+  (EN/AR). **+9 Wave C tests, full suite 405 green, tsc clean.** E2E (real service path, mocked chain): $1000 @ 30%, 3×,
+  10 tokens — down→**3 released/7 locked**, pay #1 ($233.33)→**5/5** +owner $233.33, pay #2→**7/3**, pay #3 ($233.34)→
+  **10/0 + plan completed**; owner credited across down+3 == **$1000.00** (fees 0); broker 5% per tranche == **$50.01**
+  (per-tranche cent rounding ≈ 5%×$1000); replayed installment settles ONCE; a distribution declared mid-plan paid the
+  30%-holder on 3 released tokens while a normal holder earned on their full position.
+  **Wave D (LAST remaining):** missed-payment handling — grace/penalty + FORFEITURE of still-locked tokens
+  (internal-ledger, no on-chain clawback — tokens were already minted-locked).
+  **Open flags to preserve:** (1) installment FEES — installments are charged EX-FEES in v1 (down + each installment;
+  mirrors the full flow, where fees come off the owner's net); (2) MERGED OwnershipToken positions — one slug holding a
+  full buy + an installment share a single `locked_amount` (the Wave-C release decrements by the plan's computed tranche,
+  so it's robust to listing escrow; revisit only if a user runs a full buy AND an active installment on the same slug);
+  (3) per-tranche rounding — owner/broker credit each tranche to the cent, so the sum can differ from a single-shot
+  computation by a rounding cent (correct for accrue-as-paid).
 
 **➡️ ALL 6 ROLES COMPLETE (investor/LP/owner/developer/partner/broker).** Latest on `origin/main` = **`e58190a`**
 (finishing cleanup: dead WithdrawalDialog removed + broker Commissions repoint). Phase 12 A+B, Phase 13, and all
@@ -1549,9 +1568,10 @@ remaining stubbed/mock controls to existing endpoints (per DASHBOARD_GAPS.md). T
 local-only).
 
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
-FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Waves C+** (Waves A+B BUILT — plan/schedule +
-down-payment charge + full-mint-then-lock + proportional owner/broker credit, see the Installments bullet above; the
-per-installment "Pay Now" payments + progressive release + missed-payment forfeiture + schedule export remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Wave D** (Waves A+B+C BUILT — plan/schedule +
+down-payment charge + full-mint-then-lock + per-installment gated payments + progressive release + per-installment
+owner/broker credit + distributions-on-released, see the Installments bullet above; only **missed-payment FORFEITURE**
++ **schedule export** remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
 order-book i18n preserved), and the **small satellite mini-domains** (no backend) flagged in DASHBOARD_GAPS.md:
 **GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**

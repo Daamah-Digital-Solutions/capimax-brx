@@ -29,15 +29,21 @@ class PaymentNotFound(Exception):
 
 
 def get_or_create_payment(
-    investment: Investment, *, amount, currency: str, provider: str = "stripe"
+    investment: Investment, *, amount, currency: str, provider: str = "stripe",
+    installment_payment=None,
 ) -> Payment:
     """
     Return the pending Payment for this investment + provider, creating one if needed.
     Reuses an existing pending payment so re-clicking "Pay" doesn't spawn duplicates.
+
+    `installment_payment` (Wave C) scopes the reuse to ONE scheduled installment: a normal
+    purchase / down-payment passes None → the filter matches the historical NULL-FK rows
+    (behaviour identical to before), while each installment gets its OWN pending Payment.
     """
     existing = (
         Payment.objects.filter(
-            investment=investment, provider=provider, status=PaymentState.PENDING
+            investment=investment, provider=provider, status=PaymentState.PENDING,
+            installment_payment=installment_payment,
         )
         .order_by("-created_at")
         .first()
@@ -45,7 +51,8 @@ def get_or_create_payment(
     if existing is not None:
         return existing
     return Payment.objects.create(
-        investment=investment, provider=provider, amount=amount, currency=currency
+        investment=investment, provider=provider, amount=amount, currency=currency,
+        installment_payment=installment_payment,
     )
 
 
@@ -56,10 +63,23 @@ def get_or_create_payment(
 # --------------------------------------------------------------------------- #
 def _complete_payment(payment: Payment) -> dict:
     """
-    Idempotently mark a Payment succeeded + Investment completed, then mint.
-    Returns {processed, minted, reason?}. NEVER mints unless the Payment is succeeded.
+    Idempotently mark a Payment succeeded, then drive the settlement side-effect.
+
+    Two settlement paths share this single gated core (so Stripe + NOW reuse it unchanged):
+      * a DOWN-PAYMENT / full-purchase payment (installment_payment is NULL) → mark the
+        Investment completed + mint (Phase 3 / Wave B) — UNCHANGED.
+      * an INSTALLMENT payment (Wave C; installment_payment set) → do NOT touch the
+        Investment (it was already completed by the down-payment) and do NOT re-mint;
+        instead progressively release locked→released + credit owner/broker on that
+        installment (`settle_installment_payment`).
+
+    Returns {processed, minted, settled?, reason?}. NEVER acts unless the Payment is succeeded.
     """
     with transaction.atomic():
+        # NOTE: only the non-nullable `investment` is select_related here. The nullable
+        # `installment_payment` would LEFT-JOIN and Postgres forbids FOR UPDATE on the
+        # nullable side of an outer join (the Wave-B trap) — we read just its id (a column
+        # on Payment, no join) to branch.
         payment = (
             Payment.objects.select_for_update()
             .select_related("investment")
@@ -71,14 +91,32 @@ def _complete_payment(payment: Payment) -> dict:
             payment.failure_reason = ""
             payment.save(update_fields=["status", "failure_reason", "updated_at"])
 
-        inv = payment.investment
-        if inv.payment_status != PaymentStatus.COMPLETED:
-            inv.payment_status = PaymentStatus.COMPLETED
-            inv.save(update_fields=["payment_status", "updated_at"])
-        investment_id = inv.pk
+        installment_payment_id = payment.installment_payment_id
+        investment_id = None
+        if installment_payment_id is None:
+            # Down-payment / full purchase: complete the investment, mint below.
+            inv = payment.investment
+            if inv.payment_status != PaymentStatus.COMPLETED:
+                inv.payment_status = PaymentStatus.COMPLETED
+                inv.save(update_fields=["payment_status", "updated_at"])
+            investment_id = inv.pk
 
-    # Mint AFTER commit. mint_investment is itself idempotent (locks the investment,
-    # no-ops if already minted) and never fabricates a tx.
+    # Side-effect AFTER commit. Both branches are themselves idempotent (lock + status
+    # guard) and never fabricate a tx.
+    if installment_payment_id is not None:
+        settled = False
+        try:
+            from apps.installments.services import settle_installment_payment
+
+            result = settle_installment_payment(installment_payment_id)
+            settled = bool(result.get("settled"))
+        except Exception:  # noqa: BLE001 - payment is recorded; settlement can be retried
+            log.exception(
+                "Installment settlement after payment failed for payment %s", payment.pk
+            )
+        # No mint on the installment path (tokens already minted on the down-payment).
+        return {"processed": not already, "minted": False, "settled": settled}
+
     minted = False
     reason = None
     try:

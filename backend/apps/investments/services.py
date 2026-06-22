@@ -238,14 +238,20 @@ def create_investment(
 OWNER_PRIMARY_SALE_SOURCE = "primary_sale"
 
 
-def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
+def credit_owner_share(inv: Investment, prop: Property, *, gross, reference, memo=None):
     """
-    Credit the property owner's net primary-sale proceeds, exactly once.
+    Reusable owner-credit core: credit the property owner the NET of one `gross` tranche,
+    exactly once (idempotent on (source="primary_sale", `reference`)).
 
-    NET = amount_invested − (Property.fee_platform% + Property.fee_management%) — fees
-    are the per-property, admin-set rates (apps/properties/models.py:185-187), computed
-    server-side (never hardcoded). Returns the net credited, or None when skipped
-    (no linked owner / already credited / non-positive net).
+    NET = gross − (Property.fee_platform% + Property.fee_management%) — the per-property,
+    admin-set rates (apps/properties/models.py:185-187), computed server-side (never
+    hardcoded). Returns the net credited, or None when skipped (no linked owner / already
+    credited / non-positive net).
+
+    Two callers share this core, each with a DISTINCT reference so their idempotency keys
+    never collide: the down-payment/full-purchase path keys on the investment id; each
+    installment (Wave C) keys on its InstallmentPayment id. So credits accrue as money
+    actually arrives, tranche by tranche.
     """
     from apps.wallets.models import BalanceTransaction
     from apps.wallets.services import credit_user_balance
@@ -255,18 +261,14 @@ def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
     if not prop.submitted_by_id:
         return None
 
-    # Keyed idempotency guard (mirrors the mint's per-investment idempotency): a given
-    # investment can only ever write ONE primary_sale credit, even on webhook replay.
-    reference = str(inv.id)
+    # Keyed idempotency guard: a given (source, reference) can only ever write ONE
+    # primary_sale credit, even on webhook replay.
     if BalanceTransaction.objects.filter(
         source=OWNER_PRIMARY_SALE_SOURCE, reference=reference
     ).exists():
         return None
 
-    # Credit on the amount ACTUALLY PAID for this settlement: the full price normally,
-    # the DOWN-PAYMENT for an installment (`charge_amount`). So credits accrue as money
-    # arrives; later installments (Wave C) credit their share. Unchanged for normal buys.
-    gross = Decimal(inv.charge_amount)
+    gross = Decimal(gross)
     fee_percent = (prop.fee_platform or Decimal("0")) + (prop.fee_management or Decimal("0"))
     fees = (gross * fee_percent / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -279,9 +281,21 @@ def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
         prop.submitted_by, net,
         source=OWNER_PRIMARY_SALE_SOURCE,
         reference=reference,
-        memo=f"Primary sale: {inv.token_amount} {inv.token_symbol} of {prop.slug}",
+        memo=memo or f"Primary sale: {inv.token_amount} {inv.token_symbol} of {prop.slug}",
     )
     return net
+
+
+def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
+    """
+    Credit the owner's net for the amount ACTUALLY PAID at this settlement: the full price
+    for a normal buy, the DOWN-PAYMENT for an installment (`charge_amount`). Keyed on the
+    investment id. Unchanged for normal buys (charge_amount == amount_invested). Wave C
+    credits each later installment via `credit_owner_share` keyed on the installment id.
+    """
+    return credit_owner_share(
+        inv, prop, gross=inv.charge_amount, reference=str(inv.id)
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -297,13 +311,17 @@ def _credit_owner_for_primary_sale(inv: Investment, prop: Property):
 BROKER_COMMISSION_SOURCE = "broker_commission"
 
 
-def _credit_broker_commission(inv: Investment):
+def credit_broker_share(inv: Investment, *, gross, reference, memo=None):
     """
-    Credit the investor's referring broker their commission, exactly once.
+    Reusable broker-commission core: credit the investor's referring broker their
+    commission on one `gross` tranche, exactly once (idempotent on
+    (source="broker_commission", `reference`)).
 
-    Returns (broker, commission) when credited, or None when skipped (no referring
-    broker / broker not approved / already credited / non-positive). NEVER touches the
-    investor's tokens or the owner's net — it's a standalone additive credit.
+    Returns (broker, commission) when credited, or None when skipped (no referring broker /
+    broker not approved / already credited / non-positive). PLATFORM-BORNE + ADDITIVE —
+    NEVER touches the investor's tokens or the owner's net. As with the owner credit, the
+    down-payment/full path keys on the investment id and each installment (Wave C) keys on
+    its InstallmentPayment id, so the broker accrues commission as money actually arrives.
     """
     from apps.broker.models import BrokerProfile, BrokerStatus
     from apps.wallets.models import BalanceTransaction
@@ -319,18 +337,17 @@ def _credit_broker_commission(inv: Investment):
     if broker is None or broker.status != BrokerStatus.APPROVED:
         return None
 
-    # LOCKED #3: keyed idempotency — one broker_commission credit per investment, even on
-    # webhook/mint replay (mirrors the owner-credit guard exactly).
-    reference = str(inv.id)
+    # LOCKED #3: keyed idempotency — one broker_commission credit per (source, reference),
+    # even on webhook/mint replay (mirrors the owner-credit guard exactly).
     if BalanceTransaction.objects.filter(
         source=BROKER_COMMISSION_SOURCE, reference=reference
     ).exists():
         return None
 
     # LOCKED #1: commission = paid amount × rate% (per-broker, server-side). Platform-borne
-    # + additive — computed off the amount ACTUALLY PAID (`charge_amount`: full price
-    # normally, the DOWN-PAYMENT for an installment), independent of the owner's fee math.
-    gross = Decimal(inv.charge_amount)
+    # + additive — computed off the amount ACTUALLY PAID for this tranche, independent of
+    # the owner's fee math.
+    gross = Decimal(gross)
     rate = Decimal(broker.commission_rate or 0)
     commission = (gross * rate / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -342,7 +359,7 @@ def _credit_broker_commission(inv: Investment):
         broker.user, commission,
         source=BROKER_COMMISSION_SOURCE,
         reference=reference,
-        memo=f"Referral commission ({rate}%): {inv.token_symbol} of {inv.property.slug}",
+        memo=memo or f"Referral commission ({rate}%): {inv.token_symbol} of {inv.property.slug}",
     )
 
     # LOCKED #4: bump the broker's accumulator in the SAME transaction (row-locked).
@@ -352,6 +369,16 @@ def _credit_broker_commission(inv: Investment):
     )
     locked.save(update_fields=["total_commission_earned", "updated_at"])
     return broker, commission
+
+
+def _credit_broker_commission(inv: Investment):
+    """
+    Credit the referring broker on the amount ACTUALLY PAID at this settlement (full price
+    normally, the down-payment for an installment — `charge_amount`), keyed on the
+    investment id. Wave C credits each later installment via `credit_broker_share` keyed on
+    the installment id.
+    """
+    return credit_broker_share(inv, gross=inv.charge_amount, reference=str(inv.id))
 
 
 # --------------------------------------------------------------------------- #

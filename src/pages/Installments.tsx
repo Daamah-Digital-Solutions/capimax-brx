@@ -28,16 +28,18 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useInstallmentPlans } from "@/hooks/useInstallmentPlans";
 import type { InstallmentPlanRow } from "@/integrations/api/client";
+import { InstallmentPayDialog } from "@/components/installments/InstallmentPayDialog";
 
-// Installments — Wave A: REAL per-investor plans + cent-exact schedules from
-// GET /api/installments/plans/ (was fully mock). READ-ONLY this wave: "Pay Now" is
-// intentionally DISABLED — the down-payment charge + per-installment payments +
-// full-mint-then-lock release are later waves. INSTALLMENTS_SURFACE.md.
+// Installments — REAL per-investor plans + cent-exact schedules from
+// GET /api/installments/plans/. Wave C: "Pay Now" charges the next due installment through
+// the gated Stripe/NOW path; on confirmation the server progressively releases locked→
+// released tokens. Enabled only on ACTIVE plans (the down-payment cleared via Checkout).
 
 export default function Installments() {
   const { t, language } = useLanguage();
-  const { data, loading } = useInstallmentPlans();
+  const { data, loading, refresh } = useInstallmentPlans();
   const [filter, setFilter] = useState("all");
+  const [payPlan, setPayPlan] = useState<InstallmentPlanRow | null>(null);
 
   const stats = data?.stats;
   const plans = data?.plans ?? [];
@@ -161,16 +163,6 @@ export default function Installments() {
             </div>
           ) : (
             <>
-              {/* Pay-Now is a later wave: flag it clearly rather than faking a charge. */}
-              <div className="mb-8 p-4 bg-muted/40 rounded-2xl border border-border flex items-center gap-3 animate-fade-in">
-                <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
-                <p className="text-sm text-muted-foreground">
-                  {language === "ar"
-                    ? "عرض الجدول فقط حالياً — دفع الأقساط عبر الإنترنت سيتاح قريباً."
-                    : "Schedule view only for now — paying installments online is coming soon."}
-                </p>
-              </div>
-
               {/* Installment Plans */}
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -318,7 +310,19 @@ export default function Installments() {
                                 <div className="text-right">
                                   <div className="text-xl font-bold text-foreground">${plan.installmentAmount.toLocaleString()}</div>
                                 </div>
-                                <Button variant="hero" disabled className="gap-2" title={language === "ar" ? "قريباً" : "Coming soon"}>
+                                <Button
+                                  variant="hero"
+                                  className="gap-2"
+                                  disabled={plan.status !== "active"}
+                                  title={
+                                    plan.status !== "active"
+                                      ? language === "ar"
+                                        ? "يُتاح بعد تأكيد الدفعة المقدمة"
+                                        : "Available once the down-payment confirms"
+                                      : undefined
+                                  }
+                                  onClick={() => setPayPlan(plan)}
+                                >
                                   <CreditCard className="w-4 h-4" />
                                   {t("installments.payNow")}
                                 </Button>
@@ -335,6 +339,15 @@ export default function Installments() {
           )}
         </div>
       </div>
+
+      {payPlan && (
+        <InstallmentPayDialog
+          plan={payPlan}
+          open={!!payPlan}
+          onOpenChange={(o) => !o && setPayPlan(null)}
+          onPaid={refresh}
+        />
+      )}
     </MainLayout>
   );
 }
