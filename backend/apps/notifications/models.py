@@ -54,6 +54,9 @@ class Notification(models.Model):
         # Installments (Wave C). A confirmed scheduled installment cleared → released
         # tokens grow. params.sequence/total/released/tokens/property.
         INSTALLMENT_PAID = "installment_paid", _("Installment paid")
+        # Installments (Wave D). A plan defaulted (missed payment past grace): the investor
+        # KEEPS their paid tokens; unpaid tokens are forfeited. params.kept/forfeited/property.
+        INSTALLMENT_DEFAULTED = "installment_defaulted", _("Installment plan defaulted")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

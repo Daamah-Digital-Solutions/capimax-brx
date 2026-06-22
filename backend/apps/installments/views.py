@@ -152,9 +152,14 @@ class InstallmentPlansView(APIView):
                     "progress": round(progress, 2),
                     "downPaid": down_paid,
                     # Real on-chain token split (full-mint-then-lock). null until minted.
+                    # After a DEFAULT (Wave D) tokenAmount/releasedTokens reflect the KEPT
+                    # (paid) position (the forfeited tokens are removed); `forfeitedTokens`
+                    # surfaces how many unpaid tokens were forfeited for the honest display.
                     "tokenAmount": token_amount_full,
                     "releasedTokens": released_tokens,
                     "lockedTokens": locked_tokens,
+                    "forfeitedTokens": int(plan.forfeited_tokens or 0),
+                    "defaultedAt": plan.defaulted_at.isoformat() if plan.defaulted_at else None,
                     "payments": display_payments,
                 }
             )

@@ -38,6 +38,8 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   broker_commission_credited: "financial",
   // Installments (Wave C) — a scheduled installment cleared → tokens released.
   installment_paid: "financial",
+  // Installments (Wave D) — a plan defaulted (missed payment past grace).
+  installment_defaulted: "alert",
 };
 
 export function categoryOf(type: string): NotificationCategory {

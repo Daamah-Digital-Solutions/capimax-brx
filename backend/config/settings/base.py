@@ -308,6 +308,17 @@ LP_MARKET_FEE_PERCENT = env.float("LP_MARKET_FEE_PERCENT", default=1.0)
 SECONDARY_MARKET_FEE_PERCENT = env.float("SECONDARY_MARKET_FEE_PERCENT", default=0.5)
 
 # --------------------------------------------------------------------------- #
+# Installments — default / forfeiture (Wave D). An installment becomes `missed`
+# once its due_date passes unpaid; a plan `defaults` only once its EARLIEST unpaid
+# installment is overdue by MORE than this grace period (not on the first late day).
+# Default 30 days ≈ one full monthly cycle of leeway past the missed due date.
+# Backend-configurable (no frontend deploy). The `check_installment_defaults`
+# command reads this; running it daily is a PRODUCTION-DEPLOY concern (cron/Celery
+# beat), NOT wired here. INSTALLMENTS_SURFACE.md / DECISIONS.md "Installments".
+# --------------------------------------------------------------------------- #
+INSTALLMENT_DEFAULT_GRACE_DAYS = env.int("INSTALLMENT_DEFAULT_GRACE_DAYS", default=30)
+
+# --------------------------------------------------------------------------- #
 # Real payments — Stripe (Phase 5 Wave 1). DEFERRED, env-driven, INERT when blank
 # (same pattern as Sumsub/OAuth). Build + test against Stripe TEST MODE (test keys
 # + test cards); production keys land later. SPEC §6; DECISIONS.md "Payments".

@@ -826,9 +826,12 @@ export interface InstallmentPlanRow {
   progress: number;                 // released/paid % (down-payment once confirmed; + installments in Wave C)
   downPaid: boolean;                // the down-payment has confirmed (plan active)
   // Real on-chain token split (full-mint-then-lock). null until the down-payment mints.
+  // After a DEFAULT (Wave D), tokenAmount/releasedTokens reflect the KEPT (paid) position.
   tokenAmount: number | null;
   releasedTokens: number | null;
   lockedTokens: number | null;
+  forfeitedTokens: number;          // unpaid tokens forfeited on default (0 otherwise)
+  defaultedAt: string | null;       // ISO when the plan defaulted (null otherwise)
   payments: InstallmentSchedulePayment[];
 }
 

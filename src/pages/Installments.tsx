@@ -10,6 +10,7 @@ import {
   Eye,
   Loader2,
   Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -231,23 +232,40 @@ export default function Installments() {
                             </div>
                           </div>
 
-                          {/* Token release split (full-mint-then-lock). Shown once the
-                              down-payment has minted the position. Honest: only the paid
-                              share is unlocked. */}
-                          {plan.tokenAmount != null && (
-                            <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-primary/5 border border-primary/20">
-                              <Lock className="w-4 h-4 text-primary shrink-0" />
+                          {/* DEFAULTED (Wave D): honest forfeiture state — kept paid tokens,
+                              forfeited unpaid tokens, voided remaining schedule. */}
+                          {plan.defaultedAt ? (
+                            <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-destructive/5 border border-destructive/20">
+                              <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
                               <div className="text-sm">
                                 <span className="font-semibold text-foreground">
-                                  {plan.releasedTokens} {language === "ar" ? "من" : "of"} {plan.tokenAmount}
+                                  {language === "ar" ? "تعثّرت الخطة" : "Plan defaulted"}
                                 </span>{" "}
                                 <span className="text-muted-foreground">
                                   {language === "ar"
-                                    ? "رمز محرَّر — يُحرَّر الباقي مع سداد الأقساط."
-                                    : "tokens released — the rest unlock as you pay."}
+                                    ? `تحتفظ بـ ${plan.releasedTokens ?? 0} رمز مدفوع؛ تمت مصادرة ${plan.forfeitedTokens} رمز غير مدفوع. الأقساط المتبقية ملغاة.`
+                                    : `you keep ${plan.releasedTokens ?? 0} paid token(s); ${plan.forfeitedTokens} unpaid token(s) forfeited. Remaining installments voided.`}
                                 </span>
                               </div>
                             </div>
+                          ) : (
+                            /* Token release split (full-mint-then-lock). Shown once the
+                               down-payment has minted the position. Only the paid share is unlocked. */
+                            plan.tokenAmount != null && (
+                              <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-primary/5 border border-primary/20">
+                                <Lock className="w-4 h-4 text-primary shrink-0" />
+                                <div className="text-sm">
+                                  <span className="font-semibold text-foreground">
+                                    {plan.releasedTokens} {language === "ar" ? "من" : "of"} {plan.tokenAmount}
+                                  </span>{" "}
+                                  <span className="text-muted-foreground">
+                                    {language === "ar"
+                                      ? "رمز محرَّر — يُحرَّر الباقي مع سداد الأقساط."
+                                      : "tokens released — the rest unlock as you pay."}
+                                  </span>
+                                </div>
+                              </div>
+                            )
                           )}
 
                           {/* Payment Progress */}

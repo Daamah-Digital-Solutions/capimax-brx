@@ -37,7 +37,8 @@ class InstallmentPlanStatus(models.TextChoices):
 class InstallmentPaymentStatus(models.TextChoices):
     PENDING = "pending", _("Pending")
     PAID = "paid", _("Paid")
-    MISSED = "missed", _("Missed")
+    MISSED = "missed", _("Missed")          # due_date passed unpaid (Wave D bookkeeping)
+    CANCELLED = "cancelled", _("Cancelled")  # voided when the plan defaults (Wave D)
 
 
 class InstallmentPlan(models.Model):
@@ -85,6 +86,13 @@ class InstallmentPlan(models.Model):
     # The down-payment is tracked here on the plan (not as an InstallmentPayment row —
     # the schedule rows are the N financed installments only). Drives the released %.
     down_paid_at = models.DateTimeField(null=True, blank=True)
+    # Wave D: set when the plan DEFAULTS (missed installment past the grace period). On
+    # default the investor KEEPS their released (paid) tokens; the LOCKED (unpaid) tokens
+    # are FORFEITED — the position is reduced to the released amount, freeing that supply.
+    # `forfeited_tokens` records how many were forfeited (for the honest read shape); there
+    # is NO money refund and NO on-chain clawback of the kept tokens.
+    defaulted_at = models.DateTimeField(null=True, blank=True)
+    forfeited_tokens = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

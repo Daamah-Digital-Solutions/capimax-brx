@@ -558,3 +558,185 @@ class WaveCDistributionsOnReleasedTests(TestCase):
         declare_distribution(self.prop.slug, Decimal("170.00"))
         self.assertEqual(self._balance(self.a), Decimal("100.00"))
         self.assertEqual(self._balance(self.b), Decimal("70.00"))
+
+
+# =====================================================================
+# WAVE D — missed-payment DEFAULT + forfeiture (keep released / forfeit locked)
+# =====================================================================
+from datetime import timedelta  # noqa: E402
+
+from django.core.management import call_command  # noqa: E402
+from django.utils import timezone as _tz  # noqa: E402
+
+from apps.investments.services import available_tokens  # noqa: E402
+
+from .models import InstallmentPlanStatus  # noqa: E402
+from .services import default_plan  # noqa: E402
+
+
+class WaveDDefaultForfeitureTests(TestCase):
+    """$1000 @ 30%, 3×, 10 tokens. Down → 3 released / 7 locked. Default forfeits the 7."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-wd@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-wd@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        self.prop = _deployed_installment_property("inst-wd", self.owner)
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        self.inv = res["investment"]
+        _confirm_and_mint(self.inv)  # 3 released / 7 locked, plan active
+        self.plan = self.inv.installment_plan
+        self.today = _tz.now().date()
+
+    def _token(self):
+        return OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+
+    def _backdate(self, days):
+        InstallmentPayment.objects.filter(plan=self.plan).update(
+            due_date=self.today - timedelta(days=days)
+        )
+
+    def test_default_past_grace_forfeits_locked_keeps_released(self):
+        self._backdate(400)  # all installments long overdue (past the 30-day grace)
+        before_avail = available_tokens(self.prop)
+        call_command("check_installment_defaults")
+
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.DEFAULTED)
+        self.assertIsNotNone(self.plan.defaulted_at)
+        self.assertEqual(self.plan.forfeited_tokens, 7)
+
+        # KEEP released (3), FORFEIT locked (7): position reduced to 3, fully unlocked.
+        token = self._token()
+        self.assertEqual(token.token_amount, 3)
+        self.assertEqual(token.locked_amount, 0)
+        self.assertEqual(token.available_amount, 3)
+
+        # Supply freed: the linked investment now reflects only the kept tokens, so 7 return
+        # to the property's available pool.
+        self.inv.refresh_from_db()
+        self.assertEqual(self.inv.token_amount, 3)
+        self.assertEqual(available_tokens(self.prop), before_avail + 7)
+
+        # NO money refund — the investor (the payer) is never credited internally.
+        self.assertEqual(BalanceTransaction.objects.filter(balance__user=self.investor).count(), 0)
+
+        # Remaining schedule voided.
+        statuses = set(
+            InstallmentPayment.objects.filter(plan=self.plan).values_list("status", flat=True)
+        )
+        self.assertEqual(statuses, {InstallmentPaymentStatus.CANCELLED})
+
+    def test_within_grace_not_defaulted(self):
+        self._backdate(5)  # overdue (missed) but inside the 30-day grace
+        call_command("check_installment_defaults")
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.ACTIVE)
+        self.assertEqual(self._token().locked_amount, 7)  # nothing forfeited
+        # ...but the overdue rows ARE marked missed (lifecycle bookkeeping).
+        self.assertTrue(
+            InstallmentPayment.objects.filter(
+                plan=self.plan, status=InstallmentPaymentStatus.MISSED
+            ).exists()
+        )
+
+    def test_idempotent_rerun_no_double_forfeit(self):
+        self._backdate(400)
+        call_command("check_installment_defaults")
+        token_after_first = self._token()
+        self.assertEqual(token_after_first.token_amount, 3)
+        avail_after_first = available_tokens(self.prop)
+
+        # Re-run → already defaulted → no-op (no double-forfeit, no extra supply freed).
+        call_command("check_installment_defaults")
+        res = default_plan(self.plan.id)  # direct re-call too
+        self.assertTrue(res.get("already"))
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.forfeited_tokens, 7)
+        self.assertEqual(self._token().token_amount, 3)
+        self.assertEqual(available_tokens(self.prop), avail_after_first)
+
+    def test_on_time_plan_untouched(self):
+        # Default schedule due-dates are in the FUTURE → nothing is overdue.
+        call_command("check_installment_defaults")
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.ACTIVE)
+        self.assertEqual(self._token().locked_amount, 7)
+        self.assertFalse(
+            InstallmentPayment.objects.filter(
+                plan=self.plan, status=InstallmentPaymentStatus.MISSED
+            ).exists()
+        )
+
+    def test_completed_plan_never_defaulted(self):
+        for r in InstallmentPayment.objects.filter(plan=self.plan).order_by("sequence"):
+            settle_installment_payment(r.id)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.COMPLETED)
+        # Even with backdated due-dates, a completed plan is out of scope (only ACTIVE scanned).
+        InstallmentPayment.objects.filter(plan=self.plan).update(
+            due_date=self.today - timedelta(days=400)
+        )
+        call_command("check_installment_defaults")
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.COMPLETED)
+        self.assertEqual(self._token().token_amount, 10)  # fully owned, nothing forfeited
+
+    def test_defaulted_holder_earns_distributions_on_kept_only(self):
+        from apps.distributions.services import declare_distribution
+        from apps.wallets.models import UserBalance
+
+        self._backdate(400)
+        call_command("check_installment_defaults")  # kept 3, forfeited 7
+
+        # A normal full holder (7 tokens) of the same property.
+        b = User.objects.create_user(email="b-wd@example.com", password="pw12345!")
+        wb, _ = get_or_create_custodial_wallet(b)
+        OwnershipToken.objects.create(
+            wallet=wb, property_id=self.prop.slug, property_name=self.prop.name,
+            token_symbol=self.inv.token_symbol, token_amount=7, locked_amount=0,
+            token_value_usd=Decimal("700"),
+        )
+        # earning: defaulted holder 3 (kept) + B 7 = 10. Pool $100 → 30 / 70.
+        declare_distribution(self.prop.slug, Decimal("100.00"))
+        bal = UserBalance.objects.get(user=self.investor)
+        self.assertEqual(bal.current_balance, Decimal("30.00"))
+        self.assertEqual(UserBalance.objects.get(user=b).current_balance, Decimal("70.00"))
+
+
+class WaveDFullPurchaseUnaffectedTests(TestCase):
+    """A non-installment full purchase has no plan → the default sweep never touches it."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-wdf@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-wdf@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        p = Property(**_valid_property_kwargs(
+            slug="ready-wd", model="ready", category="ready",
+            total_value=Decimal("10000"), token_price=Decimal("100"), is_published=True,
+        ))
+        p.submitted_by = self.owner
+        p.fee_platform = Decimal("0")
+        p.fee_management = Decimal("0")
+        p.save()
+        meta, _ = TokenMetadata.objects.get_or_create(property=p)
+        meta.deployed_contract_address = "0x" + "44" * 20
+        meta.deployment_chain_id = 97
+        meta.deployment_network = "bsc-testnet"
+        meta.save()
+        self.prop = p
+
+    def test_full_purchase_position_untouched_by_default_sweep(self):
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
+        )
+        inv = res["investment"]
+        _confirm_and_mint(inv)
+        call_command("check_installment_defaults")
+        token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+        self.assertEqual(token.token_amount, 10)
+        self.assertEqual(token.locked_amount, 0)
+        self.assertEqual(InstallmentPlan.objects.count(), 0)

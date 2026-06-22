@@ -966,6 +966,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_commission_credited.body": "تم إضافة عمولة ${amount} من استثمار في {property}.",
     "notif.installment_paid.title": "تم سداد القسط",
     "notif.installment_paid.body": "تم سداد القسط {sequence} من {total} لـ {property} — تم تحرير {released} من {tokens} رمز.",
+    "notif.installment_defaulted.title": "تعثّرت خطة الأقساط",
+    "notif.installment_defaulted.body": "تعثّرت خطة {property}: تحتفظ بـ {kept} رمز مدفوع، وتمت مصادرة {forfeited} رمز غير مدفوع.",
 
     // Support
     "support.title": "الدعم والمساعدة",
@@ -2398,6 +2400,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_commission_credited.body": "${amount} commission from an investment in {property}.",
     "notif.installment_paid.title": "Installment Paid",
     "notif.installment_paid.body": "Installment {sequence} of {total} for {property} — {released} of {tokens} tokens released.",
+    "notif.installment_defaulted.title": "Installment Plan Defaulted",
+    "notif.installment_defaulted.body": "Your {property} plan defaulted: you keep {kept} paid tokens; {forfeited} unpaid tokens were forfeited.",
 
     // Support
     "support.title": "Support & Help",

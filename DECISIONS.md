@@ -1549,8 +1549,33 @@ Consolidated for compact-resilience — the per-phase sections above are authori
   **10/0 + plan completed**; owner credited across down+3 == **$1000.00** (fees 0); broker 5% per tranche == **$50.01**
   (per-tranche cent rounding ≈ 5%×$1000); replayed installment settles ONCE; a distribution declared mid-plan paid the
   30%-holder on 3 released tokens while a normal holder earned on their full position.
-  **Wave D (LAST remaining):** missed-payment handling — grace/penalty + FORFEITURE of still-locked tokens
-  (internal-ledger, no on-chain clawback — tokens were already minted-locked).
+  **Wave D delivered — missed-payment DEFAULT + forfeiture → INSTALLMENTS DOMAIN COMPLETE (A→D):** default detection is a
+  manually-runnable, idempotent management command `check_installment_defaults`
+  ([apps/installments/management/commands](backend/apps/installments/management/commands/check_installment_defaults.py))
+  — it marks overdue PENDING rows `missed`, then DEFAULTS any ACTIVE plan whose earliest unpaid installment is overdue by
+  MORE than the grace period. **Grace = `settings.INSTALLMENT_DEFAULT_GRACE_DAYS` (default 30 days)** — env-configurable;
+  not an instant default on the first late day. `services.default_plan(plan_id)` runs the forfeiture in ONE atomic block
+  (plan row-locked, idempotent — an already-defaulted plan is a no-op): the investor **KEEPS the RELEASED (paid) tokens**
+  (`kept = floor(total_paid/total × token_amount)`) and **FORFEITS the LOCKED (unpaid)** ones (`forfeited = token_amount −
+  kept`); **NO money refund; NO on-chain clawback of kept tokens.** Plan → `defaulted` (+ `defaulted_at`, `forfeited_tokens`);
+  remaining non-paid `InstallmentPayment` rows → new `cancelled` status (schedule voided). **Forfeiture representation
+  (FLAGGED — ledger/position adjustment, no on-chain burn):** the OwnershipToken is reduced to the kept amount
+  (`token_amount −= forfeited`, `locked_amount −= forfeited` so the kept tokens are fully unlocked/tradable) and the linked
+  `Investment.token_amount` is reduced to kept, so the forfeited supply RETURNS to the property's pool (`investments
+  .sold_tokens`/`available_tokens` recover). The forfeited tokens were already minted on-chain to the custodial wallet and
+  PHYSICALLY remain there, but the platform LEDGER no longer credits them (so they can't be listed/sold via the
+  platform) — an on-chain burn-back is deferred (mainnet/ops item, consistent with the existing "no on-chain clawback"
+  stance). Distributions already accrue on RELEASED only (Wave C) and a defaulted plan is no longer ACTIVE, so a defaulted
+  holder simply earns on their KEPT tokens — verified, no change needed. Frontend: `Installments.tsx` shows an honest
+  defaulted banner ("plan defaulted; you keep X paid tokens; Y unpaid forfeited; remaining schedule voided"), Pay-Now
+  doesn't render on a defaulted plan (no pending due row); new `installment_defaulted` notification (EN/AR); read endpoint
+  surfaces `forfeitedTokens`/`defaultedAt`. **+7 Wave D tests, full suite 412 green, tsc clean.** Journey (real service
+  path, mocked chain): $1000 @ 30%, down paid (3 released / 7 locked) → installments backdated past grace → run
+  `check_installment_defaults` → **plan defaulted, 7 forfeited / 3 kept** (position + investment reduced to 3, 7 freed to
+  supply), no refund (investor never credited), 3 schedule rows voided; **re-run → 0 defaulted (idempotent, no
+  double-forfeit)**; within-grace → marked missed but NOT defaulted; on-time/completed/full-purchase flows untouched.
+  **PRODUCTION-DEPLOY item (NOT built — like provider keys / mainnet audit):** schedule `check_installment_defaults` to run
+  DAILY (cron or Celery beat); the command is safe to run repeatedly. **Wave D was the last installments wave.**
   **Open flags to preserve:** (1) installment FEES — installments are charged EX-FEES in v1 (down + each installment;
   mirrors the full flow, where fees come off the owner's net); (2) MERGED OwnershipToken positions — one slug holding a
   full buy + an installment share a single `locked_amount` (the Wave-C release decrements by the plan's computed tranche,
@@ -1568,10 +1593,7 @@ remaining stubbed/mock controls to existing endpoints (per DASHBOARD_GAPS.md). T
 local-only).
 
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
-FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **installments Wave D** (Waves A+B+C BUILT — plan/schedule +
-down-payment charge + full-mint-then-lock + per-installment gated payments + progressive release + per-installment
-owner/broker credit + distributions-on-released, see the Installments bullet above; only **missed-payment FORFEITURE**
-+ **schedule export** remain), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
 order-book i18n preserved), and the **small satellite mini-domains** (no backend) flagged in DASHBOARD_GAPS.md:
 **GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**

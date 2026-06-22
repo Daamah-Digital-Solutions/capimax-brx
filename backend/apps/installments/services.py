@@ -17,7 +17,7 @@ FINAL installment.
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -395,3 +395,154 @@ def installment_locked_tokens(user_id, property_slug) -> int:
         released = _released_for(total_paid, Decimal(plan.total_amount), token_total)
         locked += max(0, token_total - released)
     return locked
+
+
+# --------------------------------------------------------------------------- #
+# Wave D — missed-payment DEFAULT + forfeiture (the last installments wave).
+#
+# An installment becomes `missed` once its due_date passes unpaid; a plan `defaults` only
+# once its EARLIEST unpaid installment is overdue by MORE than the grace period (settings
+# .INSTALLMENT_DEFAULT_GRACE_DAYS, default 30) — NOT on the first late day. On default the
+# investor KEEPS the RELEASED (paid-for) tokens and FORFEITS the LOCKED (unpaid) ones: the
+# position is reduced to the released amount, freeing that supply back to the property.
+# NO money refund, NO on-chain clawback of kept tokens. Detection is run by the
+# `check_installment_defaults` management command (scheduling it daily is a deploy concern).
+# --------------------------------------------------------------------------- #
+def mark_overdue_missed(today: date | None = None) -> int:
+    """
+    Mark every PENDING installment on an ACTIVE plan whose due_date has passed as MISSED
+    (lifecycle bookkeeping). Idempotent; returns the count newly marked. PAID/CANCELLED
+    rows are untouched, and this never changes plan/token state — defaulting is separate.
+    """
+    today = today or timezone.now().date()
+    return (
+        InstallmentPayment.objects.filter(
+            plan__status=InstallmentPlanStatus.ACTIVE,
+            status=InstallmentPaymentStatus.PENDING,
+            due_date__lt=today,
+        ).update(status=InstallmentPaymentStatus.MISSED)
+    )
+
+
+def find_defaultable_plan_ids(grace_days: int, today: date | None = None) -> list:
+    """
+    IDs of ACTIVE plans whose EARLIEST unpaid (pending/missed) installment is overdue by
+    MORE than `grace_days` — i.e. its due_date < today − grace_days. Only ACTIVE plans
+    qualify (draft never minted; completed fully paid; defaulted already handled).
+    """
+    today = today or timezone.now().date()
+    cutoff = today - timedelta(days=grace_days)
+    return list(
+        InstallmentPlan.objects.filter(
+            status=InstallmentPlanStatus.ACTIVE,
+            payments__status__in=[
+                InstallmentPaymentStatus.PENDING,
+                InstallmentPaymentStatus.MISSED,
+            ],
+            payments__due_date__lt=cutoff,
+        )
+        .values_list("id", flat=True)
+        .distinct()
+    )
+
+
+def default_plan(plan_id) -> dict:
+    """
+    Default ONE plan: forfeit the LOCKED (unpaid) tokens, KEEP the RELEASED (paid) ones,
+    void the remaining schedule, mark the plan `defaulted`. Idempotent — an already-
+    defaulted plan is a no-op (no double-forfeit). NO money refund; NO on-chain clawback.
+
+    Forfeiture representation (a ledger/POSITION adjustment — flagged, no on-chain burn):
+      * kept = floor(total_paid / total × token_amount); forfeited = token_amount − kept.
+      * The OwnershipToken is reduced to `kept` (token_amount −= forfeited; locked_amount −=
+        forfeited, so the kept tokens are fully unlocked + tradable) and its value/ownership%
+        recomputed. The on-chain wallet still physically holds the minted tokens; the
+        platform LEDGER no longer credits the forfeited ones to the investor (so they can't
+        be listed/sold via the platform) and the supply is freed by reducing the linked
+        Investment.token_amount to `kept` (drives availability via investments.sold_tokens).
+    """
+    from apps.investments.models import Investment
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
+    from apps.wallets.models import OwnershipToken
+
+    with transaction.atomic():
+        plan = InstallmentPlan.objects.select_for_update().get(pk=plan_id)
+        if plan.status != InstallmentPlanStatus.ACTIVE:
+            # Already defaulted/completed/draft → idempotent no-op (no double-forfeit).
+            return {"defaulted": False, "already": True, "status": plan.status}
+
+        inv = (
+            Investment.objects.select_related("property")
+            .filter(installment_plan_id=plan.id)
+            .order_by("created_at")
+            .first()
+        )
+
+        kept = forfeited = 0
+        if inv is not None and inv.tokens_minted and inv.wallet_id:
+            token_total = int(inv.token_amount)
+            total_paid = _down_paid(plan) + sum(
+                (Decimal(p.amount) for p in plan.payments.all()
+                 if p.status == InstallmentPaymentStatus.PAID),
+                Decimal("0"),
+            )
+            kept = _released_for(total_paid, Decimal(plan.total_amount), token_total)
+            forfeited = max(0, token_total - kept)
+
+            if forfeited > 0:
+                prop = inv.property
+                supply = int(prop.token_supply or 0)
+                token = (
+                    OwnershipToken.objects.select_for_update()
+                    .filter(wallet_id=inv.wallet_id, property_id=prop.slug)
+                    .first()
+                )
+                if token is not None:
+                    # Reduce the position to the kept (paid) tokens, fully unlocked. The
+                    # decrement rides on top of any market-listing escrow (unchanged).
+                    token.token_amount = max(0, int(token.token_amount) - forfeited)
+                    token.locked_amount = max(0, int(token.locked_amount) - forfeited)
+                    token.token_value_usd = (
+                        Decimal(token.token_amount) * prop.token_price
+                    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    token.ownership_percentage = (
+                        (Decimal(token.token_amount) / Decimal(supply) * Decimal("100"))
+                        .quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+                        if supply else Decimal("0")
+                    )
+                    token.save(update_fields=[
+                        "token_amount", "locked_amount", "token_value_usd",
+                        "ownership_percentage", "updated_at",
+                    ])
+                # Free the forfeited supply: the linked COMPLETED investment now reflects
+                # only the kept tokens (investments.sold_tokens → availability recovers).
+                inv.token_amount = kept
+                inv.ownership_percentage = (
+                    (Decimal(kept) / Decimal(supply) * Decimal("100"))
+                    .quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+                    if supply else Decimal("0")
+                )
+                inv.save(update_fields=["token_amount", "ownership_percentage", "updated_at"])
+
+        # Void the remaining schedule (every non-paid row → cancelled).
+        plan.payments.exclude(status=InstallmentPaymentStatus.PAID).update(
+            status=InstallmentPaymentStatus.CANCELLED
+        )
+
+        plan.status = InstallmentPlanStatus.DEFAULTED
+        plan.defaulted_at = timezone.now()
+        plan.forfeited_tokens = forfeited
+        plan.save(update_fields=["status", "defaulted_at", "forfeited_tokens", "updated_at"])
+
+        if inv is not None:
+            notify(
+                plan.investor, Notification.Type.INSTALLMENT_DEFAULTED,
+                params={
+                    "property": inv.property.name, "slug": inv.property.slug,
+                    "kept": kept, "forfeited": forfeited,
+                },
+                action_url="/installments",
+            )
+
+    return {"defaulted": True, "kept": kept, "forfeited": forfeited}
