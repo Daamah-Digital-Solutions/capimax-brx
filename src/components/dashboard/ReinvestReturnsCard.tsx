@@ -1,13 +1,15 @@
-import { RefreshCw, Percent, TrendingUp, ArrowRight, Coins } from "lucide-react";
+import { RefreshCw, TrendingUp, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 interface ReinvestReturnsCardProps {
   availableReturns: number;
+  // Deprecated/optional: reinvestment bonus + Pronova rewards are a DEFERRED product
+  // (no backend, no Pronova token) — these are no longer rendered. Kept optional so
+  // existing callers compile; they are intentionally ignored.
   totalReinvested?: number;
   totalBonus?: number;
   className?: string;
@@ -16,18 +18,11 @@ interface ReinvestReturnsCardProps {
 
 export function ReinvestReturnsCard({
   availableReturns,
-  totalReinvested = 0,
-  totalBonus = 0,
   className,
   style,
 }: ReinvestReturnsCardProps) {
   const { language, isRTL } = useLanguage();
-
-  const discountPercentage = 5;
-  const pronovaBonus = 2;
-  const potentialBonus = (availableReturns * discountPercentage) / 100;
-  const potentialPronovaBonus = (availableReturns * pronovaBonus) / 100;
-  const totalPotentialValue = availableReturns + potentialBonus + potentialPronovaBonus;
+  const isAr = language === "ar";
 
   return (
     <div
@@ -45,99 +40,45 @@ export function ReinvestReturnsCard({
           </div>
           <div>
             <h3 className="font-display text-lg font-semibold text-foreground">
-              {language === "ar" ? "إعادة استثمار العوائد" : "Reinvest Returns"}
+              {isAr ? "إعادة استثمار العوائد" : "Reinvest Returns"}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {language === "ar" 
-                ? "ضاعف أرباحك مع مكافآت إضافية" 
-                : "Multiply your earnings with bonus rewards"}
+              {isAr
+                ? "أعد استثمار رصيدك في عقارات جديدة"
+                : "Put your balance back to work in new properties"}
             </p>
           </div>
         </div>
-        <Badge variant="gold" className="gap-1">
-          <Percent className="w-3 h-3" />
-          {discountPercentage}% {language === "ar" ? "مكافأة" : "Bonus"}
-        </Badge>
       </div>
 
-      {/* Available Returns */}
+      {/* Available Returns — REAL internal balance */}
       <div className="p-4 bg-card/80 backdrop-blur-sm rounded-xl border border-border mb-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            {language === "ar" ? "العوائد المتاحة للاستثمار" : "Available Returns"}
+            {isAr ? "العوائد المتاحة للاستثمار" : "Available Returns"}
           </span>
           <span className="text-xl font-bold text-gradient-gold">
             ${availableReturns.toLocaleString()}
           </span>
         </div>
-        <Progress value={75} className="h-2" />
       </div>
 
-      {/* Bonus Calculation */}
-      <div className="space-y-3 mb-6">
-        <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg border border-success/20">
-          <div className="flex items-center gap-2">
-            <Percent className="w-4 h-4 text-success" />
-            <span className="text-sm text-foreground">
-              {language === "ar" ? "مكافأة إعادة الاستثمار" : "Reinvestment Bonus"} ({discountPercentage}%)
-            </span>
-          </div>
-          <span className="font-semibold text-success">+${potentialBonus.toLocaleString()}</span>
-        </div>
-
-        <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/20">
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-primary" />
-            <span className="text-sm text-foreground">
-              {language === "ar" ? "مكافأة برونوفا" : "Pronova Bonus"} ({pronovaBonus}%)
-            </span>
-          </div>
-          <span className="font-semibold text-primary">+${potentialPronovaBonus.toLocaleString()}</span>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/20 to-success/20 rounded-xl border border-primary/30">
-          <span className="font-medium text-foreground">
-            {language === "ar" ? "إجمالي قيمة الاستثمار" : "Total Investment Value"}
-          </span>
-          <span className="text-xl font-bold text-gradient-gold">
-            ${totalPotentialValue.toLocaleString()}
-          </span>
-        </div>
+      {/* Bonus rewards — deferred product, shown honestly (no fake figures) */}
+      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border mb-6">
+        <span className="text-sm text-muted-foreground">
+          {isAr ? "مكافآت إعادة الاستثمار" : "Reinvestment bonus rewards"}
+        </span>
+        <Badge variant="secondary">{isAr ? "قريباً" : "Coming soon"}</Badge>
       </div>
-
-      {/* Stats */}
-      {(totalReinvested > 0 || totalBonus > 0) && (
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="p-3 bg-muted rounded-lg text-center">
-            <div className="text-sm text-muted-foreground mb-1">
-              {language === "ar" ? "إجمالي إعادة الاستثمار" : "Total Reinvested"}
-            </div>
-            <div className="font-semibold text-foreground">${totalReinvested.toLocaleString()}</div>
-          </div>
-          <div className="p-3 bg-muted rounded-lg text-center">
-            <div className="text-sm text-muted-foreground mb-1">
-              {language === "ar" ? "إجمالي المكافآت" : "Total Bonus Earned"}
-            </div>
-            <div className="font-semibold text-success">${totalBonus.toLocaleString()}</div>
-          </div>
-        </div>
-      )}
 
       {/* CTA */}
-      <Link to="/marketplace">
-        <Button variant="hero" className="w-full gap-2">
+      <Link to="/reinvestment">
+        <Button variant="hero" className="w-full gap-2" disabled={availableReturns <= 0}>
           <TrendingUp className="w-4 h-4" />
-          {language === "ar" ? "إعادة استثمار العوائد الآن" : "Reinvest Returns Now"}
+          {isAr ? "إعادة استثمار العوائد الآن" : "Reinvest Returns Now"}
           <ArrowRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
         </Button>
       </Link>
-
-      {/* Info */}
-      <p className="text-xs text-muted-foreground text-center mt-4">
-        {language === "ar" 
-          ? "احصل على مكافأة 5% + 2% برونوفا عند إعادة استثمار عوائدك"
-          : "Get 5% bonus + 2% Pronova reward when reinvesting your returns"}
-      </p>
     </div>
   );
 }

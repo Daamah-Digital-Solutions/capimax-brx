@@ -1,13 +1,10 @@
-import { 
-  TrendingUp, 
-  Wallet, 
-  Building2, 
+import { useMemo } from "react";
+import {
+  TrendingUp,
+  Wallet,
+  Building2,
   DollarSign,
-  ArrowUpRight,
-  ArrowDownRight,
-  Calendar,
   Bell,
-  BarChart3,
   Coins,
   FileText,
   RefreshCw,
@@ -18,97 +15,90 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useUserWallet } from "@/hooks/useUserWallet";
+import { useOwnershipTokens } from "@/hooks/useOwnershipTokens";
+import { useDistributions } from "@/hooks/useDistributions";
+import { useReinvestments } from "@/hooks/useReinvestments";
+import { useNotifications } from "@/hooks/useNotifications";
+import { renderNotificationCopy, relativeTime } from "@/lib/notifications";
 import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard";
 import { ReinvestmentBanner } from "@/components/dashboard/ReinvestmentBanner";
 import { ExitOptionsCard } from "@/components/portfolio/ExitOptionsCard";
 
-const portfolioStats = {
-  totalValue: 45000,
-  totalReturn: 4250,
-  returnPercent: 9.4,
-  properties: 4,
-  pendingDistributions: 850,
-  nextDistribution: "2025-01-15",
-};
-
-const holdings = [
-  {
-    id: "1",
-    name: "Marina Bay Tower",
-    nameAr: "برج مارينا باي",
-    units: 5,
-    invested: 5000,
-    currentValue: 5475,
-    yield: 9.5,
-    status: "active",
-    lastDistribution: 125,
-  },
-  {
-    id: "2",
-    name: "Palm Residences",
-    nameAr: "مساكن النخلة",
-    units: 10,
-    invested: 25000,
-    currentValue: 27500,
-    yield: 25,
-    status: "construction",
-    progress: 65,
-  },
-  {
-    id: "3",
-    name: "Industrial Park",
-    nameAr: "المجمع الصناعي",
-    units: 3,
-    invested: 15000,
-    currentValue: 16800,
-    yield: 11.2,
-    status: "active",
-    lastDistribution: 420,
-  },
+// Real, derived per-property donut colors (cycled). The token model has NO property
+// type/category, so the allocation is by REAL per-property VALUE SHARE (token_value_usd
+// / total), not an invented Commercial/Residential/Industrial split.
+const SLICE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(142 76% 36%)",
+  "hsl(199 89% 48%)",
+  "hsl(38 92% 50%)",
+  "hsl(280 65% 60%)",
 ];
+const RING_CIRCUMFERENCE = 2 * Math.PI * 40; // r=40
 
 export default function Dashboard() {
   const { t, language } = useLanguage();
-  const userName = language === "ar" ? "محمد أحمد" : "Mohamed Ahmed";
+  const isAr = language === "ar";
+  const { user } = useAuth();
+  const { wallet } = useUserWallet();
+  const { tokens, loading: tokensLoading, totalValue } = useOwnershipTokens(wallet?.id ?? null);
+  const { stats: distributionStats } = useDistributions();
+  const { availableBalance } = useReinvestments();
+  const { notifications, unreadCount, loading: activityLoading } = useNotifications();
 
-  const recentActivity = [
-    { 
-      type: "distribution", 
-      title: language === "ar" ? "توزيعات - برج مارينا باي" : "Distribution - Marina Bay Tower", 
-      amount: "+$125", 
-      date: language === "ar" ? "15 ديسمبر 2024" : "Dec 15, 2024", 
-      status: "success" 
-    },
-    { 
-      type: "investment", 
-      title: language === "ar" ? "استثمار جديد - المجمع الصناعي" : "New Investment - Industrial Park", 
-      amount: "-$3,000", 
-      date: language === "ar" ? "10 ديسمبر 2024" : "Dec 10, 2024", 
-      status: "info" 
-    },
-    { 
-      type: "distribution", 
-      title: language === "ar" ? "توزيعات - المجمع الصناعي" : "Distribution - Industrial Park", 
-      amount: "+$420", 
-      date: language === "ar" ? "1 ديسمبر 2024" : "Dec 1, 2024", 
-      status: "success" 
-    },
-  ];
+  const userName = user?.profile?.full_name || user?.email || (isAr ? "مستثمر" : "Investor");
 
-  const upcomingPayments = [
-    { 
-      property: language === "ar" ? "برج مارينا باي" : "Marina Bay Tower", 
-      type: t("dashboard.distribution"), 
-      amount: 125, 
-      date: language === "ar" ? "15 يناير 2025" : "Jan 15, 2025" 
-    },
-    { 
-      property: language === "ar" ? "المجمع الصناعي" : "Industrial Park", 
-      type: t("dashboard.distribution"), 
-      amount: 420, 
-      date: language === "ar" ? "1 فبراير 2025" : "Feb 1, 2025" 
-    },
-  ];
+  // REAL available returns = the investor's internal balance (accrued distribution / sale
+  // proceeds), same source the Reinvestment page uses. NO bonus/Pronova figures (deferred).
+  const availableReturns = availableBalance;
+  const pendingDistributions = distributionStats.pendingAmount;
+
+  // Group ownership tokens by property (a wallet may hold several token rows per property).
+  const holdings = useMemo(() => {
+    const map = new Map<
+      string,
+      { propertyId: string; name: string; units: number; value: number; ownership: number }
+    >();
+    for (const tk of tokens) {
+      const cur = map.get(tk.property_id) ?? {
+        propertyId: tk.property_id,
+        name: tk.property_name,
+        units: 0,
+        value: 0,
+        ownership: 0,
+      };
+      cur.units += Number(tk.token_amount) || 0;
+      cur.value += Number(tk.token_value_usd) || 0;
+      cur.ownership += Number(tk.ownership_percentage) || 0;
+      map.set(tk.property_id, cur);
+    }
+    return [...map.values()].sort((a, b) => b.value - a.value);
+  }, [tokens]);
+
+  const propertiesCount = holdings.length;
+
+  // Donut segments = each property's share of total portfolio value (REAL, derived).
+  const allocation = useMemo(() => {
+    if (totalValue <= 0) return [];
+    let cumulative = 0;
+    return holdings.map((h, i) => {
+      const pct = (h.value / totalValue) * 100;
+      const dash = (pct / 100) * RING_CIRCUMFERENCE;
+      const seg = {
+        name: h.name,
+        pct,
+        color: SLICE_COLORS[i % SLICE_COLORS.length],
+        dash,
+        offset: -cumulative,
+      };
+      cumulative += dash;
+      return seg;
+    });
+  }, [holdings, totalValue]);
+
+  const recentActivity = notifications.slice(0, 5);
 
   return (
     <MainLayout>
@@ -142,11 +132,8 @@ export default function Dashboard() {
         </div>
 
         <div className="container py-8">
-          {/* Reinvestment Banner */}
-          <ReinvestmentBanner 
-            availableReturns={portfolioStats.totalReturn} 
-            className="mb-8"
-          />
+          {/* Reinvestment Banner — real available balance; null when zero */}
+          <ReinvestmentBanner availableReturns={availableReturns} className="mb-8" />
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -155,13 +142,9 @@ export default function Dashboard() {
                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                   <Wallet className="w-6 h-6 text-primary" />
                 </div>
-                <Badge variant="success" className="gap-1">
-                  <ArrowUpRight className="w-3 h-3" />
-                  +12%
-                </Badge>
               </div>
               <div className="text-sm text-muted-foreground mb-1">{t("dashboard.totalValue")}</div>
-              <div className="text-2xl font-bold text-foreground">${portfolioStats.totalValue.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-foreground">${totalValue.toLocaleString()}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.05s" }}>
@@ -169,10 +152,9 @@ export default function Dashboard() {
                 <div className="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-success" />
                 </div>
-                <span className="text-2xl font-bold text-success">+{portfolioStats.returnPercent}%</span>
               </div>
               <div className="text-sm text-muted-foreground mb-1">{t("dashboard.totalReturns")}</div>
-              <div className="text-2xl font-bold text-foreground">${portfolioStats.totalReturn.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-foreground">${availableReturns.toLocaleString()}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.1s" }}>
@@ -182,7 +164,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="text-sm text-muted-foreground mb-1">{t("dashboard.properties")}</div>
-              <div className="text-2xl font-bold text-foreground">{portfolioStats.properties}</div>
+              <div className="text-2xl font-bold text-foreground">{propertiesCount}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-primary/30 animate-fade-in" style={{ animationDelay: "0.15s" }}>
@@ -192,7 +174,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="text-sm text-muted-foreground mb-1">{t("dashboard.pendingDistributions")}</div>
-              <div className="text-2xl font-bold text-gradient-gold">${portfolioStats.pendingDistributions}</div>
+              <div className="text-2xl font-bold text-gradient-gold">${pendingDistributions.toLocaleString()}</div>
             </div>
           </div>
 
@@ -203,161 +185,174 @@ export default function Dashboard() {
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-display text-xl font-semibold text-foreground">{t("dashboard.myInvestments")}</h2>
-                  <Button variant="ghost" size="sm">{t("dashboard.viewAll")}</Button>
+                  <Link to="/portfolio">
+                    <Button variant="ghost" size="sm">{t("dashboard.viewAll")}</Button>
+                  </Link>
                 </div>
 
-                <div className="space-y-4">
-                  {holdings.map((holding) => (
-                    <Link
-                      key={holding.id}
-                      to={`/property/${holding.id}`}
-                      className="flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                          <Building2 className="w-6 h-6 text-primary" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-foreground">
-                            {language === "ar" ? holding.nameAr : holding.name}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {holding.units} {t("dashboard.units")} • ${holding.invested.toLocaleString()} {t("dashboard.invested")}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-end">
-                        <div className="font-semibold text-foreground">${holding.currentValue.toLocaleString()}</div>
-                        <div className={cn(
-                          "text-sm flex items-center gap-1 justify-end",
-                          holding.currentValue > holding.invested ? "text-success" : "text-destructive"
-                        )}>
-                          {holding.currentValue > holding.invested ? (
-                            <ArrowUpRight className="w-3 h-3" />
-                          ) : (
-                            <ArrowDownRight className="w-3 h-3" />
-                          )}
-                          {holding.yield}%
-                        </div>
-                      </div>
+                {tokensLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : holdings.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Building2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                    <p className="text-muted-foreground mb-4">
+                      {isAr ? "لا توجد استثمارات بعد" : "No investments yet"}
+                    </p>
+                    <Link to="/marketplace">
+                      <Button variant="outline" className="gap-2">
+                        <Coins className="w-4 h-4" />
+                        {t("dashboard.newInvestment")}
+                      </Button>
                     </Link>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {holdings.map((holding) => (
+                      <Link
+                        key={holding.propertyId}
+                        to={`/property/${holding.propertyId}`}
+                        className="flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                            <Building2 className="w-6 h-6 text-primary" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-foreground">{holding.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {holding.units.toLocaleString()} {t("dashboard.units")} •{" "}
+                              {holding.ownership.toFixed(2)}% {isAr ? "ملكية" : "ownership"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-end">
+                          <div className="font-semibold text-foreground">${holding.value.toLocaleString()}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {isAr ? "القيمة الحالية" : "Current value"}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Allocation Chart */}
+              {/* Allocation Chart — by REAL per-property value share (no invented type split) */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.25s" }}>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-display text-xl font-semibold text-foreground">{t("dashboard.portfolioAllocation")}</h2>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">{t("dashboard.byType")}</Button>
-                    <Button variant="ghost" size="sm">{t("dashboard.byRegion")}</Button>
-                  </div>
                 </div>
 
-                <div className="h-64 flex items-center justify-center">
-                  <div className="relative w-48 h-48">
-                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(var(--muted))" strokeWidth="12" />
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(var(--primary))" strokeWidth="12" strokeDasharray="100 151" />
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(142 76% 36%)" strokeWidth="12" strokeDasharray="60 191" strokeDashoffset="-100" />
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(199 89% 48%)" strokeWidth="12" strokeDasharray="40 211" strokeDashoffset="-160" />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center flex-col">
-                      <div className="text-2xl font-bold text-foreground">4</div>
-                      <div className="text-sm text-muted-foreground">{t("dashboard.properties")}</div>
+                {allocation.length === 0 ? (
+                  <div className="h-64 flex flex-col items-center justify-center text-center">
+                    <Building2 className="w-10 h-10 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      {isAr ? "لا توجد أصول لعرض التوزيع" : "No holdings to allocate yet"}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="h-64 flex items-center justify-center">
+                      <div className="relative w-48 h-48">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(var(--muted))" strokeWidth="12" />
+                          {allocation.map((seg, i) => (
+                            <circle
+                              key={i}
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="none"
+                              stroke={seg.color}
+                              strokeWidth="12"
+                              strokeDasharray={`${seg.dash} ${RING_CIRCUMFERENCE - seg.dash}`}
+                              strokeDashoffset={seg.offset}
+                            />
+                          ))}
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center flex-col">
+                          <div className="text-2xl font-bold text-foreground">{propertiesCount}</div>
+                          <div className="text-sm text-muted-foreground">{t("dashboard.properties")}</div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-4 mt-6">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-primary" />
-                    <span className="text-sm text-muted-foreground">{t("dashboard.commercial")} (40%)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-success" />
-                    <span className="text-sm text-muted-foreground">{t("dashboard.residential")} (35%)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-info" />
-                    <span className="text-sm text-muted-foreground">{t("dashboard.industrial")} (25%)</span>
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-3 mt-6">
+                      {allocation.map((seg, i) => (
+                        <div key={i} className="flex items-center gap-2 min-w-0">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                          <span className="text-sm text-muted-foreground truncate">
+                            {seg.name} ({seg.pct.toFixed(0)}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Upcoming Payments */}
+              {/* Recent Activity — real notifications */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                <div className="flex items-center gap-2 mb-6">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold text-foreground">{t("dashboard.upcomingPayments")}</h3>
-                </div>
-
-                <div className="space-y-4">
-                  {upcomingPayments.map((payment, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div>
-                        <div className="font-medium text-foreground text-sm">{payment.property}</div>
-                        <div className="text-xs text-muted-foreground">{payment.type} • {payment.date}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-success">+${payment.amount}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.35s" }}>
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
                     <Bell className="w-5 h-5 text-primary" />
                     <h3 className="font-semibold text-foreground">{t("dashboard.recentActivity")}</h3>
                   </div>
-                  <Badge variant="gold">3 {t("dashboard.new")}</Badge>
+                  {unreadCount > 0 && (
+                    <Badge variant="gold">{unreadCount} {t("dashboard.new")}</Badge>
+                  )}
                 </div>
 
-                <div className="space-y-4">
-                  {recentActivity.map((activity, index) => (
-                    <div key={index} className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                        activity.status === "success" ? "bg-success/10" : "bg-info/10"
-                      )}>
-                        {activity.type === "distribution" && <DollarSign className={cn("w-4 h-4", activity.status === "success" ? "text-success" : "text-info")} />}
-                        {activity.type === "investment" && <Building2 className="w-4 h-4 text-info" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">{activity.title}</div>
-                        <div className="text-xs text-muted-foreground">{activity.date}</div>
-                      </div>
-                      <div className={cn(
-                        "text-sm font-semibold shrink-0",
-                        activity.amount.startsWith("+") ? "text-success" : "text-foreground"
-                      )}>
-                        {activity.amount}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {activityLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    {isAr ? "لا يوجد نشاط حديث" : "No recent activity"}
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((n) => {
+                      const { title } = renderNotificationCopy(n, t);
+                      return (
+                        <div key={n.id} className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0">
+                          <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                            n.read ? "bg-muted" : "bg-primary/10"
+                          )}>
+                            <Bell className={cn("w-4 h-4", n.read ? "text-muted-foreground" : "text-primary")} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-foreground">{title}</div>
+                            <div className="text-xs text-muted-foreground">{relativeTime(n.created_at, language)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                <Button variant="ghost" className="w-full mt-4">{t("dashboard.viewAllActivity")}</Button>
+                <Link to="/notifications">
+                  <Button variant="ghost" className="w-full mt-4">{t("dashboard.viewAllActivity")}</Button>
+                </Link>
               </div>
 
-              {/* Reinvest Returns Card */}
+              {/* Reinvest Returns Card — real available balance, no fake bonus figures */}
               <ReinvestReturnsCard
-                availableReturns={portfolioStats.totalReturn}
-                totalReinvested={2500}
-                totalBonus={175}
+                availableReturns={availableReturns}
                 className="animate-fade-in"
                 style={{ animationDelay: "0.4s" }}
               />
 
               {/* Exit Options Card */}
-              <ExitOptionsCard 
-                compact 
+              <ExitOptionsCard
+                compact
                 className="bg-card rounded-2xl border border-border p-6 animate-fade-in"
                 style={{ animationDelay: "0.42s" }}
               />
@@ -378,10 +373,10 @@ export default function Dashboard() {
                       <span className="text-xs">{t("nav.secondaryMarket")}</span>
                     </Button>
                   </Link>
-                  <Link to="/marketplace" className="contents">
+                  <Link to="/reinvestment" className="contents">
                     <Button variant="outline" className="flex-col h-auto py-4 gap-2">
                       <RefreshCw className="w-5 h-5" />
-                      <span className="text-xs">{language === "ar" ? "إعادة استثمار" : "Reinvest"}</span>
+                      <span className="text-xs">{isAr ? "إعادة استثمار" : "Reinvest"}</span>
                     </Button>
                   </Link>
                   <Link to="/documents" className="contents">

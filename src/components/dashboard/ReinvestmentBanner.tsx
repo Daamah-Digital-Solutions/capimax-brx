@@ -14,8 +14,6 @@ export function ReinvestmentBanner({ availableReturns, className }: Reinvestment
 
   if (availableReturns <= 0) return null;
 
-  const bonusAmount = (availableReturns * 5) / 100;
-
   return (
     <div
       className={cn(
@@ -42,14 +40,14 @@ export function ReinvestmentBanner({ availableReturns, className }: Reinvestment
               <Sparkles className="w-4 h-4 text-warning" />
             </div>
             <p className="text-primary-foreground/80 text-sm">
-              {language === "ar" 
-                ? `لديك $${availableReturns.toLocaleString()} متاحة - احصل على $${bonusAmount.toLocaleString()} مكافأة!`
-                : `You have $${availableReturns.toLocaleString()} available - get $${bonusAmount.toLocaleString()} bonus!`}
+              {language === "ar"
+                ? `لديك $${availableReturns.toLocaleString()} متاحة لإعادة الاستثمار من رصيدك`
+                : `You have $${availableReturns.toLocaleString()} available to reinvest from your balance`}
             </p>
           </div>
         </div>
 
-        <Link to="/marketplace">
+        <Link to="/reinvestment">
           <Button 
             variant="secondary" 
             className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 gap-2 shadow-lg"

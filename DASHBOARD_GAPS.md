@@ -20,6 +20,39 @@ at implementation. Line numbers are from the audit pass.
 
 ## INVESTOR
 
+### ✅ Dashboard.tsx — full mock→real repoint (frontend-only, existing endpoints)
+The investor home page was **100% mock** (no API calls; hardcoded `portfolioStats`, `holdings`,
+`recentActivity`, `upcomingPayments`, fake user name). Now wired to real Django data:
+- **User name** → `useAuth().user.profile.full_name || email` (was "Mohamed Ahmed").
+- **Total Value** → sum of real `useOwnershipTokens` `token_value_usd`; **Properties** → distinct property count.
+- **Total Returns** + **ReinvestmentBanner** + **ReinvestReturnsCard** `availableReturns` → real internal
+  balance via `useReinvestments().availableBalance` (= `walletsApi.balance`). One real value, 3 spots.
+- **Pending Distributions** → `useDistributions().stats.pendingAmount`.
+- **Holdings list** → real ownership tokens grouped by property (name, units, ownership%, current value,
+  real `/property/:property_id` link); loading spinner + empty state ("No investments yet" → marketplace).
+- **Recent Activity** → real `useNotifications` (`renderNotificationCopy` + `relativeTime`); **"X new"** =
+  real `unreadCount`; **View all activity** → `/notifications`. **View All** (holdings) → `/portfolio`.
+- **Allocation donut** → derived from **real per-property VALUE SHARE** (`token_value_usd / total`), center
+  = real property count. *(Decision: the token model carries NO type/category, so the fake
+  Commercial/Residential/Industrial 40/35/25 split was NOT invented — replaced with real per-property
+  shares. The By-Type/By-Region toggles were removed.)*
+- **Quick action Reinvest** → `/reinvestment` (was `/marketplace`).
+
+**Removed / deferred-and-handled honestly (no fake numbers shown):**
+- **"+12%" KPI trend badge** — REMOVED (no portfolio time-series endpoint).
+- **Upcoming Payments** section — REMOVED (distributions are ad-hoc; no scheduled-distributions endpoint).
+- Per-holding **construction status / progress bar** — DROPPED (no build-progress field on tokens).
+- Per-holding **"invested" + returnPercent / `+9.4%`** — DROPPED: ownership tokens carry **no cost-basis**,
+  so a truthful return % isn't computable (would be invented). Holdings show units + ownership% + current value.
+- **ReinvestReturnsCard** 5% bonus + 2% Pronova math, `Progress=75`, `totalReinvested`/`totalBonus`, and
+  **ReinvestmentBanner** bonus figure — REMOVED; bonuses shown as honest **"Coming soon"** (deferred product,
+  no backend/Pronova). The card/banner now use the real balance + CTA → `/reinvestment`. *(`totalReinvested`/
+  `totalBonus` props kept optional-but-ignored so Portfolio.tsx/Wallet.tsx still compile — those pages still
+  feed the card their OWN mock `availableReturns`, a separate audit.)*
+- **ExitOptionsCard fees** (0.5% / 1%) — left as static nav config (no fee-config endpoint) — flagged, minor.
+
+tsc clean; loading/empty states added (a new investor sees clean zeros/empty, not mock).
+
 ### A — BLOCKED
 - `src/pages/Distributions.tsx:73` — **Export Statement** — no-handler — A:reports-export.
 - `src/pages/Distributions.tsx:77` — **Tax Report** — no-handler — A:reports-export.
@@ -29,15 +62,12 @@ at implementation. Line numbers are from the audit pass.
 ### B — CLEANUP
 - ~~`src/pages/Wallet.tsx:432` — `WithdrawalDialog` (investor withdraw) — LEGACY SUPABASE-OTP — B.~~ ✅ **CLOSED** — investor Wallet repointed to the shared Django `OwnerWithdrawDialog`; the dead `WithdrawalDialog.tsx` component was deleted.
 - ~~`src/pages/PropertyDetail.tsx:880` — **Add to Wallet** (SPV tab) — toast-only (3s "added"), informational MetaMask-add dialog, no real action — B.~~ ✅ **CLOSED** — button + dialog **removed** (PropertyDetail finishing).
-- `src/pages/Dashboard.tsx:206` — **View All** (holdings) — no-handler — B (decorative).
-- `src/pages/Dashboard.tsx:254` — **By Region** (allocation filter) — no-handler — B (decorative).
-- `src/pages/Dashboard.tsx:346` — **View All Activity** — no-handler — B (decorative).
+- ~~`Dashboard.tsx` — **View All** (holdings) / **By Region** (allocation) / **View All Activity** — decorative~~ ✅ **CLOSED** (Dashboard repoint): View All → `/portfolio`, View All Activity → `/notifications`, By-Type/By-Region toggles removed.
 - `src/pages/Notifications.tsx:108` — **Settings** gear — no-handler — B (no prefs backend; local only).
 
 ### C — QUICK-WIN (existing endpoint)
 - `src/pages/Wallet.tsx:160` — **Refresh balance** — no-handler — C (refetch `walletsApi.balance`/`useUserWallet`).
-- `src/pages/Dashboard.tsx:369` — **Deposit** (quick action) — no-handler — C (route to wallet / top-up).
-- `src/pages/Dashboard.tsx:385` — **Documents** (quick action) — no-handler — C (route to portfolio certificates).
+- `Dashboard.tsx` Quick Actions (**Deposit**→/wallet, **Secondary Market**→/secondary-market, **Reinvest**→/reinvestment, **Documents**→/documents) — all real nav links (verified post-repoint).
 
 **Verified-wired (no gap):** SecondaryMarket buy/sell/withdraw (`useSecondaryMarket`); VerifyCertificate (`certificatesApi.verify`); CertificatesSection refresh; Portfolio token-details.
 
