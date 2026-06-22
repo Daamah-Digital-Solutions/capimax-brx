@@ -12,7 +12,9 @@ from apps.properties.models import Property
 from .models import Investment
 
 # Payment methods the frontend offers (src/pages/Checkout.tsx PaymentMethod).
-PAYMENT_METHODS = ["card", "apple_pay", "google_pay", "crypto", "pronova", "sukuk"]
+# "balance" = reinvestment (spend accrued internal balance — no PSP); see
+# investments.services.BALANCE_METHOD.
+PAYMENT_METHODS = ["card", "apple_pay", "google_pay", "crypto", "pronova", "sukuk", "balance"]
 
 
 class InvestmentCreateSerializer(serializers.Serializer):

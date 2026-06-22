@@ -319,6 +319,33 @@ export const paymentsApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// Reinvestments — spend accrued internal balance (distribution/sale yield) to buy more
+// tokens via the normal invest+mint path (payment_method="balance"; no PSP). The buy is
+// the existing investmentsApi.create with payment_method:"balance"; this api only reads
+// the self-scoped HISTORY (balance-funded investments). Available balance = walletsApi
+// .balance(). NO bonus/discount in v1 (deferred product decision). REINVESTMENTS_SURFACE.md.
+// --------------------------------------------------------------------------- //
+export interface ReinvestmentRow {
+  id: string;
+  property_id: string;
+  property_name: string;
+  source_amount: number;       // amount spent from balance (== net; no discount in v1)
+  discount_amount: number;     // always 0 in v1 (bonus deferred)
+  net_investment_value: number;
+  token_amount: number;
+  token_symbol: string;
+  tokens_minted: boolean;
+  status: "completed" | "pending" | "failed" | string;
+  created_at: string;
+}
+
+export const reinvestmentsApi = {
+  /** The caller's reinvestments (balance-funded buys), newest first. */
+  history: () =>
+    rawRequest("/investments/reinvestments/", { auth: true }) as Promise<ReinvestmentRow[]>,
+};
+
+// --------------------------------------------------------------------------- //
 // Wallet + KYC API (Phase 4) — authenticated. SPEC §3.4 / §3.2.
 // Repoints the frontend's wallet/KYC/holdings layer off Supabase onto Django.
 // --------------------------------------------------------------------------- //

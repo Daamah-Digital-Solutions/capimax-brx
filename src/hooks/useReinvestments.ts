@@ -1,103 +1,55 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import {
+  reinvestmentsApi,
+  walletsApi,
+  type ReinvestmentRow,
+} from "@/integrations/api/client";
 
-export interface Reinvestment {
-  id: string;
-  user_id: string;
-  source_amount: number;
-  discount_percentage: number;
-  discount_amount: number;
-  net_investment_value: number;
-  investment_id: string | null;
-  property_id: string;
-  property_name: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+// Reinvestments — repointed off Supabase onto Django. A reinvestment is a balance-funded
+// buy (spend accrued distribution/sale yield in UserBalance → mint more tokens via the
+// normal invest path, payment_method="balance"). This hook reads the self-scoped HISTORY
+// + the real available balance. The BUY itself happens at Checkout (the "Pay from balance"
+// method); there is no client-side Supabase insert anymore. NO bonus/discount in v1 (a
+// deferred product decision). REINVESTMENTS_SURFACE.md.
 
-export interface CreateReinvestmentInput {
-  source_amount: number;
-  property_id: string;
-  property_name: string;
-  discount_percentage?: number;
-}
+export type Reinvestment = ReinvestmentRow;
 
 export function useReinvestments() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
   const { data: reinvestments, isLoading } = useQuery({
     queryKey: ["reinvestments", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      const { data, error } = await supabase
-        .from("reinvestments")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data as Reinvestment[];
-    },
+    queryFn: () => reinvestmentsApi.history(),
     enabled: !!user?.id,
   });
 
-  const createReinvestment = useMutation({
-    mutationFn: async (input: CreateReinvestmentInput) => {
-      if (!user?.id) throw new Error("User not authenticated");
-
-      const discountPercentage = input.discount_percentage ?? 5;
-      const discountAmount = (input.source_amount * discountPercentage) / 100;
-      const netInvestmentValue = input.source_amount + discountAmount;
-
-      const { data, error } = await supabase
-        .from("reinvestments")
-        .insert({
-          user_id: user.id,
-          source_amount: input.source_amount,
-          discount_percentage: discountPercentage,
-          discount_amount: discountAmount,
-          net_investment_value: netInvestmentValue,
-          property_id: input.property_id,
-          property_name: input.property_name,
-          status: "pending",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reinvestments"] });
-      toast.success("Reinvestment request created successfully!");
-    },
-    onError: (error) => {
-      console.error("Error creating reinvestment:", error);
-      toast.error("Failed to create reinvestment request");
-    },
+  // Real available balance (distribution/sale yield) — replaces the old mock $5000.
+  const { data: balance } = useQuery({
+    queryKey: ["reinvestments-balance", user?.id],
+    queryFn: () => walletsApi.balance(),
+    enabled: !!user?.id,
   });
 
-  const totalReinvested = reinvestments?.reduce(
-    (sum, r) => sum + (r.status === "completed" ? r.source_amount : 0),
-    0
-  ) ?? 0;
+  const totalReinvested =
+    reinvestments?.reduce(
+      (sum, r) => sum + (r.status === "completed" ? r.source_amount : 0),
+      0,
+    ) ?? 0;
 
-  const totalBonus = reinvestments?.reduce(
-    (sum, r) => sum + (r.status === "completed" ? r.discount_amount : 0),
-    0
-  ) ?? 0;
+  // No bonus in v1 (discount_amount is always 0); kept for the History shape.
+  const totalBonus =
+    reinvestments?.reduce(
+      (sum, r) => sum + (r.status === "completed" ? r.discount_amount : 0),
+      0,
+    ) ?? 0;
 
-  const pendingReinvestments = reinvestments?.filter(r => r.status === "pending") ?? [];
+  const pendingReinvestments = reinvestments?.filter((r) => r.status === "pending") ?? [];
 
   return {
     reinvestments,
     isLoading,
-    createReinvestment,
+    availableBalance: balance?.current_balance ?? 0,
     totalReinvested,
     totalBonus,
     pendingReinvestments,

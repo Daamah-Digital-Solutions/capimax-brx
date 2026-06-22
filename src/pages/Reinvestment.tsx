@@ -26,48 +26,25 @@ import { cn } from "@/lib/utils";
 
 export default function Reinvestment() {
   const { language, isRTL } = useLanguage();
-  const { reinvestments, isLoading, totalReinvested, totalBonus, pendingReinvestments } = useReinvestments();
-  
-  // Mock available returns - in production this would come from user's account
-  const availableReturns = 5000;
-  
-  // Discount calculations
-  const standardDiscount = 5; // 5% standard reinvestment bonus
-  const pronovaBonus = 2; // 2% Pronova bonus
-  const standardFee = 1; // 1% standard purchase fee
-  const pronovaFee = 0; // 0% fee with Pronova
-  
-  const potentialBonus = (availableReturns * standardDiscount) / 100;
-  const potentialPronovaBonus = (availableReturns * pronovaBonus) / 100;
-  const totalPotentialValue = availableReturns + potentialBonus + potentialPronovaBonus;
+  const { reinvestments, isLoading, availableBalance, totalReinvested, pendingReinvestments } =
+    useReinvestments();
 
-  const benefits = [
+  // REAL available returns = the investor's internal balance (accrued distribution / sale
+  // yield in UserBalance). Replaces the old mock $5000. Reinvesting spends this at the SAME
+  // price/fees as a normal buy — the 5%/2%/Pronova bonuses are DEFERRED (a product decision;
+  // no backend/Pronova exists). REINVESTMENTS_SURFACE.md.
+  const availableReturns = availableBalance;
+
+  // The reinvestment buy is funded from balance at checkout (payment_method="balance").
+  const compoundBenefits = [
     {
-      icon: Percent,
-      title: language === "ar" ? "خصم 5% فوري" : "5% Instant Discount",
-      description: language === "ar" 
-        ? "احصل على خصم 5% على قيمة كل سهم عند إعادة الاستثمار"
-        : "Get 5% off the value of each share when reinvesting",
+      icon: Wallet,
+      title: language === "ar" ? "ادفع من رصيدك" : "Pay from Your Balance",
+      description: language === "ar"
+        ? "أعد استثمار عوائدك المتراكمة مباشرةً دون دفع جديد بالبطاقة"
+        : "Reinvest your accrued returns directly — no new card charge",
       color: "text-success",
       bgColor: "bg-success/10",
-    },
-    {
-      icon: Coins,
-      title: language === "ar" ? "مكافأة برونوفا 2%" : "2% Pronova Bonus",
-      description: language === "ar"
-        ? "مكافأة إضافية 2% عند الدفع بتوكن برونوفا"
-        : "Additional 2% bonus when paying with Pronova token",
-      color: "text-primary",
-      bgColor: "bg-primary/10",
-    },
-    {
-      icon: Shield,
-      title: language === "ar" ? "رسوم مخفضة" : "Reduced Fees",
-      description: language === "ar"
-        ? "رسوم 1% فقط مع الشراء العادي، 0% مع برونوفا"
-        : "Only 1% fee with standard purchase, 0% with Pronova",
-      color: "text-amber-500",
-      bgColor: "bg-amber-500/10",
     },
     {
       icon: TrendingUp,
@@ -129,13 +106,13 @@ export default function Reinvestment() {
                 </CardTitle>
                 <CardDescription>
                   {language === "ar"
-                    ? "إعادة استثمار عوائدك تتيح لك الاستفادة من مكافآت وخصومات حصرية غير متاحة للمشتريات العادية"
-                    : "Reinvesting your returns allows you to benefit from exclusive bonuses and discounts not available for regular purchases"}
+                    ? "أعد استثمار عوائدك المتراكمة في عقارات جديدة مباشرةً من رصيدك — دون دفع جديد بالبطاقة"
+                    : "Reinvest your accrued returns into new properties straight from your balance — no new card charge"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {benefits.map((benefit, index) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {compoundBenefits.map((benefit, index) => (
                     <div
                       key={index}
                       className={cn(
@@ -163,48 +140,42 @@ export default function Reinvestment() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="p-4 bg-muted rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1">
                       <span className="text-sm text-muted-foreground">
-                        {language === "ar" ? "العوائد المتاحة للاستثمار" : "Returns Available for Reinvestment"}
+                        {language === "ar" ? "الرصيد المتاح لإعادة الاستثمار" : "Balance Available to Reinvest"}
                       </span>
                       <span className="text-2xl font-bold text-gradient-gold">
                         ${availableReturns.toLocaleString()}
                       </span>
                     </div>
-                    <Progress value={75} className="h-2" />
+                    <p className="text-xs text-muted-foreground">
+                      {language === "ar"
+                        ? "عوائدك المتراكمة من التوزيعات والمبيعات."
+                        : "Your accrued distribution & sale proceeds."}
+                    </p>
                   </div>
 
-                  {/* Calculation Preview */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg">
-                      <span className="text-sm">
-                        {language === "ar" ? "مكافأة إعادة الاستثمار" : "Reinvestment Bonus"} (5%)
-                      </span>
-                      <span className="font-semibold text-success">+${potentialBonus.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
-                      <span className="text-sm">
-                        {language === "ar" ? "مكافأة برونوفا" : "Pronova Bonus"} (2%)
-                      </span>
-                      <span className="font-semibold text-primary">+${potentialPronovaBonus.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/20 to-success/20 rounded-xl border border-primary/30">
-                      <span className="font-medium">
-                        {language === "ar" ? "إجمالي قيمة الاستثمار" : "Total Investment Value"}
-                      </span>
-                      <span className="text-xl font-bold text-gradient-gold">
-                        ${totalPotentialValue.toLocaleString()}
-                      </span>
-                    </div>
+                  {/* Bonuses (5% / Pronova / reduced fees) are a future product decision —
+                      flagged clearly rather than shown as if active. */}
+                  <div className="flex items-center justify-between p-3 bg-muted/40 border border-border rounded-lg">
+                    <span className="text-sm text-muted-foreground">
+                      {language === "ar" ? "مكافآت إعادة الاستثمار" : "Reinvestment bonuses"}
+                    </span>
+                    <Badge variant="secondary">{language === "ar" ? "قريباً" : "Coming soon"}</Badge>
                   </div>
 
                   <Link to="/marketplace?reinvest=true">
-                    <Button variant="hero" className="w-full gap-2 mt-4">
+                    <Button variant="hero" className="w-full gap-2 mt-2" disabled={availableReturns <= 0}>
                       <ShoppingCart className="w-4 h-4" />
-                      {language === "ar" ? "اذهب إلى السوق للاستثمار" : "Go to Marketplace to Invest"}
+                      {language === "ar" ? "أعد الاستثمار من رصيدك" : "Reinvest from Balance"}
                       <ArrowRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
                     </Button>
                   </Link>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {language === "ar"
+                      ? "اختر عقارًا ثم اختر «الدفع من الرصيد» عند الدفع."
+                      : "Pick a property, then choose “Pay from Balance” at checkout."}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -228,10 +199,10 @@ export default function Reinvestment() {
                     </div>
                     <div className="p-4 bg-muted rounded-xl text-center">
                       <div className="text-sm text-muted-foreground mb-1">
-                        {language === "ar" ? "إجمالي المكافآت" : "Total Bonus Earned"}
+                        {language === "ar" ? "الرصيد المتاح" : "Available Balance"}
                       </div>
                       <div className="text-xl font-bold text-success">
-                        ${totalBonus.toLocaleString()}
+                        ${availableReturns.toLocaleString()}
                       </div>
                     </div>
                     <div className="p-4 bg-muted rounded-xl text-center">
@@ -266,141 +237,57 @@ export default function Reinvestment() {
             </div>
           </TabsContent>
 
-          {/* Bonuses Tab */}
+          {/* Bonuses Tab — DEFERRED. The 5% / 2% Pronova / reduced-fee mechanics are an
+              undefined product decision (no backend, no Pronova integration). We flag this
+              honestly instead of advertising bonuses that don't apply. */}
           <TabsContent value="bonuses" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Discount Structure */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Percent className="w-5 h-5 text-success" />
-                    {language === "ar" ? "هيكل الخصومات" : "Discount Structure"}
-                  </CardTitle>
-                  <CardDescription>
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Percent className="w-5 h-5 text-muted-foreground" />
+                  {language === "ar" ? "مكافآت إعادة الاستثمار" : "Reinvestment Bonuses"}
+                  <Badge variant="secondary">{language === "ar" ? "قريباً" : "Coming soon"}</Badge>
+                </CardTitle>
+                <CardDescription>
+                  {language === "ar"
+                    ? "إعادة الاستثمار اليوم تتم بنفس السعر والرسوم كأي شراء عادي."
+                    : "Reinvesting today happens at the same price and fees as any normal purchase."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-muted/40 border border-border rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-5 h-5 text-success" />
+                    <span className="font-semibold text-foreground">
+                      {language === "ar" ? "المتاح الآن" : "Available now"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
                     {language === "ar"
-                      ? "الخصومات والمكافآت المطبقة تلقائياً"
-                      : "Discounts and bonuses applied automatically"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 border border-success/30 bg-success/5 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-foreground">
-                        {language === "ar" ? "خصم إعادة الاستثمار" : "Reinvestment Discount"}
-                      </span>
-                      <Badge variant="success" className="text-lg px-3 py-1">5%</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar"
-                        ? "يُطبق تلقائياً على جميع عمليات إعادة الاستثمار"
-                        : "Automatically applied to all reinvestment transactions"}
-                    </p>
-                  </div>
-
-                  <div className="p-4 border border-primary/30 bg-primary/5 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-foreground">
-                        {language === "ar" ? "مكافأة برونوفا" : "Pronova Bonus"}
-                      </span>
-                      <Badge variant="default" className="text-lg px-3 py-1">+2%</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar"
-                        ? "مكافأة إضافية عند الدفع بتوكن برونوفا"
-                        : "Additional bonus when paying with Pronova token"}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-gradient-to-r from-success/10 to-primary/10 border border-success/30 rounded-xl">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-foreground">
-                        {language === "ar" ? "إجمالي المكافأة المحتملة" : "Total Potential Bonus"}
-                      </span>
-                      <Badge variant="gold" className="text-lg px-4 py-1">7%</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Fee Structure */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-amber-500" />
-                    {language === "ar" ? "هيكل الرسوم" : "Fee Structure"}
-                  </CardTitle>
-                  <CardDescription>
-                    {language === "ar"
-                      ? "رسوم المعاملات حسب طريقة الدفع"
-                      : "Transaction fees based on payment method"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 border border-border rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <ShoppingCart className="w-5 h-5 text-muted-foreground" />
-                        <span className="font-semibold text-foreground">
-                          {language === "ar" ? "الشراء العادي" : "Standard Purchase"}
-                        </span>
-                      </div>
-                      <Badge variant="secondary" className="text-lg px-3 py-1">{standardFee}%</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar"
-                        ? "رسوم المعاملات للمشتريات ببطاقة الائتمان أو التحويل البنكي"
-                        : "Transaction fee for credit card or bank transfer purchases"}
-                    </p>
-                  </div>
-
-                  <div className="p-4 border border-primary/30 bg-primary/5 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Coins className="w-5 h-5 text-primary" />
-                        <span className="font-semibold text-foreground">
-                          {language === "ar" ? "الدفع ببرونوفا" : "Pronova Payment"}
-                        </span>
-                      </div>
-                      <Badge variant="success" className="text-lg px-3 py-1">{pronovaFee}%</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar"
-                        ? "بدون رسوم عند الدفع بتوكن برونوفا"
-                        : "Zero fees when paying with Pronova token"}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2 text-success">
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="text-sm font-medium">
-                        {language === "ar" ? "موصى به" : "Recommended"}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* CTA */}
-            <Card className="border-primary/30 bg-gradient-to-r from-primary/10 to-success/10">
-              <CardContent className="py-8">
-                <div className="text-center space-y-4">
-                  <h3 className="text-2xl font-bold text-foreground">
-                    {language === "ar" 
-                      ? "ابدأ إعادة الاستثمار الآن واحصل على مكافآتك"
-                      : "Start Reinvesting Now and Get Your Bonuses"}
-                  </h3>
-                  <p className="text-muted-foreground max-w-2xl mx-auto">
-                    {language === "ar"
-                      ? "استفد من خصم 5% + 2% مكافأة برونوفا على جميع عمليات إعادة الاستثمار"
-                      : "Take advantage of 5% discount + 2% Pronova bonus on all reinvestments"}
+                      ? "أعد استثمار رصيدك (عوائد التوزيعات والمبيعات) مباشرةً في رموز جديدة — دون دفع جديد بالبطاقة، وبإصدار فوري للرموز."
+                      : "Reinvest your balance (distribution & sale proceeds) straight into new tokens — no new card charge, with instant token minting."}
                   </p>
-                  <Link to="/marketplace?reinvest=true">
-                    <Button variant="hero" size="lg" className="gap-2 mt-4">
-                      <ShoppingCart className="w-5 h-5" />
-                      {language === "ar" ? "تصفح فرص الاستثمار" : "Browse Investment Opportunities"}
-                      <ArrowRight className={cn("w-5 h-5", isRTL && "rotate-180")} />
-                    </Button>
-                  </Link>
                 </div>
+                <div className="p-4 bg-muted/40 border border-border rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Coins className="w-5 h-5 text-muted-foreground" />
+                    <span className="font-semibold text-foreground">
+                      {language === "ar" ? "قيد التخطيط" : "Planned"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {language === "ar"
+                      ? "خصومات/مكافآت إعادة الاستثمار وتكامل توكن برونوفا — قيد التحديد، وستُعلن لاحقاً."
+                      : "Reinvestment discounts/bonuses and Pronova-token integration — to be defined and announced later."}
+                  </p>
+                </div>
+                <Link to="/marketplace?reinvest=true">
+                  <Button variant="hero" className="w-full gap-2 mt-2" disabled={availableReturns <= 0}>
+                    <ShoppingCart className="w-4 h-4" />
+                    {language === "ar" ? "أعد الاستثمار من رصيدك" : "Reinvest from Balance"}
+                    <ArrowRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </TabsContent>

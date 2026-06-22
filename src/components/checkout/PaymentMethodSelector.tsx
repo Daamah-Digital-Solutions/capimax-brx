@@ -27,6 +27,10 @@ interface PaymentMethodSelectorProps {
   onSelectMethod: (method: PaymentMethod) => void;
   totalAmount: number;
   pronovaDiscount: number;
+  // Reinvestment: the caller's internal balance + what a balance buy would debit (units ×
+  // price). When provided, a "Pay from balance" method is offered (disabled if insufficient).
+  availableBalance?: number | null;
+  balanceChargeAmount?: number;
 }
 
 export function PaymentMethodSelector({
@@ -34,11 +38,31 @@ export function PaymentMethodSelector({
   onSelectMethod,
   totalAmount,
   pronovaDiscount,
+  availableBalance,
+  balanceChargeAmount = 0,
 }: PaymentMethodSelectorProps) {
   const { t, language, isRTL } = useLanguage();
   const [expandedMethod, setExpandedMethod] = useState<PaymentMethod | null>(null);
 
+  const hasBalance = availableBalance !== null && availableBalance !== undefined;
+  const balanceEnough = hasBalance && (availableBalance as number) >= balanceChargeAmount;
+
   const paymentMethods = [
+    // Reinvestment: spend accrued returns (no PSP). Shown first when a balance exists.
+    ...(hasBalance && (availableBalance as number) > 0
+      ? [{
+          id: "balance" as PaymentMethod,
+          name: language === "ar" ? "الدفع من الرصيد" : "Pay from Balance",
+          icon: Wallet,
+          description:
+            language === "ar"
+              ? `متاح: $${(availableBalance as number).toLocaleString()} — إعادة استثمار عوائدك`
+              : `Available: $${(availableBalance as number).toLocaleString()} — reinvest your returns`,
+          badge: language === "ar" ? "إعادة استثمار" : "Reinvest",
+          disabled: !balanceEnough,
+        }]
+      : []),
+  ].concat([
     {
       id: "card" as PaymentMethod,
       name: t("payment.creditDebitCard"),
@@ -78,15 +102,50 @@ export function PaymentMethodSelector({
       description: language === "ar" ? "أداة تمويل متوافقة مع الشريعة" : "Sharia-compliant financing",
       badge: t("payment.financing"),
     },
-  ];
+  ] as Array<{
+    id: PaymentMethod;
+    name: string;
+    icon: typeof CreditCard;
+    description: string;
+    badge?: string;
+    highlight?: boolean;
+    disabled?: boolean;
+  }>);
 
-  const handleSelectMethod = (methodId: PaymentMethod) => {
+  const handleSelectMethod = (methodId: PaymentMethod, disabled?: boolean) => {
+    if (disabled) return;
     onSelectMethod(methodId);
     setExpandedMethod(methodId);
   };
 
   const renderMethodContent = (methodId: PaymentMethod) => {
     switch (methodId) {
+      case "balance":
+        return (
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">
+                {language === "ar" ? "ستدفع من رصيدك" : "You'll pay from your balance"}
+              </span>
+              <span className="font-semibold text-foreground">
+                ${balanceChargeAmount.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">
+                {language === "ar" ? "الرصيد المتاح" : "Available balance"}
+              </span>
+              <span className="font-semibold text-foreground">
+                ${(availableBalance ?? 0).toLocaleString()}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground pt-1 border-t border-border">
+              {language === "ar"
+                ? "إعادة استثمار عوائدك المتراكمة بنفس السعر والرسوم — تُصدر الرموز فورًا. (لا توجد مكافآت إضافية حاليًا.)"
+                : "Reinvest your accrued returns at the same price/fees — tokens mint instantly. (No extra bonuses yet.)"}
+            </p>
+          </div>
+        );
       case "card":
         return <CardPaymentForm />;
       case "apple_pay":
@@ -129,11 +188,13 @@ export function PaymentMethodSelector({
             >
               {/* Method Header */}
               <button
+                disabled={method.disabled}
                 className={cn(
                   "w-full p-4 flex items-center gap-4",
-                  isRTL ? "text-right" : "text-left"
+                  isRTL ? "text-right" : "text-left",
+                  method.disabled && "opacity-50 cursor-not-allowed"
                 )}
-                onClick={() => handleSelectMethod(method.id)}
+                onClick={() => handleSelectMethod(method.id, method.disabled)}
               >
                 {/* Selection Indicator */}
                 <div

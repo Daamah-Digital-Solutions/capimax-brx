@@ -14,10 +14,10 @@ import { Lock, Shield, ArrowLeft, ArrowRight, Plus, Minus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInvestment } from "@/hooks/useInvestment";
 import { useAuth } from "@/contexts/AuthContext";
-import { propertiesApi, kycApi } from "@/integrations/api/client";
+import { propertiesApi, kycApi, walletsApi } from "@/integrations/api/client";
 import { toast } from "sonner";
 
-export type PaymentMethod = "card" | "apple_pay" | "google_pay" | "crypto" | "pronova" | "sukuk";
+export type PaymentMethod = "card" | "apple_pay" | "google_pay" | "crypto" | "pronova" | "sukuk" | "balance";
 export type PaymentStatus = "idle" | "processing" | "success" | "failed";
 
 export interface InvestmentData {
@@ -53,6 +53,9 @@ export default function Checkout() {
   // Get params from URL
   const propertyId = searchParams.get("property") || "1";
   const urlUnits = parseInt(searchParams.get("units") || "1");
+  // Reinvestment (REINVESTMENTS_SURFACE.md): ?reinvest=true → pre-select "Pay from balance",
+  // funding the buy from the investor's accrued internal balance (no PSP). Same price/fees.
+  const reinvestMode = searchParams.get("reinvest") === "true";
 
   // Installments (Wave B): the calculator passes type=installment + the terms. When set,
   // the server charges only the DOWN-PAYMENT (not the full price) and mints the full
@@ -91,10 +94,14 @@ export default function Checkout() {
   // non-approved user is routed to the KYC flow gracefully (not a raw error). null
   // = unknown/not-logged-in; the backend remains the authoritative gate.
   const [kycApproved, setKycApproved] = useState<boolean | null>(null);
+  // Available internal balance (distribution/sale yield) → funds a "Pay from balance"
+  // reinvestment. null = unknown/not-logged-in.
+  const [availableBalance, setAvailableBalance] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) {
       setKycApproved(null);
+      setAvailableBalance(null);
       return;
     }
     let active = true;
@@ -102,6 +109,10 @@ export default function Checkout() {
       .me()
       .then((k) => active && setKycApproved(k.status === "approved"))
       .catch(() => active && setKycApproved(null));
+    walletsApi
+      .balance()
+      .then((b) => active && setAvailableBalance(Number(b.current_balance)))
+      .catch(() => active && setAvailableBalance(0));
     return () => {
       active = false;
     };
@@ -177,6 +188,14 @@ export default function Checkout() {
     if (property) setUnits((u) => Math.min(maxUnits, Math.max(MIN_UNITS, u)));
   }, [property, maxUnits]);
 
+  // Reinvest mode: pre-select "Pay from balance" once the balance is known (installments
+  // are gated to card/crypto, so never auto-select balance for them).
+  useEffect(() => {
+    if (reinvestMode && availableBalance !== null && !isInstallment && selectedMethod === null) {
+      setSelectedMethod("balance");
+    }
+  }, [reinvestMode, availableBalance, isInstallment, selectedMethod]);
+
   const investment = useMemo<InvestmentData>(() => {
     const investmentAmount = units * unitPrice;
     const platformFee = Math.round(investmentAmount * platformRate);
@@ -215,7 +234,14 @@ export default function Checkout() {
     setUnits(clamped);
   };
 
-  const canProceed = selectedMethod && termsAccepted && riskAccepted && !!property;
+  // Balance-funded buys are gated on sufficient balance (the backend debits the
+  // investment amount = units × price; an insufficient balance is rejected server-side).
+  const balanceInsufficient =
+    selectedMethod === "balance" &&
+    availableBalance !== null &&
+    availableBalance < investment.investmentAmount;
+  const canProceed =
+    selectedMethod && termsAccepted && riskAccepted && !!property && !balanceInsufficient;
 
   const handleConfirmPayment = async () => {
     setShowConfirmation(false);
@@ -461,6 +487,8 @@ export default function Checkout() {
                 onSelectMethod={setSelectedMethod}
                 totalAmount={investment.totalPayable}
                 pronovaDiscount={pronovaDiscount}
+                availableBalance={availableBalance}
+                balanceChargeAmount={investment.investmentAmount}
               />
 
               {/* Terms & Risk Disclosure */}

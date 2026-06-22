@@ -284,3 +284,194 @@ class InvestmentApiTests(APITestCase):
         self.client.force_authenticate(other)
         resp2 = self.client.get(f"/api/wallets/{wallet.id}/tokens/")
         self.assertEqual(resp2.status_code, status.HTTP_404_NOT_FOUND)
+
+
+# =====================================================================
+# REINVESTMENTS — balance-funded buy (spend internal yield -> mint), no PSP, no bonus
+# =====================================================================
+from apps.wallets.models import BalanceTransaction, UserBalance  # noqa: E402
+from apps.wallets.services import credit_user_balance  # noqa: E402
+
+
+def _deployed_owned_property(slug, owner, *, total_value="1000000", token_price="100"):
+    """A published, on-chain-deployed property owned by `owner` with zero fees."""
+    p = Property(**_valid_property_kwargs(
+        slug=slug, total_value=Decimal(str(total_value)),
+        token_price=Decimal(str(token_price)), is_published=True,
+    ))
+    p.submitted_by = owner
+    p.fee_platform = Decimal("0")
+    p.fee_management = Decimal("0")
+    p.save()
+    meta, _ = TokenMetadata.objects.get_or_create(property=p)
+    meta.deployed_contract_address = "0x" + "55" * 20
+    meta.deployment_chain_id = 97
+    meta.deployment_network = "bsc-testnet"
+    meta.save()
+    return p
+
+
+class ReinvestmentTests(TestCase):
+    """payment_method='balance': debit UserBalance -> mint (real). Same price/fees as a buy."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-ri@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-ri@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        self.prop = _deployed_owned_property("reinv-1", self.owner)  # supply 10000 @ $100
+
+    def _reinvest(self, tokens):
+        with mock.patch("apps.investments.services.chain_service.mint", side_effect=_fake_mint):
+            return create_investment(
+                user=self.investor, prop=self.prop, token_amount=tokens,
+                payment_method="balance",
+            )
+
+    def _balance(self):
+        bal = UserBalance.objects.filter(user=self.investor).first()
+        return bal.current_balance if bal else Decimal("0")
+
+    def test_balance_funded_reinvest_debits_exactly_and_mints(self):
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        res = self._reinvest(5)  # 5 x $100 = $500
+        self.assertTrue(res["tokens_minted"])
+        inv = res["investment"]
+        self.assertEqual(inv.payment_method, "balance")
+        self.assertEqual(inv.payment_status, PaymentStatus.COMPLETED)
+        self.assertEqual(inv.amount_invested, Decimal("500.00"))
+        # Balance debited EXACTLY $500 (1000 -> 500), with a keyed DEBIT ledger entry.
+        self.assertEqual(self._balance(), Decimal("500.00"))
+        debit = BalanceTransaction.objects.get(
+            balance__user=self.investor, source="reinvestment", reference=str(inv.id)
+        )
+        self.assertEqual(debit.entry_type, BalanceTransaction.EntryType.DEBIT)
+        self.assertEqual(debit.amount, Decimal("500.00"))
+        # Real on-chain mint (mocked): 5 tokens, fully unlocked.
+        token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+        self.assertEqual(token.token_amount, 5)
+        self.assertEqual(token.locked_amount, 0)
+        # Owner credited normally (fees 0 -> net == gross $500), keyed on the investment.
+        owner_credit = BalanceTransaction.objects.get(
+            balance__user=self.owner, source="primary_sale", reference=str(inv.id)
+        )
+        self.assertEqual(owner_credit.amount, Decimal("500.00"))
+
+    def test_insufficient_balance_rejected_nothing_moves(self):
+        from rest_framework.exceptions import ValidationError
+
+        credit_user_balance(self.investor, Decimal("100.00"), source="distribution")
+        with self.assertRaises(ValidationError):
+            self._reinvest(5)  # needs $500, only $100
+        # Rolled back: no investment, balance untouched, no mint, no owner credit.
+        self.assertEqual(Investment.objects.filter(user=self.investor).count(), 0)
+        self.assertEqual(self._balance(), Decimal("100.00"))
+        self.assertFalse(
+            OwnershipToken.objects.filter(
+                wallet__user=self.investor, property_id=self.prop.slug
+            ).exists()
+        )
+        self.assertFalse(BalanceTransaction.objects.filter(source="reinvestment").exists())
+
+    def test_idempotent_no_double_debit_or_mint(self):
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        res = self._reinvest(5)
+        inv = res["investment"]
+        self.assertEqual(self._balance(), Decimal("500.00"))
+        # Replay the mint -> already minted; NO second debit, NO second mint.
+        with mock.patch("apps.investments.services.chain_service.mint", side_effect=_fake_mint) as m:
+            res2 = mint_investment(inv)
+        self.assertTrue(res2.get("already"))
+        self.assertEqual(m.call_count, 0)
+        self.assertEqual(self._balance(), Decimal("500.00"))
+        self.assertEqual(
+            BalanceTransaction.objects.filter(source="reinvestment", reference=str(inv.id)).count(), 1
+        )
+        token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+        self.assertEqual(token.token_amount, 5)
+
+    def test_no_bonus_same_price_as_normal_buy(self):
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        inv = self._reinvest(5)["investment"]
+        # 5 x $100 = exactly $500 charged - NOT a discounted $475 (no 5% reinvest bonus).
+        self.assertEqual(inv.amount_invested, Decimal("500.00"))
+        self.assertEqual(inv.price_per_token, Decimal("100.00"))
+        self.assertEqual(self._balance(), Decimal("500.00"))
+
+    def test_funding_is_internal_no_psp_payment_row(self):
+        from apps.payments.models import Payment
+
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        res = self._reinvest(5)
+        # No PSP Payment row for a balance-funded buy (settled by the in-ledger debit).
+        self.assertEqual(Payment.objects.filter(investment=res["investment"]).count(), 0)
+
+    def test_broker_credited_if_referred(self):
+        from apps.broker.models import BrokerProfile, BrokerStatus
+
+        broker_user = User.objects.create_user(email="brk-ri@example.com", password="pw12345!")
+        broker = BrokerProfile.objects.create(
+            user=broker_user, contact_name="Brk", email="brk-ri@example.com",
+            status=BrokerStatus.APPROVED, commission_rate=Decimal("5"),
+        )
+        self.investor.profile.referred_by_broker = broker
+        self.investor.profile.save(update_fields=["referred_by_broker"])
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        res = self._reinvest(5)  # $500 -> 5% = $25
+        bt = BalanceTransaction.objects.get(
+            balance__user=broker_user, source="broker_commission",
+            reference=str(res["investment"].id),
+        )
+        self.assertEqual(bt.amount, Decimal("25.00"))
+
+    def test_card_buy_unchanged_no_balance_touched(self):
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=5, payment_method="card",
+        )
+        inv = res["investment"]
+        # Card stays PENDING + not minted at creation (webhook-gated) - and NO balance debit.
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
+        self.assertFalse(res["tokens_minted"])
+        self.assertEqual(self._balance(), Decimal("1000.00"))
+        self.assertFalse(BalanceTransaction.objects.filter(source="reinvestment").exists())
+
+
+class ReinvestmentApiTests(APITestCase):
+    """The create endpoint + the reinvestment-history read are KYC-gated / self-scoped."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-ria@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-ria@example.com", password="pw12345!")
+        self.prop = _deployed_owned_property("reinv-api", self.owner)
+
+    def test_balance_buy_kyc_gated(self):
+        # No approved KYC -> the create endpoint rejects with kyc_required (all methods).
+        self.client.force_authenticate(self.investor)
+        resp = self.client.post(
+            "/api/investments/",
+            {"property_id": self.prop.slug, "token_amount": 1, "payment_method": "balance"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.json().get("code"), "kyc_required")
+
+    def test_reinvestment_history_self_scoped(self):
+        get_or_create_custodial_wallet(self.investor)
+        credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
+        with mock.patch("apps.investments.services.chain_service.mint", side_effect=_fake_mint):
+            create_investment(
+                user=self.investor, prop=self.prop, token_amount=3, payment_method="balance",
+            )
+        self.client.force_authenticate(self.investor)
+        resp = self.client.get("/api/investments/reinvestments/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        rows = resp.json()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["source_amount"], 300.0)
+        self.assertEqual(rows[0]["discount_amount"], 0.0)
+        self.assertEqual(rows[0]["status"], "completed")
+        # Another user sees none.
+        other = User.objects.create_user(email="other-ria@example.com", password="pw12345!")
+        self.client.force_authenticate(other)
+        resp2 = self.client.get("/api/investments/reinvestments/")
+        self.assertEqual(resp2.json(), [])

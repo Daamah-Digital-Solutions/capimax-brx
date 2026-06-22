@@ -33,6 +33,14 @@ DEDUP_WINDOW_SECONDS = 60
 # creation). Phase 5 Wave 1: card (Stripe). Wave 2: crypto (NOW Payments IPN).
 WEBHOOK_PAID_METHODS = {"card", "crypto"}
 
+# Reinvestment funding: spend the investor's accrued internal balance (distribution /
+# sale yield in UserBalance) instead of a PSP charge. NOT webhook-gated — settlement IS
+# the successful in-ledger debit, so it takes the same auto-complete + auto-mint path as
+# a settled buy. Same price/fees/owner/broker as a normal buy — NO bonus/discount
+# (deferred product decision; DECISIONS.md "Reinvestments").
+BALANCE_METHOD = "balance"
+REINVESTMENT_SOURCE = "reinvestment"
+
 
 class DuplicateInvestmentError(APIException):
     status_code = 409
@@ -184,6 +192,24 @@ def create_investment(
             down_payment_amount=down_payment_amount,
             installment_plan=installment_plan,
         )
+
+        # Reinvestment (internal-balance funding): debit the investor's UserBalance for the
+        # full price INSIDE this atomic block, so an insufficient balance rolls the whole
+        # creation back (nothing moves). The successful debit IS the settlement — no PSP, no
+        # webhook — so the buy then takes the same auto-complete + auto-mint path below.
+        # Same price/fees/owner/broker as a normal buy (it IS a normal buy, balance-funded).
+        if payment_method == BALANCE_METHOD:
+            from apps.wallets.services import InsufficientBalance, debit_user_balance
+
+            try:
+                debit_user_balance(
+                    user, amount, source=REINVESTMENT_SOURCE, reference=str(investment.id),
+                    memo=f"Reinvestment: {token_amount} {symbol} of {locked_prop.slug}",
+                )
+            except InsufficientBalance:
+                raise ValidationError(
+                    {"payment_method": "Insufficient balance to reinvest this amount."}
+                )
 
         # Phase 5 Wave 1: REAL payment for the card method. The investment stays
         # PENDING here — a real Stripe charge + SIGNATURE-VERIFIED webhook drives

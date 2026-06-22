@@ -85,6 +85,47 @@ class InvestmentDetailView(APIView):
         return Response(InvestmentSerializer(investment).data)
 
 
+class ReinvestmentHistoryView(APIView):
+    """
+    GET /api/investments/reinvestments/ — the caller's REINVESTMENTS (self-scoped): the
+    investments funded from internal balance (payment_method == "balance"). Reuses
+    Investment with the funding method as the marker — no separate model. Shaped to the
+    Reinvestment.tsx History tab. Available balance is read separately via
+    /api/wallets/balance/ (not duplicated here).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .services import BALANCE_METHOD
+
+        rows = (
+            Investment.objects.filter(user=request.user, payment_method=BALANCE_METHOD)
+            .select_related("property")
+            .order_by("-created_at")
+        )
+        data = [
+            {
+                "id": str(inv.id),
+                "property_id": inv.property.slug,
+                "property_name": inv.property_name,
+                # No bonus in v1 — source == net (discount deferred; see DECISIONS.md).
+                "source_amount": float(inv.amount_invested),
+                "discount_amount": 0.0,
+                "net_investment_value": float(inv.amount_invested),
+                "token_amount": inv.token_amount,
+                "token_symbol": inv.token_symbol,
+                "tokens_minted": inv.tokens_minted,
+                "status": "completed" if inv.tokens_minted else (
+                    "pending" if inv.payment_status == "completed" else inv.payment_status
+                ),
+                "created_at": inv.created_at.isoformat(),
+            }
+            for inv in rows
+        ]
+        return Response(data)
+
+
 class InvestmentMintView(APIView):
     """Mint tokens for an existing, paid investment. Owner-only, idempotent."""
 

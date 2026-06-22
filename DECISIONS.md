@@ -1592,8 +1592,43 @@ remaining stubbed/mock controls to existing endpoints (per DASHBOARD_GAPS.md). T
 (SETTINGS_GAPS.md: PATCH /auth/me + authenticated change-password + logout-all; notif/2FA/currency toggles deferred
 local-only).
 
+## REINVESTMENTS — DELIVERED (balance-funded buy; bonuses/Pronova DEFERRED) ✅
+**Source of truth:** REINVESTMENTS_SURFACE.md. Reinvestment = a MANUAL, balance-funded buy: spend the investor's
+accrued internal balance (distribution/sale yield in `UserBalance`) to buy more tokens of ANY property via the
+EXISTING invest+mint path — funded from balance, **NO new PSP charge**. Built by adding the missing funding seam, not a
+new domain.
+- **The seam (`investments/services.py`):** new `payment_method="balance"` (`BALANCE_METHOD`). Inside `create_investment`'s
+  atomic block, after the Investment row is created, it `debit_user_balance(user, amount, source="reinvestment",
+  reference=inv.id)` — an `InsufficientBalance` is caught and re-raised as a DRF 400, rolling the whole creation back
+  (nothing moves). The successful debit IS the settlement (money already in-ledger) → `balance` is NOT in
+  `WEBHOOK_PAID_METHODS`, so it takes the same auto-complete + **real on-chain mint** path as a settled buy. Idempotent
+  via the existing `tokens_minted` guard (the debit happens once in create, never in mint replay). **Same price/fees/owner
+  + broker credit as a normal buy** — it IS a normal buy, balance-funded; no special-casing.
+- **History (no new model):** reinvestments are just Investments with `payment_method="balance"` as the marker.
+  `GET /api/investments/reinvestments/` (self-scoped) shapes them for the History tab; available balance reuses
+  `/api/wallets/balance/`. KYC is enforced upstream by `InvestmentCreateView` (all methods, unchanged).
+- **Bonuses DEFERRED (flagged):** the page advertised a **5% reinvest discount + 2% Pronova bonus + reduced fees** with
+  NO backend and NO Pronova integration anywhere. All of it is deferred as an **undefined product decision** (needs client
+  definition). Reinvestment buys at the SAME price/fees as any purchase (`discount_amount` always 0). Frontend: the
+  Reinvestment "Bonuses" tab is replaced with an honest **"Coming soon"** card; the Overview bonus-math block is removed;
+  mock `availableReturns=$5000` → the real `UserBalance`; history repointed Supabase→Django.
+- **Working flow (faithful to the page's CTA):** Checkout now offers a real **"Pay from Balance"** payment method
+  (`PaymentMethodSelector`), shown when the user has a balance and disabled when it's < the buy amount; `?reinvest=true`
+  pre-selects it. The Reinvestment CTA → Marketplace → pick property → "Pay from Balance" at checkout → balance-funded
+  mint. (The old dead `?reinvest=true` is now consumed at Checkout.)
+- **+9 tests, full suite 421 green, tsc clean.** E2E (real service path, mocked chain): investor with $1000 balance →
+  reinvest 5 tokens of a $100-token property → balance debited **exactly $500** (→ $500 left, keyed DEBIT ledger entry) →
+  **5 tokens minted (real)**, owner credited **$500** (fees 0), broker (if referred) **$25** (5%); a $100-balance attempt
+  to buy $500 → **rejected (InsufficientBalance, rolled back — no investment, no debit, no mint)**; replay → no double
+  debit/mint; NO PSP `Payment` row; card buys UNCHANGED.
+- **Flags:** (1) bonuses/discount/Pronova mechanics undefined — client product decision (the only deferral). (2) The
+  Checkout still DISPLAYS fees-inclusive `totalPayable` while the backend debits the base `amount_invested` (units×price) —
+  a PRE-EXISTING frontend fee-display nuance affecting all simulated methods (the balance gate + method panel show the
+  real debited amount). (3) `availableReturns` reads `UserBalance` (withdrawable proceeds) — a buyer can choose between
+  reinvesting and withdrawing the same balance, as intended.
+
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
-FAMILY_SURFACE.md), **reinvestments** (Supabase/mock), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+FAMILY_SURFACE.md), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
 order-book i18n preserved), and the **small satellite mini-domains** (no backend) flagged in DASHBOARD_GAPS.md:
 **GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**
