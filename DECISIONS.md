@@ -1713,6 +1713,43 @@ carries the server-side-masking fix above), and the **small satellite mini-domai
 (PropertyDetail/DataRoom doc preview/download/verify + the doc "Verify" buttons — no document storage/serving), and
 **favorites** (Add-to-Favorites). *(No longer deferred: reports-export — BUILT in Phase 13.)*
 
+## FRONTEND REALNESS PASS — Investor dashboard, tab by tab (IN PROGRESS; latest origin/main = `391aa96`)
+Going through every Investor surface making it **real** (real data + buttons + names). **TWO FIRM RULES,
+non-negotiable:** (1) **DELETE NOTHING** — every UI element/card/badge/column/section stays in the layout;
+if a value isn't available, show an honest placeholder (`—` / "Coming soon" / empty state), never remove
+the element. (2) **NEVER fake a number** — real data or honest placeholder only.
+- **⚠️ LESSON (watch for this):** the model tends to "clean up" by **DELETING** elements. On the Dashboard
+  it deleted **3** (the +12% trend badge, the Upcoming Payments section, the per-holding return%) before we
+  caught it and **restored all 3** in place. **After each tab, verify nothing was deleted.**
+- **DONE tabs:**
+  - **Dashboard** (`Dashboard.tsx`) — repointed 100% mock → real: user name (`useAuth`), balance/Total
+    Returns (`useReinvestments`/`walletsApi.balance`), holdings (`useOwnershipTokens`), pending
+    distributions (`useDistributions`), recent activity (`useNotifications`), derived value/count/per-property
+    allocation donut. The 3 deleted elements **restored**: trend badge → neutral `—` (no time-series),
+    Upcoming Payments → "No upcoming payments scheduled" (distributions are ad-hoc), per-holding return% →
+    **real** (from the cost-basis below; `—` when no cost record). Bonus/Pronova kept as "Coming soon".
+  - **Portfolio** (`Portfolio.tsx`) — repointed; Wallet + Certificates tabs were already real (untouched).
+    **+ two small BACKEND additions (NO migration):**
+    1. **Token→Property enrichment** (`WalletTokensView`): batched `Property.objects.filter(slug__in=…)`
+       (token.property_id == Property.slug) exposes metadata the model didn't carry but Property already had —
+       `city`/`location`/`location_ar`/`country`, `asset_type`/`category`, `image`/`images`,
+       **`construction_progress`**, **`exit_eligible`**. Data existed; it just wasn't exposed. One query, no N+1.
+    2. **Cost-basis recorded on ALL buy paths** via new `investments.services.record_acquisition_cost()` —
+       secondary-market + LP-market buyer settlement now write a completed `Investment` cost row (primary buys
+       always did). **NO money-flow change** (only records the price already paid; on-chain transfer + balance
+       settlement untouched), **idempotent** via the listing's completed-status guard. The view derives
+       **average cost** (Σ amount_invested / Σ token_amount — invariant to partial sells) → real `invested_usd`
+       + return% per holding. **+2 cost-basis tests; full suite 445 green; no migration** (`makemigrations
+       --check` clean).
+- **FLAGS:** (a) **installment** cost-basis reflects the **committed** (full agreed) price, not the
+  not-yet-paid portion — a minor average-cost nuance. (b) **`CreateVirtualCardButton`** kept **as-is** on
+  Portfolio (deferred visa-cards, still Supabase-functional — NOT disabled; disabling would regress a working
+  feature; pending a final call).
+- **NEXT tabs (queue):** Reinvestment (built — verify no leftover mock), Family Investment (Wave A only),
+  Installments (built), Reports & Analytics (analytics deferred), LP / Secondary Market (built), Live Exits Hub
+  (needs audit), Security & Audit Log (Supabase — deferred mini-domain), Documents (property-documents
+  deferred), Support (needs audit). Detailed per-element record in **DASHBOARD_GAPS.md**.
+
 ## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
 **Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"
 above.** The partner is a **SERVICE VENDOR** — a
