@@ -807,6 +807,59 @@ export const ownerApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// Owner-documents — a self-scoped personal document VAULT, repointed off Supabase
+// onto Django. Mirrors the lpApi document pattern verbatim: list / multipart upload
+// (rawUpload) / delete / owner-only blob download (FileResponse, not a signed URL).
+// Server-side type+size validation lives on the backend. NO Property FK; the
+// PropertyDetail data-room is a separate deferred surface. OWNER_DOCUMENTS.md.
+// --------------------------------------------------------------------------- //
+
+export interface OwnerDocumentRow {
+  id: string;
+  user_id: string;
+  document_name: string;
+  document_type: string;
+  file_path: string | null;
+  file_size: number | null;
+  file_type: string | null;
+  description: string | null;
+  property_name: string | null;
+  status: string;
+  uploaded_at: string;
+  created_at: string;
+}
+
+export const ownerDocumentsApi = {
+  /** The caller's own documents (self-scoped, newest first). */
+  list: () => rawRequest("/owner-documents/", { auth: true }) as Promise<OwnerDocumentRow[]>,
+  /** Upload a document (multipart). The server validates type + size. */
+  upload: (
+    file: File,
+    documentType: string,
+    opts?: { documentName?: string; propertyName?: string; description?: string },
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("document_type", documentType);
+    form.append("document_name", opts?.documentName || file.name);
+    if (opts?.propertyName) form.append("property_name", opts.propertyName);
+    if (opts?.description) form.append("description", opts.description);
+    return rawUpload("/owner-documents/", form) as Promise<OwnerDocumentRow>;
+  },
+  /** Delete one of the caller's own documents (removes row + file). */
+  delete: (docId: string) =>
+    rawRequest(`/owner-documents/${docId}/`, { method: "DELETE", auth: true }),
+  /** Owner-only file blob (the frontend opens or downloads it). */
+  async download(docId: string): Promise<Blob> {
+    const res = await fetch(`${API_BASE_URL}/owner-documents/${docId}/download/`, {
+      headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
+    });
+    if (!res.ok) throw buildError(`Document download failed (${res.status})`, res.status);
+    return res.blob();
+  },
+};
+
+// --------------------------------------------------------------------------- //
 // Developer ENTITY verification (business KYB) only — Phase 8 Wave A. Mirrors
 // ownerApi's KYB subset exactly. KYB approval is automatic via the signed Sumsub
 // webhook (developer business level); the WebSDK access-token degrades to 503 (then

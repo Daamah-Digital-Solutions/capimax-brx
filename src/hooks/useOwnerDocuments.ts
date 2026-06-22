@@ -1,167 +1,140 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  ownerDocumentsApi,
+  type OwnerDocumentRow,
+} from "@/integrations/api/client";
 
-export interface OwnerDocument {
-  id: string;
-  user_id: string;
-  property_id: string | null;
-  property_name: string | null;
-  document_name: string;
-  document_type: string;
-  file_path: string;
-  file_size: number | null;
-  file_type: string | null;
-  description: string | null;
-  status: string;
-  uploaded_at: string;
-  created_at: string;
-  updated_at: string;
+// Owner documents — repointed off Supabase onto the Django ownerDocumentsApi (one of the
+// satellite Supabase surfaces; see OWNER_DOCUMENTS.md). A self-scoped personal VAULT:
+// files are stored server-side under the gitignored backend/media/, the owner sees only
+// their OWN docs, and the blob is streamed from an owner-only download endpoint (no more
+// Supabase storage bucket / signed URLs). NO Property FK — `property_name` stays a
+// free-text label. The server validates file type + size on upload.
+
+// Re-export the row shape under the legacy name the page imports.
+export type OwnerDocument = OwnerDocumentRow;
+
+export type DocumentType =
+  | "ownership"
+  | "legal"
+  | "financial"
+  | "transaction"
+  | "certificate"
+  | "contract"
+  | "other";
+
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
-export type DocumentType = 'ownership' | 'legal' | 'financial' | 'transaction' | 'certificate' | 'contract' | 'other';
-
 export function useOwnerDocuments() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [documents, setDocuments] = useState<OwnerDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
+    if (!user?.id) {
+      setDocuments([]);
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("owner_documents")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setDocuments((data as unknown as OwnerDocument[]) || []);
+      setDocuments(await ownerDocumentsApi.list());
     } catch (error) {
       console.error("Error fetching owner documents:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load documents",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to load documents", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id, toast]);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const uploadDocument = async (
     file: File,
     documentType: DocumentType,
-    propertyId?: string,
     propertyName?: string,
-    description?: string
+    description?: string,
   ) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Upload file to storage
-      const filePath = `${user.id}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("owner-documents")
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Create database record
-      const { data, error } = await supabase
-        .from("owner_documents")
-        .insert({
-          user_id: user.id,
-          property_id: propertyId || null,
-          property_name: propertyName || null,
-          document_name: file.name,
-          document_type: documentType,
-          file_path: filePath,
-          file_size: file.size,
-          file_type: file.type,
-          description: description || null,
-          status: "active",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast({
-        title: "Document Uploaded",
-        description: "Your document has been uploaded successfully",
+      const doc = await ownerDocumentsApi.upload(file, documentType, {
+        documentName: file.name,
+        propertyName,
+        description,
       });
-
+      toast({ title: "Document Uploaded", description: "Your document has been uploaded successfully" });
       await fetchDocuments();
-      return data as unknown as OwnerDocument;
+      return doc;
     } catch (error: any) {
       console.error("Error uploading document:", error);
       toast({
         title: "Upload Failed",
-        description: error.message || "Failed to upload document",
+        description: error?.message || "Failed to upload document",
         variant: "destructive",
       });
       return null;
     }
   };
 
-  const deleteDocument = async (documentId: string, filePath: string) => {
+  const deleteDocument = async (documentId: string) => {
     try {
-      // Delete from storage
-      await supabase.storage.from("owner-documents").remove([filePath]);
-
-      // Delete database record
-      const { error } = await supabase
-        .from("owner_documents")
-        .delete()
-        .eq("id", documentId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Document Deleted",
-        description: "Document has been deleted successfully",
-      });
-
+      await ownerDocumentsApi.delete(documentId);
+      toast({ title: "Document Deleted", description: "Document has been deleted successfully" });
       await fetchDocuments();
     } catch (error: any) {
       console.error("Error deleting document:", error);
       toast({
         title: "Delete Failed",
-        description: error.message || "Failed to delete document",
+        description: error?.message || "Failed to delete document",
         variant: "destructive",
       });
     }
   };
 
-  const getSignedUrl = async (filePath: string) => {
+  // Open the document in a new tab (owner-only blob).
+  const viewDocument = async (documentId: string) => {
     try {
-      const { data, error } = await supabase.storage
-        .from("owner-documents")
-        .createSignedUrl(filePath, 3600); // 1 hour expiry
-
-      if (error) throw error;
-      return data.signedUrl;
+      const blob = await ownerDocumentsApi.download(documentId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      // Revoke after a beat so the new tab can load it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
-      console.error("Error getting signed URL:", error);
-      return null;
+      console.error("Error opening document:", error);
+      toast({ title: "Error", description: "Failed to open document", variant: "destructive" });
     }
   };
 
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
+  // Download the document blob to disk (owner-only).
+  const downloadDocument = async (documentId: string, fileName: string) => {
+    try {
+      triggerBlobDownload(await ownerDocumentsApi.download(documentId), fileName);
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      toast({ title: "Error", description: "Failed to download document", variant: "destructive" });
+    }
+  };
 
   return {
     documents,
     isLoading,
     uploadDocument,
     deleteDocument,
-    getSignedUrl,
+    viewDocument,
+    downloadDocument,
     refetch: fetchDocuments,
   };
 }

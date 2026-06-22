@@ -56,7 +56,7 @@ const documentCategories = [
 
 export default function OwnerDocuments() {
   const { language } = useLanguage();
-  const { documents, isLoading, uploadDocument, deleteDocument, getSignedUrl } = useOwnerDocuments();
+  const { documents, isLoading, uploadDocument, deleteDocument, viewDocument, downloadDocument } = useOwnerDocuments();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -92,7 +92,6 @@ export default function OwnerDocuments() {
     await uploadDocument(
       selectedFile,
       uploadForm.documentType,
-      undefined,
       uploadForm.propertyName || undefined,
       uploadForm.description || undefined
     );
@@ -102,24 +101,9 @@ export default function OwnerDocuments() {
     setUploadForm({ documentType: "other", propertyName: "", description: "" });
   };
 
-  const handleView = async (filePath: string) => {
-    const url = await getSignedUrl(filePath);
-    if (url) {
-      window.open(url, "_blank");
-    }
-  };
+  const handleView = (docId: string) => viewDocument(docId);
 
-  const handleDownload = async (filePath: string, fileName: string) => {
-    const url = await getSignedUrl(filePath);
-    if (url) {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-  };
+  const handleDownload = (docId: string, fileName: string) => downloadDocument(docId, fileName);
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "N/A";
@@ -361,24 +345,24 @@ export default function OwnerDocuments() {
                               variant="ghost" 
                               size="icon" 
                               title={language === "ar" ? "عرض" : "View"}
-                              onClick={() => handleView(doc.file_path)}
+                              onClick={() => handleView(doc.id)}
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               title={language === "ar" ? "تنزيل" : "Download"}
-                              onClick={() => handleDownload(doc.file_path, doc.document_name)}
+                              onClick={() => handleDownload(doc.id, doc.document_name)}
                             >
                               <Download className="w-4 h-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               title={language === "ar" ? "حذف" : "Delete"}
                               className="text-destructive hover:text-destructive"
-                              onClick={() => deleteDocument(doc.id, doc.file_path)}
+                              onClick={() => deleteDocument(doc.id)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>

@@ -1653,8 +1653,10 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
   investor gets **404** on those rows (self-scoped).
 - **⚠️ CORRECTION (honesty):** family was NOT "the last Supabase dependency." Family's data layer is now Django, BUT
   satellite hooks/pages still import Supabase. Surveyed in `SUPABASE_CLEANUP.md` (per-surface: existing-Django? / live? /
-  classification). Result: **0 repointable-now (no surface has an existing Django backend to swap onto), 1 dead, 7 deferred
-  mini-domains** — Supabase is **not** fully removed (still incl. the `integrations/supabase/client` + `lovable` shims).
+  classification). Result at survey time: **0 repointable-now (no surface had an existing Django backend to swap onto), 1 dead,
+  7 deferred mini-domains.** **Progress since: the 1 dead surface DELETED + `owner-documents` BUILT & repointed → 6 Supabase
+  surfaces remain** (`useVisaCards`, `useSavedCards`, `usePWASettings`, `useInvestorCryptoWallets`, `useInvestorBankAccounts`,
+  `AuditLog`). Supabase is **not** fully removed (still incl. the `integrations/supabase/client` + `lovable` shims).
   - **DELETED (the 1 dead surface):** `useWithdrawalRequests` — grep-confirmed **zero importers** across `src/` (only its
     own export); the withdrawal flow already runs on `walletsApi.requestWithdrawal` via `OwnerWithdrawDialog` →
     `apps.wallets.Withdrawal`. File **`git rm`'d**, tsc clean, no dangling import. Its Supabase OTP edge-function calls
@@ -1666,12 +1668,22 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
       is the *reader*; they pair with the existing withdrawal `method` field. **⚠️ FIX TO APPLY when `bank-accounts` is built:**
       the current hook masks the account number **in the browser** and sends the FULL number to Supabase — the Django version
       MUST mask **server-side** (copy Family Wave A's `services.mask_tail`; store last-4 only, never persist the full number).
-    - **cards:** `useSavedCards` (`saved-cards` — back with Stripe SetupIntent, don't vault card data ourselves) and
+    - **cards — DEFERRED BY USER DECISION, explicitly out of this stage (NOT delivered, like the order book):**
+      `useSavedCards` (`saved-cards` — back with Stripe SetupIntent, don't vault card data ourselves) and
       `useVisaCards` (`visa-cards` — largest: real card issuing + spend rail + a second balance ledger; needs an issuing
-      provider; lowest priority).
-    - **pwa-settings + owner-docs (independent, small):** `usePWASettings` (`pwa-settings` — trivial singleton config model) and
-      `useOwnerDocuments` (`owner-documents` — model + `media/` file storage + self-scoped signed download; = the existing
-      "property-documents" satellite below).
+      provider). Both card surfaces keep their current Supabase-backed behaviour until a future stage; not in scope now.
+    - **pwa-settings (independent, small):** `usePWASettings` (`pwa-settings` — trivial singleton config model). Still deferred.
+    - **owner-documents — ✅ DELIVERED (repoint).** `useOwnerDocuments` repointed Supabase → Django `apps.owner_documents`.
+      New `OwnerDocument` model **mirroring `apps.lp.LPDocument`** (user FK, document_name, document_type, `FileField(upload_to=
+      "owner_documents/%Y/%m/")` under the already-gitignored `backend/media/`, file_size, file_type, description, free-text
+      `property_name`, status) + 4 self-scoped views (list / multipart upload / delete / **owner-only `FileResponse` blob
+      download** — replaces Supabase storage + signed URLs; owner sees only their own docs by `filter(user=request.user)`).
+      **INTENTIONAL IMPROVEMENT over the LP pattern:** server-side **type+size validation** (extension+content-type allowlist
+      pdf/doc/docx/jpg/jpeg/png; 10 MB cap; oversize/disallowed → 400) since this is a PII upload. Frontend: `ownerDocumentsApi`
+      (mirrors `lpApi` — `rawUpload` multipart + authed blob download), hook off Supabase, page View/Download/Delete keyed on
+      doc id (blob), bilingual EN/AR preserved. **NO Property FK** (`property_name` stays a label). The PropertyDetail
+      "Verify Documents" data-room (`property-documents`) is a **SEPARATE deferred surface — NOT wired here** (its docs are a
+      hardcoded static array; confirmed in OWNER_DOCUMENTS.md). **Supabase surfaces 7 → 6.** +8 tests; full suite green.
 - **DEFERRED — Waves B/C/D, gated on TWO CLIENT PRODUCT DECISIONS:** (1) **members as real KYC'd users with custodial
   wallets vs passive sub-records** — gates Wave B (internal `UserBalance`→balance transfer + optional distribution skim)
   and Wave C (on-chain Ownership-Token transfer via the existing `chain.service.transfer`); (2) **bank payout** — Wave D
@@ -1681,7 +1693,11 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family Waves B/C/D** (Wave A BUILT — see
 above), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (**DEFERRED BY USER DECISION — explicitly out of this stage**; peer market
-ships real one-shot listings today, order-book i18n preserved so it can return), and the **small satellite mini-domains**
+ships real one-shot listings today, order-book i18n preserved so it can return), the **CARDS mini-domains** (`visa-cards` +
+`saved-cards`) (**DEFERRED BY USER DECISION — explicitly out of this stage**, like the order book; stay on their current
+Supabase behaviour until a future stage), the **payout-destination surfaces** (`bank-accounts` + `crypto-wallets` + their
+`audit-log`) (**blocked on a missing external-payout provider** — same provider gap as family Wave D; `bank-accounts` also
+carries the server-side-masking fix above), and the **small satellite mini-domains**
 (no backend) flagged in DASHBOARD_GAPS.md:
 **GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**
 (PropertyDetail/DataRoom doc preview/download/verify + the doc "Verify" buttons — no document storage/serving), and
