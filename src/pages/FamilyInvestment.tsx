@@ -92,6 +92,7 @@ const FamilyInvestment = () => {
     transactions,
     isLoading,
     createFamilyAccount,
+    updateAllocation,
     addBankAccount,
     createTransferSchedule,
     initiateTransfer,
@@ -99,7 +100,12 @@ const FamilyInvestment = () => {
     isCreating,
     isAddingBank,
     isCreatingSchedule,
+    isTransferring,
   } = useFamilyAccounts();
+
+  // Allocation drafts (per member) + the Transfers-tab form (Wave A: record-only).
+  const [allocDraft, setAllocDraft] = useState<Record<string, number>>({});
+  const [transferForm, setTransferForm] = useState({ recipient: "", type: "returns", amount: "" });
 
   // Demo data for non-authenticated users
   const [demoFamilyMembers] = useState<DemoFamilyMember[]>([
@@ -223,8 +229,8 @@ const FamilyInvestment = () => {
       icon: Shield,
       title: isRTL ? "أمان كامل" : "Full Security",
       description: isRTL
-        ? "جميع التحويلات مؤمنة بتقنية البلوكتشين مع سجل شفاف"
-        : "All transfers are blockchain-secured with transparent records",
+        ? "تُسجَّل جميع العمليات بسجل نشاط شفاف، وتُخزَّن بيانات البنوك بشكل مُقنّع (آخر 4 أرقام فقط)"
+        : "Every action is logged in a transparent activity history; bank details are stored masked (last-4 only)",
       highlight: isRTL ? "آمن" : "Secure",
     },
   ];
@@ -286,6 +292,48 @@ const FamilyInvestment = () => {
 
   const handleAllocateReturns = () => {
     toast.success(isRTL ? "تم تحديث تخصيص العوائد" : "Returns allocation updated");
+  };
+
+  // Persist a member's allocation % to Django (≤100% enforced server-side). Demo members
+  // (unauthenticated) keep the toast-only path.
+  const saveAllocation = async (member: any) => {
+    const isReal = "allocated_returns_percent" in member;
+    const pct = allocDraft[member.id] ?? (isReal ? member.allocated_returns_percent : member.allocatedReturns);
+    if (isReal && user) {
+      try {
+        await updateAllocation({ accountId: member.id, percent: Number(pct) });
+        toast.success(isRTL ? "تم تحديث تخصيص العوائد" : "Returns allocation updated");
+      } catch (e: any) {
+        toast.error(e?.message || (isRTL ? "تعذّر تحديث التخصيص (الحد 100%)" : "Could not update allocation (100% cap)"));
+      }
+    } else {
+      handleAllocateReturns();
+    }
+  };
+
+  // Wave A: a transfer RECORDS an intent only (no money moves yet). Wired to Django for real
+  // members; demo path stays a toast.
+  const handleRecordTransfer = async () => {
+    const amt = parseFloat(transferForm.amount);
+    if (!transferForm.recipient || !amt || amt <= 0) {
+      toast.error(isRTL ? "اختر المستلم وأدخل مبلغاً" : "Pick a recipient and enter an amount");
+      return;
+    }
+    const isReal = user && familyAccounts.some((m) => m.id === transferForm.recipient);
+    if (isReal) {
+      try {
+        await initiateTransfer({
+          family_account_id: transferForm.recipient,
+          amount: amt,
+          transfer_type: transferForm.type,
+        } as any);
+        setTransferForm({ recipient: "", type: "returns", amount: "" });
+      } catch (e: any) {
+        toast.error(e?.message || (isRTL ? "تعذّر تسجيل التحويل" : "Could not record the transfer"));
+      }
+    } else {
+      toast.success(isRTL ? "تم تسجيل التحويل (سيُنفَّذ لاحقاً)" : "Transfer recorded (executed in a later release)");
+    }
   };
 
   const handleTransfer = () => {
@@ -832,7 +880,10 @@ const FamilyInvestment = () => {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="w-32">
-                        <Select defaultValue={('allocated_returns_percent' in member ? member.allocated_returns_percent : member.allocatedReturns).toString()}>
+                        <Select
+                          defaultValue={('allocated_returns_percent' in member ? member.allocated_returns_percent : member.allocatedReturns).toString()}
+                          onValueChange={(v) => setAllocDraft((d) => ({ ...d, [member.id]: Number(v) }))}
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -846,7 +897,7 @@ const FamilyInvestment = () => {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button size="sm" onClick={() => handleAllocateReturns()}>
+                      <Button size="sm" onClick={() => saveAllocation(member)}>
                         <CheckCircle2 className="w-4 h-4" />
                       </Button>
                     </div>
@@ -884,7 +935,10 @@ const FamilyInvestment = () => {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>{isRTL ? "المستلم" : "Recipient"}</Label>
-                    <Select>
+                    <Select
+                      value={transferForm.recipient}
+                      onValueChange={(v) => setTransferForm((f) => ({ ...f, recipient: v }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder={isRTL ? "اختر فرد العائلة" : "Select family member"} />
                       </SelectTrigger>
@@ -899,7 +953,10 @@ const FamilyInvestment = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>{isRTL ? "نوع التحويل" : "Transfer Type"}</Label>
-                    <Select defaultValue="returns">
+                    <Select
+                      value={transferForm.type}
+                      onValueChange={(v) => setTransferForm((f) => ({ ...f, type: v }))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -912,24 +969,29 @@ const FamilyInvestment = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>{isRTL ? "المبلغ" : "Amount"}</Label>
-                    <Input type="number" placeholder="0.00" />
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={transferForm.amount}
+                      onChange={(e) => setTransferForm((f) => ({ ...f, amount: e.target.value }))}
+                    />
                   </div>
-                  
-                  <div className="p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {isRTL ? "رسوم التحويل" : "Transfer Fee"}
-                      </span>
-                      <span className="font-bold text-green-600">$0.00</span>
-                    </div>
-                    <p className="text-xs text-green-600 mt-1">
-                      {isRTL ? "✓ تحويلات مجانية لأفراد العائلة" : "✓ Free transfers to family members"}
+
+                  {/* Wave A: a transfer is RECORDED only — execution (real money/token movement)
+                      is a later release. Honest, not a faked "instant free transfer". */}
+                  <div className="p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                    <p className="text-xs text-amber-700">
+                      {isRTL
+                        ? "سيتم تسجيل التحويل في السجل الآن — التنفيذ الفعلي (نقل الأموال/الرموز) يأتي في إصدار لاحق."
+                        : "The transfer will be recorded now — actual execution (moving money/tokens) comes in a later release."}
                     </p>
                   </div>
-                  
-                  <Button className="w-full" size="lg" onClick={() => handleTransfer()}>
+
+                  <Button className="w-full" size="lg" onClick={handleRecordTransfer} disabled={isTransferring}>
                     <ArrowRightLeft className="w-4 h-4 mr-2" />
-                    {isRTL ? "تأكيد التحويل" : "Confirm Transfer"}
+                    {isTransferring
+                      ? (isRTL ? "جاري التسجيل..." : "Recording...")
+                      : (isRTL ? "تسجيل التحويل" : "Record Transfer")}
                   </Button>
                 </CardContent>
               </Card>
@@ -942,29 +1004,52 @@ const FamilyInvestment = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {[
-                      { to: isRTL ? "أحمد محمد" : "Ahmed Mohamed", amount: 2500, date: "2024-03-10", type: isRTL ? "عوائد" : "Returns" },
-                      { to: isRTL ? "فاطمة محمد" : "Fatima Mohamed", amount: 1500, date: "2024-02-28", type: isRTL ? "عوائد" : "Returns" },
-                      { to: isRTL ? "أحمد محمد" : "Ahmed Mohamed", amount: 2500, date: "2024-02-15", type: isRTL ? "عوائد" : "Returns" },
-                    ].map((transfer, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                            <ArrowRight className="w-4 h-4 text-purple-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{transfer.to}</p>
-                            <p className="text-xs text-muted-foreground">{transfer.date}</p>
-                          </div>
+                  {(() => {
+                    // REAL records (replaces the old hardcoded array): the caller's recorded
+                    // transfer intents. Wave A → status is "pending" (recorded, not executed).
+                    const transferRows = (transactions || []).filter((t) =>
+                      t.transaction_type.startsWith("transfer"),
+                    );
+                    if (transferRows.length === 0) {
+                      return (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                          {isRTL ? "لا توجد تحويلات مسجّلة بعد" : "No transfers recorded yet"}
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-foreground">${transfer.amount.toLocaleString()}</p>
-                          <Badge variant="outline" className="text-xs">{transfer.type}</Badge>
-                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-4">
+                        {transferRows.map((tx) => {
+                          const member = familyAccounts.find((m) => m.id === tx.family_account_id);
+                          return (
+                            <div key={tx.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                                  <ArrowRight className="w-4 h-4 text-purple-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {member ? member.member_name : (tx.description || "—")}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(tx.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold text-foreground">
+                                  ${(tx.amount ?? 0).toLocaleString()}
+                                </p>
+                                <Badge variant="secondary" className="text-xs">
+                                  {isRTL ? "مسجّل" : "Recorded"}
+                                </Badge>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
@@ -989,8 +1074,8 @@ const FamilyInvestment = () => {
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {isRTL
-                    ? "جميع التحويلات العائلية مؤمنة بتقنية البلوكتشين. يتم التحقق من هوية أفراد العائلة وتخزين آخر 4 أرقام فقط من المعلومات البنكية."
-                    : "All family transfers are blockchain-secured. Family member identities are verified and only the last 4 digits of bank information are stored."}
+                    ? "تُسجَّل جميع عمليات العائلة في سجل نشاط شفاف، ويُخزَّن فقط آخر 4 أرقام من المعلومات البنكية. (تنفيذ التحويلات الفعلي يأتي في إصدار لاحق.)"
+                    : "All family actions are recorded in a transparent activity log, and only the last 4 digits of bank information are stored. (Actual transfer execution comes in a later release.)"}
                 </p>
               </div>
               <Button variant="outline" className="shrink-0">

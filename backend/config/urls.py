@@ -50,6 +50,9 @@ urlpatterns = [
     # Reports-export (Phase 13): self-scoped CSV/PDF export of existing data (wallet ledger,
     # distributions, owner earnings, LP tx, broker commissions) + an informational tax summary.
     path("api/reports/", include("apps.reports.urls")),
+    # Family accounts (Wave A): self-scoped records + allocation config (members + banks +
+    # schedules + record-only activity log). NO money/tokens/payout this wave. FAMILY_SURFACE.md.
+    path("api/family/", include("apps.family.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

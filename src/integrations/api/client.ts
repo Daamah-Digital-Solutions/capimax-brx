@@ -346,6 +346,88 @@ export const reinvestmentsApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// Family accounts (Wave A) — self-scoped records + allocation config. Repoints the LAST
+// Supabase-backed domain onto Django. NO money/tokens/payout this wave: a "transfer" writes a
+// record-only FamilyTransaction (status pending), banks are stored MASKED (last-4 only), and
+// members are passive sub-records (no user/KYC/wallet). FAMILY_SURFACE.md.
+// --------------------------------------------------------------------------- //
+export interface FamilyAccountRow {
+  id: string;
+  investor_id: string;
+  member_name: string;
+  member_email: string;
+  relationship: string;
+  status: "pending" | "active" | "suspended";
+  access_level: "view_only" | "authorized";
+  allocated_returns_percent: number;
+  total_transferred: number;
+  linked_at: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface FamilyBankAccountRow {
+  id: string;
+  family_account_id: string;
+  bank_name: string;
+  bank_code: string | null;
+  account_holder_name: string;
+  account_number_masked: string;
+  iban_masked: string | null;
+  currency: string;
+  is_verified: boolean;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface FamilyTransferScheduleRow {
+  id: string;
+  family_account_id: string;
+  bank_account_id: string;
+  schedule_type: "immediate" | "weekly" | "monthly" | "quarterly" | "threshold";
+  threshold_amount: number | null;
+  next_transfer_date: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface FamilyTransactionRow {
+  id: string;
+  family_account_id: string;
+  bank_account_id: string | null;
+  transaction_type: string;
+  amount: number | null;
+  currency: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  reference_number: string | null;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  initiated_by: string;
+  created_at: string;
+}
+
+export const familyApi = {
+  accounts: () => rawRequest("/family/accounts/", { auth: true }) as Promise<FamilyAccountRow[]>,
+  createAccount: (payload: { member_name: string; member_email: string; relationship: string }) =>
+    rawRequest("/family/accounts/", { method: "POST", auth: true, body: payload }) as Promise<FamilyAccountRow>,
+  /** Partial update: member fields, status, access_level, and/or allocated_returns_percent (≤100% enforced server-side). */
+  updateAccount: (id: string, payload: Record<string, unknown>) =>
+    rawRequest(`/family/accounts/${id}/`, { method: "PATCH", auth: true, body: payload }) as Promise<FamilyAccountRow>,
+  deleteAccount: (id: string) =>
+    rawRequest(`/family/accounts/${id}/`, { method: "DELETE", auth: true }),
+  banks: () => rawRequest("/family/banks/", { auth: true }) as Promise<FamilyBankAccountRow[]>,
+  /** Link a bank. The full account_number/iban are MASKED server-side and never stored. */
+  addBank: (payload: Record<string, unknown>) =>
+    rawRequest("/family/banks/", { method: "POST", auth: true, body: payload }) as Promise<FamilyBankAccountRow>,
+  schedules: () => rawRequest("/family/schedules/", { auth: true }) as Promise<FamilyTransferScheduleRow[]>,
+  createSchedule: (payload: Record<string, unknown>) =>
+    rawRequest("/family/schedules/", { method: "POST", auth: true, body: payload }) as Promise<FamilyTransferScheduleRow>,
+  transactions: () => rawRequest("/family/transactions/", { auth: true }) as Promise<FamilyTransactionRow[]>,
+  /** RECORD-ONLY transfer intent (status pending). Moves NO money/tokens this wave. */
+  recordTransfer: (payload: { family_account_id: string; bank_account_id?: string; amount: number; transfer_type?: string; description?: string }) =>
+    rawRequest("/family/transactions/", { method: "POST", auth: true, body: payload }) as Promise<FamilyTransactionRow>,
+};
+
+// --------------------------------------------------------------------------- //
 // Wallet + KYC API (Phase 4) — authenticated. SPEC §3.4 / §3.2.
 // Repoints the frontend's wallet/KYC/holdings layer off Supabase onto Django.
 // --------------------------------------------------------------------------- //

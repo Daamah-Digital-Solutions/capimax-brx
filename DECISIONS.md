@@ -1627,8 +1627,42 @@ new domain.
   real debited amount). (3) `availableReturns` reads `UserBalance` (withdrawable proceeds) — a buyer can choose between
   reinvesting and withdrawing the same balance, as intended.
 
-**STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family accounts** (still Supabase,
-FAMILY_SURFACE.md), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+## FAMILY accounts — Wave A DELIVERED (records + allocation, NO money); B/C/D DEFERRED
+**Source of truth:** FAMILY_SURFACE.md. A primary investor designates family MEMBERS, allocates a % of returns to each,
+links their banks, and configures transfer schedules. **Wave A = the SAFE foundation: records + allocation config ONLY —
+NO money, NO token movement, NO bank payout, NO distribution skim.**
+- **Backend `apps/family` (was an empty stub) now has the 4 models** mirroring the old Supabase tables: `FamilyAccount`
+  (investor FK = PRIMARY investor only; members are **passive SUB-RECORDS** — no User/KYC/wallet), `FamilyBankAccount`
+  (**MASKED last-4 only** — full number/IBAN masked server-side via `services.mask_tail`, NEVER persisted),
+  `FamilyTransferSchedule` (cadence config), `FamilyTransaction` (**record-only** activity log). Self-scoped CRUD API at
+  `/api/family/` (accounts + banks + schedules + transactions), mounted in config/urls. Admin registered (banks show only
+  the mask).
+- **Allocation persisted + ≤100% rule:** the Allocations tab (toast-only before) now saves `allocated_returns_percent`
+  via PATCH; `services.assert_allocation_within_limit` rejects any change that pushes the investor's member total over
+  100% (own slice excluded on update). **NO auto-skim hook on distributions** (that's Wave B).
+- **Record-only transfer:** POST `/api/family/transactions/` writes a `pending` FamilyTransaction (server-generated
+  `FT-…` reference) and moves **NOTHING** — no `BalanceTransaction`, no token transfer, no `Withdrawal`; `total_transferred`
+  stays 0. The Transfers tab is honest ("recorded now — execution comes later"); the hardcoded transfer-history array was
+  replaced with the real records; the false "blockchain-secured" copy was softened (only the last-4 masking + activity log
+  are real).
+- **Frontend repoint:** `useFamilyAccounts.ts` dropped the Supabase import → `familyApi` (Django). FamilyMemberCard's
+  existing mutations (bank-link, schedule, access-level, transfer) now hit Django unchanged.
+- **+9 tests, full suite 430 green, tsc clean.** Journey: investor adds a member → sets allocation (persists; 60+50 → 400
+  rejected, 60+40 → ok) → links a bank (`1234567890123456` → stored `****3456`, full number never in response/DB) → records
+  a transfer (`pending` FamilyTransaction, **no money/token/Withdrawal moved**, total_transferred stays 0); a second
+  investor gets **404** on those rows (self-scoped).
+- **⚠️ CORRECTION (honesty):** family was NOT "the last Supabase dependency." Family's data layer is now Django, BUT
+  **8 satellite hooks/pages still import Supabase**: `useWithdrawalRequests`, `useVisaCards`, `useSavedCards`,
+  `usePWASettings`, `useOwnerDocuments`, `useInvestorCryptoWallets`, `useInvestorBankAccounts`, `AuditLog` (+ the
+  `integrations/supabase/client` + `lovable` shims). Supabase is **not** fully removed — those remain a separate cleanup.
+- **DEFERRED — Waves B/C/D, gated on TWO CLIENT PRODUCT DECISIONS:** (1) **members as real KYC'd users with custodial
+  wallets vs passive sub-records** — gates Wave B (internal `UserBalance`→balance transfer + optional distribution skim)
+  and Wave C (on-chain Ownership-Token transfer via the existing `chain.service.transfer`); (2) **bank payout** — Wave D
+  is **blocked on a missing external-payout provider** (Stripe/NOW are pay-in only; `Withdrawal` is operator-fulfilled), so
+  a real automated bank transfer is record-only / deferred to a future provider integration.
+
+**STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family Waves B/C/D** (Wave A BUILT — see
+above), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
 the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
 order-book i18n preserved), and the **small satellite mini-domains** (no backend) flagged in DASHBOARD_GAPS.md:
 **GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**
