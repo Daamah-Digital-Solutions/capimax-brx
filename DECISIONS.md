@@ -1663,8 +1663,9 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
 
 **STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family Waves B/C/D** (Wave A BUILT — see
 above), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
-the **bid/ask ORDER BOOK + matching engine** (largest remaining; peer market ships real one-shot listings today,
-order-book i18n preserved), and the **small satellite mini-domains** (no backend) flagged in DASHBOARD_GAPS.md:
+the **bid/ask ORDER BOOK + matching engine** (**DEFERRED BY USER DECISION — explicitly out of this stage**; peer market
+ships real one-shot listings today, order-book i18n preserved so it can return), and the **small satellite mini-domains**
+(no backend) flagged in DASHBOARD_GAPS.md:
 **GlobalStats** (Marketplace's hardcoded platform stats → needs a stats-aggregation endpoint), **property-documents**
 (PropertyDetail/DataRoom doc preview/download/verify + the doc "Verify" buttons — no document storage/serving), and
 **favorites** (Add-to-Favorites). *(No longer deferred: reports-export — BUILT in Phase 13.)*
@@ -1709,6 +1710,10 @@ no activation path — exactly the gap the developer role had pre-Phase-8; **Wav
   funding seam:** secondary-market transfers are seller-signed, and because custodial wallets hold
   0 native BNB the deployer tops up exactly the gas per transfer (`apps/chain.service._fund_gas_if_needed`).
   For mainnet this must become a proper **funded relayer / gas-station** (the helper is the single seam).
+  (4) **On-chain burn-back of FORFEITED installment tokens** (Installments Wave D): a defaulted plan forfeits the
+  unpaid/locked tokens as a LEDGER/position adjustment only — the tokens were already minted on-chain to the custodial
+  wallet and physically remain there. A real on-chain burn / return-to-treasury is DEFERRED to mainnet/ops (a reconciliation
+  seam, consistent with the "no on-chain clawback" decision); the platform ledger already stops crediting them.
 - **(b) Pre-delivery security review (RESERVED).** **Fable 5 + Dynamic Workflows** are
   reserved for the comprehensive pre-delivery security review (multi-agent adversarial pass
   over the whole codebase before handover). Not run yet — scheduled for pre-delivery.
