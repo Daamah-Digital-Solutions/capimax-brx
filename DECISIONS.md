@@ -1652,9 +1652,26 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
   a transfer (`pending` FamilyTransaction, **no money/token/Withdrawal moved**, total_transferred stays 0); a second
   investor gets **404** on those rows (self-scoped).
 - **⚠️ CORRECTION (honesty):** family was NOT "the last Supabase dependency." Family's data layer is now Django, BUT
-  **8 satellite hooks/pages still import Supabase**: `useWithdrawalRequests`, `useVisaCards`, `useSavedCards`,
-  `usePWASettings`, `useOwnerDocuments`, `useInvestorCryptoWallets`, `useInvestorBankAccounts`, `AuditLog` (+ the
-  `integrations/supabase/client` + `lovable` shims). Supabase is **not** fully removed — those remain a separate cleanup.
+  satellite hooks/pages still import Supabase. Surveyed in `SUPABASE_CLEANUP.md` (per-surface: existing-Django? / live? /
+  classification). Result: **0 repointable-now (no surface has an existing Django backend to swap onto), 1 dead, 7 deferred
+  mini-domains** — Supabase is **not** fully removed (still incl. the `integrations/supabase/client` + `lovable` shims).
+  - **DELETED (the 1 dead surface):** `useWithdrawalRequests` — grep-confirmed **zero importers** across `src/` (only its
+    own export); the withdrawal flow already runs on `walletsApi.requestWithdrawal` via `OwnerWithdrawDialog` →
+    `apps.wallets.Withdrawal`. File **`git rm`'d**, tsc clean, no dangling import. Its Supabase OTP edge-function calls
+    (`send/verify-withdrawal-otp`) died with it — **OTP-on-withdrawal is a deferred enhancement, NOT a repoint** (the
+    Django withdrawal flow has no OTP step).
+  - **7 DEFERRED mini-domains (each needs a NEW Django model/endpoint — no existing backend to repoint to), grouped:**
+    - **payout-destinations + audit (build together):** `useInvestorBankAccounts` (`bank-accounts`) + `useInvestorCryptoWallets`
+      (`crypto-wallets`) + `AuditLog` (`audit-log`) — the first two are the *writers* of `payment_method_audit_log`, the page
+      is the *reader*; they pair with the existing withdrawal `method` field. **⚠️ FIX TO APPLY when `bank-accounts` is built:**
+      the current hook masks the account number **in the browser** and sends the FULL number to Supabase — the Django version
+      MUST mask **server-side** (copy Family Wave A's `services.mask_tail`; store last-4 only, never persist the full number).
+    - **cards:** `useSavedCards` (`saved-cards` — back with Stripe SetupIntent, don't vault card data ourselves) and
+      `useVisaCards` (`visa-cards` — largest: real card issuing + spend rail + a second balance ledger; needs an issuing
+      provider; lowest priority).
+    - **pwa-settings + owner-docs (independent, small):** `usePWASettings` (`pwa-settings` — trivial singleton config model) and
+      `useOwnerDocuments` (`owner-documents` — model + `media/` file storage + self-scoped signed download; = the existing
+      "property-documents" satellite below).
 - **DEFERRED — Waves B/C/D, gated on TWO CLIENT PRODUCT DECISIONS:** (1) **members as real KYC'd users with custodial
   wallets vs passive sub-records** — gates Wave B (internal `UserBalance`→balance transfer + optional distribution skim)
   and Wave C (on-chain Ownership-Token transfer via the existing `chain.service.transfer`); (2) **bank payout** — Wave D
