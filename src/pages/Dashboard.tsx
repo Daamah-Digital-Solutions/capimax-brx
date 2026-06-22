@@ -4,6 +4,9 @@ import {
   Wallet,
   Building2,
   DollarSign,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
   Bell,
   Coins,
   FileText,
@@ -59,7 +62,10 @@ export default function Dashboard() {
   const holdings = useMemo(() => {
     const map = new Map<
       string,
-      { propertyId: string; name: string; units: number; value: number; ownership: number }
+      {
+        propertyId: string; name: string; units: number; value: number;
+        ownership: number; invested: number; hasCost: boolean;
+      }
     >();
     for (const tk of tokens) {
       const cur = map.get(tk.property_id) ?? {
@@ -68,13 +74,25 @@ export default function Dashboard() {
         units: 0,
         value: 0,
         ownership: 0,
+        invested: 0,
+        hasCost: false,
       };
       cur.units += Number(tk.token_amount) || 0;
       cur.value += Number(tk.token_value_usd) || 0;
       cur.ownership += Number(tk.ownership_percentage) || 0;
+      if (tk.invested_usd != null) {
+        cur.invested += Number(tk.invested_usd) || 0;
+        cur.hasCost = true;
+      }
       map.set(tk.property_id, cur);
     }
-    return [...map.values()].sort((a, b) => b.value - a.value);
+    // Real per-holding return% from cost basis (null when no cost record yet → shown as "—").
+    return [...map.values()]
+      .map((h) => ({
+        ...h,
+        returnPct: h.hasCost && h.invested > 0 ? (h.value / h.invested - 1) * 100 : null,
+      }))
+      .sort((a, b) => b.value - a.value);
   }, [tokens]);
 
   const propertiesCount = holdings.length;
@@ -142,6 +160,12 @@ export default function Dashboard() {
                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                   <Wallet className="w-6 h-6 text-primary" />
                 </div>
+                {/* Trend badge — slot kept; no period-over-period time-series endpoint yet,
+                    so a neutral "—" rather than a fabricated trend %. */}
+                <Badge variant="secondary" className="gap-1 text-muted-foreground">
+                  <TrendingUp className="w-3 h-3" />
+                  —
+                </Badge>
               </div>
               <div className="text-sm text-muted-foreground mb-1">{t("dashboard.totalValue")}</div>
               <div className="text-2xl font-bold text-foreground">${totalValue.toLocaleString()}</div>
@@ -229,8 +253,18 @@ export default function Dashboard() {
                         </div>
                         <div className="text-end">
                           <div className="font-semibold text-foreground">${holding.value.toLocaleString()}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {isAr ? "القيمة الحالية" : "Current value"}
+                          {/* Per-holding return% from real cost basis; "—" when no cost record yet. */}
+                          <div className={cn(
+                            "text-sm flex items-center gap-1 justify-end",
+                            holding.returnPct == null ? "text-muted-foreground"
+                              : holding.returnPct >= 0 ? "text-success" : "text-destructive",
+                          )}>
+                            {holding.returnPct != null && (
+                              holding.returnPct >= 0
+                                ? <ArrowUpRight className="w-3 h-3" />
+                                : <ArrowDownRight className="w-3 h-3" />
+                            )}
+                            {holding.returnPct == null ? "—" : `${holding.returnPct >= 0 ? "+" : ""}${holding.returnPct.toFixed(1)}%`}
                           </div>
                         </div>
                       </Link>
@@ -296,6 +330,19 @@ export default function Dashboard() {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Upcoming Payments — section kept. Distributions are declared ad-hoc by
+                  admin (no scheduled-distributions endpoint), so this shows an honest empty
+                  state instead of a fabricated schedule. */}
+              <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.28s" }}>
+                <div className="flex items-center gap-2 mb-6">
+                  <Calendar className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold text-foreground">{t("dashboard.upcomingPayments")}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  {isAr ? "لا توجد مدفوعات قادمة مجدولة" : "No upcoming payments scheduled"}
+                </p>
+              </div>
+
               {/* Recent Activity — real notifications */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
                 <div className="flex items-center justify-between mb-6">

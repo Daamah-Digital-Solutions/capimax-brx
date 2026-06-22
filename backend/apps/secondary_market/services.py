@@ -250,6 +250,20 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         _recompute_position(buyer_pos, listing.property_id)
         buyer_pos.save()
 
+        # Record the buyer's cost basis (a completed Investment row) so portfolio return%
+        # is correct for secondary-acquired tokens. NO money flow change — the debit above
+        # already happened; this only RECORDS the price paid. Idempotent via the
+        # completed-status guard at the top of this function. Local import avoids any
+        # import cycle (investments.services never imports this module).
+        from apps.investments.services import record_acquisition_cost
+
+        record_acquisition_cost(
+            user=buyer_user, property_slug=listing.property_id,
+            property_name=listing.property_name, token_symbol=listing.token_symbol,
+            token_amount=listing.token_amount, amount_paid=total,
+            wallet=buyer_wallet, source="secondary_market",
+        )
+
         for w in (seller_wallet, buyer_wallet):
             WalletTransaction.objects.create(
                 wallet=w, tx_hash=tx_hash, tx_type="transfer",

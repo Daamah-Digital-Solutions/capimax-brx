@@ -201,6 +201,64 @@ class PeerPurchaseTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         m_transfer.assert_not_called()
 
+    def test_secondary_buy_records_cost_basis(self, m_transfer):
+        """A secondary purchase records a completed Investment (cost basis) for the buyer,
+        WITHOUT moving extra money, and the tokens endpoint exposes invested_usd."""
+        from apps.investments.models import Investment
+
+        buyer = self._buyer("pbcost@ex.com", 1000)
+        inv_before = Investment.objects.count()
+        bt_before = BalanceTransaction.objects.count()
+
+        self.client.force_authenticate(buyer)
+        # Buy 4 tokens @ 100 = $400 paid.
+        resp = self.client.post(f"/api/secondary-market/{self.listing_id}/purchase/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        # Exactly ONE new Investment row (the buyer's cost record); no extra balance ledger
+        # entries beyond the buy's own debit/credit (settlement already counted those — the
+        # cost record adds NO money movement).
+        self.assertEqual(Investment.objects.count(), inv_before + 1)
+        inv = Investment.objects.filter(user=buyer).latest("created_at")
+        self.assertEqual(inv.amount_invested, Decimal("400.00"))
+        self.assertEqual(inv.token_amount, 4)
+        self.assertEqual(inv.price_per_token, Decimal("100.00"))
+        self.assertEqual(inv.payment_method, "secondary_market")
+        self.assertEqual(inv.payment_status, "completed")
+        self.assertTrue(inv.tokens_minted)
+
+        # The tokens endpoint now exposes real avg-cost + invested for the holding.
+        tok = self.client.get(f"/api/wallets/{buyer.wallet.id}/tokens/").json()[0]
+        self.assertEqual(tok["avg_cost_per_token"], 100.0)
+        self.assertEqual(tok["invested_usd"], 400.0)
+        # Enrichment present (real Property metadata, not faked).
+        self.assertIn("city", tok)
+        self.assertIn("exit_eligible", tok)
+        self.assertIn("construction_progress", tok)
+
+    def test_weighted_avg_cost_mixes_primary_and_secondary(self, m_transfer):
+        """Avg cost = Σ paid / Σ tokens across primary + secondary acquisitions."""
+        from apps.investments.services import record_acquisition_cost
+
+        buyer = self._buyer("pbmix@ex.com", 1000)
+        # Simulate a prior PRIMARY buy: 6 tokens @ $120 = $720.
+        record_acquisition_cost(
+            user=buyer, property_slug=self.prop.slug, property_name=self.prop.name,
+            token_symbol="TOK", token_amount=6, amount_paid=Decimal("720"),
+            wallet=None, source="card",
+        )
+        self.client.force_authenticate(buyer)
+        # Secondary buy: 4 tokens @ $100 = $400. Total = $1120 / 10 = $112 avg.
+        self.client.post(f"/api/secondary-market/{self.listing_id}/purchase/")
+
+        from apps.investments.models import Investment
+        rows = Investment.objects.filter(user=buyer, property=self.prop)
+        total_amt = sum(r.amount_invested for r in rows)
+        total_tok = sum(r.token_amount for r in rows)
+        self.assertEqual(total_amt, Decimal("1120"))
+        self.assertEqual(total_tok, 10)
+        self.assertEqual(total_amt / total_tok, Decimal("112"))
+
 
 class InvestorWithdrawalTests(APITestCase):
     def setUp(self):

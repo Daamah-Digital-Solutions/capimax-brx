@@ -272,11 +272,16 @@ class InvestmentApiTests(APITestCase):
         self.assertEqual(
             set(body[0].keys()),
             {
+                # Base OwnershipToken fields.
                 "id", "wallet_id", "property_id", "property_name", "token_symbol",
                 "token_amount", "locked_amount", "available_amount",
                 "token_value_usd", "ownership_percentage",
                 "acquisition_date", "last_distribution_date", "total_distributions",
                 "status", "created_at", "updated_at",
+                # Portfolio enrichment: Property metadata (joined by slug) + cost basis.
+                "city", "location", "location_ar", "country", "asset_type", "category",
+                "image", "images", "construction_progress", "exit_eligible",
+                "avg_cost_per_token", "invested_usd",
             },
         )
         # A different user cannot read this wallet's tokens.

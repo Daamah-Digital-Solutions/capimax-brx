@@ -84,9 +84,60 @@ class WalletTokensView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, wallet_id):
+        from decimal import Decimal
+
+        from django.db.models import Sum
+
+        from apps.investments.models import Investment
+        from apps.properties.models import Property
+
         wallet = get_object_or_404(UserWallet, pk=wallet_id, user=request.user)
-        tokens = OwnershipToken.objects.filter(wallet=wallet)
-        return Response(OwnershipTokenSerializer(tokens, many=True).data)
+        tokens = list(OwnershipToken.objects.filter(wallet=wallet))
+        data = OwnershipTokenSerializer(tokens, many=True).data
+
+        # --- Batched Property enrichment (token.property_id == Property.slug; a CharField,
+        # not an FK). One query, no N+1. Surfaces the metadata the model doesn't carry:
+        # location/type/image + construction_progress + exit_eligible (all already on
+        # Property). Missing/unpublished property → honest nulls, never faked. ---
+        slugs = {t.property_id for t in tokens}
+        props = (
+            {p.slug: p for p in Property.objects.filter(slug__in=slugs)} if slugs else {}
+        )
+
+        # --- Average cost basis per property from the caller's completed acquisitions.
+        # Primary buys (card/crypto/balance/installment) and now secondary/LP buys all
+        # record an Investment row, so Σ(amount_invested)/Σ(token_amount) is the real
+        # average price/token — invariant to partial sells. ---
+        avg_cost = {}
+        rows = (
+            Investment.objects.filter(user=request.user, tokens_minted=True)
+            .values("property__slug")
+            .annotate(amt=Sum("amount_invested"), toks=Sum("token_amount"))
+        )
+        for r in rows:
+            if r["toks"]:
+                avg_cost[r["property__slug"]] = Decimal(r["amt"]) / Decimal(r["toks"])
+
+        for d, tok in zip(data, tokens):
+            p = props.get(tok.property_id)
+            d["city"] = p.city if p else None
+            d["location"] = p.location if p else None
+            d["location_ar"] = p.location_ar if p else None
+            d["country"] = p.country if p else None
+            d["asset_type"] = p.asset_type if p else None
+            d["category"] = p.category if p else None
+            d["image"] = p.image if p else None
+            d["images"] = (p.images if p else []) or []
+            d["construction_progress"] = p.construction_progress if p else None
+            d["exit_eligible"] = bool(p.exit_eligible) if p else False
+            ac = avg_cost.get(tok.property_id)
+            if ac is not None:
+                d["avg_cost_per_token"] = float(ac)
+                d["invested_usd"] = float(ac * Decimal(tok.token_amount))
+            else:
+                d["avg_cost_per_token"] = None
+                d["invested_usd"] = None
+        return Response(data)
 
 
 class WalletTransactionsView(APIView):

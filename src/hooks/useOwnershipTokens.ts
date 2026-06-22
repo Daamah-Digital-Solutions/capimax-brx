@@ -21,6 +21,21 @@ export interface OwnershipToken {
   status: string;
   created_at: string;
   updated_at: string;
+  // Phase: Portfolio enrichment — Property metadata (token.property_id == Property.slug,
+  // joined server-side) + average cost basis. Optional: null when the property is
+  // missing/unpublished or no cost record exists (a new/secondary-only holding).
+  city?: string | null;
+  location?: string | null;
+  location_ar?: string | null;
+  country?: string | null;
+  asset_type?: string | null;
+  category?: string | null;
+  image?: string | null;
+  images?: string[];
+  construction_progress?: number | null;
+  exit_eligible?: boolean;
+  avg_cost_per_token?: number | null;
+  invested_usd?: number | null;
 }
 
 export function useOwnershipTokens(walletId: string | null) {

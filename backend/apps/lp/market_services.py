@@ -324,6 +324,20 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         _recompute_position(buyer_pos, listing.property_id)
         buyer_pos.save()
 
+        # Record the buyer's cost basis (a completed Investment row) so portfolio return%
+        # is correct for LP-acquired tokens. NO money flow change — the LP balance was
+        # already debited above; this only RECORDS the price paid. Idempotent via the
+        # completed-status guard at the top of this function. Local import avoids any
+        # import cycle (investments.services never imports this module).
+        from apps.investments.services import record_acquisition_cost
+
+        record_acquisition_cost(
+            user=buyer_user, property_slug=listing.property_id,
+            property_name=listing.property_name, token_symbol=listing.token_symbol,
+            token_amount=listing.token_amount, amount_paid=total,
+            wallet=buyer_wallet, source="lp_market",
+        )
+
         # ---- WalletTransaction 'transfer' rows (REAL chain values) ---- #
         for w in (seller_wallet, buyer_wallet):
             WalletTransaction.objects.create(

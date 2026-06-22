@@ -20,6 +20,35 @@ at implementation. Line numbers are from the audit pass.
 
 ## INVESTOR
 
+### ✅ Portfolio.tsx — full mock→real repoint + small backend enrichment (NOTHING deleted, NOTHING faked)
+The "My Portfolio" page was mock (`portfolioStats`, `holdings[]` with Unsplash images, placeholder
+Tokens tab, mock ReinvestCard). Now real — every card/badge/column/dropdown item/section KEPT in place:
+- **Backend enrichment (no migration):** the tokens endpoint (`WalletTokensView`) now batches a
+  `Property.objects.filter(slug__in=…)` lookup (token.property_id == Property.slug) and exposes the
+  metadata the model didn't carry but Property already has — `city`/`location`/`location_ar`/`country`,
+  `asset_type`/`category`, `image`/`images`, **`construction_progress`**, **`exit_eligible`** — plus a
+  derived **average cost basis** (`avg_cost_per_token`, `invested_usd`). One query, no N+1, self-scoped.
+- **Backend cost-basis (no migration):** secondary-market + LP-market buyer settlement now call a shared
+  `record_acquisition_cost()` (a completed `Investment` row) so return% is correct for ALL holdings, not
+  only primary buys. **No money-flow change** — it only records the price already paid; idempotent via the
+  listing's completed-status guard. Avg cost = Σ(amount_invested)/Σ(token_amount), invariant to partial sells.
+- **Summary cards:** Total Value + Tokens ← `useOwnershipTokens`; Properties ← distinct count; Pending
+  Distributions ← `useDistributions`; **totalInvested + return% ← real cost basis** (show "—" only when a
+  holding has no cost record yet — never a fake number).
+- **Holdings list ← enriched tokens:** real name, units, current value, ownership%, real `/property/:property_id`,
+  real location/type, real image (placeholder block when none), **construction-status badge w/ real %**,
+  **exit-eligible badge** (real flag). `exitableAssets` count ← real `exit_eligible`.
+- **Tokens tab** (was empty placeholder) → real `<TokenHoldings>`. **Filter** Select wires over real
+  holdings (active/construction/exitable now have real data). **Export Report** + the **Reports** dropdown
+  item → `reportsApi.export("wallet","pdf")`. **Token Details** dropdown → switches to the (real) Tokens tab.
+  **ReinvestReturnsCard** `availableReturns` ← real `useReinvestments().availableBalance`.
+- **CreateVirtualCardButton — KEPT as-is** (deferred visa-cards; still Supabase-functional — not mock, so
+  not disabled; disabling would regress a working feature). Flagged.
+- Loading spinner + existing empty state ("No assets") driven by real data; bilingual EN/AR preserved.
+- **Wallet + Certificates tabs already real — untouched.** tsc clean; +2 cost-basis tests; suite green.
+- **Honest edge flagged:** for **installment** holdings, `Investment.amount_invested` is the full committed
+  price, so cost basis reflects *committed* (not yet fully *paid*) cost — a minor average-cost nuance.
+
 ### ✅ Dashboard.tsx — full mock→real repoint (frontend-only, existing endpoints)
 The investor home page was **100% mock** (no API calls; hardcoded `portfolioStats`, `holdings`,
 `recentActivity`, `upcomingPayments`, fake user name). Now wired to real Django data:

@@ -576,3 +576,43 @@ def mint_investment(investment: Investment) -> dict:
         "owner_credited": None if owner_net is None else str(owner_net),
         "broker_credited": None if broker_result is None else str(broker_result[1]),
     }
+
+
+def record_acquisition_cost(
+    *, user, property_slug, property_name, token_symbol, token_amount,
+    amount_paid, wallet=None, source,
+):
+    """
+    Record a COST-BASIS row (a completed `Investment`) for tokens acquired on the
+    SECONDARY / LP market, so the portfolio's average-cost and return% are correct for
+    ALL holdings — not only primary buys. Primary buys already create an Investment via
+    `create_investment`; secondary/LP buys previously credited only an OwnershipToken.
+
+    This does NOT move money or mint: the on-chain transfer + balance settlement already
+    happened in the caller; this only RECORDS the price the buyer already paid. Idempotency
+    is the caller's (settlement is guarded by the listing's completed-status check, so a
+    re-run returns before reaching here). Returns the row, or None if the property/amount
+    is unusable.
+    """
+    amount = Decimal(amount_paid)
+    qty = int(token_amount)
+    if qty <= 0 or amount <= 0:
+        return None
+    prop = Property.objects.filter(slug=property_slug).first()
+    if prop is None:
+        return None
+    return Investment.objects.create(
+        user=user,
+        property=prop,
+        property_name=property_name,
+        amount_invested=amount,
+        token_amount=qty,
+        token_symbol=token_symbol,
+        price_per_token=(amount / Decimal(qty)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        ownership_percentage=Decimal("0"),
+        payment_method=source,
+        payment_status=PaymentStatus.COMPLETED,
+        tokens_minted=True,
+        minted_at=timezone.now(),
+        wallet=wallet,
+    )
