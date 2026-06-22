@@ -1,30 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { pwaSettingsApi, type PWASettingsRow } from "@/integrations/api/client";
 
-export interface PWASettings {
-  id: string;
-  app_name: string;
-  app_short_name: string;
-  app_description: string;
-  theme_color: string;
-  background_color: string;
-  install_prompt_enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
+// PWA settings — repointed off Supabase onto the Django pwaSettingsApi (one of the
+// satellite Supabase surfaces). A SINGLETON global-config row: GET is public (the app
+// reads its own branding + the install-prompt gate in usePWAInstall.ts), the WRITE is
+// admin-only server-side (IsAdminRole → 403 for non-admins). No PII, no secrets.
+
+export type PWASettings = PWASettingsRow;
 
 export function usePWASettings() {
   return useQuery({
     queryKey: ["pwa-settings"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pwa_settings")
-        .select("*")
-        .single();
-
-      if (error) throw error;
-      return data as PWASettings;
-    },
+    queryFn: () => pwaSettingsApi.get(),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
@@ -33,24 +20,8 @@ export function useUpdatePWASettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (settings: Partial<PWASettings>) => {
-      const { data: currentSettings } = await supabase
-        .from("pwa_settings")
-        .select("id")
-        .single();
-
-      if (!currentSettings) throw new Error("No PWA settings found");
-
-      const { data, error } = await supabase
-        .from("pwa_settings")
-        .update(settings)
-        .eq("id", currentSettings.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as PWASettings;
-    },
+    // Admin-only on the server; a non-admin save is rejected with 403.
+    mutationFn: (settings: Partial<PWASettings>) => pwaSettingsApi.update(settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pwa-settings"] });
     },

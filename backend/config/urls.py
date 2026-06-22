@@ -57,6 +57,9 @@ urlpatterns = [
     # backend/media/), repointed off Supabase. Mirrors the LP document pattern + adds server-side
     # type/size validation. NO Property FK; the PropertyDetail data-room is a separate surface.
     path("api/owner-documents/", include("apps.owner_documents.urls")),
+    # PWA settings: a singleton global-config row (app branding + install-prompt toggle),
+    # repointed off Supabase. GET is public (branding); PATCH/PUT is admin-only. No PII/secrets.
+    path("api/pwa-settings/", include("apps.pwa.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

@@ -428,6 +428,32 @@ export const familyApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// PWA settings — a SINGLETON global-config row (app branding + install-prompt
+// toggle), repointed off Supabase. GET is public (the app reads its own branding
+// + install gate); the WRITE is ADMIN-ONLY (global config). No PII/secrets.
+// --------------------------------------------------------------------------- //
+
+export interface PWASettingsRow {
+  id: number;
+  app_name: string;
+  app_short_name: string;
+  app_description: string;
+  theme_color: string;
+  background_color: string;
+  install_prompt_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const pwaSettingsApi = {
+  /** The singleton config (readable app-wide for branding). */
+  get: () => rawRequest("/pwa-settings/") as Promise<PWASettingsRow>,
+  /** Admin-only partial update of global app config (403 for non-admins). */
+  update: (payload: Partial<PWASettingsRow>) =>
+    rawRequest("/pwa-settings/", { method: "PATCH", auth: true, body: payload }) as Promise<PWASettingsRow>,
+};
+
+// --------------------------------------------------------------------------- //
 // Wallet + KYC API (Phase 4) — authenticated. SPEC §3.4 / §3.2.
 // Repoints the frontend's wallet/KYC/holdings layer off Supabase onto Django.
 // --------------------------------------------------------------------------- //

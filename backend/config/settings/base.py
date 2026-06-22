@@ -79,6 +79,7 @@ DOMAIN_STUB_APPS = [
     "apps.secondary_market",
     "apps.family",
     "apps.owner_documents",
+    "apps.pwa",
     "apps.distributions",
     "apps.notifications",
     "apps.reports",

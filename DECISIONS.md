@@ -1654,9 +1654,11 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
 - **⚠️ CORRECTION (honesty):** family was NOT "the last Supabase dependency." Family's data layer is now Django, BUT
   satellite hooks/pages still import Supabase. Surveyed in `SUPABASE_CLEANUP.md` (per-surface: existing-Django? / live? /
   classification). Result at survey time: **0 repointable-now (no surface had an existing Django backend to swap onto), 1 dead,
-  7 deferred mini-domains.** **Progress since: the 1 dead surface DELETED + `owner-documents` BUILT & repointed → 6 Supabase
-  surfaces remain** (`useVisaCards`, `useSavedCards`, `usePWASettings`, `useInvestorCryptoWallets`, `useInvestorBankAccounts`,
-  `AuditLog`). Supabase is **not** fully removed (still incl. the `integrations/supabase/client` + `lovable` shims).
+  7 deferred mini-domains.** **Progress since: the 1 dead surface DELETED + `owner-documents` and `pwa-settings` BUILT &
+  repointed → 5 Supabase surfaces remain** (`useVisaCards`, `useSavedCards`, `useInvestorCryptoWallets`,
+  `useInvestorBankAccounts`, `AuditLog`) — all DEFERRED per prior decisions (cards by user decision; bank/crypto/audit blocked
+  on the external-payout provider). Supabase is **not** fully removed (still incl. the `integrations/supabase/client` +
+  `lovable` shims).
   - **DELETED (the 1 dead surface):** `useWithdrawalRequests` — grep-confirmed **zero importers** across `src/` (only its
     own export); the withdrawal flow already runs on `walletsApi.requestWithdrawal` via `OwnerWithdrawDialog` →
     `apps.wallets.Withdrawal`. File **`git rm`'d**, tsc clean, no dangling import. Its Supabase OTP edge-function calls
@@ -1672,7 +1674,15 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
       `useSavedCards` (`saved-cards` — back with Stripe SetupIntent, don't vault card data ourselves) and
       `useVisaCards` (`visa-cards` — largest: real card issuing + spend rail + a second balance ledger; needs an issuing
       provider). Both card surfaces keep their current Supabase-backed behaviour until a future stage; not in scope now.
-    - **pwa-settings (independent, small):** `usePWASettings` (`pwa-settings` — trivial singleton config model). Still deferred.
+    - **pwa-settings — ✅ DELIVERED (repoint).** `usePWASettings` repointed Supabase → Django `apps.pwa`. New **singleton**
+      `PWASettings` model (pk pinned to 1 via `save()`; access via `load()` get-or-create → no duplicate rows) holding app
+      branding (app_name/short_name/description, theme_color, background_color) + the `install_prompt_enabled` toggle — fields
+      mirror what the hook reads; **NO PII, NO secrets, NO money/chain.** Endpoint `GET /api/pwa-settings/` is **public**
+      (branding is read app-wide — incl. the install-prompt gate in `usePWAInstall.ts`); **`PATCH`/`PUT` is ADMIN-ONLY** via
+      `IsAdminRole` (staff OR `profile.role=='admin'`) — the one security point, matching the existing UI gate (Settings.tsx
+      renders `PWASettingsSection` only for admins). A non-admin write → **403**. Frontend: `pwaSettingsApi` (public get + admin
+      update), hook off Supabase (react-query shapes unchanged → `PWASettingsSection` + `usePWAInstall` untouched), bilingual
+      preserved. **Supabase surfaces 6 → 5.** +5 tests; full suite green.
     - **owner-documents — ✅ DELIVERED (repoint).** `useOwnerDocuments` repointed Supabase → Django `apps.owner_documents`.
       New `OwnerDocument` model **mirroring `apps.lp.LPDocument`** (user FK, document_name, document_type, `FileField(upload_to=
       "owner_documents/%Y/%m/")` under the already-gitignored `backend/media/`, file_size, file_type, description, free-text
