@@ -1821,17 +1821,54 @@ the element. (2) **NEVER fake a number** — real data or honest placeholder onl
 - **DONE (real) tabs:** Dashboard, Portfolio (+ token→Property enrichment + cost-basis on all buy paths),
   Reinvestment, Installments, Live Exits Hub, Support (built tickets domain), Wallet (+ deposit/top-up built),
   **Distributions** (re-audited + 2 fabricated figures fixed — see below), **Notifications** (re-audited +
-  per-type preferences built — see [[notification-preferences]] below).
-  Earlier/independently real: LP Market, Secondary Market.
+  per-type preferences built — see [[notification-preferences]] below), **LP Market + Secondary Market**
+  (re-audited; secondary clean, 3 LP buy/sell-dialog honesty fixes — commit `7cfb13d`), **Reports & Analytics**
+  (was 100% mock → made real — see [[reports-analytics-real]] below).
 - **Distributions** (`Distributions.tsx`, commit `3854edf`) — re-AUDITED: list/amounts/by-property/exports
   were (and stay) real; **no shared-component mock feed**. Fixed the only 2 fabricated visuals: the hardcoded
   **`+18%` vs-last-year** → a **real** YoY delta computed from payout years in `DistributionsView` stats
   (`vsLastYear`; honest `—` when no prior year), and the **identical static sparkline array** → a **real**
   per-property **monthly payout series** (`by_property[].series`, read-side aggregation; honest `—`/flat when
   empty). DELETE NOTHING (both elements kept); **no migration**; +4 tests; full suite 463 green.
-- **STILL TO AUDIT (built — re-audit for hidden mock / shared-component mock feeds, per LESSON 2):**
-  LP Market, Secondary Market, **Reports & Analytics** (the analytics half is
-  DEFERRED — mock charts, no stats endpoint; the reports-export half is real, Phase 13).
+- **LP Market + Secondary Market** (re-audited; commit `7cfb13d`) — data feeds were already real
+  (listings/create/cancel/buy/holdings/resale/fees/balance/withdraw). Secondary Market = clean. LP Market had 3
+  honesty issues in the buy/sell DIALOGS only (no data-feed mock): (1) partial-purchase mislead → locked the
+  buy to the whole listing so the displayed total matches the whole-listing settlement (`PurchaseForm`);
+  (2) hardcoded $100 LP-sell unit price → derive the real price = `token_value_usd / token_amount`
+  (`InvestorAssetsView` + dropped the `|| 100` in `useLPMarket`); (3) `bank_transfer` option (no off-balance
+  rail) → disabled "Coming soon". UI-honesty only, NO settlement change.
+- **STILL TO AUDIT:** *(none — all investor tabs audited)*. Remaining work is the DEFERRED domains below.
+
+## Reports & Analytics — MADE REAL ✅ (was 100% mock; derived client-side, real exports; 2 honest deferrals)
+**Slug:** reports-analytics-real. `Reports.tsx` was the worst tab: 4 module-level mock constants, every button a
+no-op, and it ignored the real `reportsApi`. Now every figure derives from the SAME real sources as
+Portfolio/Distributions, and the exports use the real Phase-13 `reportsApi`. **No new persisted data, no
+migration** — one tiny read-side enrichment field added (below). FOLLOW-THE-FRONTEND; DELETE NOTHING; no fakes.
+- **Backend (1 field, no migration):** `WalletTokensView` enrichment now also exposes `expected_yield`
+  (already on `Property`; added to the same `slug__in` join) → powers the avg-yield + per-property yield.
+  Frontend `OwnershipToken` type + the enrichment key-set test updated. **All client-derived otherwise — no new
+  analytics endpoint** (kept minimal per the brief).
+- **Made REAL (derived):** Overview — Total Value (Σ `token_value_usd`), Properties (holding count),
+  Distributions (`useDistributions` `stats.totalReceived`), Avg Yield (value-weighted `expected_yield`),
+  Portfolio Return (cost-basis: `totalValue/totalInvested − 1`; `—` when no cost basis). Allocation donut —
+  real value-weighted split by `category||asset_type` (dynamic `strokeDasharray`, mirrors Portfolio). Monthly
+  Distributions chart — real monthly totals grouped from distribution history (period-filtered). Returns-by-
+  property + Performance table — value from tokens, yield from `expected_yield`, change% from cost-basis (`—`
+  when none). Property dropdown — real holdings; Period filter windows the monthly chart; Property filter
+  filters performance/returns. Refresh — refetches the hooks.
+- **Exports → REAL `reportsApi`:** "Export Full" **fans out** to the real per-context exports in sequence
+  (wallet PDF → distributions PDF → tax PDF) — chosen over disabling, since all three are real Phase-13
+  documents; an honest "comprehensive export". The Reports tab carries 3 real on-demand export buttons
+  (Distributions / Wallet / Tax PDF).
+- **Honest placeholders (truly BLOCKED — DELETE NOTHING):** (a) **Portfolio-VALUE time-series chart + its
+  change badge** → no value-snapshot history exists → chart shows an honest empty state + "historical value
+  tracking coming" note; the Total-Value change badge shows `—` (NOT a fabricated %). (b) **Saved-reports
+  catalog** → our model is on-demand export, not stored reports → category count badges show `—`; the "Recent
+  Reports" list is an honest empty state ("reports are generated on demand"); the per-row "view details" action
+  is disabled "Coming soon".
+- **DEFERRED (flagged, NOT built):** a **portfolio-value snapshot-history domain** (would unblock the value
+  time-series chart + period-over-period deltas) and a **saved-reports catalog**. Both are separate domains;
+  neither built now. tsc clean; +1 enrichment assertion; full suite green.
 - **DEFERRED tabs (recorded, NOT built):** Family (Wave A built — records+allocation; payout awaits an
   external bank rail), Security & Audit Log (Supabase mini-domain), Documents (property-documents),
   Inheritance/Estate+Gifting ([[inheritance-deferral]] — PropShare port package held), order book, cards

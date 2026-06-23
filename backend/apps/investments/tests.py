@@ -258,6 +258,9 @@ class InvestmentApiTests(APITestCase):
 
     def test_wallet_tokens_endpoint_owner_only(self):
         wallet, _ = get_or_create_custodial_wallet(self.user)
+        # Give the property a known yield so the enriched expected_yield is meaningful.
+        self.prop.expected_yield = Decimal("8.25")
+        self.prop.save(update_fields=["expected_yield"])
         OwnershipToken.objects.create(
             wallet=wallet, property_id=self.prop.slug, property_name=self.prop.name,
             token_symbol="BRXPAPI", token_amount=100, token_value_usd=Decimal("10000"),
@@ -280,10 +283,13 @@ class InvestmentApiTests(APITestCase):
                 "status", "created_at", "updated_at",
                 # Portfolio enrichment: Property metadata (joined by slug) + cost basis.
                 "city", "location", "location_ar", "country", "asset_type", "category",
+                "expected_yield",
                 "image", "images", "construction_progress", "exit_eligible",
                 "avg_cost_per_token", "invested_usd",
             },
         )
+        # The enriched expected_yield mirrors the Property's value (Reports avg-yield source).
+        self.assertEqual(body[0]["expected_yield"], float(self.prop.expected_yield))
         # A different user cannot read this wallet's tokens.
         other = User.objects.create_user(email="other2@example.com", password="pw12345!")
         self.client.force_authenticate(other)

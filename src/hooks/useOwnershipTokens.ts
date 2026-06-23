@@ -30,6 +30,7 @@ export interface OwnershipToken {
   country?: string | null;
   asset_type?: string | null;
   category?: string | null;
+  expected_yield?: number | null;
   image?: string | null;
   images?: string[];
   construction_progress?: number | null;

@@ -126,6 +126,11 @@ class WalletTokensView(APIView):
             d["country"] = p.country if p else None
             d["asset_type"] = p.asset_type if p else None
             d["category"] = p.category if p else None
+            # Property's expected annual yield (already on Property) — powers the
+            # Reports avg-yield + per-property yield. Honest null when unknown.
+            d["expected_yield"] = (
+                float(p.expected_yield) if p and p.expected_yield is not None else None
+            )
             d["image"] = p.image if p else None
             d["images"] = (p.images if p else []) or []
             d["construction_progress"] = p.construction_progress if p else None
