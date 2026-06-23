@@ -1747,14 +1747,18 @@ the deferral and that the port package is held so nothing is lost.
 - **Related:** pairs with [[family-accounts]] (same passive-sub-record + masked-PII + wave-split pattern). No code, no
   models, no endpoints created by this entry — **deferral + package-ready note only.**
 
-## FRONTEND REALNESS PASS — Investor dashboard, tab by tab (IN PROGRESS; latest origin/main = `391aa96`)
+## FRONTEND REALNESS PASS — Investor dashboard, tab by tab (IN PROGRESS; latest origin/main = `779e9af`)
 Going through every Investor surface making it **real** (real data + buttons + names). **TWO FIRM RULES,
 non-negotiable:** (1) **DELETE NOTHING** — every UI element/card/badge/column/section stays in the layout;
 if a value isn't available, show an honest placeholder (`—` / "Coming soon" / empty state), never remove
 the element. (2) **NEVER fake a number** — real data or honest placeholder only.
-- **⚠️ LESSON (watch for this):** the model tends to "clean up" by **DELETING** elements. On the Dashboard
+- **⚠️ LESSON 1 (deletes):** the model tends to "clean up" by **DELETING** elements. On the Dashboard
   it deleted **3** (the +12% trend badge, the Upcoming Payments section, the per-holding return%) before we
   caught it and **restored all 3** in place. **After each tab, verify nothing was deleted.**
+- **⚠️ LESSON 2 (shared-component mock feed):** a "done" page can still feed a SHARED component mock
+  props. `ReinvestReturnsCard` was fed mock in BOTH `Portfolio` (early) and `Wallet` (a `Math.min(balance,
+  4250)` fake clamp + dead `2500`/`175` props) — caught on re-audit, both fixed to the real balance. **So we
+  re-audit EVERY tab — even ones we thought were done — and check every shared component's props.**
 - **DONE tabs:**
   - **Dashboard** (`Dashboard.tsx`) — repointed 100% mock → real: user name (`useAuth`), balance/Total
     Returns (`useReinvestments`/`walletsApi.balance`), holdings (`useOwnershipTokens`), pending
@@ -1814,10 +1818,20 @@ the element. (2) **NEVER fake a number** — real data or honest placeholder onl
   would reuse the owner-documents media pattern when built). (e) **Wallet deposit methods** bank/Apple/Google/
   Pronova/Sukuk have no wired rail → kept but disabled "Coming soon" (only card+crypto are real); the fake
   Pronova 5% discount calc was removed.
-- **NEXT tabs (queue):** Family Investment (Wave A only — see FAMILY section; inheritance DEFERRED),
-  Reports & Analytics (analytics deferred), LP / Secondary Market (built), Security & Audit Log (Supabase —
-  deferred mini-domain), Documents (property-documents deferred). Detailed per-element record in
-  **DASHBOARD_GAPS.md**. *(DONE since: Reinvestment, Installments, Live Exits Hub, Support, Wallet.)*
+- **DONE (real) tabs:** Dashboard, Portfolio (+ token→Property enrichment + cost-basis on all buy paths),
+  Reinvestment, Installments, Live Exits Hub, Support (built tickets domain), Wallet (+ deposit/top-up built).
+  Earlier/independently real: LP Market, Secondary Market, Notifications.
+- **STILL TO AUDIT (built — re-audit for hidden mock / shared-component mock feeds, per LESSON 2):**
+  Distributions, Notifications, LP Market, Secondary Market, **Reports & Analytics** (the analytics half is
+  DEFERRED — mock charts, no stats endpoint; the reports-export half is real, Phase 13).
+- **DEFERRED tabs (recorded, NOT built):** Family (Wave A built — records+allocation; payout awaits an
+  external bank rail), Security & Audit Log (Supabase mini-domain), Documents (property-documents),
+  Inheritance/Estate+Gifting ([[inheritance-deferral]] — PropShare port package held), order book, cards
+  (visa/saved), payout-destinations (bank/crypto/audit). Detail in **DASHBOARD_GAPS.md** + SUPABASE_CLEANUP.md.
+- **LP MODEL (confirmed from code):** our LP = a **KYB-verified institutional BUYER** providing **exit
+  liquidity** — it buys investors' listed token blocks from a **prepaid internal balance**, settled on-chain,
+  **1% fee on the seller** ([[phase-6-wave-2]] / Phase 6 Wave 3). It is **NOT a fixed-yield deposit pool**;
+  one consistent model across `apps/lp` (market_services.purchase_listing). No deposit-for-yield anywhere.
 
 ## Deposit / top-up — BUILT ✅ (gated external pay-in that CREDITS balance; NO mint; inert until keys)
 **Slug:** deposit-topup. The Wallet's Deposit dialog (method → amount → confirm) had a **silent no-op** Confirm
