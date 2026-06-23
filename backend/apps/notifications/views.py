@@ -16,8 +16,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Notification
-from .serializers import NotificationSerializer
+from .models import Notification, NotificationPreference
+from .serializers import NotificationPreferenceSerializer, NotificationSerializer
 
 # Cap the list (poll-on-load, no realtime) — the bell/page only need recent items.
 LIST_LIMIT = 100
@@ -83,3 +83,27 @@ class DeleteNotificationView(APIView):
             notif.deleted = True
             notif.save(update_fields=["deleted"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotificationPreferencesView(APIView):
+    """
+    GET   /api/notifications/preferences/   the caller's 7 per-type toggles (created with
+                                            the UI defaults on first access).
+    PATCH /api/notifications/preferences/   update one or more toggles (partial).
+
+    SELF-SCOPED: always the caller's own row — there is no cross-user access path. Only
+    the in-app per-type preferences live here; channel/digest are UI-only "Coming soon".
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        prefs = NotificationPreference.get_for(request.user)
+        return Response(NotificationPreferenceSerializer(prefs).data)
+
+    def patch(self, request):
+        prefs = NotificationPreference.get_for(request.user)
+        serializer = NotificationPreferenceSerializer(prefs, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

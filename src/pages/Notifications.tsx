@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useNotificationPrefs, type PrefKey } from "@/hooks/useNotificationPrefs";
 import { categoryOf, renderNotificationCopy, relativeTime, type NotificationCategory } from "@/lib/notifications";
 import {
   Bell,
@@ -27,7 +28,9 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-const notificationSettingsData = [
+// The 7 per-type toggles. `id` matches the backend preference key (NotificationPreferences);
+// `enabled` is the UI preset, used only as the fallback while the saved prefs load.
+const notificationSettingsData: { id: PrefKey; labelKey: string; enabled: boolean }[] = [
   { id: "distributions", labelKey: "notifications.distributionsNotif", enabled: true },
   { id: "installments", labelKey: "notifications.installmentsNotif", enabled: true },
   { id: "newProperties", labelKey: "notifications.newProperties", enabled: true },
@@ -41,10 +44,12 @@ export default function Notifications() {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
-  // Phase 10: real notifications from the API (was a static mock array). Local UI
-  // settings stay local-only (channel/digest/per-type toggles are NOT persisted).
+  // Phase 10: real notifications from the API (was a static mock array).
   const { notifications: notifs, unreadCount, markRead, markAllRead, remove } = useNotifications();
-  const [settings, setSettings] = useState(notificationSettingsData);
+  // Per-type toggles now PERSIST server-side (was local-only useState that reset on
+  // reload). Channel/digest toggles stay UI-only "Coming soon" (no mailer/SMS/scheduler).
+  const { prefs, saving, toggle } = useNotificationPrefs();
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   const getTypeIcon = (type: NotificationCategory) => {
     switch (type) {
@@ -105,7 +110,12 @@ export default function Notifications() {
               <MailOpen className="w-4 h-4 mr-2" />
               {t("notifications.markAllRead")}
             </Button>
-            <Button variant="outline" size="icon">
+            <Button
+              variant="outline"
+              size="icon"
+              title={t("notifications.settings")}
+              onClick={() => settingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
               <Settings className="w-4 h-4" />
             </Button>
           </div>
@@ -228,7 +238,7 @@ export default function Notifications() {
           </div>
 
           {/* Settings Panel */}
-          <div className="space-y-4">
+          <div ref={settingsRef} className="space-y-4 scroll-mt-6">
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -237,7 +247,9 @@ export default function Notifications() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {settings.map((setting) => (
+                {/* Per-type toggles — bound to the user's REAL saved prefs (persist on
+                    change). While loading, fall back to the UI preset (`setting.enabled`). */}
+                {notificationSettingsData.map((setting) => (
                   <div
                     key={setting.id}
                     className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
@@ -246,50 +258,58 @@ export default function Notifications() {
                       <p className="text-sm font-medium text-foreground">{t(setting.labelKey)}</p>
                     </div>
                     <Switch
-                      checked={setting.enabled}
-                      onCheckedChange={(checked) =>
-                        setSettings((prev) =>
-                          prev.map((s) => (s.id === setting.id ? { ...s, enabled: checked } : s))
-                        )
-                      }
+                      checked={prefs ? prefs[setting.id] : setting.enabled}
+                      disabled={!prefs || saving === setting.id}
+                      onCheckedChange={(checked) => toggle(setting.id, checked)}
                     />
                   </div>
                 ))}
               </CardContent>
             </Card>
 
+            {/* Channels — IN-APP is the only real delivery channel. Email/SMS need an
+                external mailer/SMS provider that doesn't exist yet → disabled "Coming soon"
+                (kept, not faked: toggling them would persist/deliver nothing). */}
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">{t("notifications.channels")}</CardTitle>
+                <CardTitle className="text-sm flex items-center justify-between gap-2">
+                  {t("notifications.channels")}
+                  <Badge variant="outline" className="text-[10px]">{t("support.comingSoon")}</Badge>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{t("notifications.email")}</span>
-                  <Switch defaultChecked />
+                  <Switch disabled />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{t("notifications.inApp")}</span>
-                  <Switch defaultChecked />
+                  {/* In-app delivery is always on (the real channel) — shown checked + locked. */}
+                  <Switch checked disabled />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{t("notifications.sms")}</span>
-                  <Switch />
+                  <Switch disabled />
                 </div>
               </CardContent>
             </Card>
 
+            {/* Digest — needs a scheduler/mailer that doesn't exist → disabled "Coming soon". */}
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">{t("notifications.digest")}</CardTitle>
+                <CardTitle className="text-sm flex items-center justify-between gap-2">
+                  {t("notifications.digest")}
+                  <Badge variant="outline" className="text-[10px]">{t("support.comingSoon")}</Badge>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{t("notifications.dailyDigest")}</span>
-                  <Switch defaultChecked />
+                  <Switch disabled />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{t("notifications.weeklyDigest")}</span>
-                  <Switch defaultChecked />
+                  <Switch disabled />
                 </div>
               </CardContent>
             </Card>

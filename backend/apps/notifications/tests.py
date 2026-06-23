@@ -26,7 +26,8 @@ from apps.distributions.services import declare_distribution
 from apps.investments.services import create_investment
 from apps.investments.tests import _fake_mint, _make_property
 
-from .models import Notification
+from .models import Notification, NotificationPreference
+from .services import notify
 
 
 def _user(email):
@@ -262,3 +263,119 @@ class NotificationsApiTests(APITestCase):
         other_notif = Notification.objects.filter(user=self.other).first()
         resp = self.client.post(f"/api/notifications/{other_notif.id}/read/")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class NotificationPreferenceApiTests(APITestCase):
+    """The per-type preferences read/write API — defaults, persistence, self-scoping."""
+
+    def setUp(self):
+        self.user = _user("prefs@ex.com")
+        self.other = _user("prefsother@ex.com")
+
+    def test_requires_auth(self):
+        self.assertIn(
+            self.client.get("/api/notifications/preferences/").status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )
+
+    def test_defaults_match_the_ui_presets(self):
+        # GET creates the row with the frontend's exact defaults: all ON except priceAlerts.
+        self.client.force_authenticate(self.user)
+        data = self.client.get("/api/notifications/preferences/").data
+        self.assertEqual(
+            data,
+            {
+                "distributions": True,
+                "installments": True,
+                "newProperties": True,
+                "reports": True,
+                "priceAlerts": False,
+                "marketUpdates": True,
+                "security": True,
+            },
+        )
+
+    def test_patch_persists_and_is_partial(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            "/api/notifications/preferences/", {"distributions": False}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["distributions"])
+        self.assertTrue(resp.data["installments"])  # untouched toggle unchanged
+        # Persisted to the model (snake_case field).
+        self.assertFalse(NotificationPreference.get_for(self.user).distributions)
+
+    def test_patch_camelcase_keys(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            "/api/notifications/preferences/",
+            {"newProperties": False, "priceAlerts": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        prefs = NotificationPreference.get_for(self.user)
+        self.assertFalse(prefs.new_properties)
+        self.assertTrue(prefs.price_alerts)
+
+    def test_self_scoped_no_cross_user_leak(self):
+        # Each caller only ever reads/writes their OWN row (pk = the authed user).
+        self.client.force_authenticate(self.user)
+        self.client.patch(
+            "/api/notifications/preferences/", {"security": False}, format="json"
+        )
+        self.client.force_authenticate(self.other)
+        other_data = self.client.get("/api/notifications/preferences/").data
+        self.assertTrue(other_data["security"])  # the other user's row is untouched (default)
+        self.assertEqual(NotificationPreference.objects.count(), 2)  # one row per user
+
+
+class NotifyPreferenceGateTests(TestCase):
+    """notify() respects the per-type toggle: skip a disabled category, deliver others."""
+
+    def setUp(self):
+        self.user = _user("gate@ex.com")
+
+    def test_disabled_category_is_skipped(self):
+        prefs = NotificationPreference.get_for(self.user)
+        prefs.distributions = False
+        prefs.save(update_fields=["distributions"])
+        # A distribution notification maps to the "distributions" toggle → skipped.
+        result = notify(self.user, Notification.Type.DISTRIBUTION_CREDITED, params={"amount": "100.00"})
+        self.assertIsNone(result)
+        self.assertEqual(
+            Notification.objects.filter(user=self.user, type=Notification.Type.DISTRIBUTION_CREDITED).count(),
+            0,
+        )
+
+    def test_enabled_category_is_delivered(self):
+        # Default ON → the same notification IS created.
+        notify(self.user, Notification.Type.DISTRIBUTION_CREDITED, params={"amount": "100.00"})
+        self.assertEqual(
+            Notification.objects.filter(user=self.user, type=Notification.Type.DISTRIBUTION_CREDITED).count(),
+            1,
+        )
+
+    def test_unmapped_type_always_delivers_even_if_other_toggles_off(self):
+        # Disable everything the user can; an UNMAPPED money-in type still delivers.
+        prefs = NotificationPreference.get_for(self.user)
+        for f in ("distributions", "installments", "new_properties", "reports",
+                  "market_updates", "security"):
+            setattr(prefs, f, False)
+        prefs.save()
+        notify(self.user, Notification.Type.EARNINGS_CREDITED, params={"slug": "x"})
+        self.assertEqual(
+            Notification.objects.filter(user=self.user, type=Notification.Type.EARNINGS_CREDITED).count(),
+            1,
+        )
+
+    def test_security_toggle_gates_kyc(self):
+        # security=False suppresses KYC/KYB/account events (honored like any toggle).
+        prefs = NotificationPreference.get_for(self.user)
+        prefs.security = False
+        prefs.save(update_fields=["security"])
+        notify(self.user, Notification.Type.KYC_APPROVED)
+        self.assertEqual(
+            Notification.objects.filter(user=self.user, type=Notification.Type.KYC_APPROVED).count(),
+            0,
+        )

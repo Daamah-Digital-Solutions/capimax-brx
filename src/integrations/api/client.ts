@@ -1172,7 +1172,25 @@ export const notificationsApi = {
   /** Soft-delete one notification (hidden from the list). */
   delete: (id: string) =>
     rawRequest(`/notifications/${id}/delete/`, { method: "POST", auth: true }),
+  /** The caller's per-type notification preferences (the 7 settings toggles). */
+  preferences: () =>
+    rawRequest("/notifications/preferences/", { auth: true }) as Promise<NotificationPreferences>,
+  /** Update one or more per-type toggles (partial). Returns the full saved prefs. */
+  updatePreferences: (patch: Partial<NotificationPreferences>) =>
+    rawRequest("/notifications/preferences/", { method: "PATCH", auth: true, body: patch }) as Promise<NotificationPreferences>,
 };
+
+// The 7 per-type toggles the Notifications settings column persists (in-app only).
+// Channel (email/SMS) + digest toggles are NOT here — no mailer/SMS/scheduler exists.
+export interface NotificationPreferences {
+  distributions: boolean;
+  installments: boolean;
+  newProperties: boolean;
+  reports: boolean;
+  priceAlerts: boolean;
+  marketUpdates: boolean;
+  security: boolean;
+}
 
 // --------------------------------------------------------------------------- //
 // Strategic Partner API (Phase 11 Wave A) — partner ENTITY verification (business KYB)

@@ -1819,10 +1819,18 @@ the element. (2) **NEVER fake a number** — real data or honest placeholder onl
   Pronova/Sukuk have no wired rail → kept but disabled "Coming soon" (only card+crypto are real); the fake
   Pronova 5% discount calc was removed.
 - **DONE (real) tabs:** Dashboard, Portfolio (+ token→Property enrichment + cost-basis on all buy paths),
-  Reinvestment, Installments, Live Exits Hub, Support (built tickets domain), Wallet (+ deposit/top-up built).
-  Earlier/independently real: LP Market, Secondary Market, Notifications.
+  Reinvestment, Installments, Live Exits Hub, Support (built tickets domain), Wallet (+ deposit/top-up built),
+  **Distributions** (re-audited + 2 fabricated figures fixed — see below), **Notifications** (re-audited +
+  per-type preferences built — see [[notification-preferences]] below).
+  Earlier/independently real: LP Market, Secondary Market.
+- **Distributions** (`Distributions.tsx`, commit `3854edf`) — re-AUDITED: list/amounts/by-property/exports
+  were (and stay) real; **no shared-component mock feed**. Fixed the only 2 fabricated visuals: the hardcoded
+  **`+18%` vs-last-year** → a **real** YoY delta computed from payout years in `DistributionsView` stats
+  (`vsLastYear`; honest `—` when no prior year), and the **identical static sparkline array** → a **real**
+  per-property **monthly payout series** (`by_property[].series`, read-side aggregation; honest `—`/flat when
+  empty). DELETE NOTHING (both elements kept); **no migration**; +4 tests; full suite 463 green.
 - **STILL TO AUDIT (built — re-audit for hidden mock / shared-component mock feeds, per LESSON 2):**
-  Distributions, Notifications, LP Market, Secondary Market, **Reports & Analytics** (the analytics half is
+  LP Market, Secondary Market, **Reports & Analytics** (the analytics half is
   DEFERRED — mock charts, no stats endpoint; the reports-export half is real, Phase 13).
 - **DEFERRED tabs (recorded, NOT built):** Family (Wave A built — records+allocation; payout awaits an
   external bank rail), Security & Audit Log (Supabase mini-domain), Documents (property-documents),
@@ -1899,6 +1907,45 @@ laid out, matching the UI shape EXACTLY (no invented fields, none dropped).
   `TicketMessage` child built), **attachments** upload, **AI Assistant + Live Chat** (external services), and
   the **FAQ content store** (popular-questions / category search are static, not-wired — FAQ text is fine
   static). Related: [[family-accounts]] (same self-scoped CRUD pattern).
+
+## Notification preferences — BUILT ✅ (per-type in-app toggles persist + gate notify(); channels/digest deferred)
+**Slug:** notification-preferences. The Notifications page's settings column had **12 switches that persisted
+nothing** (local `useState` that reset on reload). We built the per-type preferences the UI lays out, in-app
+only — channels/digest need external mailer/SMS/scheduler that don't exist → kept honest "Coming soon".
+- **UI → model mapping (FOLLOW-THE-FRONTEND, exact):** the 7 per-type toggles (`Notifications.tsx:30-38`) →
+  `NotificationPreference` boolean fields **with the same defaults**: `distributions/installments/newProperties/
+  reports/marketUpdates/security` = **ON**, `priceAlerts` = **OFF** (the UI's only off-by-default preset).
+  Model is **singleton-per-user** (OneToOne pk + `get_for()` get-or-create with UI defaults), mirrors the
+  `pwa`-settings singleton pattern. snake_case fields; serializer exposes the UI's **camelCase** keys via
+  `source`. `GET`/`PATCH /api/notifications/preferences/` — self-scoped (the row IS the authed user; no
+  cross-user path), PATCH partial (one toggle at a time). Migration `0007`.
+- **notify() pref-gate:** `services.TYPE_PREF_KEY` maps each notification **type → preference field**;
+  `notify()` skips creating the in-app row when the user disabled that category. **Mapped:**
+  `distribution_credited→distributions`, `installment_paid`/`installment_defaulted→installments`,
+  `kyc_*`/`kyb_*`/`broker_license_*`/`wallet_created→security`. **UNMAPPED types always deliver** (money-in
+  earnings/commission/secondary-sale/withdrawal, mint, partner workflow) — never silently dropped.
+  **FAIL-OPEN:** any pref-lookup error defaults to delivering. **No regression** — defaults match the UI so the
+  16+ existing emit points still fire (a notification is gated only when the user explicitly turns it off).
+- **Security-type choice (flagged):** the `security` toggle is **HONORED like any other** (not force-on) — it's
+  a normal user-controllable switch in the UI defaulting ON; turning it off suppresses KYC/KYB/account events.
+  Chosen to match the frontend exactly rather than special-case it (no misleading "off but still delivers").
+- **Forward-looking toggles (honest):** `newProperties`/`reports`/`priceAlerts`/`marketUpdates` have **no
+  current emit type** — they persist and will gate future notifications of those categories. They control
+  nothing today but are real, saved prefs (not faked).
+- **Frontend:** `notificationsApi.preferences()`/`updatePreferences()` + `useNotificationPrefs` hook
+  (GET on mount; optimistic toggle → PATCH → reconcile, revert on error; per-key `saving`). `Notifications.tsx`
+  settings column: 7 toggles bound to **real saved prefs** (preset as loading fallback, disabled while saving);
+  **Channels** (Email/SMS disabled, **In-App checked+locked** = the only real channel) + **Digest** (both
+  disabled) → kept with a **"Coming soon"** badge; the dead header **gear button** now scrolls to the settings
+  panel. The notification **list + count + mark-read/all + delete are UNTOUCHED** (already real). Bilingual
+  EN/AR preserved (reused `support.comingSoon`).
+- **+9 tests** (prefs default to the UI presets; PATCH persists + partial + camelCase keys; self-scoped no
+  cross-user leak; `notify()` skips a disabled category, delivers an enabled one, always delivers unmapped
+  types, security toggle gates KYC). **Notifications suite 28 green; full suite green; tsc clean;**
+  `makemigrations --check` clean (one new migration `0007`).
+- **Deferred (honest "Coming soon"):** email/SMS **channels** (no mailer/SMS provider) + **digest** (no
+  scheduler) — external, like the payment providers. In-app is the only delivered channel. Related:
+  [[support-domain]] (same FOLLOW-THE-FRONTEND + "Coming soon" stance), [[deposit-topup]] (inert-until-external).
 
 ## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
 **Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"

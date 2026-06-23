@@ -9,8 +9,10 @@ DESIGN (locked): we store a TYPE (enum) + a small JSON `params` dict + an `actio
 by `type`, interpolating `params` (same approach used repointing Distributions — Arabic
 stays in `t()`). This keeps the backend language-agnostic.
 
-In-app ONLY (no email/SMS/push/digest). Preferences are NOT modelled (v1 emits all
-events; the frontend's per-type/channel toggles are local-only UI).
+In-app ONLY (no email/SMS/push/digest). Per-type PREFERENCES are modelled
+(NotificationPreference, below): the frontend's 7 per-type toggles now persist and
+gate `notify()`. The channel (email/SMS) + digest toggles stay UI-only "Coming soon"
+(no mailer/SMS/scheduler exists — external/deferred, like the payment providers).
 """
 import uuid
 
@@ -84,3 +86,51 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.type} → {self.user_id} ({'read' if self.read else 'unread'})"
+
+
+class NotificationPreference(models.Model):
+    """
+    Per-user in-app notification preferences — one row per user (singleton-per-user via
+    OneToOne pk + `get_for`). The 7 boolean fields MATCH the frontend's settings column
+    EXACTLY (src/pages/Notifications.tsx:30-38), including the defaults: every category
+    defaults ON except `price_alerts` (priceAlerts=false in the UI preset).
+
+    `notify()` reads these before creating an in-app row: if the user disabled the
+    category that a notification's type maps to, the notification is skipped for them
+    (apps/notifications/services.TYPE_PREF_KEY). Types with NO matching toggle (money-in,
+    workflow, etc.) are NEVER gated — they always deliver (default-enabled).
+
+    Only IN-APP delivery is real; the UI's channel (email/SMS) + digest toggles are NOT
+    modelled here (no mailer/SMS/scheduler — shown disabled "Coming soon").
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notification_preference",
+        primary_key=True,
+    )
+    # The 7 UI toggles (snake_case here; the serializer exposes the UI's camelCase keys).
+    distributions = models.BooleanField(default=True)
+    installments = models.BooleanField(default=True)
+    new_properties = models.BooleanField(default=True)     # UI: newProperties
+    reports = models.BooleanField(default=True)
+    price_alerts = models.BooleanField(default=False)      # UI: priceAlerts (preset OFF)
+    market_updates = models.BooleanField(default=True)     # UI: marketUpdates
+    security = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "notification_preferences"
+        verbose_name = _("notification preference")
+        verbose_name_plural = _("notification preferences")
+
+    @classmethod
+    def get_for(cls, user):
+        """Return the user's preferences, creating them (with the UI defaults) on first access."""
+        obj, _created = cls.objects.get_or_create(user=user)
+        return obj
+
+    def __str__(self):
+        return f"NotificationPreference[{self.user_id}]"
