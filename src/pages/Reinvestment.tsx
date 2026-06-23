@@ -8,7 +8,6 @@ import {
   Coins,
   ShoppingCart,
   Gift,
-  Shield,
   CheckCircle,
   Info,
   Wallet,
@@ -17,7 +16,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -50,8 +48,8 @@ export default function Reinvestment() {
       icon: TrendingUp,
       title: language === "ar" ? "نمو مضاعف" : "Compound Growth",
       description: language === "ar"
-        ? "ضاعف عوائدك من خلال إعادة الاستثمار المستمر"
-        : "Multiply your returns through continuous reinvestment",
+        ? "نمِّ محفظتك من خلال إعادة الاستثمار المستمر"
+        : "Grow your portfolio through continuous reinvestment",
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
     },
@@ -71,9 +69,9 @@ export default function Reinvestment() {
                 {language === "ar" ? "إعادة الاستثمار" : "Reinvestment"}
               </h1>
               <p className="text-muted-foreground">
-                {language === "ar" 
-                  ? "ضاعف أرباحك مع مكافآت وخصومات حصرية"
-                  : "Multiply your earnings with exclusive bonuses and discounts"}
+                {language === "ar"
+                  ? "أعد استثمار عوائدك المتراكمة مباشرةً من رصيدك"
+                  : "Reinvest your accrued returns straight from your balance"}
               </p>
             </div>
           </div>
@@ -348,8 +346,13 @@ export default function Reinvestment() {
                             <span className="text-muted-foreground">
                               {language === "ar" ? "المكافأة" : "Bonus"}
                             </span>
-                            <p className="font-medium text-success">
-                              +${reinvestment.discount_amount.toLocaleString()}
+                            <p className={cn(
+                              "font-medium",
+                              reinvestment.discount_amount > 0 ? "text-success" : "text-muted-foreground"
+                            )}>
+                              {reinvestment.discount_amount > 0
+                                ? `+$${reinvestment.discount_amount.toLocaleString()}`
+                                : "—"}
                             </p>
                           </div>
                           <div>
@@ -373,8 +376,8 @@ export default function Reinvestment() {
                     </h4>
                     <p className="text-muted-foreground mb-4">
                       {language === "ar"
-                        ? "ابدأ إعادة استثمار عوائدك للحصول على مكافآت إضافية"
-                        : "Start reinvesting your returns to get additional bonuses"}
+                        ? "ابدأ إعادة استثمار عوائدك المتراكمة في رموز جديدة"
+                        : "Start reinvesting your accrued returns into new tokens"}
                     </p>
                     <Link to="/marketplace?reinvest=true">
                       <Button variant="default" className="gap-2">
