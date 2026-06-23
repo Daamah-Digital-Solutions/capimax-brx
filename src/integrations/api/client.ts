@@ -454,6 +454,37 @@ export const pwaSettingsApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// Support / tickets — the backend for Support.tsx (was 100% mock). Self-scoped CRUD:
+// the caller's own tickets + a real unresolved count; the New-Ticket form POSTs here.
+// Fields mirror the form EXACTLY (subject / category / priority / details + the open/
+// pending/resolved status the badges render). AI-assistant + live-chat stay deferred.
+// --------------------------------------------------------------------------- //
+export interface SupportTicketRow {
+  id: string;
+  reference: string;             // TKT-#### (the list's mono ref)
+  subject: string;
+  category: "investment" | "payments" | "account" | "technical" | "other" | string;
+  priority: "low" | "medium" | "high" | string;
+  details: string;
+  status: "open" | "pending" | "resolved" | string;
+  created_at: string;
+  updated_at: string;
+}
+export interface SupportTicketsResponse {
+  tickets: SupportTicketRow[];
+  unresolved_count: number;      // real count (open + pending) for the tab badge
+}
+
+export const supportApi = {
+  /** The caller's own tickets (newest first) + the real unresolved count. */
+  tickets: () =>
+    rawRequest("/support/tickets/", { auth: true }) as Promise<SupportTicketsResponse>,
+  /** Submit a new ticket (the New-Ticket form). */
+  create: (payload: { subject: string; category: string; priority: string; details: string }) =>
+    rawRequest("/support/tickets/", { method: "POST", auth: true, body: payload }) as Promise<SupportTicketRow>,
+};
+
+// --------------------------------------------------------------------------- //
 // Wallet + KYC API (Phase 4) — authenticated. SPEC §3.4 / §3.2.
 // Repoints the frontend's wallet/KYC/holdings layer off Supabase onto Django.
 // --------------------------------------------------------------------------- //

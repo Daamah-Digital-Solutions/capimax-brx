@@ -80,6 +80,7 @@ DOMAIN_STUB_APPS = [
     "apps.family",
     "apps.owner_documents",
     "apps.pwa",
+    "apps.support",
     "apps.distributions",
     "apps.notifications",
     "apps.reports",

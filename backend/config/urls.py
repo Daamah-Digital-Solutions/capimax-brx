@@ -60,6 +60,9 @@ urlpatterns = [
     # PWA settings: a singleton global-config row (app branding + install-prompt toggle),
     # repointed off Supabase. GET is public (branding); PATCH/PUT is admin-only. No PII/secrets.
     path("api/pwa-settings/", include("apps.pwa.urls")),
+    # Support: self-scoped ticket CRUD (the Support.tsx New-Ticket form + ticket list) + an
+    # admin-only status-advance endpoint. NO money/chain; AI-assistant/live-chat stay deferred.
+    path("api/support/", include("apps.support.urls")),
     # allauth routes (OAuth callback handling) — scaffolding for social login.
     path("accounts/", include("allauth.urls")),
 ]

@@ -1003,6 +1003,7 @@ const translations: Record<Language, Record<string, string>> = {
     "support.dragFiles": "اسحب الملفات هنا أو انقر للتحميل",
     "support.fileTypes": "PNG, JPG, PDF حتى 10MB",
     "support.submitTicket": "إرسال التذكرة",
+    "support.comingSoon": "قريباً",
     
     // Reports
     "reports.title": "التقارير والتحليلات",
@@ -2437,6 +2438,7 @@ const translations: Record<Language, Record<string, string>> = {
     "support.dragFiles": "Drag files here or click to upload",
     "support.fileTypes": "PNG, JPG, PDF up to 10MB",
     "support.submitTicket": "Submit Ticket",
+    "support.comingSoon": "Coming soon",
     
     // Reports
     "reports.title": "Reports & Analytics",
