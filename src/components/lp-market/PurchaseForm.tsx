@@ -53,10 +53,14 @@ export function PurchaseForm({
   const [step, setStep] = useState<"details" | "payment" | "confirm">("details");
   const [paymentMethod, setPaymentMethod] = useState<"lp_balance" | "bank_transfer">("lp_balance");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [purchaseAmount, setPurchaseAmount] = useState(listing.token_amount.toString());
 
+  // The backend settles the WHOLE listing (purchase sends only the listing id, no
+  // quantity). So the buy is locked to the full block: quantity = listing.token_amount
+  // and the charged total = listing.total_value — the displayed total MATCHES what the
+  // backend charges (no misleading partial-buy math).
+  const purchaseAmount = listing.token_amount;
+  const calculatedTotal = listing.total_value;
   const insufficientBalance = listing.total_value > lpBalance;
-  const calculatedTotal = parseFloat(purchaseAmount) * listing.unit_price;
 
   const handleNext = () => {
     if (step === "details") setStep("payment");
@@ -82,7 +86,6 @@ export function PurchaseForm({
   const handleClose = () => {
     onOpenChange(false);
     setStep("details");
-    setPurchaseAmount(listing.token_amount.toString());
   };
 
   return (
@@ -144,15 +147,13 @@ export function PurchaseForm({
 
             <div className="space-y-2">
               <Label>{language === "ar" ? "كمية الشراء" : "Purchase Amount"}</Label>
-              <Input
-                type="number"
-                value={purchaseAmount}
-                onChange={(e) => setPurchaseAmount(e.target.value)}
-                max={listing.token_amount}
-                min={1}
-              />
+              {/* Whole-listing purchase: the amount is locked to the full block (the
+                  backend settles the entire listing), so the total shown matches the charge. */}
+              <Input type="number" value={purchaseAmount} disabled />
               <p className="text-xs text-muted-foreground">
-                {language === "ar" ? "الحد الأقصى" : "Maximum"}: {listing.token_amount} tokens
+                {language === "ar"
+                  ? "يتم شراء القائمة بالكامل"
+                  : "The full listing is purchased"}: {listing.token_amount} tokens
               </p>
             </div>
 
@@ -196,12 +197,14 @@ export function PurchaseForm({
                   </div>
                 </label>
 
-                <label 
-                  className={`flex items-center gap-4 p-4 border rounded-lg cursor-pointer transition-colors ${
-                    paymentMethod === "bank_transfer" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-                  }`}
+                {/* Bank transfer has no off-balance settlement rail yet (LP settlement is
+                    an instant internal-balance debit) → kept visible but disabled "Coming
+                    soon", like the deferred payment providers. LP balance is the only real
+                    purchase method. */}
+                <label
+                  className="flex items-center gap-4 p-4 border border-border rounded-lg opacity-50 cursor-not-allowed"
                 >
-                  <RadioGroupItem value="bank_transfer" />
+                  <RadioGroupItem value="bank_transfer" disabled />
                   <div className="flex items-center gap-3 flex-1">
                     <CreditCard className="h-8 w-8 text-info p-1.5 bg-info/10 rounded-lg" />
                     <div>
@@ -210,6 +213,9 @@ export function PurchaseForm({
                         {language === "ar" ? "معالجة خلال 1-3 أيام" : "Processing 1-3 business days"}
                       </p>
                     </div>
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {language === "ar" ? "قريباً" : "Coming soon"}
+                    </Badge>
                   </div>
                 </label>
               </div>

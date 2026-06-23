@@ -103,16 +103,23 @@ export function InvestorAssetsView({
     setSellDialogOpen(true);
   };
 
+  // Real per-token price from the held token's value (NOT a flat $100). Guards a
+  // zero/empty token_amount so we never divide by zero.
+  const unitPrice =
+    selectedAsset && selectedAsset.token_amount > 0
+      ? selectedAsset.token_value_usd / selectedAsset.token_amount
+      : 0;
+
   const handleListAsset = async () => {
     if (!selectedAsset || !sellAmount) return;
-    
+
     setIsSubmitting(true);
     const result = await onListAsset({
       property_id: selectedAsset.property_id,
       property_name: selectedAsset.property_name,
       token_symbol: selectedAsset.token_symbol,
       token_amount: parseFloat(sellAmount),
-      unit_price: 100,
+      unit_price: unitPrice,
     });
     setIsSubmitting(false);
     
@@ -457,7 +464,7 @@ export function InvestorAssetsView({
                       <span className="text-muted-foreground">
                         {language === "ar" ? "القيمة الإجمالية" : "Total Value"}
                       </span>
-                      <span className="font-medium">${(parseFloat(sellAmount) * 100).toLocaleString()}</span>
+                      <span className="font-medium">${(parseFloat(sellAmount) * unitPrice).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
@@ -465,13 +472,13 @@ export function InvestorAssetsView({
                         {language === "ar" ? "رسوم المنصة (1%)" : "Platform Fee (1%)"}
                       </span>
                       <span className="text-destructive">
-                        -${(parseFloat(sellAmount) * 100 * 0.01).toLocaleString()}
+                        -${(parseFloat(sellAmount) * unitPrice * 0.01).toLocaleString()}
                       </span>
                     </div>
                     <div className="border-t pt-2 flex justify-between">
                       <span className="font-medium">{language === "ar" ? "المبلغ الصافي" : "You Receive"}</span>
                       <span className="text-lg font-bold text-success">
-                        ${(parseFloat(sellAmount) * 100 * 0.99).toLocaleString()}
+                        ${(parseFloat(sellAmount) * unitPrice * 0.99).toLocaleString()}
                       </span>
                     </div>
                   </div>

@@ -105,7 +105,9 @@ export function useLPMarket() {
         property_name: data.property_name,
         token_symbol: data.token_symbol,
         token_amount: data.token_amount,
-        unit_price: data.unit_price || 100,
+        // Caller supplies the REAL per-token price (derived from the holding's value);
+        // no flat-$100 fallback (that would misprice tokens not worth exactly $100/unit).
+        unit_price: data.unit_price,
       })) as LPMarketListing;
 
       setMyListings([result, ...myListings]);
