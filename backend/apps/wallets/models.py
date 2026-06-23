@@ -286,3 +286,45 @@ class Withdrawal(models.Model):
 
     def __str__(self):
         return f"withdraw {self.amount} {self.currency} [{self.status}] ({self.user_id})"
+
+
+class Deposit(models.Model):
+    """
+    A wallet TOP-UP — an external pay-in that CREDITS the user's internal `UserBalance`
+    (the inverse of a withdrawal). It is the "what" record for a deposit, exactly as an
+    `Investment` is for a buy: a `payments.Payment` references it and the SAME gated
+    Stripe/NOW path charges it; on the confirmed webhook/IPN the completion core credits
+    the balance (`credit_user_balance(source="deposit")`).
+
+    SETTLEMENT-GATED + IDEMPOTENT: nothing is credited at request time. The credit happens
+    only inside the gated completion core, and the `credited` flag guarantees a replayed
+    webhook never double-credits. NO tokens are minted — a deposit is not a buy.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        COMPLETED = "completed", _("Completed")
+        FAILED = "failed", _("Failed")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="deposits"
+    )
+    amount = models.DecimalField(max_digits=16, decimal_places=2)  # USD
+    payment_method = models.CharField(max_length=16, default="card")  # card | crypto
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    # Idempotency guard: flipped true the first (and only) time the balance is credited.
+    credited = models.BooleanField(default=False)
+    credited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("deposit")
+        verbose_name_plural = _("deposits")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"deposit {self.amount} [{self.status}] ({self.user_id})"

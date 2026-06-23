@@ -1713,6 +1713,40 @@ carries the server-side-masking fix above), and the **small satellite mini-domai
 (PropertyDetail/DataRoom doc preview/download/verify + the doc "Verify" buttons — no document storage/serving), and
 **favorites** (Add-to-Favorites). *(No longer deferred: reports-export — BUILT in Phase 13.)*
 
+## INHERITANCE / ESTATE + GIFTING — DEFERRED BY USER DECISION (port package READY; nothing to build now)
+**Decision (2026-06-22):** the **"Designate Beneficiary / Heir" + "Estate, Heirs & Authorized Representatives" +
+Gifting** feature is **DEFERRED** for now by user decision. **Do NOT build anything yet** — this entry only records
+the deferral and that the port package is held so nothing is lost.
+- **Current state in THIS repo (BRX) — confirmed by audit (2026-06-22):** the Estate/Gifting UI **does NOT exist** in
+  `src/`. The only inheritance-related code is **non-functional placeholder**: the Family page §B "Inheritance System"
+  **toast-stub cards** (`FamilyInvestment.tsx` — "Setup Beneficiaries" / "Inactivity Trigger" / "Assign Proxy", all
+  `toast.success` no-ops, no form, no fields) + §C "Real Estate Gifts" ("Schedule New Property Gift" toast stub), plus a
+  **static home-page marketing tile** ("Tokenized Real Estate Inheritance", `WhyCapimaxBrixSection.tsx`). Grep for
+  `beneficiar`/`Designate`/`verified death`/`id_type`/`legal_name`/`Gifting` → **zero functional matches**. So this is a
+  **PropShare-only UI that must be brought over** — not a repoint.
+- **PORT PACKAGE — READY (held, do not lose):** we have the full package from **PropShare** (the other project, *CapiMax
+  PropShare*, FastAPI): (1) the **frontend component source** (Estate + Gifting tabs, "Add Beneficiary" dialog), (2) a
+  **field + behavioral spec**, and (3) a **proposed Django backend contract**. ⚠️ **PropShare's own version is 100% MOCK
+  (no backend)** — so porting the UI alone yields a mock; the backend must be **built from scratch** here.
+- **Captured spec (so nothing is lost if the package file is misplaced):** Estate/Gifting tab structure; **Add Beneficiary**
+  fields = **full legal name / relationship / role (Beneficiary | Heir) / email / phone / ID type + ID number /
+  allocation %**; **per-beneficiary allocation %**; transfer **condition** = "**On verified death**" (+ an inactivity
+  trigger); transfer **scope tags** = **Ownership Rights / Rental Returns / Passive Income / Full Portfolio**; roles incl.
+  **Authorized Representatives / legal proxy**.
+- **When we return — the build plan (mirror the FAMILY domain's wave split):**
+  - **Wave A (SAFE foundation, build first):** port the UI + build a **new Django backend from scratch** for
+    **registration / config / masked-PII ONLY** — beneficiary records (passive sub-records, like family members),
+    per-beneficiary allocation %, masked ID/contact PII (**server-side masking — reuse Family Wave A's
+    `services.mask_tail`; store last-4 / never persist full ID numbers**), scope-tag + condition config. **NO money, NO
+    token movement, NO automatic transfer, NO death/inactivity execution** — record + config only, exactly like
+    **family Wave A**.
+  - **Execution / triggers DEFERRED (later waves, like family B/C/D):** the "on verified death" / inactivity **trigger
+    engine** + actual ownership-token / returns transfer to beneficiaries is gated on the same open product decisions as
+    family Waves B/C/D (members/beneficiaries as real KYC'd users w/ custodial wallets; a verified-death attestation
+    source; the external-payout provider gap) — **NOT in Wave A.**
+- **Related:** pairs with [[family-accounts]] (same passive-sub-record + masked-PII + wave-split pattern). No code, no
+  models, no endpoints created by this entry — **deferral + package-ready note only.**
+
 ## FRONTEND REALNESS PASS — Investor dashboard, tab by tab (IN PROGRESS; latest origin/main = `391aa96`)
 Going through every Investor surface making it **real** (real data + buttons + names). **TWO FIRM RULES,
 non-negotiable:** (1) **DELETE NOTHING** — every UI element/card/badge/column/section stays in the layout;
@@ -1741,14 +1775,116 @@ the element. (2) **NEVER fake a number** — real data or honest placeholder onl
        **average cost** (Σ amount_invested / Σ token_amount — invariant to partial sells) → real `invested_usd`
        + return% per holding. **+2 cost-basis tests; full suite 445 green; no migration** (`makemigrations
        --check` clean).
+  - **Reinvestment** (`Reinvestment.tsx`) — AUDITED + polished: data layer was already real
+    (`useReinvestments` → balance + history; Pay-from-Balance). **No leftover mock.** Cosmetic fixes only:
+    dead imports removed; History "Bonus" column shows `—` when 0 (was `+$0`); bonus-promising marketing copy
+    softened to match the honest "Coming soon" stance. **NO new numbers faked.**
+  - **Installments** (`Installments.tsx`) — AUDITED: **already real end-to-end** (`useInstallmentPlans` →
+    `GET /installments/plans/`; per-installment gated Pay-Now via Stripe/NOW; default/forfeiture display). **No
+    leftover mock.** 3 honest placeholders only (static "Under Construction" badge; no-image gradient; disabled
+    Export "Coming soon"). No fix needed.
+  - **Live Exits Hub** (`ExitsHub.tsx`) — AUDITED: **already real** (own LP + secondary `my_listings` + cancel,
+    both Django). Distinct cross-market "my sell-orders" view. No mock; 2 cosmetic static channel cards only.
+  - **Support** (`Support.tsx`) — was **100% mock** (hardcoded ticket array, fabricated FAQ counts, an
+    uncontrolled New-Ticket form whose Submit was a silent no-op). **BUILT the support domain** the UI lays out
+    — see [[support-domain]] below. New `apps/support` (`SupportTicket` model + migration + self-scoped CRUD +
+    admin status endpoint); the form now POSTs for real, the list + unresolved badge read live Django, the
+    fabricated FAQ counts became honest `—`, and AI-Assistant/Live-Chat are kept-but-disabled "Coming soon".
+    **+7 tests; full suite 452 green; tsc clean.**
 - **FLAGS:** (a) **installment** cost-basis reflects the **committed** (full agreed) price, not the
   not-yet-paid portion — a minor average-cost nuance. (b) **`CreateVirtualCardButton`** kept **as-is** on
   Portfolio (deferred visa-cards, still Supabase-functional — NOT disabled; disabling would regress a working
-  feature; pending a final call).
-- **NEXT tabs (queue):** Reinvestment (built — verify no leftover mock), Family Investment (Wave A only),
-  Installments (built), Reports & Analytics (analytics deferred), LP / Secondary Market (built), Live Exits Hub
-  (needs audit), Security & Audit Log (Supabase — deferred mini-domain), Documents (property-documents
-  deferred), Support (needs audit). Detailed per-element record in **DASHBOARD_GAPS.md**.
+  feature; pending a final call). (c) **Support phone number** "+1 205 350 8771" stays static — **client to
+  confirm the real support line**. (d) **Support attachments** dropzone is display-only (the form never had a
+  real `<input type=file>`) — upload is a deferred enhancement, kept + labelled "Coming soon" (NOT wired;
+  would reuse the owner-documents media pattern when built).
+  - **Wallet** (`Wallet.tsx`) — re-AUDITED + fixed. Balance / transactions / withdrawals / export / the
+    withdraw dialog were (and stay) real. Caught + fixed two regressions the audit flagged: (1) the shared
+    **`ReinvestReturnsCard` was fed mock props** — a `Math.min(balance, 4250)` clamp (showed a fake capped
+    number) + dead `totalReinvested={2500}`/`totalBonus={175}` → now `availableReturns={balance}` (mirrors
+    Portfolio, no clamp, dead props removed). (2) the **Deposit/top-up flow was a silent no-op** → BUILT the
+    real gated deposit (see [[deposit-topup]] below). Cosmetics: not-wired **Receipt** button kept but
+    disabled "Coming soon"; the per-tx "completed" badge kept (balance-ledger rows are settled — accurate).
+- **FLAGS:** (a) **installment** cost-basis reflects the **committed** (full agreed) price, not the
+  not-yet-paid portion — a minor average-cost nuance. (b) **`CreateVirtualCardButton`** kept **as-is** on
+  Portfolio (deferred visa-cards, still Supabase-functional — NOT disabled; disabling would regress a working
+  feature; pending a final call). (c) **Support phone number** "+1 205 350 8771" stays static — **client to
+  confirm the real support line**. (d) **Support attachments** dropzone is display-only (the form never had a
+  real `<input type=file>`) — upload is a deferred enhancement, kept + labelled "Coming soon" (NOT wired;
+  would reuse the owner-documents media pattern when built). (e) **Wallet deposit methods** bank/Apple/Google/
+  Pronova/Sukuk have no wired rail → kept but disabled "Coming soon" (only card+crypto are real); the fake
+  Pronova 5% discount calc was removed.
+- **NEXT tabs (queue):** Family Investment (Wave A only — see FAMILY section; inheritance DEFERRED),
+  Reports & Analytics (analytics deferred), LP / Secondary Market (built), Security & Audit Log (Supabase —
+  deferred mini-domain), Documents (property-documents deferred). Detailed per-element record in
+  **DASHBOARD_GAPS.md**. *(DONE since: Reinvestment, Installments, Live Exits Hub, Support, Wallet.)*
+
+## Deposit / top-up — BUILT ✅ (gated external pay-in that CREDITS balance; NO mint; inert until keys)
+**Slug:** deposit-topup. The Wallet's Deposit dialog (method → amount → confirm) had a **silent no-op** Confirm
+and no endpoint. We built the deposit the frontend lays out, **reusing the existing Stripe/NOW machinery** —
+NOT a new payment rail.
+- **Model:** a DEPOSIT is the inverse of a withdrawal — an external pay-in that **credits `UserBalance`**, NOT a
+  buy (no `Investment`, **no mint, no tokens**). New `wallets.Deposit` (user, amount, payment_method, status,
+  **`credited` idempotency flag**, credited_at) — the "what" record, like `Investment` is for a buy.
+- **Reuse (the credit-not-mint branch):** `payments.Payment.investment` is now **nullable** + a new nullable
+  `Payment.deposit` FK. The SAME gated completion core `_complete_payment` gained a **deposit branch** (mirrors
+  the installment-FK branch): `deposit` set → `_credit_deposit()` → `credit_user_balance(source="deposit")`,
+  idempotent via the `Deposit.credited` flag; `installment` set → settle; else → mint (UNCHANGED). The webhook/
+  IPN views are **untouched** — they already route provider id → Payment → core. (`select_related("investment")`
+  dropped from the `select_for_update()` calls because the now-nullable FK + FOR UPDATE on an outer-join side is
+  a Postgres error — we branch on FK *ids*, the established pattern.)
+- **Endpoints:** `POST /api/payments/deposit/stripe/` + `/deposit/nowpayments/` — **KYC-gated**
+  (`KYCApprovedPermission`, matches the buy flow), create a `Deposit` + `Payment(deposit=…, investment=NULL)` +
+  a real gated charge. **Settlement-gated:** balance credited ONLY on the confirmed webhook/IPN, never at
+  request. **Inert until keys:** no Stripe/NOW keys → **503** `*_unconfigured` (honest, no Deposit row leaked,
+  no silent success). Amount validated (>0, ≤ 1,000,000). `Deposit` admin is read-only (the credit is never an
+  admin action).
+- **Frontend:** `paymentsApi.createDepositStripe/createDepositNow` + new `DepositPayStep.tsx` (Stripe Elements
+  card + NOW crypto QR/address + **poll balance until it rises** → refresh) modeled on `InstallmentPayDialog`.
+  Wallet step-3 renders it (replaces the silent `resetDepositFlow()`); with no keys → honest "not configured"
+  panel. **ReinvestReturnsCard** un-mocked (real `balance`). DELETE NOTHING: card+crypto are the real methods,
+  bank/Apple/Google/Pronova/Sukuk kept disabled "Coming soon"; the fake Pronova 5% discount removed.
+- **DEFERRED (honest):** the Pronova-discount + Sukuk + bank/Apple/Google deposit rails (no integration) —
+  disabled "Coming soon", same as the reinvest bonuses.
+- **+7 tests** (confirmed deposit credits balance EXACTLY, source="deposit"; settlement-gated — no credit before
+  completion; **idempotent** — replayed webhook → ONE credit; **no mint/no OwnershipToken/no Investment**;
+  failed deposit credits nothing; endpoint KYC-gated; unconfigured → 503 with no row; bad amount → 400).
+  **Full suite 459 green** (was 452), **tsc clean**, `makemigrations --check` clean (`wallets.0005_deposit`,
+  `payments.0004`). NO regression to buy/installment/reinvest (their tests unchanged). Related: [[reinvestments]]
+  (the inverse — spends balance), [[family-accounts]].
+
+## Support / tickets domain — BUILT ✅ (self-scoped ticket CRUD; FOLLOW-THE-FRONTEND)
+**Slug:** support-domain. The frontend (`Support.tsx`) was 100% mock; we built the Django backend it already
+laid out, matching the UI shape EXACTLY (no invented fields, none dropped).
+- **UI → model mapping (proof we followed the frontend):** New-Ticket form → `SupportTicket`:
+  `subject` (Input), `category` (select: **investment/payments/account/technical/other** — verbatim),
+  `priority` (select: **low/medium/high**, default low), `details` (Textarea). Ticket-list row →
+  `reference` (**TKT-####**, the list showed `TKT-001`), `status` (**open/pending/resolved** — the badge values;
+  the UI uses *pending*, NOT *in_progress*, so we followed the UI), `created_at`/`updated_at` (the date +
+  last-update columns). The attachments dropzone had **no real file input** → attachments NOT wired (flagged).
+- **Backend `apps/support`:** `SupportTicket` (UUID pk, `user` FK self-scope, auto `TKT-####` ref via `save()`,
+  the choices above, `status` default `open`) + migration `0001`. Self-scoped CRUD (`apps/core.IsAuthenticated`
+  + `filter(user=request.user)`): `GET/POST /api/support/tickets/` (list returns `{tickets, unresolved_count}`
+  — the badge's **real** count = open+pending), `GET /api/support/tickets/<id>/` (404 for non-owners).
+  **Admin-only** `PATCH /api/support/admin/tickets/<id>/` (`IsAdminRole`) advances status open→pending→resolved.
+  Admin registered (operators triage/resolve; status editable, rest read-only). Registered in INSTALLED_APPS +
+  mounted at `/api/support/`. **NO money/chain/PII-file.**
+- **Frontend:** `supportApi` (tickets + create) + `useSupportTickets` hook (own tickets + unresolved count,
+  poll on mount/focus). `Support.tsx`: New-Ticket form now **controlled** + Submit → real POST with
+  loading + success/error toast (was a silent no-op) → on success resets, refreshes, jumps to the list; ticket
+  list + unresolved badge read **live** data (ref/subject/status/priority/created/updated); fabricated FAQ
+  category counts (12/8/6/10) → honest **`—`** (cards kept); **AI Assistant + Live Chat** kept but **disabled
+  "Coming soon"** (need external AI/chat services — deferred like payment providers); FAQ text + phone stay
+  static. Bilingual EN/AR preserved (`support.comingSoon` added both locales). **DELETE NOTHING** honoured —
+  every card/tab/field/badge remains.
+- **+7 tests** (create persists the exact fields + default open + TKT-#### ref; priority defaults low; invalid
+  category/priority → 400; self-scoped list with real unresolved_count; cross-user detail 404; admin
+  open→pending→resolved while non-admin 403). **Full suite 452 green** (was 445), **tsc clean**,
+  `makemigrations --check` clean.
+- **Still deferred (honest):** ticket **reply thread** (the UI shows no per-ticket message thread → no
+  `TicketMessage` child built), **attachments** upload, **AI Assistant + Live Chat** (external services), and
+  the **FAQ content store** (popular-questions / category search are static, not-wired — FAQ text is fine
+  static). Related: [[family-accounts]] (same self-scoped CRUD pattern).
 
 ## Partner domain — COMPLETE ✅ (Wave A: KYB + directory; Wave B: assignment/deliverable workflow)
 **Source of truth:** PARTNERS_SURFACE.md (+ its "Wave detail" section). **BOTH waves are BUILT — see "Phase 11"

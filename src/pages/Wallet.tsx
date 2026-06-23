@@ -47,6 +47,7 @@ import { SavedCardsManager } from "@/components/wallet/SavedCardsManager";
 // Phase 12 finishing: the investor wallet now uses the REAL Django flow + the shared
 // Django withdrawal dialog (replaces the legacy Supabase-OTP WithdrawalDialog).
 import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
+import { DepositPayStep } from "@/components/wallet/DepositPayStep";
 import { walletsApi, reportsApi, type BalanceTransactionRow } from "@/integrations/api/client";
 import { useExport } from "@/hooks/useExport";
 import { toast } from "sonner";
@@ -64,14 +65,17 @@ const SOURCE_LABEL: Record<string, { en: string; ar: string }> = {
   withdrawal: { en: "Withdrawal", ar: "سحب" },
 };
 
+// Deposit methods. ONLY card + crypto have a real gated rail (Stripe / NOW). The others
+// have no wired pay-in rail yet → kept (DELETE NOTHING) but disabled "Coming soon". The
+// Pronova 5% discount + Sukuk are a deferred product (no Pronova token) — NO fake discount.
 const paymentMethods = [
   { id: "card", nameAr: "بطاقة ائتمان/خصم", nameEn: "Credit/Debit Card", icon: CreditCard, available: true },
-  { id: "bank", nameAr: "تحويل بنكي", nameEn: "Bank Transfer", icon: Building2, available: true },
-  { id: "apple", nameAr: "Apple Pay", nameEn: "Apple Pay", icon: Smartphone, available: true },
-  { id: "google", nameAr: "Google Pay", nameEn: "Google Pay", icon: Smartphone, available: true },
   { id: "crypto", nameAr: "عملات رقمية", nameEn: "Cryptocurrency", icon: Bitcoin, available: true },
-  { id: "pronova", nameAr: "توكن Pronova", nameEn: "Pronova Token", icon: Coins, discount: 5, available: true },
-  { id: "sukuk", nameAr: "Nova Sukuk", nameEn: "Nova Sukuk", icon: FileText, available: true },
+  { id: "bank", nameAr: "تحويل بنكي", nameEn: "Bank Transfer", icon: Building2, available: false },
+  { id: "apple", nameAr: "Apple Pay", nameEn: "Apple Pay", icon: Smartphone, available: false },
+  { id: "google", nameAr: "Google Pay", nameEn: "Google Pay", icon: Smartphone, available: false },
+  { id: "pronova", nameAr: "توكن Pronova", nameEn: "Pronova Token", icon: Coins, available: false },
+  { id: "sukuk", nameAr: "Nova Sukuk", nameEn: "Nova Sukuk", icon: FileText, available: false },
 ];
 
 export default function Wallet() {
@@ -324,7 +328,14 @@ export default function Wallet() {
                           <Badge variant="success">
                             {t("wallet.completed")}
                           </Badge>
-                          <Button variant="ghost" size="icon">
+                          {/* Per-transaction receipt is a deferred enhancement (no receipt
+                              endpoint yet) — kept, disabled, not a silent no-op. */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled
+                            title={isAr ? "قريباً" : "Coming soon"}
+                          >
                             <Receipt className="w-4 h-4" />
                           </Button>
                         </div>
@@ -338,11 +349,8 @@ export default function Wallet() {
 
             {/* Sidebar */}
             <div className="space-y-6">
-              <ReinvestReturnsCard
-                availableReturns={balance > 0 ? Math.min(balance, 4250) : 0}
-                totalReinvested={2500}
-                totalBonus={175}
-              />
+              {/* Real internal balance (no clamp; mirrors Portfolio). */}
+              <ReinvestReturnsCard availableReturns={balance} />
 
               {/* Payment Methods Management */}
               <div className="bg-card rounded-2xl border border-border p-6 space-y-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
@@ -407,10 +415,11 @@ export default function Wallet() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {method.discount && (
-                        <Badge variant="success">{t("payment.discount")} {method.discount}%</Badge>
+                      {method.available ? (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <Badge variant="secondary">{language === "ar" ? "قريباً" : "Coming soon"}</Badge>
                       )}
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </button>
                 ))}
@@ -443,23 +452,16 @@ export default function Wallet() {
                     </Button>
                   ))}
                 </div>
-                {selectedMethod === "pronova" && amount && (
-                  <div className="p-4 bg-success/10 rounded-xl border border-success/20">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground">{t("wallet.pronovaDiscount")} (5%)</span>
-                      <span className="font-semibold text-success">-${(parseFloat(amount) * 0.05).toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="font-medium">{t("wallet.finalAmount")}</span>
-                      <span className="font-bold text-primary">${(parseFloat(amount) * 0.95).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setDepositStep(1)} className="flex-1">
                     {t("common.back")}
                   </Button>
-                  <Button variant="hero" onClick={() => setDepositStep(3)} className="flex-1" disabled={!amount}>
+                  <Button
+                    variant="hero"
+                    onClick={() => setDepositStep(3)}
+                    className="flex-1"
+                    disabled={!amount || parseFloat(amount) <= 0}
+                  >
                     {t("common.next")}
                   </Button>
                 </div>
@@ -471,17 +473,26 @@ export default function Wallet() {
                 <div className="p-4 bg-muted rounded-xl space-y-3">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t("wallet.depositAmount")}</span>
-                    <span className="font-semibold">${parseFloat(amount).toLocaleString()}</span>
+                    <span className="font-semibold">${parseFloat(amount || "0").toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setDepositStep(2)} className="flex-1">
-                    {t("common.back")}
-                  </Button>
-                  <Button variant="hero" onClick={resetDepositFlow} className="flex-1">
-                    {t("wallet.confirmAndPay")}
-                  </Button>
-                </div>
+
+                {/* REAL gated deposit — Stripe card or NOW crypto. On the confirmed
+                    webhook/IPN the balance is credited (no mint); we poll + refresh.
+                    With no provider keys this shows an honest "not configured" panel
+                    (replaces the old silent resetDepositFlow() no-op). */}
+                <DepositPayStep
+                  method={selectedMethod === "crypto" ? "crypto" : "card"}
+                  amount={parseFloat(amount || "0")}
+                  onPaid={() => {
+                    resetDepositFlow();
+                    refresh();
+                  }}
+                />
+
+                <Button variant="outline" onClick={() => setDepositStep(2)} className="w-full">
+                  {t("common.back")}
+                </Button>
               </div>
             )}
           </DialogContent>

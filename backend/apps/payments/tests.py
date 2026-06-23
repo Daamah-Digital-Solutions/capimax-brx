@@ -29,7 +29,11 @@ from apps.wallets.services import get_or_create_custodial_wallet
 
 from . import nowpayments_service, stripe_service
 from .models import Payment, PaymentState
-from .services import get_or_create_payment
+from .services import (
+    get_or_create_payment,
+    mark_payment_failed,
+    process_successful_payment,
+)
 
 _WEBHOOK_SECRET = "whsec_test_secret"
 _FAKE_TX = "0x" + "ef" * 32
@@ -379,3 +383,105 @@ class NowPaymentsIpnTests(APITestCase):
     def test_unconfigured_ipn_returns_503(self):
         resp = self._post("finished", sign=False)
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+# --------------------------------------------------------------------------- #
+# DEPOSIT / top-up — gated external pay-in that CREDITS the balance (no mint).
+# --------------------------------------------------------------------------- #
+class DepositTests(APITestCase):
+    """Deposit credits UserBalance via the SAME gated completion core; never mints."""
+
+    def setUp(self):
+        from apps.wallets.models import Deposit
+
+        self.Deposit = Deposit
+        self.user = _approved_user("dep@example.com")
+
+    def _balance(self, user):
+        from apps.wallets.models import UserBalance
+
+        bal = UserBalance.objects.filter(user=user).first()
+        return bal.current_balance if bal else Decimal("0")
+
+    def _pending_deposit_payment(self, amount="500.00", intent="pi_dep_1"):
+        deposit = self.Deposit.objects.create(
+            user=self.user, amount=Decimal(amount), payment_method="card"
+        )
+        payment = Payment.objects.create(
+            deposit=deposit, provider="stripe", amount=Decimal(amount), currency="usd",
+            stripe_payment_intent_id=intent,
+        )
+        return deposit, payment
+
+    # --- settlement-gated: nothing credited before the webhook completes -------- #
+    def test_deposit_not_credited_before_completion(self):
+        self._pending_deposit_payment()
+        self.assertEqual(self._balance(self.user), Decimal("0"))
+
+    # --- confirmed deposit credits the balance exactly, source="deposit", no mint #
+    def test_confirmed_deposit_credits_balance_exactly_no_mint(self):
+        from apps.wallets.models import BalanceTransaction
+
+        deposit, _payment = self._pending_deposit_payment(amount="750.00", intent="pi_dep_2")
+        with mock.patch("apps.chain.service.mint", side_effect=_fake_mint) as m:
+            res = process_successful_payment("pi_dep_2")
+
+        self.assertTrue(res["processed"])
+        self.assertFalse(res["minted"])
+        self.assertTrue(res["credited"])
+        self.assertEqual(self._balance(self.user), Decimal("750.00"))
+        deposit.refresh_from_db()
+        self.assertTrue(deposit.credited)
+        self.assertEqual(deposit.status, self.Deposit.Status.COMPLETED)
+        # The ledger row is a CREDIT tagged source="deposit".
+        tx = BalanceTransaction.objects.get(source="deposit")
+        self.assertEqual(tx.entry_type, BalanceTransaction.EntryType.CREDIT)
+        self.assertEqual(tx.amount, Decimal("750.00"))
+        # NO mint, NO tokens, NO investment created.
+        m.assert_not_called()
+        self.assertFalse(OwnershipToken.objects.filter(wallet__user=self.user).exists())
+        self.assertFalse(Investment.objects.filter(user=self.user).exists())
+
+    # --- idempotent: replayed webhook does NOT double-credit -------------------- #
+    def test_replayed_completion_does_not_double_credit(self):
+        from apps.wallets.models import BalanceTransaction
+
+        self._pending_deposit_payment(amount="200.00", intent="pi_dep_3")
+        first = process_successful_payment("pi_dep_3")
+        second = process_successful_payment("pi_dep_3")  # webhook re-delivery
+
+        self.assertTrue(first["credited"])
+        self.assertFalse(second["credited"])  # second is a no-op
+        self.assertEqual(self._balance(self.user), Decimal("200.00"))  # credited ONCE
+        self.assertEqual(BalanceTransaction.objects.filter(source="deposit").count(), 1)
+
+    # --- failed deposit credits nothing ---------------------------------------- #
+    def test_failed_deposit_does_not_credit(self):
+        deposit, _payment = self._pending_deposit_payment(amount="123.00", intent="pi_dep_4")
+        mark_payment_failed("pi_dep_4", reason="card declined")
+        self.assertEqual(self._balance(self.user), Decimal("0"))
+        deposit.refresh_from_db()
+        self.assertEqual(deposit.status, self.Deposit.Status.FAILED)
+
+    # --- endpoint: KYC-gated, honest 503 when keys deferred (no silent success) - #
+    def test_create_endpoint_requires_kyc(self):
+        nokyc = User.objects.create_user(email="depnokyc@example.com", password="pw-12345-strong")
+        self.client.force_authenticate(nokyc)
+        resp = self.client.post("/api/payments/deposit/stripe/", {"amount": "100"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(STRIPE_SECRET_KEY="", STRIPE_PUBLISHABLE_KEY="")
+    def test_create_endpoint_unconfigured_returns_503_no_deposit_row(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post("/api/payments/deposit/stripe/", {"amount": "100"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(resp.json().get("code"), "stripe_unconfigured")
+        # Honest not-configured: no Deposit/Payment row leaked, no balance touched.
+        self.assertFalse(self.Deposit.objects.filter(user=self.user).exists())
+        self.assertEqual(self._balance(self.user), Decimal("0"))
+
+    def test_create_endpoint_rejects_bad_amount(self):
+        self.client.force_authenticate(self.user)
+        for bad in ("0", "-5", "abc", ""):
+            resp = self.client.post("/api/payments/deposit/stripe/", {"amount": bad}, format="json")
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, bad)

@@ -33,8 +33,19 @@ class Payment(models.Model):
     """A PSP charge attempt for an investment. No raw card data — ever."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # NULL for a DEPOSIT (a wallet top-up has no investment). A buy / installment leaves
+    # `deposit` NULL and sets this, exactly as before — the two are mutually exclusive.
     investment = models.ForeignKey(
-        "investments.Investment", on_delete=models.CASCADE, related_name="payments"
+        "investments.Investment", on_delete=models.CASCADE, related_name="payments",
+        null=True, blank=True,
+    )
+    # Deposit Wave: when set, this charge funds a wallet TOP-UP (credits UserBalance), NOT
+    # an investment. The gated completion core routes a deposit payment to a balance credit
+    # (`credit_user_balance(source="deposit")`) instead of `mint_investment` — there is NO
+    # mint. A normal buy / installment leaves this NULL and behaves EXACTLY as before.
+    deposit = models.ForeignKey(
+        "wallets.Deposit", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="payments",
     )
     # Installments Wave C: when set, this charge funds ONE scheduled installment of an
     # active plan (NOT the down-payment/full purchase). The `investment` above is then the

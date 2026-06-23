@@ -9,6 +9,7 @@ from django.contrib import admin
 
 from .models import (
     BalanceTransaction,
+    Deposit,
     OwnershipToken,
     UserBalance,
     UserWallet,
@@ -118,3 +119,15 @@ class WithdrawalAdmin(admin.ModelAdmin):
     list_filter = ("status", "method", "currency")
     search_fields = ("user__email", "reference")
     readonly_fields = ("id", "user", "amount", "currency", "method", "reference", "created_at")
+
+
+@admin.register(Deposit)
+class DepositAdmin(admin.ModelAdmin):
+    # Read-only: the credit is settlement-gated (webhook), never an admin action.
+    list_display = ("user", "amount", "payment_method", "status", "credited", "created_at")
+    list_filter = ("status", "payment_method", "credited")
+    search_fields = ("user__email", "id")
+    readonly_fields = (
+        "id", "user", "amount", "payment_method", "status", "credited",
+        "credited_at", "created_at", "updated_at",
+    )

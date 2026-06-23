@@ -252,6 +252,147 @@ class CreateNowPaymentsView(APIView):
         })
 
 
+# --------------------------------------------------------------------------- #
+# Deposit / top-up — an external pay-in that CREDITS the user's internal balance
+# (NOT a buy: no Investment, no mint). Reuses the SAME gated Stripe/NOW path; on the
+# confirmed webhook/IPN the completion core routes a deposit Payment to a balance
+# credit. Settlement-gated, idempotent, inert (503) until provider keys land.
+# --------------------------------------------------------------------------- #
+from decimal import Decimal, InvalidOperation  # noqa: E402
+
+from apps.wallets.models import Deposit  # noqa: E402
+
+MAX_DEPOSIT = Decimal("1000000")  # sanity cap on a single top-up
+
+
+def _parse_deposit_amount(raw):
+    """Return a positive 2-dp Decimal deposit amount, or (None, error_response)."""
+    try:
+        amount = Decimal(str(raw)).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return None, Response(
+            {"detail": "A valid amount is required."}, status=status.HTTP_400_BAD_REQUEST
+        )
+    if amount <= 0 or amount > MAX_DEPOSIT:
+        return None, Response(
+            {"detail": "Amount must be greater than 0 and within limits."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return amount, None
+
+
+class CreateDepositStripeIntentView(APIView):
+    """
+    Start a Stripe card payment to TOP UP the caller's balance. KYC-gated (matches the
+    buy flow). On the confirmed webhook the balance is credited — never here. 503 when
+    Stripe keys are deferred (honest, not a silent success).
+    """
+
+    permission_classes = [IsAuthenticated, KYCApprovedPermission]
+
+    def post(self, request):
+        amount, err = _parse_deposit_amount(request.data.get("amount"))
+        if err:
+            return err
+        if not stripe_service.is_configured():
+            return Response(
+                {"configured": False, "code": "stripe_unconfigured",
+                 "detail": "Card payments are not configured yet."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        deposit = Deposit.objects.create(
+            user=request.user, amount=amount, payment_method="card"
+        )
+        payment = Payment.objects.create(
+            deposit=deposit, provider="stripe", amount=amount, currency="usd"
+        )
+        try:
+            intent = stripe_service.create_payment_intent(
+                amount=amount, currency=payment.currency,
+                metadata={"deposit_id": str(deposit.id), "payment_id": str(payment.id)},
+            )
+        except stripe_service.StripeError:
+            log.warning("Stripe deposit intent creation failed for user %s", request.user.id)
+            return Response(
+                {"detail": "Could not start the deposit. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment.stripe_payment_intent_id = intent["id"]
+        payment.save(update_fields=["stripe_payment_intent_id", "updated_at"])
+        return Response(
+            {
+                "client_secret": intent["client_secret"],
+                "publishable_key": stripe_service.publishable_key(),
+                "payment_id": str(payment.id),
+                "deposit_id": str(deposit.id),
+            }
+        )
+
+
+class CreateDepositNowPaymentsView(APIView):
+    """
+    Start a crypto payment (NOW Payments) to TOP UP the caller's balance. KYC-gated.
+    Returns the REAL deposit address / amount the user pays; the balance is credited
+    only on the confirmed IPN. 503 when NOW keys are deferred.
+    """
+
+    permission_classes = [IsAuthenticated, KYCApprovedPermission]
+
+    def post(self, request):
+        amount, err = _parse_deposit_amount(request.data.get("amount"))
+        if err:
+            return err
+        pay_currency = (request.data.get("pay_currency") or "").strip().lower()
+        if not pay_currency:
+            return Response(
+                {"detail": "pay_currency is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not nowpayments_service.is_configured():
+            return Response(
+                {"configured": False, "code": "nowpayments_unconfigured",
+                 "detail": "Crypto payments are not configured yet."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        deposit = Deposit.objects.create(
+            user=request.user, amount=amount, payment_method="crypto"
+        )
+        payment = Payment.objects.create(
+            deposit=deposit, provider="nowpayments", amount=amount, currency="usd"
+        )
+        ipn_url = request.build_absolute_uri(reverse("payments:nowpayments-ipn"))
+        try:
+            created = nowpayments_service.create_payment(
+                price_amount=amount, price_currency="usd", pay_currency=pay_currency,
+                order_id=str(payment.id), ipn_callback_url=ipn_url,
+            )
+        except nowpayments_service.NowPaymentsError:
+            log.warning("NOW deposit create failed for user %s", request.user.id)
+            return Response(
+                {"detail": "Could not start the crypto deposit. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment.nowpayments_payment_id = created["payment_id"]
+        payment.pay_currency = created["pay_currency"]
+        payment.pay_address = created["pay_address"]
+        payment.pay_amount = created["pay_amount"]
+        payment.save(update_fields=[
+            "nowpayments_payment_id", "pay_currency", "pay_address", "pay_amount",
+            "updated_at",
+        ])
+        return Response({
+            "payment_id": created["payment_id"],
+            "pay_address": created["pay_address"],
+            "pay_amount": str(created["pay_amount"]) if created["pay_amount"] is not None else None,
+            "pay_currency": created["pay_currency"],
+            "deposit_id": str(deposit.id),
+        })
+
+
 class NowPaymentsIpnView(APIView):
     """
     NOW Payments IPN receiver — the AUTOMATION HINGE. PUBLIC + signature-verified.

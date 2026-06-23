@@ -2,6 +2,8 @@
 from django.urls import path
 
 from .views import (
+    CreateDepositNowPaymentsView,
+    CreateDepositStripeIntentView,
     CreateNowPaymentsView,
     CreateStripeIntentView,
     NowPaymentsIpnView,
@@ -21,4 +23,7 @@ urlpatterns = [
     path("nowpayments/create/", CreateNowPaymentsView.as_view(), name="nowpayments-create"),
     # PUBLIC, signature-verified IPN callback (the automation hinge).
     path("nowpayments/ipn/", NowPaymentsIpnView.as_view(), name="nowpayments-ipn"),
+    # Deposit / top-up — reuses the gated Stripe/NOW path; credits balance (no mint).
+    path("deposit/stripe/", CreateDepositStripeIntentView.as_view(), name="deposit-stripe"),
+    path("deposit/nowpayments/", CreateDepositNowPaymentsView.as_view(), name="deposit-nowpayments"),
 ]

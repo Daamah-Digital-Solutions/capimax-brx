@@ -316,6 +316,39 @@ export const paymentsApi = {
       pay_currency: string;
       investment_id: string;
     }>,
+  /**
+   * DEPOSIT / top-up (card) — start a Stripe charge that CREDITS the caller's balance
+   * (no investment, no mint). Returns the client_secret to confirm with Elements. The
+   * balance is credited only on the confirmed webhook. 503 ⇒ Stripe not configured.
+   */
+  createDepositStripe: (amount: number) =>
+    rawRequest("/payments/deposit/stripe/", {
+      method: "POST",
+      auth: true,
+      body: { amount },
+    }) as Promise<{
+      client_secret: string;
+      publishable_key: string;
+      payment_id: string;
+      deposit_id: string;
+    }>,
+  /**
+   * DEPOSIT / top-up (crypto) — start a NOW Payments charge that CREDITS the balance →
+   * returns the REAL deposit address + amount. Credited only on the confirmed IPN.
+   * 503 ⇒ NOW not configured.
+   */
+  createDepositNow: (amount: number, payCurrency: string) =>
+    rawRequest("/payments/deposit/nowpayments/", {
+      method: "POST",
+      auth: true,
+      body: { amount, pay_currency: payCurrency },
+    }) as Promise<{
+      payment_id: string;
+      pay_address: string;
+      pay_amount: string | null;
+      pay_currency: string;
+      deposit_id: string;
+    }>,
 };
 
 // --------------------------------------------------------------------------- //

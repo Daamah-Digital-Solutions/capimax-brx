@@ -65,35 +65,33 @@ def _complete_payment(payment: Payment) -> dict:
     """
     Idempotently mark a Payment succeeded, then drive the settlement side-effect.
 
-    Two settlement paths share this single gated core (so Stripe + NOW reuse it unchanged):
-      * a DOWN-PAYMENT / full-purchase payment (installment_payment is NULL) → mark the
-        Investment completed + mint (Phase 3 / Wave B) — UNCHANGED.
+    Three settlement paths share this single gated core (so Stripe + NOW reuse it unchanged):
+      * a DEPOSIT payment (deposit set) → CREDIT the user's internal balance
+        (`credit_user_balance(source="deposit")`), idempotently. NO investment, NO mint.
+      * a DOWN-PAYMENT / full-purchase payment (deposit + installment_payment NULL) → mark
+        the Investment completed + mint (Phase 3 / Wave B) — UNCHANGED.
       * an INSTALLMENT payment (Wave C; installment_payment set) → do NOT touch the
-        Investment (it was already completed by the down-payment) and do NOT re-mint;
-        instead progressively release locked→released + credit owner/broker on that
-        installment (`settle_installment_payment`).
+        Investment and do NOT re-mint; progressively release locked→released + credit
+        owner/broker on that installment (`settle_installment_payment`).
 
-    Returns {processed, minted, settled?, reason?}. NEVER acts unless the Payment is succeeded.
+    Returns {processed, minted, settled?/credited?, reason?}. NEVER acts unless succeeded.
     """
     with transaction.atomic():
-        # NOTE: only the non-nullable `investment` is select_related here. The nullable
-        # `installment_payment` would LEFT-JOIN and Postgres forbids FOR UPDATE on the
-        # nullable side of an outer join (the Wave-B trap) — we read just its id (a column
-        # on Payment, no join) to branch.
-        payment = (
-            Payment.objects.select_for_update()
-            .select_related("investment")
-            .get(pk=payment.pk)
-        )
+        # We DON'T select_related the FKs here: `investment` is now nullable, so a
+        # select_related would LEFT-JOIN and Postgres forbids FOR UPDATE on the nullable
+        # side of an outer join. We read the FK *ids* (plain columns on Payment, no join)
+        # to branch, then load the related row separately where needed.
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
         already = payment.status == PaymentState.SUCCEEDED
         if not already:
             payment.status = PaymentState.SUCCEEDED
             payment.failure_reason = ""
             payment.save(update_fields=["status", "failure_reason", "updated_at"])
 
+        deposit_id = payment.deposit_id
         installment_payment_id = payment.installment_payment_id
         investment_id = None
-        if installment_payment_id is None:
+        if deposit_id is None and installment_payment_id is None:
             # Down-payment / full purchase: complete the investment, mint below.
             inv = payment.investment
             if inv.payment_status != PaymentStatus.COMPLETED:
@@ -101,8 +99,14 @@ def _complete_payment(payment: Payment) -> dict:
                 inv.save(update_fields=["payment_status", "updated_at"])
             investment_id = inv.pk
 
-    # Side-effect AFTER commit. Both branches are themselves idempotent (lock + status
-    # guard) and never fabricate a tx.
+    # Side-effect AFTER commit. Every branch is itself idempotent (lock + status/flag
+    # guard) and never fabricates a tx.
+    if deposit_id is not None:
+        # DEPOSIT: credit the balance once (no mint, no tokens). Idempotent via the
+        # Deposit.credited flag under a row lock.
+        credited = _credit_deposit(deposit_id)
+        return {"processed": not already, "minted": False, "credited": credited}
+
     if installment_payment_id is not None:
         settled = False
         try:
@@ -129,19 +133,53 @@ def _complete_payment(payment: Payment) -> dict:
     return {"processed": not already, "minted": minted, "reason": reason}
 
 
-def _fail_payment(payment: Payment, *, reason: str = "") -> None:
-    """Mark a Payment failed (no mint). Idempotent; never downgrades a paid one."""
+def _credit_deposit(deposit_id) -> bool:
+    """
+    Credit a confirmed DEPOSIT to the user's internal balance, exactly once. Returns True
+    if it credited now, False if it was already credited (replayed webhook → no double
+    credit). Settlement-gated: only ever reached from `_complete_payment`.
+    """
+    from django.utils import timezone
+
+    from apps.wallets.models import Deposit
+    from apps.wallets.services import credit_user_balance
+
     with transaction.atomic():
-        payment = Payment.objects.select_for_update().select_related("investment").get(
-            pk=payment.pk
+        deposit = Deposit.objects.select_for_update().get(pk=deposit_id)
+        if deposit.credited:
+            return False  # idempotent: already credited on an earlier delivery
+        credit_user_balance(
+            deposit.user, deposit.amount, source="deposit",
+            reference=str(deposit.id), memo="Wallet top-up",
         )
+        deposit.credited = True
+        deposit.status = Deposit.Status.COMPLETED
+        deposit.credited_at = timezone.now()
+        deposit.save(update_fields=["credited", "status", "credited_at", "updated_at"])
+    return True
+
+
+def _fail_payment(payment: Payment, *, reason: str = "") -> None:
+    """Mark a Payment failed (no mint/credit). Idempotent; never downgrades a paid one."""
+    with transaction.atomic():
+        # No select_related (nullable FKs + FOR UPDATE outer-join restriction); branch on ids.
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
         if payment.status == PaymentState.SUCCEEDED:
-            return  # a success already won — don't downgrade a paid investment
+            return  # a success already won — don't downgrade a paid investment/deposit
         payment.status = PaymentState.FAILED
         payment.failure_reason = (reason or "")[:300]
         payment.save(update_fields=["status", "failure_reason", "updated_at"])
+        if payment.deposit_id is not None:
+            from apps.wallets.models import Deposit
+
+            Deposit.objects.filter(
+                pk=payment.deposit_id, credited=False
+            ).update(status=Deposit.Status.FAILED)
+            return
+        if payment.installment_payment_id is not None:
+            return  # installment failure leaves the plan as-is (no investment to fail)
         inv = payment.investment
-        if inv.payment_status != PaymentStatus.COMPLETED:
+        if inv is not None and inv.payment_status != PaymentStatus.COMPLETED:
             inv.payment_status = PaymentStatus.FAILED
             inv.save(update_fields=["payment_status", "updated_at"])
 
