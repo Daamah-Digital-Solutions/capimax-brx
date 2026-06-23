@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   ArrowUpRight,
+  ArrowDownRight,
   BarChart3,
   FileText
 } from "lucide-react";
@@ -129,10 +130,17 @@ export default function Distributions() {
               </div>
               <div className="text-sm text-muted-foreground mb-1">{t("distributions.thisYear")}</div>
               <div className="text-2xl font-bold text-foreground">${distributionStats.yearToDate.toLocaleString()}</div>
-              <div className="text-xs text-success flex items-center gap-1 mt-1">
-                <ArrowUpRight className="w-3 h-3" />
-                +18% {t("distributions.vsLastYear")}
-              </div>
+              {/* Real YoY delta; null (no prior-year data) shows an honest "—", never a fake %. */}
+              {distributionStats.vsLastYear === null || distributionStats.vsLastYear === undefined ? (
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  — {t("distributions.vsLastYear")}
+                </div>
+              ) : (
+                <div className={`text-xs flex items-center gap-1 mt-1 ${distributionStats.vsLastYear >= 0 ? "text-success" : "text-destructive"}`}>
+                  {distributionStats.vsLastYear >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {distributionStats.vsLastYear >= 0 ? "+" : ""}{distributionStats.vsLastYear}% {t("distributions.vsLastYear")}
+                </div>
+              )}
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.15s" }}>
@@ -278,16 +286,30 @@ export default function Distributions() {
                       </div>
                     </div>
 
-                    {/* Mini chart placeholder */}
-                    <div className="h-16 bg-muted/50 rounded-lg flex items-end justify-around px-2 gap-1">
-                      {[40, 60, 45, 80, 65, 90, 70, 85].map((h, i) => (
-                        <div
-                          key={i}
-                          className="bg-primary/60 rounded-t flex-1"
-                          style={{ height: `${h}%` }}
-                        />
-                      ))}
-                    </div>
+                    {/* Real monthly payout sparkline (USD per month, chronological),
+                        normalized to bar heights. Honest "—" when there's no series. */}
+                    {(() => {
+                      const series = property.series ?? [];
+                      const max = series.length ? Math.max(...series) : 0;
+                      if (!series.length || max <= 0) {
+                        return (
+                          <div className="h-16 bg-muted/50 rounded-lg flex items-center justify-center text-xs text-muted-foreground">
+                            —
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="h-16 bg-muted/50 rounded-lg flex items-end justify-around px-2 gap-1">
+                          {series.map((v, i) => (
+                            <div
+                              key={i}
+                              className="bg-primary/60 rounded-t flex-1"
+                              style={{ height: `${Math.max(4, (v / max) * 100)}%` }}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

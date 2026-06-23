@@ -248,3 +248,45 @@ class DistributionsReadApiTests(APITestCase):
         resp = self.client.get("/api/distributions/")
         self.assertEqual(resp.data["distributions"], [])
         self.assertEqual(resp.data["stats"]["totalReceived"], 0.0)
+        self.assertIsNone(resp.data["stats"]["vsLastYear"])  # no prior year → honest no-delta
+
+
+class DistributionsStatsApiTests(APITestCase):
+    """Real YoY delta + real per-property monthly sparkline series."""
+
+    def setUp(self):
+        from django.utils import timezone
+        self.this_year = timezone.now().year
+        self.prop = _property(slug="marina", expected_yield=Decimal("9.50"))
+        self.ua, _, _ = _holder("a@ex.com", self.prop, 100)  # sole holder → whole pool each time
+
+    def _stats(self):
+        self.client.force_authenticate(self.ua)
+        return self.client.get("/api/distributions/").data["stats"]
+
+    # --- vsLastYear computed across two years -------------------------------- #
+    def test_vs_last_year_computed(self):
+        declare_distribution(self.prop.slug, Decimal("1000.00"), pay_date=date(self.this_year - 1, 6, 30))
+        declare_distribution(self.prop.slug, Decimal("1500.00"), pay_date=date(self.this_year, 3, 31))
+        stats = self._stats()
+        self.assertEqual(stats["yearToDate"], 1500.0)
+        self.assertEqual(stats["vsLastYear"], 50.0)  # (1500 - 1000) / 1000 = +50.0%
+
+    def test_vs_last_year_negative(self):
+        declare_distribution(self.prop.slug, Decimal("1000.00"), pay_date=date(self.this_year - 1, 6, 30))
+        declare_distribution(self.prop.slug, Decimal("750.00"), pay_date=date(self.this_year, 3, 31))
+        self.assertEqual(self._stats()["vsLastYear"], -25.0)  # (750 - 1000) / 1000 = -25.0%
+
+    # --- last-year zero → honest no-delta (null, never a fake %) -------------- #
+    def test_vs_last_year_null_when_no_prior(self):
+        declare_distribution(self.prop.slug, Decimal("1500.00"), pay_date=date(self.this_year, 3, 31))
+        self.assertIsNone(self._stats()["vsLastYear"])
+
+    # --- real per-property monthly series ------------------------------------ #
+    def test_property_series_reflects_monthly_payouts(self):
+        declare_distribution(self.prop.slug, Decimal("400.00"), pay_date=date(self.this_year, 1, 31))
+        declare_distribution(self.prop.slug, Decimal("600.00"), pay_date=date(self.this_year, 4, 30))
+        self.client.force_authenticate(self.ua)
+        rollup = self.client.get("/api/distributions/").data["by_property"][0]
+        # Two distinct payout months → two real bars, chronological, reflecting the amounts.
+        self.assertEqual(rollup["series"], [400.0, 600.0])

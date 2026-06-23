@@ -1024,6 +1024,7 @@ export interface DistributionByProperty {
   type: string;        // cadence
   nextPayment: string | null;
   status: string;      // "active"
+  series: number[];    // real monthly payout totals (USD), chronological — sparkline
 }
 export interface DistributionsResponse {
   stats: {
@@ -1033,6 +1034,7 @@ export interface DistributionsResponse {
     yearToDate: number;
     averageMonthly: number;
     propertiesDistributing: number;
+    vsLastYear: number | null;  // real YoY % change; null when no prior-year data
   };
   distributions: DistributionRow[];
   by_property: DistributionByProperty[];

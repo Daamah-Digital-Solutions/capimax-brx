@@ -92,9 +92,14 @@ class DistributionsView(APIView):
                     "nextPayment": None,  # v1: no scheduling/recurrence
                     "status": "active",
                     "_latest": d.pay_date,
+                    "_months": {},  # (year, month) -> summed payout USD (real sparkline series)
                 }
                 by_property[slug] = agg
             agg["totalDistributed"] += float(p.share_amount_usd)
+            # Real per-property monthly series: this holder's payouts for THIS property,
+            # bucketed by the distribution's pay month (the card sparkline renders this).
+            month_key = (d.pay_date.year, d.pay_date.month)
+            agg["_months"][month_key] = agg["_months"].get(month_key, 0.0) + float(p.share_amount_usd)
             # Keep the most-recent distribution's cadence as the property's frequency.
             if d.pay_date >= agg["_latest"]:
                 agg["_latest"] = d.pay_date
@@ -102,6 +107,9 @@ class DistributionsView(APIView):
         property_rollup = []
         for agg in by_property.values():
             agg.pop("_latest", None)
+            months = agg.pop("_months", {})
+            # Chronological real monthly totals (USD); frontend normalizes to bar heights.
+            agg["series"] = [months[k] for k in sorted(months.keys())]
             property_rollup.append(agg)
 
         # --- Summary stats. #
@@ -116,6 +124,18 @@ class DistributionsView(APIView):
             float(year_to_date) / len(active_months) if active_months else 0.0
         )
 
+        # Real year-over-year delta: this year's total vs last year's total. When there
+        # is NO prior-year data we return None (the frontend shows "—", never a fake %).
+        last_year_total = sum(
+            (p.share_amount_usd for p in payouts if p.distribution.pay_date.year == this_year - 1),
+            Decimal("0"),
+        )
+        vs_last_year = (
+            round(float((year_to_date - last_year_total) / last_year_total * 100), 1)
+            if last_year_total > 0
+            else None
+        )
+
         stats = {
             # v1 credits immediately → nothing pending and no scheduled next payment.
             "totalReceived": float(total_received),
@@ -124,6 +144,7 @@ class DistributionsView(APIView):
             "yearToDate": float(year_to_date),
             "averageMonthly": round(average_monthly, 2),
             "propertiesDistributing": len(by_property),
+            "vsLastYear": vs_last_year,  # real YoY % change, or None when no prior year
         }
 
         return Response({
