@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -501,8 +502,11 @@ export default function Reports() {
                               {p.yield == null ? "—" : `${p.yield}%`}
                             </td>
                             <td className="px-6 py-4">
-                              <Button variant="ghost" size="sm" disabled className="text-muted-foreground">
-                                {isAr ? "قريباً" : "Coming soon"}
+                              {/* Real link to the property page (token.property_id == Property.slug). */}
+                              <Button variant="ghost" size="sm" asChild>
+                                <Link to={`/property/${p.id}`}>
+                                  {isAr ? "عرض التفاصيل" : "View Details"}
+                                </Link>
                               </Button>
                             </td>
                           </tr>

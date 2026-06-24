@@ -1475,7 +1475,7 @@ export const reportsApi = {
   },
   /** Export a report context as csv|pdf (optional year/period filter). */
   export(
-    context: "wallet" | "distributions" | "owner-earnings" | "lp" | "broker-commissions",
+    context: "wallet" | "distributions" | "installments" | "owner-earnings" | "lp" | "broker-commissions",
     fmt: "csv" | "pdf",
     params?: { year?: number | string; period?: string },
   ): Promise<void> {

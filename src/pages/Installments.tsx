@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useInstallmentPlans } from "@/hooks/useInstallmentPlans";
-import type { InstallmentPlanRow } from "@/integrations/api/client";
+import { reportsApi, type InstallmentPlanRow } from "@/integrations/api/client";
+import { useExport } from "@/hooks/useExport";
 import { InstallmentPayDialog } from "@/components/installments/InstallmentPayDialog";
 
 // Installments — REAL per-investor plans + cent-exact schedules from
@@ -39,6 +40,7 @@ import { InstallmentPayDialog } from "@/components/installments/InstallmentPayDi
 export default function Installments() {
   const { t, language } = useLanguage();
   const { data, loading, refresh } = useInstallmentPlans();
+  const { exporting, run } = useExport();
   const [filter, setFilter] = useState("all");
   const [payPlan, setPayPlan] = useState<InstallmentPlanRow | null>(null);
 
@@ -79,8 +81,13 @@ export default function Installments() {
                 <p className="text-muted-foreground">{t("installments.subtitle")}</p>
               </div>
               <div className="flex items-center gap-3">
-                {/* Export schedule = a later wave (no document service for plans yet). */}
-                <Button variant="outline" className="gap-2" disabled title={language === "ar" ? "قريباً" : "Coming soon"}>
+                {/* Real export via the Phase-13 reports service (installments adapter). */}
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={exporting !== null}
+                  onClick={() => run("installments", () => reportsApi.export("installments", "pdf"))}
+                >
                   <Download className="w-4 h-4" />
                   {t("installments.exportSchedule")}
                 </Button>

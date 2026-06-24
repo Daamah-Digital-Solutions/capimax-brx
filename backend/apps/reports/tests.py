@@ -103,6 +103,35 @@ class ReportsExportTests(APITestCase):
         body = _read(self.client.get("/api/reports/distributions/export/?fmt=csv&year=2000")).decode("utf-8")
         self.assertNotIn("840.00", body)  # the payout is this year, not 2000
 
+    # --- installments -------------------------------------------------------- #
+    def test_installments_export_over_real_plan(self):
+        from apps.installments.models import InstallmentFrequency
+        from apps.installments.services import build_installment_plan
+        from apps.installments.tests import _make_property
+
+        prop = _make_property("rx-inst")
+        build_installment_plan(
+            self.user, prop, total_amount="1000",
+            down_payment_percent=30, n_installments=3, frequency=InstallmentFrequency.MONTHLY,
+        )
+        self.client.force_authenticate(self.user)
+        res = self.client.get("/api/reports/installments/export/?fmt=csv")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res["Content-Type"], "text/csv")
+        body = _read(res).decode("utf-8")
+        # Real plan figures: down payment 300.00, per-installment 233.33, + the DP row.
+        self.assertIn("300.00", body)
+        self.assertIn("233.33", body)
+        self.assertIn("DP", body)
+        # PDF variant renders.
+        res2 = self.client.get("/api/reports/installments/export/?fmt=pdf")
+        self.assertEqual(res2["Content-Type"], "application/pdf")
+        self.assertTrue(_read(res2).startswith(b"%PDF"))
+        # Self-scoped: the OTHER user (no plan) gets an empty installments export.
+        self.client.force_authenticate(self.other)
+        other = _read(self.client.get("/api/reports/installments/export/?fmt=csv")).decode("utf-8")
+        self.assertNotIn("300.00", other)
+
     # --- owner / lp / broker smoke (200 + content-type; empty rows OK) ------- #
     def test_other_contexts_render(self):
         self.client.force_authenticate(self.user)

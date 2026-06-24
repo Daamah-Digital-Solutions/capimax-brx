@@ -239,10 +239,80 @@ def broker_commissions(user, *, year=None, period="", **_):
     }
 
 
+# --------------------------------------------------------------------------- #
+# Installments — the caller's own installment plans + their payment schedule
+# (mirrors the InstallmentPlans read the page already serves; same figures). One row
+# per cash item: the down payment, then each scheduled installment.
+# --------------------------------------------------------------------------- #
+def installments(user, *, year=None, period="", **_):
+    from apps.installments.models import InstallmentPlan
+
+    plans = (
+        InstallmentPlan.objects.filter(investor=user)
+        .select_related("property")
+        .prefetch_related("payments")
+    )
+    rows = []
+    total_value = paid = remaining = Decimal("0")
+    plan_count = 0
+    for plan in plans:
+        plan_count += 1
+        total_value += Decimal(str(plan.total_amount))
+        dp_paid = plan.down_paid_at is not None
+        dp_date = (plan.down_paid_at or plan.created_at)
+        # Down payment row (lives on the plan, not as a payment row).
+        if _in_year(dp_date, year):
+            rows.append({
+                "property": plan.property_name,
+                "sequence": "DP",
+                "due": dp_date.date().isoformat(),
+                "amount": _money(plan.down_payment_amount),
+                "status": "paid" if dp_paid else "pending",
+                "paid": (plan.down_paid_at.date().isoformat() if dp_paid else ""),
+            })
+        dp_amt = Decimal(str(plan.down_payment_amount))
+        paid += dp_amt if dp_paid else Decimal("0")
+        remaining += Decimal("0") if dp_paid else dp_amt
+        # Scheduled installments (default-ordered by sequence).
+        for p in plan.payments.all():
+            amt = Decimal(str(p.amount))
+            if p.status == "paid":
+                paid += amt
+            elif p.status in ("pending", "missed"):
+                remaining += amt
+            if not _in_year(p.due_date, year):
+                continue
+            rows.append({
+                "property": plan.property_name,
+                "sequence": str(p.sequence),
+                "due": p.due_date.isoformat(),
+                "amount": _money(p.amount),
+                "status": p.status,
+                "paid": (p.paid_at.date().isoformat() if p.paid_at else ""),
+            })
+    return {
+        "title": "Installment Schedule",
+        "period": period or (str(year) if year else "All time"),
+        "columns": [
+            ("property", "Property"), ("sequence", "#"), ("due", "Due date"),
+            ("amount", "Amount (USD)"), ("status", "Status"), ("paid", "Paid date"),
+        ],
+        "rows": rows,
+        "meta": [
+            ("Account", _display_name(user)),
+            ("Plans", plan_count),
+            ("Total plan value", f"${_money(total_value)}"),
+            ("Paid to date", f"${_money(paid)}"),
+            ("Remaining", f"${_money(remaining)}"),
+        ],
+    }
+
+
 # The export registry: context slug → adapter. (`distributions/tax` is its own endpoint.)
 ADAPTERS = {
     "wallet": wallet,
     "distributions": distributions,
+    "installments": installments,
     "owner-earnings": owner_earnings,
     "lp": lp,
     "broker-commissions": broker_commissions,
