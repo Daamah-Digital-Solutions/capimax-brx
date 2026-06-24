@@ -394,9 +394,46 @@ export interface FamilyAccountRow {
   access_level: "view_only" | "authorized";
   allocated_returns_percent: number;
   total_transferred: number;
+  // Wave B — the REAL internal accrual position (the auto-allocation engine).
+  // accrued_total = Σ carved; withdrawn_total = Σ withdrawn; accrued_balance = withdrawable now.
+  accrued_total: number;
+  accrued_balance: number;
+  withdrawn_total: number;
   linked_at: string;
   created_at: string;
   updated_at: string;
+}
+export interface FamilyAccrualEntryRow {
+  id: string;
+  family_account_id: string;
+  entry_type: "accrual" | "withdrawal";
+  amount: number;
+  distribution_id: string | null;
+  allocation_percent: number;
+  owner_share: number;
+  withdrawal_id: string | null;
+  memo: string | null;
+  created_at: string;
+}
+export interface FamilyAccrualLedger {
+  member_id: string;
+  member_name: string;
+  allocated_returns_percent: number;
+  accrued_total: number;
+  accrued_balance: number;
+  withdrawn_total: number;
+  entries: FamilyAccrualEntryRow[];
+}
+export interface FamilyAccrualWithdrawResult {
+  withdrawal: {
+    id: string;
+    amount: number;
+    method: string;
+    status: string;
+    reference: string;
+    created_at: string;
+  };
+  member: FamilyAccountRow;
 }
 export interface FamilyBankAccountRow {
   id: string;
@@ -458,6 +495,15 @@ export const familyApi = {
   /** RECORD-ONLY transfer intent (status pending). Moves NO money/tokens this wave. */
   recordTransfer: (payload: { family_account_id: string; bank_account_id?: string; amount: number; transfer_type?: string; description?: string }) =>
     rawRequest("/family/transactions/", { method: "POST", auth: true, body: payload }) as Promise<FamilyTransactionRow>,
+  /** Wave B — a member's REAL internal accrual ledger (summary + append-only history). */
+  accruals: (accountId: string) =>
+    rawRequest(`/family/accounts/${accountId}/accruals/`, { auth: true }) as Promise<FamilyAccrualLedger>,
+  /**
+   * Wave B — the OWNER withdraws a member's accrued cash himself via the EXISTING wallet
+   * withdrawal path (NO external bank rail). `amount` omitted → the full accrued balance.
+   */
+  withdrawAccrual: (accountId: string, payload: { amount?: number; method?: "bank" | "crypto"; notes?: string } = {}) =>
+    rawRequest(`/family/accounts/${accountId}/withdraw/`, { method: "POST", auth: true, body: payload }) as Promise<FamilyAccrualWithdrawResult>,
 };
 
 // --------------------------------------------------------------------------- //

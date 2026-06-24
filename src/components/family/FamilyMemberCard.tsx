@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,15 +7,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { 
-  BadgeCheck, 
-  Building, 
-  Calendar, 
-  DollarSign, 
-  Heart, 
-  MoreVertical, 
-  Send, 
-  Shield, 
+import {
+  BadgeCheck,
+  Building,
+  Calendar,
+  DollarSign,
+  Heart,
+  MoreVertical,
+  Send,
+  Shield,
   Eye,
   UserCheck,
   User,
@@ -22,10 +23,14 @@ import {
   Clock,
   CreditCard,
   Percent,
-  ArrowUpRight
+  ArrowUpRight,
+  Wallet,
+  ArrowDownToLine,
+  History
 } from "lucide-react";
 import { BankAccountForm } from "./BankAccountForm";
 import { TransferScheduleForm } from "./TransferScheduleForm";
+import { familyApi } from "@/integrations/api/client";
 import type { FamilyAccount, FamilyBankAccount, TransferSchedule } from "@/hooks/useFamilyAccounts";
 
 interface FamilyMemberCardProps {
@@ -50,8 +55,11 @@ interface FamilyMemberCardProps {
   }) => Promise<unknown>;
   onInitiateTransfer: (data: { family_account_id: string; bank_account_id: string; amount: number }) => Promise<unknown>;
   onUpdateAccessLevel: (data: { accountId: string; accessLevel: "view_only" | "authorized" }) => Promise<void>;
+  // Wave B — the owner withdraws the member's REAL accrued cash via the existing path.
+  onWithdrawAccrual?: (data: { accountId: string; amount?: number }) => Promise<unknown>;
   isAddingBank?: boolean;
   isCreatingSchedule?: boolean;
+  isWithdrawingAccrual?: boolean;
 }
 
 export function FamilyMemberCard({
@@ -62,20 +70,32 @@ export function FamilyMemberCard({
   onCreateSchedule,
   onInitiateTransfer,
   onUpdateAccessLevel,
+  onWithdrawAccrual,
   isAddingBank,
   isCreatingSchedule,
+  isWithdrawingAccrual,
 }: FamilyMemberCardProps) {
   const { isRTL } = useLanguage();
   const [isBankDialogOpen, setIsBankDialogOpen] = useState(false);
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [isMemberPageOpen, setIsMemberPageOpen] = useState(false);
+  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [transferAmount, setTransferAmount] = useState("");
 
   const memberBankAccounts = bankAccounts.filter((ba) => ba.family_account_id === member.id);
   const memberSchedules = transferSchedules.filter((ts) => ts.family_account_id === member.id);
   const primaryBank = memberBankAccounts.find((ba) => ba.is_primary) || memberBankAccounts[0];
   const activeSchedule = memberSchedules.find((s) => s.is_active);
+
+  // Wave B: the member's REAL accrued balance (the auto-allocation engine). The accrual
+  // ledger (history) is fetched only while the member page is open.
+  const accruedBalance = member.accrued_balance ?? 0;
+  const { data: ledger } = useQuery({
+    queryKey: ["family-accruals", member.id],
+    queryFn: () => familyApi.accruals(member.id),
+    enabled: isMemberPageOpen,
+  });
 
   const handleTransfer = async () => {
     if (!primaryBank || !transferAmount) return;
@@ -86,6 +106,12 @@ export function FamilyMemberCard({
     });
     setTransferAmount("");
     setIsTransferDialogOpen(false);
+  };
+
+  const handleWithdrawAccrual = async () => {
+    if (!onWithdrawAccrual || accruedBalance <= 0) return;
+    await onWithdrawAccrual({ accountId: member.id });  // full accrued balance
+    setIsWithdrawDialogOpen(false);
   };
 
   return (
@@ -149,6 +175,13 @@ export function FamilyMemberCard({
                   {isRTL ? "العوائد المخصصة" : "Allocated Returns"}
                 </div>
               </div>
+              {/* Wave B: the REAL accrued (un-withdrawn) balance from the engine. */}
+              <div className="text-center">
+                <div className="text-lg font-bold text-primary">${accruedBalance.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">
+                  {isRTL ? "الرصيد المتراكم" : "Accrued Balance"}
+                </div>
+              </div>
               <div className="text-center">
                 <div className="text-lg font-bold text-green-600">${member.total_transferred.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">
@@ -209,7 +242,17 @@ export function FamilyMemberCard({
                     {isRTL ? "تحويل يدوي" : "Manual Transfer"}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem 
+                {/* Wave B: the owner withdraws the member's accrued cash (existing path). */}
+                {onWithdrawAccrual && (
+                  <DropdownMenuItem
+                    disabled={accruedBalance <= 0}
+                    onClick={() => setIsWithdrawDialogOpen(true)}
+                  >
+                    <ArrowDownToLine className="w-4 h-4 mr-2" />
+                    {isRTL ? "سحب الرصيد المتراكم" : "Withdraw Accrual"}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
                   onClick={() => onUpdateAccessLevel({
                     accountId: member.id,
                     accessLevel: member.access_level === "view_only" ? "authorized" : "view_only"
@@ -318,6 +361,52 @@ export function FamilyMemberCard({
           </DialogContent>
         </Dialog>
 
+        {/* Withdraw Accrual Dialog — Wave B (the owner withdraws the member's accrued cash
+            via the EXISTING wallet withdrawal path; NO external bank rail). */}
+        <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ArrowDownToLine className="w-5 h-5 text-primary" />
+                {isRTL ? "سحب الرصيد المتراكم" : "Withdraw Accrual"}
+              </DialogTitle>
+              <DialogDescription>
+                {isRTL
+                  ? `سحب الرصيد المتراكم لـ ${member.member_name} إلى محفظتك عبر مسار السحب المعتاد.`
+                  : `Withdraw ${member.member_name}'s accrued balance through your standard withdrawal flow.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <span className="text-sm text-muted-foreground">
+                  {isRTL ? "الرصيد المتراكم القابل للسحب" : "Accrued balance available"}
+                </span>
+                <span className="text-xl font-bold text-primary">${accruedBalance.toLocaleString()}</span>
+              </div>
+              {/* Honest: the accrual is real + internal; the AUTOMATED scheduled bank payout
+                  stays deferred (no rail) — the owner withdraws manually for now. */}
+              <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                <p className="text-xs text-amber-700">
+                  {isRTL
+                    ? "يُسحب الرصيد إلى رصيد محفظتك (طلب سحب معلّق). التحويل البنكي التلقائي المجدول يأتي لاحقاً."
+                    : "Withdraws to your wallet balance as a pending request. Automated scheduled bank transfer comes later."}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsWithdrawDialogOpen(false)}>
+                {isRTL ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button onClick={handleWithdrawAccrual} disabled={accruedBalance <= 0 || isWithdrawingAccrual}>
+                <ArrowDownToLine className="w-4 h-4 mr-2" />
+                {isWithdrawingAccrual
+                  ? (isRTL ? "جاري السحب..." : "Withdrawing...")
+                  : (isRTL ? "سحب" : "Withdraw")}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Member Page Dialog */}
         <Dialog open={isMemberPageOpen} onOpenChange={setIsMemberPageOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -420,18 +509,75 @@ export function FamilyMemberCard({
                     {isRTL ? "الملخص المالي" : "Financial Summary"}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 text-center">
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 rounded-lg bg-muted/40 border text-center">
                       <Percent className="w-6 h-6 text-primary mx-auto mb-2" />
                       <p className="text-2xl font-bold text-foreground">{member.allocated_returns_percent}%</p>
                       <p className="text-xs text-muted-foreground">{isRTL ? "العوائد المخصصة" : "Allocated Returns"}</p>
+                    </div>
+                    {/* Wave B: the REAL accrued balance (the auto-allocation engine). */}
+                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 text-center">
+                      <Wallet className="w-6 h-6 text-primary mx-auto mb-2" />
+                      <p className="text-2xl font-bold text-primary">${accruedBalance.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">{isRTL ? "الرصيد المتراكم" : "Accrued Balance"}</p>
                     </div>
                     <div className="p-4 rounded-lg bg-green-500/5 border border-green-500/20 text-center">
                       <ArrowUpRight className="w-6 h-6 text-green-600 mx-auto mb-2" />
                       <p className="text-2xl font-bold text-green-600">${member.total_transferred.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">{isRTL ? "إجمالي المحول" : "Total Transferred"}</p>
                     </div>
+                  </div>
+
+                  {/* Withdraw the accrued cash (existing path; no external bank rail). */}
+                  {onWithdrawAccrual && (
+                    <Button
+                      className="w-full"
+                      disabled={accruedBalance <= 0 || isWithdrawingAccrual}
+                      onClick={() => { setIsMemberPageOpen(false); setIsWithdrawDialogOpen(true); }}
+                    >
+                      <ArrowDownToLine className="w-4 h-4 mr-2" />
+                      {accruedBalance > 0
+                        ? (isRTL ? `سحب $${accruedBalance.toLocaleString()}` : `Withdraw $${accruedBalance.toLocaleString()}`)
+                        : (isRTL ? "لا يوجد رصيد متراكم" : "No accrued balance")}
+                    </Button>
+                  )}
+
+                  {/* Append-only accrual ledger (real history). */}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                      <History className="w-3.5 h-3.5" />
+                      {isRTL ? "سجل التراكم" : "Accrual History"}
+                    </p>
+                    {ledger && ledger.entries.length > 0 ? (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {ledger.entries.map((e) => {
+                          const isAccrual = e.entry_type === "accrual";
+                          return (
+                            <div key={e.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 text-sm">
+                              <div className="flex items-center gap-2">
+                                {isAccrual ? (
+                                  <ArrowUpRight className="w-4 h-4 text-green-600" />
+                                ) : (
+                                  <ArrowDownToLine className="w-4 h-4 text-amber-600" />
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(e.created_at).toLocaleDateString()}
+                                  {isAccrual && e.allocation_percent > 0 && ` · ${e.allocation_percent}%`}
+                                </span>
+                              </div>
+                              <span className={`font-semibold ${isAccrual ? "text-green-600" : "text-amber-600"}`}>
+                                {isAccrual ? "+" : "−"}${e.amount.toLocaleString()}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-muted-foreground text-xs">
+                        {isRTL ? "لا يوجد تراكم بعد" : "No accruals yet"}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

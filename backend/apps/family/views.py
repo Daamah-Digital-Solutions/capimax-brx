@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 
 from .models import (
     FamilyAccount,
+    FamilyAccrual,
     FamilyBankAccount,
     FamilyTransaction,
     FamilyTransferSchedule,
@@ -28,22 +29,32 @@ from .models import (
 from .serializers import (
     FamilyAccountCreateSerializer,
     FamilyAccountUpdateSerializer,
+    FamilyAccrualWithdrawSerializer,
     FamilyBankAccountCreateSerializer,
     FamilyTransactionCreateSerializer,
     FamilyTransferScheduleCreateSerializer,
 )
 from .services import (
+    accrual_summaries,
+    accrual_summary,
     assert_allocation_within_limit,
     log_transaction,
     make_reference,
     mask_tail,
+    withdraw_family_accrual,
 )
 
 
 # --------------------------------------------------------------------------- #
 # Read shapes (hand-built to match the frontend TS interfaces).
 # --------------------------------------------------------------------------- #
-def _account_dict(a: FamilyAccount) -> dict:
+def _account_dict(a: FamilyAccount, summary: dict | None = None) -> dict:
+    # Wave B: the REAL accrual position from the append-only ledger. `summary` is the
+    # batched per-member rollup (services.accrual_summaries); absent (e.g. just-created
+    # member) → honest zeros. `total_transferred` is now ledger-driven (Σ withdrawals).
+    accrued_total = summary["accrued_total"] if summary else Decimal("0")
+    withdrawn_total = summary["withdrawn_total"] if summary else Decimal("0")
+    accrued_balance = summary["accrued_balance"] if summary else Decimal("0")
     return {
         "id": str(a.id),
         "investor_id": str(a.investor_id),
@@ -54,6 +65,10 @@ def _account_dict(a: FamilyAccount) -> dict:
         "access_level": a.access_level,
         "allocated_returns_percent": float(a.allocated_returns_percent),
         "total_transferred": float(a.total_transferred),
+        # Real accrual figures (the auto-allocation engine, Wave B).
+        "accrued_total": float(accrued_total),
+        "accrued_balance": float(accrued_balance),
+        "withdrawn_total": float(withdrawn_total),
         "linked_at": a.linked_at.isoformat(),
         "created_at": a.created_at.isoformat(),
         "updated_at": a.updated_at.isoformat(),
@@ -108,6 +123,22 @@ def _transaction_dict(t: FamilyTransaction) -> dict:
     }
 
 
+def _accrual_dict(e: FamilyAccrual) -> dict:
+    """One append-only accrual-ledger row (member-scoped history)."""
+    return {
+        "id": str(e.id),
+        "family_account_id": str(e.family_account_id),
+        "entry_type": e.entry_type,
+        "amount": float(e.amount_usd),
+        "distribution_id": str(e.distribution_id) if e.distribution_id else None,
+        "allocation_percent": float(e.allocation_percent),
+        "owner_share": float(e.owner_share_usd),
+        "withdrawal_id": str(e.withdrawal_id) if e.withdrawal_id else None,
+        "memo": e.memo or None,
+        "created_at": e.created_at.isoformat(),
+    }
+
+
 def _get_owned_account(request, account_id) -> FamilyAccount:
     """Fetch a family account that BELONGS to the caller, or 404 (self-scoping)."""
     return get_object_or_404(FamilyAccount, id=account_id, investor=request.user)
@@ -121,7 +152,8 @@ class FamilyAccountsView(APIView):
 
     def get(self, request):
         accounts = FamilyAccount.objects.filter(investor=request.user)
-        return Response([_account_dict(a) for a in accounts])
+        summaries = accrual_summaries(request.user)  # batched, no N+1
+        return Response([_account_dict(a, summaries.get(str(a.id))) for a in accounts])
 
     def post(self, request):
         ser = FamilyAccountCreateSerializer(data=request.data)
@@ -144,7 +176,8 @@ class FamilyAccountDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, account_id):
-        return Response(_account_dict(_get_owned_account(request, account_id)))
+        account = _get_owned_account(request, account_id)
+        return Response(_account_dict(account, accrual_summary(account)))
 
     def patch(self, request, account_id):
         account = _get_owned_account(request, account_id)
@@ -167,7 +200,7 @@ class FamilyAccountDetailView(APIView):
         if fields:
             fields.append("updated_at")
             account.save(update_fields=fields)
-        return Response(_account_dict(account))
+        return Response(_account_dict(account, accrual_summary(account)))
 
     def delete(self, request, account_id):
         account = _get_owned_account(request, account_id)
@@ -279,3 +312,67 @@ class FamilyTransactionsView(APIView):
             description=(data.get("description") or f"{ttype} transfer recorded (not executed)"),
         )
         return Response(_transaction_dict(txn), status=status.HTTP_201_CREATED)
+
+
+# --------------------------------------------------------------------------- #
+# Accruals — Wave B: the member's REAL internal accrual ledger + the owner-driven
+# withdrawal (reusing the existing wallet-withdrawal path; NO external bank rail).
+# --------------------------------------------------------------------------- #
+class FamilyAccrualView(APIView):
+    """GET the accrual summary + append-only ledger history for ONE member (self-scoped)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, account_id):
+        account = _get_owned_account(request, account_id)
+        summary = accrual_summary(account)
+        entries = FamilyAccrual.objects.filter(family_account=account)
+        return Response({
+            "member_id": str(account.id),
+            "member_name": account.member_name,
+            "allocated_returns_percent": float(account.allocated_returns_percent),
+            "accrued_total": float(summary["accrued_total"]),
+            "accrued_balance": float(summary["accrued_balance"]),
+            "withdrawn_total": float(summary["withdrawn_total"]),
+            "entries": [_accrual_dict(e) for e in entries],
+        })
+
+
+class FamilyAccrualWithdrawView(APIView):
+    """
+    POST — the OWNER withdraws a member's accrued cash himself via the EXISTING wallet
+    withdrawal path (NO external bank rail). Body: {amount?: number, method?: bank|crypto,
+    notes?}. `amount` omitted → withdraw the full accrued balance. Self-scoped (404 if the
+    member isn't the caller's). Returns the created Withdrawal + the member's refreshed accrual.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, account_id):
+        account = _get_owned_account(request, account_id)
+        ser = FamilyAccrualWithdrawSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+
+        # ValidationError (bad/over amount) surfaces as 400 via DRF's handler.
+        wd = withdraw_family_accrual(
+            request.user, account,
+            amount=data.get("amount"),
+            method=data.get("method", "bank"),
+            notes=data.get("notes", "") or "",
+        )
+        account.refresh_from_db()
+        return Response(
+            {
+                "withdrawal": {
+                    "id": str(wd.id),
+                    "amount": float(wd.amount),
+                    "method": wd.method,
+                    "status": wd.status,
+                    "reference": wd.reference,
+                    "created_at": wd.created_at.isoformat(),
+                },
+                "member": _account_dict(account, accrual_summary(account)),
+            },
+            status=status.HTTP_201_CREATED,
+        )

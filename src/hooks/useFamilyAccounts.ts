@@ -7,6 +7,8 @@ import {
   type FamilyBankAccountRow,
   type FamilyTransferScheduleRow,
   type FamilyTransactionRow,
+  type FamilyAccrualLedger,
+  type FamilyAccrualEntryRow,
 } from "@/integrations/api/client";
 
 // Family accounts — repointed off Supabase onto the Django familyApi (this removes the LAST
@@ -19,6 +21,8 @@ export type FamilyAccount = FamilyAccountRow;
 export type FamilyBankAccount = FamilyBankAccountRow;
 export type TransferSchedule = FamilyTransferScheduleRow;
 export type FamilyTransaction = FamilyTransactionRow;
+export type FamilyAccrualEntry = FamilyAccrualEntryRow;
+export type { FamilyAccrualLedger };
 
 export function useFamilyAccounts() {
   const { user } = useAuth();
@@ -104,6 +108,20 @@ export function useFamilyAccounts() {
     onSuccess: () => invalidate("family-accounts"),
   });
 
+  // Wave B: the owner withdraws a member's REAL accrued cash via the existing wallet
+  // withdrawal path (NO external bank rail). Refreshes the member rows + the wallet balance.
+  const withdrawAccrualMutation = useMutation({
+    mutationFn: (data: { accountId: string; amount?: number }) =>
+      familyApi.withdrawAccrual(data.accountId, data.amount != null ? { amount: data.amount } : {}),
+    onSuccess: (res) => {
+      invalidate("family-accounts", "wallet-balance", "balance-transactions");
+      toast.success(`Withdrawal of $${res.withdrawal.amount.toLocaleString()} requested (${res.withdrawal.reference})`);
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || "Could not withdraw the accrual");
+    },
+  });
+
   return {
     familyAccounts,
     bankAccounts,
@@ -116,9 +134,11 @@ export function useFamilyAccounts() {
     createTransferSchedule: createTransferScheduleMutation.mutateAsync,
     initiateTransfer: initiateTransferMutation.mutateAsync,
     updateAccessLevel: updateAccessLevelMutation.mutateAsync,
+    withdrawAccrual: withdrawAccrualMutation.mutateAsync,
     isCreating: createFamilyAccountMutation.isPending,
     isAddingBank: addBankAccountMutation.isPending,
     isCreatingSchedule: createTransferScheduleMutation.isPending,
     isTransferring: initiateTransferMutation.isPending,
+    isWithdrawingAccrual: withdrawAccrualMutation.isPending,
   };
 }

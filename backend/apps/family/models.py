@@ -139,6 +139,85 @@ class FamilyTransferSchedule(models.Model):
         return f"{self.schedule_type} → {self.bank_account_id} [{'on' if self.is_active else 'off'}]"
 
 
+class FamilyAccrual(models.Model):
+    """
+    Wave B — the INTERNAL accrual ledger (append-only). The engine carves each ACTIVE
+    member's allocated slice out of every distribution credited to the primary investor
+    and records it here; the OWNER later withdraws the accrued pool himself (the member
+    is still a passive sub-record — there is NO external bank rail).
+
+    DOUBLE-ENTRY, append-only:
+      * ACCRUAL   (+) — carved from one distribution (provenance: distribution + payout +
+                        the frozen allocation_percent + the owner_share it came from). The
+                        owner's UserBalance is debited by the same amount in the SAME atomic
+                        block (services.carve_family_accruals).
+      * WITHDRAWAL (−) — the owner drew the member's accrued cash out via the EXISTING
+                        withdrawal path (provenance: the wallets.Withdrawal it created).
+
+    A member's accrued balance = Σ(ACCRUAL) − Σ(WITHDRAWAL). `investor` is denormalized off
+    `family_account.investor` purely for cheap self-scoping. IDEMPOTENCY: unique(distribution,
+    family_account) makes a re-credited distribution a no-op (NULL distribution on WITHDRAWAL
+    rows is exempt — Postgres treats NULLs as distinct, so a member may withdraw many times).
+    """
+
+    class EntryType(models.TextChoices):
+        ACCRUAL = "accrual", _("Accrual")        # carved from a distribution (+)
+        WITHDRAWAL = "withdrawal", _("Withdrawal")  # owner withdrew the accrual (−)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    family_account = models.ForeignKey(
+        FamilyAccount, on_delete=models.CASCADE, related_name="accruals"
+    )
+    # Denormalized owner — every row is reachable only through investor == request.user.
+    investor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="family_accruals"
+    )
+    entry_type = models.CharField(max_length=12, choices=EntryType.choices)
+    # Always a POSITIVE magnitude; the sign is carried by entry_type.
+    amount_usd = models.DecimalField(max_digits=18, decimal_places=2)
+
+    # --- ACCRUAL provenance (NULL on WITHDRAWAL rows) --- #
+    distribution = models.ForeignKey(
+        "distributions.Distribution", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="family_accruals",
+    )
+    source_payout = models.ForeignKey(
+        "distributions.DistributionPayout", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="family_accruals",
+    )
+    # The member's allocation % frozen at carve time, and the owner distribution amount
+    # it was carved from — so the row is fully auditable without re-deriving anything.
+    allocation_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    owner_share_usd = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+
+    # --- WITHDRAWAL provenance (NULL on ACCRUAL rows) --- #
+    withdrawal = models.ForeignKey(
+        "wallets.Withdrawal", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="family_accruals",
+    )
+
+    memo = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "family_accruals"
+        verbose_name = _("family accrual")
+        verbose_name_plural = _("family accruals")
+        ordering = ("-created_at",)
+        constraints = [
+            # IDEMPOTENCY anchor: one ACCRUAL per (distribution, member). WITHDRAWAL rows
+            # carry a NULL distribution and are exempt (NULLs are distinct in Postgres).
+            models.UniqueConstraint(
+                fields=["distribution", "family_account"],
+                name="uniq_family_accrual_per_distribution_member",
+            )
+        ]
+
+    def __str__(self):
+        sign = "+" if self.entry_type == self.EntryType.ACCRUAL else "-"
+        return f"{sign}${self.amount_usd} {self.entry_type} ({self.family_account_id})"
+
+
 class FamilyTransactionStatus(models.TextChoices):
     PENDING = "pending", _("Pending")
     PROCESSING = "processing", _("Processing")

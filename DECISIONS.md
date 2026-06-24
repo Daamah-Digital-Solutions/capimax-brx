@@ -1627,7 +1627,7 @@ new domain.
   real debited amount). (3) `availableReturns` reads `UserBalance` (withdrawable proceeds) — a buyer can choose between
   reinvesting and withdrawing the same balance, as intended.
 
-## FAMILY accounts — Wave A DELIVERED (records + allocation, NO money); Wave B NEXT (auto-allocation accrual — client decided, internal cycle, no bank rail); C/D DEFERRED
+## FAMILY accounts — Wave A + Wave B DELIVERED (auto-allocation engine + internal accrual + owner-withdrawal, real money); C/D DEFERRED
 **Source of truth:** FAMILY_SURFACE.md. A primary investor designates family MEMBERS, allocates a % of returns to each,
 links their banks, and configures transfer schedules. **Wave A = the SAFE foundation: records + allocation config ONLY —
 NO money, NO token movement, NO bank payout, NO distribution skim.**
@@ -1664,14 +1664,49 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
      blocking**: accrual + owner-withdrawal IS the real cycle.
   4. **Granularity = GLOBAL per-member** (a % of **ALL** returns), matching the current frontend — **NOT
      per-property.** Per-property would be a later additive layer; for now **follow the frontend = global**.
-  - **NEXT — Family Wave B build plan (auto-allocation ENGINE; money discipline):** hook the distribution
-    settlement so each declared distribution, **inside the same atomic block**, carves each member's share
-    (`member_pct × owner_share`) into an **append-only internal accrual ledger** — **server-authoritative,
-    Decimal, atomic, idempotent** (one accrual row per (distribution, member); replay-safe, like the existing
-    payout/commission guards). The owner draws the accrued total down through the **existing withdrawal path**
-    (no new payout rail). Cent-exact split (remainder discipline like `declare_distribution`). **NOT YET
-    BUILT** — decision + plan only. Waves C (on-chain member transfer) / D (scheduled bank auto-transfer)
-    remain deferred (C = product, D = external bank rail).
+  - The decision above was the plan; **Wave B below is the delivered build.**
+
+### ✅ FAMILY Wave B — DELIVERED (2026-06-24, LOCKED): the auto-allocation ENGINE + internal accrual + owner-withdrawal
+**The carve (interpretation, per client decision):** a distribution credits the owner the FULL amount; each
+ACTIVE member's share `= floor(allocation_percent × owner_share)` then comes **OUT** of it — the owner is
+**debited the members' total in the SAME atomic block**, so they effectively keep the **remainder**. Flooring
+each share to the cent makes the **owner the residual claimant of rounding crumbs** → cent-exact books, no
+remainder to redistribute. Example: $1000 to owner with A=30%/B=20% → A accrues $300, B $200, owner keeps $500.
+- **New model `FamilyAccrual` (`family_accruals`, migration `0002`)** — the **append-only, double-entry**
+  internal ledger. `ACCRUAL` (+, provenance: distribution + source_payout + frozen `allocation_percent` +
+  `owner_share_usd`) and `WITHDRAWAL` (−, provenance: the `wallets.Withdrawal` it created). A member's accrued
+  balance = Σ(ACCRUAL) − Σ(WITHDRAWAL). `investor` denormalized for self-scoping. **IDEMPOTENCY anchor:**
+  `unique(distribution, family_account)` (WITHDRAWAL rows carry NULL distribution → exempt, NULLs distinct in PG).
+- **The engine — `family.services.carve_family_accruals(owner, distribution, payout)`** — hooked into
+  `distributions.services._build_and_credit_payouts` **inside its existing `transaction.atomic()`**, on the
+  **newly-credited branch only** (so a replayed distribution credit skips it via the `payout.credited` guard,
+  AND the unique constraint makes `get_or_create` a no-op → **never double-carves / never re-debits**). For each
+  ACTIVE member with `allocated_returns_percent > 0`: floor the share (ROUND_DOWN, Decimal), append an ACCRUAL row;
+  then **`debit_user_balance(owner, Σ carved, source="family_allocation")`** once. An owner with **no allocating
+  members is a cheap no-op** → existing non-family distributions are unchanged (no regression).
+- **Owner withdraws himself — `family.services.withdraw_family_accrual` + POST `/api/family/accounts/<id>/withdraw/`**
+  (self-scoped, 404 cross-owner). **Reuses the EXISTING wallet path, NO new external rail:** the carve already
+  moved the cash out of the owner's balance into the accrual pool, so to reuse `request_withdrawal` (which debits
+  `UserBalance`) it first **RELEASES** the accrued amount back into the owner's balance (`source=
+  "family_accrual_release"`) then withdraws it → net owner balance **unchanged**, a real `pending` `Withdrawal`
+  created, an append-only WITHDRAWAL ledger row recorded, and `total_transferred` refreshed from the ledger (now
+  **real**, was inert 0 in Wave A). `amount` omitted → full balance; over-withdraw → 400.
+- **Read:** `GET /api/family/accounts/<id>/accruals/` (member summary + append-only history); `_account_dict` now
+  carries real `accrued_total` / `accrued_balance` / `withdrawn_total` (batched, no N+1). Read-only `FamilyAccrual` admin.
+- **Frontend (DELETE NOTHING):** member card shows the **real Accrued Balance** stat + a 3-up Financial Summary
+  (Allocated % / Accrued Balance / Total Transferred) + the **append-only accrual history** + a **Withdraw Accrual**
+  action (dropdown + member page) → the real withdrawal path. **Honest labels:** accrual is real + internal; the
+  **automated scheduled bank payout stays deferred** ("withdraws to your wallet as a pending request; scheduled bank
+  transfer comes later"). The Wave A bank/schedule config stays as stored config. Bilingual EN/AR. tsc clean.
+- **+10 tests, full suite 483 green, makemigrations clean.** Journey: owner (sole holder) sets A=30%, B=20% →
+  $1000 distribution → A accrues $300, B $200, **owner keeps $500** → replay credit = no double-carve → owner
+  withdraws A's $300 via the existing path (real `pending` Withdrawal, ledger reconciles, owner balance still $500,
+  **no external bank transfer**, no on-chain move). Covered: Decimal-exact (3×33.33% → owner keeps the $0.01 crumb),
+  0% member accrues nothing, no-members credits normally, cross-owner 404.
+- **Flags:** (1) **GLOBAL per-member %** (follows the frontend); per-property allocation is a later additive layer.
+  (2) **Withdrawal-failure reversal** (operator marks a Withdrawal FAILED) is the same ops/back-office concern as any
+  existing withdrawal — not modeled here. (3) Waves **C** (on-chain member transfer) / **D** (scheduled bank
+  auto-transfer) remain deferred — C = product decision (members aren't wallets), D = external bank rail.
 
 - **⚠️ CORRECTION (honesty):** family was NOT "the last Supabase dependency." Family's data layer is now Django, BUT
   satellite hooks/pages still import Supabase. Surveyed in `SUPABASE_CLEANUP.md` (per-surface: existing-Django? / live? /
@@ -1722,8 +1757,8 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
   is **blocked on a missing external-payout provider** (Stripe/NOW are pay-in only; `Withdrawal` is operator-fulfilled), so
   a real automated bank transfer is record-only / deferred to a future provider integration.
 
-**STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family Waves B/C/D** (Wave A BUILT — see
-above), **deposit / top-up** + **broker payment-method** (no endpoint), **Reports.tsx "Export Full"** (mock analytics), and
+**STILL DEFERRED (need their own data layer / scope decision — NOT built):** **family Waves C/D** (Waves A + B BUILT — see
+above; C = on-chain member transfer (product), D = scheduled bank auto-transfer (external rail)), **broker payment-method** (no endpoint), and
 the **bid/ask ORDER BOOK + matching engine** (**DEFERRED BY USER DECISION — explicitly out of this stage**; peer market
 ships real one-shot listings today, order-book i18n preserved so it can return), the **CARDS mini-domains** (`visa-cards` +
 `saved-cards`) (**DEFERRED BY USER DECISION — explicitly out of this stage**, like the order book; stay on their current

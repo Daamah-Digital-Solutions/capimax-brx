@@ -201,3 +201,191 @@ class FamilyRecordOnlyTransferTests(APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 404)
+
+
+# =========================================================================== #
+# Wave B — the auto-allocation engine + internal accrual ledger + owner withdrawal.
+# =========================================================================== #
+from apps.distributions.services import _build_and_credit_payouts, declare_distribution
+from apps.distributions.tests import PAY_DATE, _balance, _holder, _property
+from apps.wallets.models import WalletTransaction
+
+from .models import FamilyAccrual
+from .services import accrual_summary
+
+
+def _member(owner, name, pct):
+    """Create an ACTIVE family member under `owner` with an allocation % (test setup)."""
+    return FamilyAccount.objects.create(
+        investor=owner, member_name=name, member_email=f"{name.lower()}@ex.com",
+        relationship="child", allocated_returns_percent=Decimal(str(pct)),
+    )
+
+
+class FamilyAutoAllocationEngineTests(APITestCase):
+    """The carve: a distribution credited to an owner auto-splits to family members."""
+
+    def setUp(self):
+        self.prop = _property(slug="fam-prop")
+        # The OWNER is the SOLE holder → they receive the WHOLE pool each distribution.
+        self.owner, _, _ = _holder("owner@ex.com", self.prop, 100)
+
+    # --- the carve: 30% / 20% → 300 / 200, owner keeps 500 ------------------- #
+    def test_carve_splits_and_owner_keeps_remainder(self):
+        a = _member(self.owner, "A", 30)
+        b = _member(self.owner, "B", 20)
+
+        declare_distribution(self.prop.slug, Decimal("1000.00"), pay_date=PAY_DATE)
+
+        self.assertEqual(accrual_summary(a)["accrued_balance"], Decimal("300.00"))
+        self.assertEqual(accrual_summary(b)["accrued_balance"], Decimal("200.00"))
+        # The owner effectively receives the remainder (1000 credited − 500 carved).
+        self.assertEqual(_balance(self.owner), Decimal("500.00"))
+        # Conservation: members' accruals + owner balance == the full distribution.
+        self.assertEqual(
+            accrual_summary(a)["accrued_total"]
+            + accrual_summary(b)["accrued_total"]
+            + _balance(self.owner),
+            Decimal("1000.00"),
+        )
+        # Two append-only ACCRUAL rows, tied to the distribution + frozen %.
+        rows = FamilyAccrual.objects.filter(entry_type=FamilyAccrual.EntryType.ACCRUAL)
+        self.assertEqual(rows.count(), 2)
+        self.assertEqual(rows.get(family_account=a).allocation_percent, Decimal("30.00"))
+        self.assertEqual(rows.get(family_account=a).owner_share_usd, Decimal("1000.00"))
+
+    # --- idempotent: re-crediting the SAME distribution does NOT double-carve - #
+    def test_idempotent_no_double_carve(self):
+        a = _member(self.owner, "A", 30)
+        dist = declare_distribution(self.prop.slug, Decimal("1000.00"), pay_date=PAY_DATE)
+        self.assertEqual(_balance(self.owner), Decimal("700.00"))
+
+        # Replay the credit step on the SAME distribution — must be a complete no-op.
+        _build_and_credit_payouts(dist)
+
+        self.assertEqual(_balance(self.owner), Decimal("700.00"))
+        self.assertEqual(accrual_summary(a)["accrued_balance"], Decimal("300.00"))
+        self.assertEqual(
+            FamilyAccrual.objects.filter(
+                entry_type=FamilyAccrual.EntryType.ACCRUAL
+            ).count(),
+            1,
+        )
+
+    # --- Decimal-exact: flooring leaves crumbs with the owner (residual) ----- #
+    def test_decimal_exact_owner_is_residual_claimant(self):
+        # Three members at 33.33% each (= 99.99% ≤ 100). $100 pool → 33.33 each (floored),
+        # owner keeps the 0.01 crumb. Everything reconciles to the cent.
+        members = [_member(self.owner, n, "33.33") for n in ("A", "B", "C")]
+        declare_distribution(self.prop.slug, Decimal("100.00"), pay_date=PAY_DATE)
+
+        for m in members:
+            self.assertEqual(accrual_summary(m)["accrued_balance"], Decimal("33.33"))
+        self.assertEqual(_balance(self.owner), Decimal("0.01"))
+        carved = sum((accrual_summary(m)["accrued_total"] for m in members), Decimal("0"))
+        self.assertEqual(carved + _balance(self.owner), Decimal("100.00"))
+
+    # --- a 0% member accrues nothing (no row) -------------------------------- #
+    def test_zero_percent_member_accrues_nothing(self):
+        active = _member(self.owner, "A", 50)
+        zero = _member(self.owner, "Z", 0)
+        declare_distribution(self.prop.slug, Decimal("100.00"), pay_date=PAY_DATE)
+
+        self.assertEqual(accrual_summary(active)["accrued_balance"], Decimal("50.00"))
+        self.assertEqual(accrual_summary(zero)["accrued_balance"], Decimal("0.00"))
+        self.assertFalse(FamilyAccrual.objects.filter(family_account=zero).exists())
+        self.assertEqual(_balance(self.owner), Decimal("50.00"))
+
+    # --- no members → the distribution credits normally (NO regression) ------ #
+    def test_owner_with_no_members_credits_normally(self):
+        declare_distribution(self.prop.slug, Decimal("100.00"), pay_date=PAY_DATE)
+        self.assertEqual(_balance(self.owner), Decimal("100.00"))
+        self.assertEqual(FamilyAccrual.objects.count(), 0)
+
+    # --- the carve never moves tokens / writes on-chain ---------------------- #
+    def test_no_token_or_chain_movement(self):
+        _member(self.owner, "A", 40)
+        before = WalletTransaction.objects.count()
+        declare_distribution(self.prop.slug, Decimal("100.00"), pay_date=PAY_DATE)
+        self.assertEqual(WalletTransaction.objects.count(), before)
+
+
+class FamilyAccrualWithdrawalTests(APITestCase):
+    """The owner withdraws a member's accrued cash himself, via the EXISTING path."""
+
+    def setUp(self):
+        self.prop = _property(slug="fam-wd")
+        self.owner, _, _ = _holder("wd-owner@ex.com", self.prop, 100)
+        self.outsider, _, _ = _holder("wd-out@ex.com", _property(slug="other-prop"), 10)
+        self.a = _member(self.owner, "A", 30)
+        declare_distribution(self.prop.slug, Decimal("1000.00"), pay_date=PAY_DATE)
+        # After carve: A accrued 300, owner balance 700.
+
+    def test_owner_withdraws_full_accrual_via_existing_path(self):
+        from apps.wallets.models import Withdrawal
+
+        wd_before = Withdrawal.objects.count()
+        ft_before = FamilyTransaction.objects.count()
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(f"/api/family/accounts/{self.a.id}/withdraw/", {}, format="json")
+        self.assertEqual(resp.status_code, 201)
+        body = resp.json()
+        self.assertEqual(body["withdrawal"]["amount"], 300.0)
+        self.assertEqual(body["withdrawal"]["status"], "pending")
+        self.assertEqual(body["member"]["accrued_balance"], 0.0)
+        self.assertEqual(body["member"]["withdrawn_total"], 300.0)
+
+        # A REAL Withdrawal was created via the existing path (mirrors a normal withdrawal).
+        self.assertEqual(Withdrawal.objects.count(), wd_before + 1)
+        wd = Withdrawal.objects.latest("created_at")
+        self.assertEqual(wd.user_id, self.owner.id)
+        self.assertEqual(wd.amount, Decimal("300.00"))
+        self.assertEqual(wd.status, Withdrawal.Status.PENDING)
+
+        # Append-only WITHDRAWAL ledger row + real total_transferred.
+        self.assertTrue(
+            FamilyAccrual.objects.filter(
+                family_account=self.a, entry_type=FamilyAccrual.EntryType.WITHDRAWAL,
+                amount_usd=Decimal("300.00"), withdrawal=wd,
+            ).exists()
+        )
+        self.a.refresh_from_db()
+        self.assertEqual(self.a.total_transferred, Decimal("300.00"))
+
+        # The owner's spendable balance is unchanged (the 300 was the member's, not the
+        # owner's own — it left via the Withdrawal). And NO external/family bank transfer.
+        self.assertEqual(_balance(self.owner), Decimal("700.00"))
+        self.assertEqual(FamilyTransaction.objects.count(), ft_before)  # no record-transfer
+
+    def test_partial_then_over_withdraw(self):
+        self.client.force_authenticate(self.owner)
+        ok = self.client.post(
+            f"/api/family/accounts/{self.a.id}/withdraw/", {"amount": "100.00"}, format="json"
+        )
+        self.assertEqual(ok.status_code, 201)
+        self.assertEqual(ok.json()["member"]["accrued_balance"], 200.0)
+        # Over-withdrawing the remaining balance is rejected (400) and writes nothing.
+        over = self.client.post(
+            f"/api/family/accounts/{self.a.id}/withdraw/", {"amount": "999.00"}, format="json"
+        )
+        self.assertEqual(over.status_code, 400)
+        self.assertEqual(accrual_summary(self.a)["accrued_balance"], Decimal("200.00"))
+
+    def test_withdraw_is_self_scoped(self):
+        # The outsider (different investor) cannot withdraw A's accrual → 404.
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.post(f"/api/family/accounts/{self.a.id}/withdraw/", {}, format="json")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accruals_endpoint_self_scoped(self):
+        self.client.force_authenticate(self.owner)
+        ok = self.client.get(f"/api/family/accounts/{self.a.id}/accruals/")
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(ok.json()["accrued_balance"], 300.0)
+        self.assertEqual(len(ok.json()["entries"]), 1)  # one ACCRUAL row so far
+
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(
+            self.client.get(f"/api/family/accounts/{self.a.id}/accruals/").status_code, 404
+        )

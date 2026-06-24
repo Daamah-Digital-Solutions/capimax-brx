@@ -97,10 +97,12 @@ const FamilyInvestment = () => {
     createTransferSchedule,
     initiateTransfer,
     updateAccessLevel,
+    withdrawAccrual,
     isCreating,
     isAddingBank,
     isCreatingSchedule,
     isTransferring,
+    isWithdrawingAccrual,
   } = useFamilyAccounts();
 
   // Allocation drafts (per member) + the Transfers-tab form (Wave A: record-only).
@@ -568,8 +570,10 @@ const FamilyInvestment = () => {
                     onCreateSchedule={createTransferSchedule}
                     onInitiateTransfer={initiateTransfer}
                     onUpdateAccessLevel={updateAccessLevel}
+                    onWithdrawAccrual={withdrawAccrual}
                     isAddingBank={isAddingBank}
                     isCreatingSchedule={isCreatingSchedule}
+                    isWithdrawingAccrual={isWithdrawingAccrual}
                   />
                 ))}
               </div>

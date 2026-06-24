@@ -3,6 +3,7 @@ from django.contrib import admin
 
 from .models import (
     FamilyAccount,
+    FamilyAccrual,
     FamilyBankAccount,
     FamilyTransaction,
     FamilyTransferSchedule,
@@ -42,3 +43,23 @@ class FamilyTransactionAdmin(admin.ModelAdmin):
     list_filter = ("transaction_type", "status")
     search_fields = ("reference_number", "family_account__member_name")
     readonly_fields = ("id", "created_at")
+
+
+@admin.register(FamilyAccrual)
+class FamilyAccrualAdmin(admin.ModelAdmin):
+    # Append-only money ledger — READ-ONLY in admin (never hand-edit a financial record).
+    list_display = ("entry_type", "amount_usd", "family_account", "investor",
+                    "distribution", "withdrawal", "created_at")
+    list_filter = ("entry_type",)
+    search_fields = ("family_account__member_name", "investor__email")
+    readonly_fields = (
+        "id", "family_account", "investor", "entry_type", "amount_usd", "distribution",
+        "source_payout", "allocation_percent", "owner_share_usd", "withdrawal", "memo",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

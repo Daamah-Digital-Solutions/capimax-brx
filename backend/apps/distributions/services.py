@@ -200,6 +200,15 @@ def _build_and_credit_payouts(dist: Distribution):
                 action_url="/distributions",
             )
 
+            # Family Wave B: auto-allocate the holder's distribution to their family members.
+            # Runs INSIDE this atomic block, ONLY on the newly-credited branch (idempotent —
+            # a replay skips it via the `payout.credited` guard, plus the accrual's own
+            # unique(distribution, member) anchor). A holder with no allocating members is a
+            # cheap no-op, so the existing non-family distribution behaviour is unchanged.
+            from apps.family.services import carve_family_accruals
+
+            carve_family_accruals(user, dist, payout)
+
         payout.credited = True
         payout.save(update_fields=["credited"])
         credited_total += payout.share_amount_usd

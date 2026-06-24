@@ -61,3 +61,16 @@ class FamilyTransactionCreateSerializer(serializers.Serializer):
         choices=["returns", "tokens", "balance"], required=False, default="returns"
     )
     description = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class FamilyAccrualWithdrawSerializer(serializers.Serializer):
+    """
+    Wave B — the owner withdraws a member's accrued cash. `amount` omitted → the full accrued
+    balance; the actual ≤-balance check is enforced server-side in withdraw_family_accrual.
+    """
+
+    amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, required=False, allow_null=True
+    )
+    method = serializers.ChoiceField(choices=["bank", "crypto"], required=False, default="bank")
+    notes = serializers.CharField(max_length=500, required=False, allow_blank=True)
