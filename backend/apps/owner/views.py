@@ -289,13 +289,59 @@ class SubmissionDocumentDownloadView(APIView):
 
 
 # --------------------------------------------------------------------------- #
-# Owner earnings / ledger — Phase 7 Wave D. Owner-scoped read of the owner's
-# PRIMARY-sale proceeds (gross − platform/management fees) per property + totals.
-# Balance + payout reuse the existing GET /api/wallets/balance/ and GET/POST
-# /api/wallets/withdrawals/ — NO new withdrawal mechanism. NOT investor distributions.
+# Owner analytics — Phase 7 Wave D + the OwnerReports realness pass. Owner-scoped,
+# read-side ONLY (no money/mint, no migration). Three surfaces, all period-aware:
+#   * earnings      — primary-sale proceeds (gross − fees) per property + totals.
+#   * distributions — the owner's properties' rental-yield distribution history/totals
+#                     (aggregated from the distributions domain; the owner does NOT
+#                     receive these — they're the cash their properties paid HOLDERS).
+#   * investors     — the distinct investor base across the owner's properties.
+# Balance + payout still reuse GET /api/wallets/balance/ and /api/wallets/withdrawals/.
 # --------------------------------------------------------------------------- #
+def _period_start(period):
+    """
+    The inclusive start date for a period window, or None for "all"/unknown (read-side
+    filter only — no schema change). Windows are relative to today: this calendar month,
+    quarter, or year.
+    """
+    from django.utils import timezone
+
+    today = timezone.now().date()
+    if period == "month":
+        return today.replace(day=1)
+    if period == "quarter":
+        quarter_first_month = 3 * ((today.month - 1) // 3) + 1
+        return today.replace(month=quarter_first_month, day=1)
+    if period == "year":
+        return today.replace(month=1, day=1)
+    return None  # "all" (or anything unrecognized) → no time filter
+
+
+def _owner_properties(user):
+    """The caller's owned (submitted_by) properties — the self-scoping anchor for analytics."""
+    from apps.properties.models import Property
+
+    return list(Property.objects.filter(submitted_by=user))
+
+
+def _mask_investor(email):
+    """
+    A privacy-preserving label for an investor shown to the property owner: first char of
+    the local part + the domain (e.g. 'a***@gmail.com'). The owner sees a distinct,
+    stable-ish handle without the full PII address. Never exposes the full email.
+    """
+    if not email or "@" not in email:
+        return "Investor"
+    local, _, domain = email.partition("@")
+    head = local[0] if local else "?"
+    return f"{head}***@{domain}"
+
+
 class OwnerEarningsView(APIView):
-    """Summary of the caller's primary-sale earnings, per owned property + totals."""
+    """
+    Summary of the caller's primary-sale earnings, per owned property + totals.
+    Optional `?period=month|quarter|year|all` narrows the underlying investments by date.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -305,17 +351,21 @@ class OwnerEarningsView(APIView):
         from django.db.models import Count, Sum
 
         from apps.investments.models import Investment, PaymentStatus
-        from apps.properties.models import Property
+
+        start = _period_start(request.query_params.get("period") or "all")
 
         rows = []
         total_net = Decimal("0")
         total_units = 0
         total_investors = 0
         # Only the caller's owned (submitted_by) properties.
-        for prop in Property.objects.filter(submitted_by=request.user):
-            agg = Investment.objects.filter(
+        for prop in _owner_properties(request.user):
+            inv_qs = Investment.objects.filter(
                 property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
-            ).aggregate(
+            )
+            if start is not None:
+                inv_qs = inv_qs.filter(created_at__date__gte=start)
+            agg = inv_qs.aggregate(
                 gross=Sum("amount_invested"),
                 units=Sum("token_amount"),
                 investors=Count("user", distinct=True),
@@ -346,4 +396,148 @@ class OwnerEarningsView(APIView):
             "total_units_sold": total_units,
             "total_investors": total_investors,
             "properties": rows,
+        })
+
+
+class OwnerDistributionsView(APIView):
+    """
+    The caller's properties' rental-yield DISTRIBUTION history + totals (read-side
+    aggregation over the distributions domain, self-scoped to the owner's properties).
+    `?period=` narrows by the distribution pay-date. An owner with no distributions gets
+    an honest empty payload (zeros + []), never a fabricated figure.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from decimal import Decimal
+
+        from apps.distributions.models import Distribution
+
+        start = _period_start(request.query_params.get("period") or "all")
+        slug_to_name = {p.slug: p.name for p in _owner_properties(request.user)}
+
+        dist_qs = Distribution.objects.filter(
+            property_id__in=list(slug_to_name.keys()),
+            status=Distribution.Status.PAID,
+        )
+        if start is not None:
+            dist_qs = dist_qs.filter(pay_date__gte=start)
+
+        per_prop: dict = {}
+        total = Decimal("0")
+        count = 0
+        # Newest first within each property.
+        for d in dist_qs.order_by("property_id", "-pay_date", "-created_at"):
+            amount = Decimal(d.pool_amount_usd or 0)
+            total += amount
+            count += 1
+            slot = per_prop.setdefault(d.property_id, {
+                "property_id": d.property_id,
+                "property_name": slug_to_name.get(d.property_id) or d.property_name or d.property_id,
+                "_total": Decimal("0"),
+                "distribution_count": 0,
+                "last_pay_date": None,
+                "distributions": [],
+            })
+            slot["_total"] += amount
+            slot["distribution_count"] += 1
+            iso = d.pay_date.isoformat()
+            if slot["last_pay_date"] is None or iso > slot["last_pay_date"]:
+                slot["last_pay_date"] = iso
+            slot["distributions"].append({
+                "period_label": d.period_label or None,
+                "dist_type": d.dist_type or None,
+                "pay_date": iso,
+                "amount": float(amount),
+            })
+
+        properties = []
+        for slot in per_prop.values():
+            slot["total_distributed"] = float(slot.pop("_total"))
+            properties.append(slot)
+        properties.sort(key=lambda s: s["total_distributed"], reverse=True)
+
+        return Response({
+            "total_distributed": float(total),
+            "distribution_count": count,
+            "properties": properties,
+        })
+
+
+class OwnerInvestorsView(APIView):
+    """
+    The distinct INVESTOR base across the caller's properties (read-side aggregation over
+    completed+minted investments, self-scoped). Returns a per-property breakdown and a
+    per-investor list (investor PII MASKED to a privacy-preserving handle). `?period=`
+    narrows by investment date. `total_investors` is the TRUE distinct count across all
+    of the owner's properties (an investor in two properties counts once). Honest empty
+    when the owner has no investors yet.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from decimal import Decimal
+
+        from django.db.models import Count, Sum
+
+        from apps.investments.models import Investment, PaymentStatus
+
+        start = _period_start(request.query_params.get("period") or "all")
+
+        by_property = []
+        investor_map: dict = {}  # user_id -> aggregated position across the owner's props
+        for prop in _owner_properties(request.user):
+            inv_qs = Investment.objects.filter(
+                property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
+            )
+            if start is not None:
+                inv_qs = inv_qs.filter(created_at__date__gte=start)
+
+            agg = inv_qs.aggregate(
+                investors=Count("user", distinct=True),
+                units=Sum("token_amount"),
+                value=Sum("amount_invested"),
+            )
+            by_property.append({
+                "property_id": prop.slug,
+                "property_name": prop.name,
+                "investors": int(agg["investors"] or 0),
+                "units": int(agg["units"] or 0),
+                "value": float(Decimal(agg["value"] or 0)),
+            })
+
+            per = inv_qs.values("user_id", "user__email").annotate(
+                units=Sum("token_amount"), value=Sum("amount_invested"),
+            )
+            for r in per:
+                slot = investor_map.setdefault(r["user_id"], {
+                    "label": _mask_investor(r["user__email"]),
+                    "units": 0,
+                    "value": Decimal("0"),
+                    "properties": set(),
+                })
+                slot["units"] += int(r["units"] or 0)
+                slot["value"] += Decimal(r["value"] or 0)
+                slot["properties"].add(prop.name)
+
+        investors = [{
+            "label": slot["label"],
+            "units": slot["units"],
+            "value": float(slot["value"]),
+            "properties": sorted(slot["properties"]),
+            "property_count": len(slot["properties"]),
+        } for slot in investor_map.values()]
+        investors.sort(key=lambda s: s["value"], reverse=True)
+
+        total_units = sum(s["units"] for s in investors)
+        total_value = float(sum((Decimal(str(s["value"])) for s in investors), Decimal("0")))
+
+        return Response({
+            "total_investors": len(investors),  # TRUE distinct across all owner properties
+            "total_units": total_units,
+            "total_value": total_value,
+            "investors": investors,
+            "by_property": by_property,
         })

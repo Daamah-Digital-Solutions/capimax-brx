@@ -916,6 +916,35 @@ Units Sold 10; no console errors. (Test data cleaned up; the testnet token/mint 
 investor distributions NOT built or conflated (placeholder only). **The OWNER DOMAIN is now COMPLETE:
 KYB (A) → submit (B) → review/publish (C) → earnings/payout (D).**
 
+### ✅ OwnerReports realness pass — DELIVERED (2026-06-24, LOCKED): period filter + Distributions & Investors tabs made REAL
+The OwnerReports earnings surface was already real; the three unfinished pieces are now real **from
+existing domains** (read-side only, NO migration, NO money/mint). DELETE NOTHING, nothing faked.
+- **PERIOD FILTER (was inert):** the month/quarter/year/all selector now drives all three surfaces
+  end-to-end. Backend helper `_period_start(period)` ([apps/owner/views.py](backend/apps/owner/views.py)) →
+  an inclusive start date (None for "all"); `OwnerEarningsView` gained `?period=` (filters `Investment.created_at`).
+  Frontend `OwnerReports.tsx` reloads earnings + distributions + investors on period change (`ownerApi.*(period)`).
+- **DISTRIBUTIONS TAB (was a placeholder) → REAL:** new `GET /api/owner/distributions/?period=`
+  (`OwnerDistributionsView`) aggregates the **distributions domain** by the owner's `submitted_by`
+  property slugs (`Distribution` PAID, `pool_amount_usd` by `property_id`) → per-property history
+  (amount + pay_date + period_label) + totals, owner-scoped, `pay_date`-period-filtered, Decimal-summed.
+  The **"Distributed" overview card** ($0 hardcoded) now reads `total_distributed` from this — real, or a
+  genuine $0 when none. (The owner does NOT receive these — it's the yield their properties paid HOLDERS.)
+- **INVESTORS TAB (was 1 number) → REAL:** new `GET /api/owner/investors/?period=` (`OwnerInvestorsView`)
+  derives the distinct investor base across the owner's properties from completed+minted `Investment`
+  (chosen over `OwnershipToken` for period-filterability + consistency with the earnings count) →
+  per-property breakdown + a per-investor list (units / value / property_count). **Investor PII is MASKED**
+  server-side (`_mask_investor` → `a***@gmail.com`) — owners see a stable handle, never the full email.
+  `total_investors` here is the TRUE distinct count (an investor in 2 properties counts once; the earnings
+  endpoint's summed count is unchanged for back-compat).
+- **TIDY:** removed the dead `property`/`setProperty` state + 5 unused lucide imports from OwnerReports.tsx
+  (no UI element touched). The mislabeled **"Asset Validation" nav** (duplicate route → same component) is
+  noted but **left as-is** (out of scope — relabel/build is a separate decision; DELETE NOTHING).
+- **Verify:** no migration (read-side); **full suite 489 green** (+7 owner-analytics: distributions
+  owner-scoped + Decimal-exact (1000+500=1500, cross-owner 777 excluded); period narrows distributions
+  (year excludes prior-year) + earnings (backdated investment excluded); investors self-scoped + PII masked
+  + distinct count + value-sorted; honest-empty owner → zeros/[]; analytics require auth). tsc clean.
+  Both `/owner-reports` and `/asset-validation` get all of this automatically (same component).
+
 **Remaining (post-owner-domain):** the **DEVELOPER** role (separate later domain, reuses the owner
 KYB+submit+review+earnings patterns); the **investor distributions engine** (rental-yield to token
 holders — `OwnershipToken.total_distributions` exists but nothing writes it); and the other mock domains

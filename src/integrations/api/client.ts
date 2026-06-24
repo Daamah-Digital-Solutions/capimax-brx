@@ -921,10 +921,10 @@ export const ownerApi = {
   deleteSubmissionDocument: (id: string, docId: string) =>
     rawRequest(`/owner/submissions/${id}/documents/${docId}/`, { method: "DELETE", auth: true }),
 
-  // --- Owner earnings / ledger (Phase 7 Wave D) — primary-sale proceeds. --- //
-  /** The caller's primary-sale earnings per owned property + totals. */
-  earnings: () =>
-    rawRequest("/owner/earnings/", { auth: true }) as Promise<{
+  // --- Owner analytics (Phase 7 Wave D + OwnerReports realness) — all period-aware. --- //
+  /** The caller's primary-sale earnings per owned property + totals. `period` narrows by date. */
+  earnings: (period?: OwnerPeriod) =>
+    rawRequest(`/owner/earnings/${_periodQ(period)}`, { auth: true }) as Promise<{
       total_net_proceeds: number;
       total_units_sold: number;
       total_investors: number;
@@ -940,7 +940,53 @@ export const ownerApi = {
         net_proceeds: number;
       }>;
     }>,
+  /** This owner's properties' rental-yield distribution history + totals (real, owner-scoped). */
+  distributions: (period?: OwnerPeriod) =>
+    rawRequest(`/owner/distributions/${_periodQ(period)}`, { auth: true }) as Promise<{
+      total_distributed: number;
+      distribution_count: number;
+      properties: Array<{
+        property_id: string;
+        property_name: string;
+        total_distributed: number;
+        distribution_count: number;
+        last_pay_date: string | null;
+        distributions: Array<{
+          period_label: string | null;
+          dist_type: string | null;
+          pay_date: string;
+          amount: number;
+        }>;
+      }>;
+    }>,
+  /** The distinct investor base across this owner's properties (PII masked, owner-scoped). */
+  investors: (period?: OwnerPeriod) =>
+    rawRequest(`/owner/investors/${_periodQ(period)}`, { auth: true }) as Promise<{
+      total_investors: number;
+      total_units: number;
+      total_value: number;
+      investors: Array<{
+        label: string;
+        units: number;
+        value: number;
+        properties: string[];
+        property_count: number;
+      }>;
+      by_property: Array<{
+        property_id: string;
+        property_name: string;
+        investors: number;
+        units: number;
+        value: number;
+      }>;
+    }>,
 };
+
+export type OwnerPeriod = "month" | "quarter" | "year" | "all";
+/** Build a `?period=` query string; omitted/"all" → no param (server defaults to all-time). */
+function _periodQ(period?: OwnerPeriod): string {
+  return period && period !== "all" ? `?period=${period}` : "";
+}
 
 // --------------------------------------------------------------------------- //
 // Owner-documents — a self-scoped personal document VAULT, repointed off Supabase

@@ -875,6 +875,132 @@ def _valid_seed_kwargs():
     )
 
 
+# =========================================================================== #
+# OWNER ANALYTICS — the OwnerReports realness pass. Period-aware, owner-scoped,
+# read-side aggregation: distributions-by-my-properties + investor breakdown.
+# Chain MOCKED so the suite stays network-free.
+# =========================================================================== #
+from datetime import date, datetime, timezone as _tz
+
+from apps.distributions.services import declare_distribution
+
+
+@mock.patch("apps.investments.services.chain_service.mint", return_value=_FAKE_MINT)
+class OwnerAnalyticsApiTests(APITestCase):
+    def _seed(self, owner_email, slug):
+        """An approved owner + a deployed property + two minted investors (10 + 5 tokens)."""
+        owner = _approved_owner(owner_email)
+        prop = _owned_deployed_property(owner, slug=slug)
+        b1 = User.objects.create_user(email=f"b1-{slug}@ex.com", password="pw-12345-strong")
+        b2 = User.objects.create_user(email=f"b2-{slug}@ex.com", password="pw-12345-strong")
+        mint_investment(_completed_investment(b1, prop, 10))  # gross 1000
+        mint_investment(_completed_investment(b2, prop, 5))   # gross 500
+        return owner, prop, b1, b2
+
+    # --- distributions: aggregates ONLY this owner's properties ------------- #
+    def test_distributions_owner_scoped_and_decimal_exact(self, _m):
+        owner, prop, _b1, _b2 = self._seed("an-owner@ex.com", "an-prop")
+        declare_distribution(prop.slug, Decimal("1000.00"), pay_date=date.today())
+        declare_distribution(prop.slug, Decimal("500.00"), pay_date=date.today())
+        # A DIFFERENT owner's property + distribution — must NOT leak in.
+        owner2, prop2, _c1, _c2 = self._seed("an-owner2@ex.com", "an-prop2")
+        declare_distribution(prop2.slug, Decimal("777.00"), pay_date=date.today())
+
+        self.client.force_authenticate(owner)
+        resp = self.client.get("/api/owner/distributions/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["total_distributed"], 1500.0)  # 1000 + 500, NOT 777
+        self.assertEqual(resp.data["distribution_count"], 2)
+        self.assertEqual(len(resp.data["properties"]), 1)
+        p = resp.data["properties"][0]
+        self.assertEqual(p["property_id"], prop.slug)
+        self.assertEqual(p["total_distributed"], 1500.0)
+        self.assertEqual(p["distribution_count"], 2)
+        self.assertEqual(len(p["distributions"]), 2)
+
+        # The other owner sees ONLY their own 777 (no cross-owner leak).
+        self.client.force_authenticate(owner2)
+        r2 = self.client.get("/api/owner/distributions/")
+        self.assertEqual(r2.data["total_distributed"], 777.0)
+
+    # --- period narrows the distribution totals ----------------------------- #
+    def test_period_narrows_distributions(self, _m):
+        owner, prop, _b1, _b2 = self._seed("per-owner@ex.com", "per-prop")
+        this_year = date.today().year
+        declare_distribution(prop.slug, Decimal("1000.00"), pay_date=date(this_year, 1, 1))
+        declare_distribution(prop.slug, Decimal("400.00"), pay_date=date(this_year - 1, 6, 30))
+
+        self.client.force_authenticate(owner)
+        all_time = self.client.get("/api/owner/distributions/?period=all")
+        self.assertEqual(all_time.data["total_distributed"], 1400.0)
+        # period=year excludes the prior-year 400.
+        year = self.client.get("/api/owner/distributions/?period=year")
+        self.assertEqual(year.data["total_distributed"], 1000.0)
+
+    # --- investors: distinct base, masked PII, self-scoped ------------------ #
+    def test_investors_breakdown_self_scoped_and_masked(self, _m):
+        owner, prop, b1, b2 = self._seed("inv-owner@ex.com", "inv-prop")
+        # Another owner's investors must not appear.
+        self._seed("inv-owner2@ex.com", "inv-prop2")
+
+        self.client.force_authenticate(owner)
+        resp = self.client.get("/api/owner/investors/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["total_investors"], 2)   # b1, b2 distinct
+        self.assertEqual(resp.data["total_units"], 15)       # 10 + 5
+        self.assertEqual(resp.data["total_value"], 1500.0)   # 1000 + 500
+        self.assertEqual(len(resp.data["by_property"]), 1)
+        self.assertEqual(resp.data["by_property"][0]["investors"], 2)
+        # Investor PII is MASKED (no full email exposed) and sorted by value desc.
+        labels = [i["label"] for i in resp.data["investors"]]
+        self.assertTrue(all("***@" in lbl for lbl in labels))
+        self.assertNotIn(b1.email, labels)
+        self.assertNotIn(b2.email, labels)
+        self.assertEqual(resp.data["investors"][0]["value"], 1000.0)  # b1 (largest) first
+        self.assertEqual(resp.data["investors"][0]["units"], 10)
+
+    # --- period narrows the earnings (and investor) figures ----------------- #
+    def test_period_narrows_earnings(self, _m):
+        owner = _approved_owner("pe-owner@ex.com")
+        prop = _owned_deployed_property(owner, slug="pe-prop")
+        b1 = User.objects.create_user(email="pe-b1@ex.com", password="pw-12345-strong")
+        mint_investment(_completed_investment(b1, prop, 10))
+        b2 = User.objects.create_user(email="pe-b2@ex.com", password="pw-12345-strong")
+        inv2 = _completed_investment(b2, prop, 5)
+        mint_investment(inv2)
+        # Backdate inv2 to a prior year (bypass auto_now_add via .update()).
+        Investment.objects.filter(pk=inv2.pk).update(
+            created_at=datetime(date.today().year - 1, 6, 30, tzinfo=_tz.utc)
+        )
+
+        self.client.force_authenticate(owner)
+        self.assertEqual(self.client.get("/api/owner/earnings/?period=all").data["total_units_sold"], 15)
+        # period=year excludes the backdated investment.
+        self.assertEqual(self.client.get("/api/owner/earnings/?period=year").data["total_units_sold"], 10)
+        self.assertEqual(self.client.get("/api/owner/investors/?period=year").data["total_investors"], 1)
+
+    # --- honest empty (no data → zeros/[], never a fabricated figure) ------- #
+    def test_owner_with_no_data_honest_empty(self, _m):
+        owner = _approved_owner("empty-owner@ex.com")
+        self.client.force_authenticate(owner)
+        d = self.client.get("/api/owner/distributions/")
+        self.assertEqual(d.data["total_distributed"], 0.0)
+        self.assertEqual(d.data["distribution_count"], 0)
+        self.assertEqual(d.data["properties"], [])
+        i = self.client.get("/api/owner/investors/")
+        self.assertEqual(i.data["total_investors"], 0)
+        self.assertEqual(i.data["investors"], [])
+        self.assertEqual(i.data["by_property"], [])
+
+    # --- analytics require auth --------------------------------------------- #
+    def test_requires_auth(self, _m):
+        for path in ("/api/owner/distributions/", "/api/owner/investors/"):
+            self.assertIn(
+                self.client.get(path).status_code,
+                (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+            )
+
+
 class SubmissionIsolationTests(APITestCase):
     def test_owner_cannot_see_or_edit_another_submission(self):
         a = _approved_owner("a-sub@example.com")
