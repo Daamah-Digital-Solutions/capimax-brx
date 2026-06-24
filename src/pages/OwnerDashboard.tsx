@@ -1,22 +1,20 @@
 import { useState, useEffect } from "react";
-import { 
+import {
   Building2,
   Plus,
-  Eye,
-  Edit,
   BarChart3,
   DollarSign,
   Users,
   TrendingUp,
   FileText,
   MessageSquare,
+  Shield,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   AlertCircle,
   Upload,
-  Calendar,
   MapPin,
-  Percent,
   ArrowUpRight,
   Download,
   Send
@@ -32,6 +30,8 @@ import { OwnerVerificationCard } from "@/components/owner/OwnerVerificationCard"
 import { DeveloperVerificationCard } from "@/components/developer/DeveloperVerificationCard";
 import { ownerApi, reportsApi } from "@/integrations/api/client";
 import { useExport } from "@/hooks/useExport";
+import { useNotifications } from "@/hooks/useNotifications";
+import { categoryOf, renderNotificationCopy, relativeTime, type NotificationCategory } from "@/lib/notifications";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -55,94 +55,47 @@ interface SubmissionRow {
   created_at: string;
 }
 
-const ownerStats = {
-  totalAssets: 3,
-  activeAssets: 2,
-  pendingAssets: 1,
-  totalRaised: 2500000,
-  totalInvestors: 156,
-  totalDistributed: 187500,
-  pendingDistribution: 62500,
+// Category → icon/background for the Recent Updates feed (mirrors Notifications.tsx).
+const notifIcon = (c: NotificationCategory) => {
+  switch (c) {
+    case "financial":
+      return <DollarSign className="w-4 h-4 text-success" />;
+    case "investment":
+      return <TrendingUp className="w-4 h-4 text-primary" />;
+    case "report":
+      return <FileText className="w-4 h-4 text-info" />;
+    case "alert":
+      return <AlertTriangle className="w-4 h-4 text-warning" />;
+    case "system":
+    default:
+      return <Shield className="w-4 h-4 text-muted-foreground" />;
+  }
+};
+const notifBg = (c: NotificationCategory) => {
+  switch (c) {
+    case "financial":
+      return "bg-success/10";
+    case "investment":
+      return "bg-primary/10";
+    case "report":
+      return "bg-info/10";
+    case "alert":
+      return "bg-warning/10";
+    case "system":
+    default:
+      return "bg-muted";
+  }
 };
 
-const assets = [
-  {
-    id: "1",
-    name: "برج مارينا باي التجاري",
-    nameEn: "Marina Bay Commercial Tower",
-    location: "دبي، الإمارات",
-    type: "تجاري",
-    status: "active",
-    totalValue: 1500000,
-    unitsSold: 150,
-    totalUnits: 150,
-    investors: 98,
-    yield: 9.5,
-    raised: 1500000,
-    distributed: 142500,
-    nextDistribution: "2025-01-15",
-    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400",
-    submittedDate: "2024-01-15",
-    listedDate: "2024-02-01",
-  },
-  {
-    id: "2",
-    name: "مساكن النخلة الفاخرة",
-    nameEn: "Palm Luxury Residences",
-    location: "دبي، الإمارات",
-    type: "سكني",
-    status: "construction",
-    totalValue: 2000000,
-    unitsSold: 180,
-    totalUnits: 200,
-    investors: 58,
-    yield: 25,
-    raised: 1800000,
-    distributed: 0,
-    progress: 65,
-    completionDate: "2025-Q4",
-    image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400",
-    submittedDate: "2024-06-01",
-    listedDate: "2024-07-15",
-  },
-  {
-    id: "3",
-    name: "المجمع التجاري الجديد",
-    nameEn: "New Commercial Complex",
-    location: "الرياض، السعودية",
-    type: "تجاري",
-    status: "under_review",
-    totalValue: 3000000,
-    unitsSold: 0,
-    totalUnits: 300,
-    investors: 0,
-    yield: 11,
-    raised: 0,
-    distributed: 0,
-    image: "https://images.unsplash.com/photo-1554469384-e58fac16e23a?w=400",
-    submittedDate: "2024-12-20",
-    reviewNotes: "في انتظار مستندات التقييم",
-  },
-];
-
-const recentUpdates = [
-  { id: 1, type: "distribution", asset: "برج مارينا باي", message: "تم توزيع $45,000 للمستثمرين", date: "2024-12-15" },
-  { id: 2, type: "milestone", asset: "مساكن النخلة", message: "اكتمال مرحلة الهيكل الخارجي", date: "2024-12-10" },
-  { id: 3, type: "investor", asset: "مساكن النخلة", message: "انضم 5 مستثمرين جدد", date: "2024-12-08" },
-  { id: 4, type: "document", asset: "برج مارينا باي", message: "تم رفع التقرير المالي الربعي", date: "2024-12-01" },
-];
-
-const platformMessages = [
-  { id: 1, subject: "مطلوب: تقرير التقييم المحدث", asset: "المجمع التجاري الجديد", date: "2024-12-22", status: "pending" },
-  { id: 2, subject: "تأكيد موعد التوزيع القادم", asset: "برج مارينا باي", date: "2024-12-18", status: "read" },
-];
-
 export default function OwnerDashboard() {
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const { user } = useAuth();
   const isAr = language === "ar";
   const { exporting, run: runExport } = useExport();
+  // Recent Updates = the owner's REAL in-app notification feed (Phase 10). Show the
+  // latest few; honest empty state when there are none. (Was a mock array.)
+  const { notifications } = useNotifications();
+  const recentNotifs = notifications.slice(0, 5);
   // The sidebar persona is merged "Owner / Developer" (both use /my-assets). Surface the
   // verification card that matches the user's selected role (Phase 8 Wave A). Developer
   // and owner are separate roles/KYB entities; everything else on this page is shared.
@@ -466,87 +419,95 @@ export default function OwnerDashboard() {
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Platform Messages */}
+              {/* Platform Messages — an admin→owner inbox. No announcements/messaging
+                  backend exists yet (same gap as the /messages link), so this is an
+                  honest "Coming soon" placeholder, NOT the notifications feed (that's the
+                  Recent Updates card below). Card + section kept, nothing faked. */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-5 h-5 text-primary" />
-                    <h3 className="font-semibold text-foreground">رسائل المنصة</h3>
+                    <h3 className="font-semibold text-foreground">{isAr ? "رسائل المنصة" : "Platform Messages"}</h3>
                   </div>
-                  <Badge variant="gold">{platformMessages.filter(m => m.status === "pending").length}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{t("support.comingSoon")}</Badge>
                 </div>
 
-                <div className="space-y-3">
-                  {platformMessages.map((message) => (
-                    <div 
-                      key={message.id}
-                      className={cn(
-                        "p-3 rounded-lg cursor-pointer transition-colors",
-                        message.status === "pending" ? "bg-primary/5 border border-primary/20" : "bg-muted"
-                      )}
-                    >
-                      <div className="flex items-start justify-between">
-                        <h4 className="text-sm font-medium text-foreground">{message.subject}</h4>
-                        {message.status === "pending" && (
-                          <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{message.asset}</p>
-                      <p className="text-xs text-muted-foreground">{message.date}</p>
-                    </div>
-                  ))}
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <MessageSquare className="w-8 h-8 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {isAr ? "لا توجد رسائل بعد" : "No messages yet"}
+                  </p>
                 </div>
 
-                <Button variant="ghost" className="w-full mt-4">عرض كل الرسائل</Button>
+                <Button variant="ghost" className="w-full mt-4" disabled>
+                  {isAr ? "عرض كل الرسائل" : "View all messages"}
+                </Button>
               </div>
 
-              {/* Recent Updates */}
+              {/* Recent Updates — the owner's REAL in-app notification feed (Phase 10),
+                  latest few. Type→category icon + i18n copy mirror Notifications.tsx. */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.25s" }}>
                 <div className="flex items-center gap-2 mb-6">
                   <Clock className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold text-foreground">آخر التحديثات</h3>
+                  <h3 className="font-semibold text-foreground">{isAr ? "آخر التحديثات" : "Recent Updates"}</h3>
                 </div>
 
-                <div className="space-y-4">
-                  {recentUpdates.map((update) => (
-                    <div key={update.id} className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                        update.type === "distribution" ? "bg-success/10" :
-                        update.type === "milestone" ? "bg-info/10" :
-                        update.type === "investor" ? "bg-primary/10" :
-                        "bg-muted"
-                      )}>
-                        {update.type === "distribution" && <DollarSign className="w-4 h-4 text-success" />}
-                        {update.type === "milestone" && <CheckCircle2 className="w-4 h-4 text-info" />}
-                        {update.type === "investor" && <Users className="w-4 h-4 text-primary" />}
-                        {update.type === "document" && <FileText className="w-4 h-4 text-muted-foreground" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground">{update.message}</p>
-                        <p className="text-xs text-muted-foreground">{update.asset} • {update.date}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {recentNotifs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Clock className="w-8 h-8 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      {isAr ? "لا توجد تحديثات بعد" : "No updates yet"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentNotifs.map((notif) => {
+                      const category = categoryOf(notif.type);
+                      const copy = renderNotificationCopy(notif, t);
+                      return (
+                        <div key={notif.id} className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0">
+                          <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                            notifBg(category),
+                          )}>
+                            {notifIcon(category)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground">{copy.title}</p>
+                            {copy.description && (
+                              <p className="text-xs text-muted-foreground">{copy.description}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground">{relativeTime(notif.created_at, language)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Quick Actions */}
+              {/* Quick Actions — real nav where a destination exists. "Send update" has
+                  no compose/broadcast backend → disabled "Coming soon" (kept, not faked). */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                <h3 className="font-semibold text-foreground mb-4">إجراءات سريعة</h3>
+                <h3 className="font-semibold text-foreground mb-4">{isAr ? "إجراءات سريعة" : "Quick Actions"}</h3>
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start gap-2">
-                    <Upload className="w-4 h-4" />
-                    رفع مستندات
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start gap-2">
+                  <Link to="/owner-documents">
+                    <Button variant="outline" className="w-full justify-start gap-2">
+                      <Upload className="w-4 h-4" />
+                      {isAr ? "رفع مستندات" : "Upload documents"}
+                    </Button>
+                  </Link>
+                  <Button variant="outline" className="w-full justify-start gap-2" disabled>
                     <Send className="w-4 h-4" />
-                    إرسال تحديث
+                    {isAr ? "إرسال تحديث" : "Send update"}
+                    <Badge variant="outline" className="ml-auto text-[10px]">{t("support.comingSoon")}</Badge>
                   </Button>
-                  <Button variant="outline" className="w-full justify-start gap-2">
-                    <BarChart3 className="w-4 h-4" />
-                    عرض التقارير
-                  </Button>
+                  <Link to="/owner-reports">
+                    <Button variant="outline" className="w-full justify-start gap-2">
+                      <BarChart3 className="w-4 h-4" />
+                      {isAr ? "عرض التقارير" : "View reports"}
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>
