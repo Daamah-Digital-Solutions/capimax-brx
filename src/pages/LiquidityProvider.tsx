@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -55,6 +55,30 @@ export default function LiquidityProvider() {
     refresh 
   } = useLiquidityProvider();
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Sidebar deep-links to this page via hash anchors (#operations / #reports /
+  // #withdrawals — see AppSidebar). The tabs are useState-driven, so without this the
+  // hash was ignored and every link opened Overview. Sync hash → activeTab on mount and
+  // on hashchange; an empty/invalid hash falls back to overview.
+  const LP_TABS = ["overview", "operations", "reports", "withdrawals", "analytics", "documents"];
+  useEffect(() => {
+    const applyHash = () => {
+      const h = window.location.hash.replace("#", "");
+      setActiveTab(LP_TABS.includes(h) ? h : "overview");
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the URL hash in sync when the user clicks a tab in-page (so a refresh / copied
+  // link reopens the same tab). Overview clears the hash to keep the URL clean.
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    const next = value === "overview" ? window.location.pathname : `#${value}`;
+    window.history.replaceState(null, "", next);
+  };
 
   const isRTL = language === "ar";
 
@@ -293,7 +317,7 @@ export default function LiquidityProvider() {
           </Card>
         ) : (
           /* Main dashboard for approved LPs */
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
               <TabsTrigger value="overview" className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
