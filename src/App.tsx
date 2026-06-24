@@ -24,6 +24,7 @@ import Reports from "./pages/Reports";
 import Documents from "./pages/Documents";
 import OwnerDocuments from "./pages/OwnerDocuments";
 import OwnerWallet from "./pages/OwnerWallet";
+import Messages from "./pages/Messages";
 import Cards from "./pages/Cards";
 import Notifications from "./pages/Notifications";
 import Support from "./pages/Support";
@@ -102,6 +103,8 @@ const App = () => (
           <Route path="/owner-reports" element={<OwnerReports />} />
           <Route path="/owner-wallet" element={<OwnerWallet />} />
           <Route path="/owner-documents" element={<OwnerDocuments />} />
+          {/* Owner-only nav item — honest "Coming soon" placeholder (no messaging backend yet). */}
+          <Route path="/messages" element={<Messages />} />
           <Route path="/cards" element={<Cards />} />
           <Route path="/asset-validation" element={<OwnerReports />} />
           <Route path="/submit-property" element={<SubmitProperty />} />
