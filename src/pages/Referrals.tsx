@@ -141,9 +141,15 @@ export default function Referrals() {
             </h1>
             <p className="text-muted-foreground mt-1">{t("referrals.subtitle")}</p>
           </div>
-          <Button className="bg-gradient-gold hover:opacity-90 shadow-gold">
-            <UserPlus className="w-4 h-4 mr-2" />
-            {t("referrals.addReferral")}
+          {/* Brokers refer via the referral LINK (no manual-add backend), so this is the
+              real share action — reuses shareLink (native share + copy fallback). */}
+          <Button
+            className="bg-gradient-gold hover:opacity-90 shadow-gold"
+            onClick={shareLink}
+            disabled={!hasLink}
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            {language === "ar" ? "مشاركة رابط الإحالة" : "Share Referral Link"}
           </Button>
         </div>
 
@@ -227,7 +233,7 @@ export default function Referrals() {
               className="pl-10"
             />
           </div>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" disabled>
             <Filter className="w-4 h-4" />
           </Button>
         </div>
@@ -299,7 +305,7 @@ export default function Referrals() {
                           </div>
                           {getStatusBadge(referral.status)}
                         </div>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" disabled>
                           <ChevronRight className="w-4 h-4" />
                         </Button>
                       </div>

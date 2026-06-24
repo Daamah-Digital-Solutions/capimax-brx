@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -182,7 +183,7 @@ export default function Commissions() {
                   <TabsTrigger value="processing">{t("commissions.processingStatus")}</TabsTrigger>
                   <TabsTrigger value="paid">{t("commissions.paid")}</TabsTrigger>
                 </TabsList>
-                <Button variant="outline" size="icon">
+                <Button variant="outline" size="icon" disabled>
                   <Filter className="w-4 h-4" />
                 </Button>
               </div>
@@ -281,13 +282,22 @@ export default function Commissions() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                {/* Commissions credit the broker's wallet balance (UserBalance) and are
+                    withdrawn via the real Wallet path — there is no separate broker payout
+                    account. Honest description + a real link to the Wallet (was a fabricated
+                    bank card "•••• 4567 / Emirates NBD"). */}
                 <div className="p-4 bg-muted/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">{t("commissions.bankAccount")}</p>
-                  <p className="font-mono text-foreground">•••• •••• •••• 4567</p>
-                  <p className="text-xs text-muted-foreground mt-2">Emirates NBD</p>
+                  <p className="text-sm text-foreground">
+                    {language === "ar"
+                      ? "تُضاف عمولاتك إلى رصيد محفظتك ويتم سحبها من المحفظة."
+                      : "Commissions are credited to your wallet balance and withdrawn from your Wallet."}
+                  </p>
                 </div>
-                <Button variant="outline" className="w-full mt-4">
-                  {t("commissions.updatePayment")}
+                <Button asChild variant="outline" className="w-full mt-4">
+                  <Link to="/wallet">
+                    <Wallet className="w-4 h-4 mr-2" />
+                    {language === "ar" ? "الإدارة في المحفظة" : "Manage in Wallet"}
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
