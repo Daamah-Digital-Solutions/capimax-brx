@@ -1,14 +1,16 @@
 # FINAL_STATE.md — Capimax BRX stage-closing handoff
 
-**Latest commit:** `99f5d5b` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
+**Latest commit:** `803e973` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
 PostgreSQL · **Chain:** BSC Testnet (chain 97), web3.py, custodial Fernet-encrypted wallets ·
-**Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **473 green** (last run).
+**Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **497 green** (last run).
 **Authoritative record:** `DECISIONS.md` — this file is an organized index over it, not a
 replacement; when in doubt, DECISIONS.md wins.
 
-> **Stage just closed: the INVESTOR DASHBOARD realness pass** — all 12 investor tabs audited and made
-> real (real data + working buttons) or honest placeholder (`—` / empty / "Coming soon"), under two firm
-> rules: **DELETE NOTHING** (every element stays) and **NEVER fake a number**. See **§0** below.
+> **Stages just closed (two realness passes), same two firm rules — DELETE NOTHING (every element stays)
+> and NEVER fake a number:**
+> - **INVESTOR DASHBOARD** — all 12 investor tabs audited + made real or honest placeholder. See **§0**.
+> - **OWNER / DEVELOPER DASHBOARD** — all 7 owner/developer tabs audited + made real or honest placeholder.
+>   See **§0B**.
 
 ## What a new engineer / the client should know
 
@@ -84,6 +86,58 @@ deploy gates stand exactly as before: **live provider keys** (Stripe/NOW/Sumsub/
 inert) + a required live-key end-to-end test; **mainnet gates** (contract audit, KMS/HSM key custody,
 gas-station seam, on-chain forfeit burn-back); the **`check_installment_defaults` daily scheduler** (built,
 not yet cron-wired); and the **Fable 5 + Dynamic Workflows pre-delivery security review**.
+
+---
+
+## 0B. OWNER / DEVELOPER DASHBOARD REALNESS PASS — CLOSED (this stage)
+
+The same tab-by-tab audit, applied to the **one combined "Owner / Developer" role** (`AppSidebar` role key
+`owner`; owner and developer are separate KYB entities sharing this dashboard). The off-limits `/developers`
+(DeveloperHub) is a **separate public marketing page, NOT this dashboard**. Both firm rules held throughout:
+**(1) DELETE NOTHING** and **(2) NEVER fake a number** — and **verified-nothing-deleted after each tab**
+(every fix diffed before commit).
+
+### (1) The 7 owner/developer tabs — all audited
+| Tab | Outcome |
+|---|---|
+| **My Assets** (`/my-assets`) | Real submissions/earnings/stats/verification. **Recent Updates → real notifications feed** (`useNotifications` + i18n copy); **Platform Messages → honest placeholder** (no announcements backend — NOT repointed, would duplicate the feed); **Quick Actions wired** (Upload→owner-documents, Reports→owner-reports, Send-update disabled "Coming soon"); dead mock arrays/state/imports tidied. Commit `9a31b88`. |
+| **Submit Property** (`/submit-property`) | Backbone already real (gate→draft→doc upload→server-validated submit). **Step 5 Media** (image/video uploads + virtual-tour URL) made **real** via the existing document multipart pattern; **Step 2 manual lat/lng** captured + **range-validated** + persisted. Interactive **map picker inert-until-maps-key** (honest, like payment providers). +migration `0004`, +8 tests. Commit `ba242fc`. |
+| **Asset Validation** (`/asset-validation`) | **Mislabeled duplicate nav** → renders the same `OwnerReports` component (header always reads "Owner Reports"). **Left as-is by user decision** (relabel/build is a separate later call; not removed). |
+| **Owner Wallet** (`/owner-wallet`) | **Core real** — `walletsApi.balance`/`withdrawals` + `ownerApi.earnings` + real withdraw dialog → `/api/wallets/withdrawals/`. No no-op deposit (none exists); no ReinvestCard-style mock-prop leak. Deferred-as-before: bank/crypto managers (Supabase mini-domains), Visa cards (CARDS domain). |
+| **Owner Reports** (`/owner-reports`) | **Made real** — period filter wired end-to-end; **Distributions** + **Investors** tabs real, **owner-scoped**, **investor PII masked server-side**; honest empty (zeros/`—`) when no data. Commit `ef40b36`. |
+| **Owner Documents** (`/owner-documents`) | Audited **already fully real** — `useOwnerDocuments` → Django vault: list / upload (server type+size validation) / owner-only-blob download / delete; 4 stats real-derived. Zero mock. |
+| **Messages** (`/messages`) | **Was a broken link** (no route → fell through to NotFound). **Fixed → real route** rendering an **honest "messaging coming soon" placeholder** (no fake inbox; links to the real Notifications feed). Nav item kept. Commit `803e973`. |
+
+### (2) Built / changed along the way (reusing existing systems — no new domains)
+- **Owner analytics endpoints** — `GET /api/owner/distributions/` (the owner's properties' rental-yield
+  distribution history/totals) + `GET /api/owner/investors/` (distinct investor base + per-property
+  breakdown, **PII masked**) + a **`?period=` filter** across earnings/distributions/investors. Read-side,
+  owner-scoped, Decimal-exact, honest-empty. Cross-owner no-leak tested.
+- **Submit Property media + coordinates** — `SubmissionDocument.DocType.IMAGE|VIDEO` (reusing the existing
+  draft-only, submitter-scoped multipart upload — no new endpoint) + `PropertySubmission.virtual_tour_url`
+  + `latitude`/`longitude` (Decimal, range-validated −90..90 / −180..180). Migration `0004`; +8 tests;
+  required-docs submit gate intact (no regression).
+- **Notifications-feed repoint** — My Assets "Recent Updates" now reads the **real** `useNotifications`
+  feed (category-icon + i18n copy, mirrors `Notifications.tsx`); no new domain.
+- **Messages placeholder route** — `src/pages/Messages.tsx` + `/messages` route (above the NotFound
+  catch-all); fixes the broken nav link with an honest page, not a 404.
+
+### (3) Remaining "Coming soon" / deferred on the owner dashboard — grouped by BLOCKER
+- **(A) External provider (no key/rail yet):** **maps-provider key** (Google Maps / Mapbox) for the
+  Submit-Property **interactive map picker** — manual lat/lng is real NOW, the visual picker is layered
+  inert-until-key (same discipline as the AI/chat/mailer/SMS/card-issuer/bank rails in §0(3)A).
+- **(B) Deferred domain we chose not to build now:** **announcements / messaging inbox** — backs both the
+  **Messages** page and the My-Assets **Platform Messages** card (no admin↔owner messaging backend exists;
+  the one-way Notifications feed is the real activity surface today); **heavier video storage/CDN** if
+  property media grows beyond the current file-upload store.
+- **Nothing else owner-side** — every other owner/developer tab is real today.
+
+### (4) Rules held throughout
+**DELETE NOTHING + NEVER fake**, verified after every tab. No element was removed: the Submit-Property map
+region, all three My-Assets sidebar cards (Platform Messages / Recent Updates / Quick Actions), all six
+submission-wizard steps, and every sidebar nav item were **kept** — unavailable surfaces became honest
+placeholders / disabled "Coming soon", never deletions; no fabricated numbers anywhere. The only removals
+were **never-rendered dead mock code** (e.g. My-Assets `ownerStats`/`assets` objects + unused imports).
 
 ---
 
