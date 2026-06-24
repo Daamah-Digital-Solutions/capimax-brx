@@ -945,6 +945,35 @@ existing domains** (read-side only, NO migration, NO money/mint). DELETE NOTHING
   + distinct count + value-sorted; honest-empty owner → zeros/[]; analytics require auth). tsc clean.
   Both `/owner-reports` and `/asset-validation` get all of this automatically (same component).
 
+### 🔄 OWNER / DEVELOPER dashboard realness pass — IN PROGRESS (started 2026-06-24)
+Same approach + the SAME TWO RULES as the now-closed Investor pass: **DELETE NOTHING** (honest placeholder
+if blocked, never remove) + **NEVER fake a number**; re-audit every tab + verify-nothing-deleted after each
+fix. It is **ONE combined "Owner / Developer" role** ([AppSidebar.tsx:83](src/components/layout/AppSidebar.tsx),
+role key `owner`). The off-limits `/developers` (DeveloperHub) is a **separate public marketing page**, NOT
+this dashboard. **7 nav tabs:** My Assets, Submit Property, Asset Validation, Owner Wallet, Owner Reports,
+Owner Documents, Messages.
+- **✅ DONE (audited real or fixed):**
+  - **Owner Documents** (`/owner-documents`) — audited **already fully real** (`useOwnerDocuments` → Django
+    vault: list/upload(server type+size validation)/owner-only-blob download/delete; 4 stats real-derived).
+    Zero mock. (Minor: dead `Tabs`/`Filter`/`FileWarning` imports — cosmetic, untouched.)
+  - **Owner Wallet** (`/owner-wallet`) — **core real** (`walletsApi.balance`/`withdrawals` + `ownerApi.earnings`
+    + `OwnerWithdrawDialog` → real `/api/wallets/withdrawals/`). **No no-op deposit** (none exists). **No
+    ReinvestCard-style mock-prop leak** (`VisaCardsSection` ignores the passed `walletBalance`). Deferred-as-
+    before: bank/crypto managers (Supabase mini-domains `useInvestorBankAccounts`/`useInvestorCryptoWallets`),
+    Visa cards (CARDS domain, user decision).
+  - **Owner Reports** (`/owner-reports`, = `/asset-validation`) — **made real, commit `ef40b36`** (see block above).
+- **⏳ STILL TO DO:**
+  - **My Assets / OwnerDashboard** (`/my-assets`) — mostly real (`ownerApi.submissions` + `ownerApi.earnings`)
+    but has **MOCK `platformMessages` + `recentUpdates` arrays** ([OwnerDashboard.tsx:128,135](src/pages/OwnerDashboard.tsx),
+    rendered ~:476,511) → make real or honest-placeholder. (The asset list was already real submissions.)
+  - **Submit Property** (`/submit-property`) — real but a large multi-step flow (`ownerApi.create/updateSubmission`
+    + owner/developer profile gate) → verify end-to-end + the doc-upload path.
+  - **Messages** (`/messages`) — **BROKEN LINK: no route exists** ([App.tsx](src/App.tsx) has no `/messages`) →
+    falls through to NotFound. Decide: honest placeholder / disable in nav / wire to a real surface. DELETE NOTHING.
+- **DECISIONS (recorded):** **Asset Validation** is a **MISLABELED duplicate nav** (`/asset-validation` →
+  the same `OwnerReports` component; page header always reads "Owner Reports") — **LEFT AS-IS by user
+  decision** (relabel/build is a separate later call; not removed).
+
 **Remaining (post-owner-domain):** the **DEVELOPER** role (separate later domain, reuses the owner
 KYB+submit+review+earnings patterns); the **investor distributions engine** (rental-yield to token
 holders — `OwnershipToken.total_distributions` exists but nothing writes it); and the other mock domains
