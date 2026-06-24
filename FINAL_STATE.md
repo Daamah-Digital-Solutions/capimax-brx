@@ -1,16 +1,18 @@
 # FINAL_STATE.md — Capimax BRX stage-closing handoff
 
-**Latest commit:** `803e973` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
+**Latest commit:** `806c43d` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
 PostgreSQL · **Chain:** BSC Testnet (chain 97), web3.py, custodial Fernet-encrypted wallets ·
 **Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **497 green** (last run).
 **Authoritative record:** `DECISIONS.md` — this file is an organized index over it, not a
 replacement; when in doubt, DECISIONS.md wins.
 
-> **Stages just closed (two realness passes), same two firm rules — DELETE NOTHING (every element stays)
+> **Stages just closed (three realness passes), same two firm rules — DELETE NOTHING (every element stays)
 > and NEVER fake a number:**
 > - **INVESTOR DASHBOARD** — all 12 investor tabs audited + made real or honest placeholder. See **§0**.
 > - **OWNER / DEVELOPER DASHBOARD** — all 7 owner/developer tabs audited + made real or honest placeholder.
 >   See **§0B**.
+> - **LP (LIQUIDITY PROVIDER) DASHBOARD** — all LP tabs audited; most confirmed real (most real backend of
+>   any role), only a fabricated account-manager card + a hash-nav defect fixed. See **§0C**.
 
 ## What a new engineer / the client should know
 
@@ -138,6 +140,50 @@ region, all three My-Assets sidebar cards (Platform Messages / Recent Updates / 
 submission-wizard steps, and every sidebar nav item were **kept** — unavailable surfaces became honest
 placeholders / disabled "Coming soon", never deletions; no fabricated numbers anywhere. The only removals
 were **never-rendered dead mock code** (e.g. My-Assets `ownerStats`/`assets` objects + unused imports).
+
+---
+
+## 0C. LP (LIQUIDITY PROVIDER) DASHBOARD REALNESS PASS — CLOSED (this stage)
+
+The same tab-by-tab audit on the LP dashboard (`roles: ["liquidity_provider"]`). **This domain had the most
+real backend of any role** — `apps/lp` (KYB onboarding + LP balance/transactions/documents + bank/crypto
+destinations) + the LP exit-liquidity market + the shared reports framework — so nearly every surface
+cleared as **"confirm real."** Only **two** real changes were needed in the whole pass: a fabricated
+account-manager card and a hash-nav defect. Both firm rules held; verified-nothing-deleted after each fix.
+
+### (1) The LP surfaces — all audited
+| Tab / surface | Outcome |
+|---|---|
+| **LP Market** (`/lp-market`) | **Confirmed clean** — the 3 investor-pass honesty fixes all intact: purchase locked to whole-listing (`PurchaseForm` total = `listing.total_value`), real derived LP-sell unit price (`ResaleForm` from `current_value`, no hardcoded $100), bank-transfer disabled "Coming soon". Feeds all real (`useLPMarket`/`useLPHoldings`/`lpApi`/`secondaryMarketApi`). |
+| **Withdrawals** | **Real money path** — withdrawal request → `POST /lp/withdrawals/` (balance-gated twice); bank/crypto destinations → `PATCH /lp/profile/bank-details/` + `/crypto-details/` (real LP-profile fields, NOT Supabase); real history. `VisaCardsSection` = deferred cards domain, `walletBalance` prop correctly **ignored** (no leak). |
+| **Documents** | **Real Django vault** — list/upload(multipart)/owner-only-blob download/scoped delete via `lpApi` → `/lp/documents/…`. Mirror of Owner Documents. |
+| **Registration / KYB onboarding** (`LPRegistrationFlow`) | **Real** apply → KYB submit → KYB doc upload (`lpApi.apply`/`submitKYB`/`uploadKYBDocument`), **webhook-driven** approval, **server-gated** by `HasActivatedLP`. Status (pending/under-review/rejected/approved) all real from `lpProfile`. |
+| **Overview + Operations** (`LPOperationsDashboard`) | **Real** — balance/deposited/earnings/withdrawn stats + investment summary + recent-transactions list, all from `lpProfile`/`transactions`; `showDetails` expands the same real data. |
+| **Reports** (`LPReports`) | **Real** — export buttons → `reportsApi.export("lp", …)` (the **`lp` adapter exists** + tested: `LPTransaction.filter(lp__user=user)`); YTD + monthly breakdown derived from real transactions, honest "-" cells. |
+| **Analytics** (`LPAnalyticsCharts`) | **Real** — balance-trend / fund-distribution / transaction-breakdown charts all derived from `lpProfile`/`transactions`; honest "No data" / "No transactions yet" empty states; real key metrics. |
+
+### (2) The only two changes (everything else was confirm-real)
+- **Fabricated account manager → real support** (commit `806c43d`). `LPAccountManager` hardcoded a fake
+  person ("Michael Anderson" + invented phone/email/availability + a fake "Available" badge) shown as the
+  LP's *real* dedicated manager — **the one never-fake violation found in the whole LP pass**. Repointed the
+  (kept) card to the **real platform support channel**: real published phone (`tel:`) + "Contact Support" →
+  `/support` (the real tickets/help domain). No invented identity, no fake status. DELETE NOTHING.
+- **Hash→tab navigation fix** (commit `806c43d`). The sidebar's `#operations` / `#reports` / `#withdrawals`
+  deep-links were ignored (tabs were `useState`-driven with no hash reader) so every link opened Overview.
+  Added a `location.hash` ↔ `activeTab` sync (mount + `hashchange`; invalid/empty → overview; tab clicks
+  update the hash). The 3 nav links now open the correct tab. Pure frontend, all 6 tabs kept.
+
+### (3) Remaining deferred on the LP dashboard — grouped by BLOCKER
+- **(A) External provider:** the **cards domain** (`VisaCardsSection` — KEPT, real `useVisaCards`, no leak;
+  card-issuer deferred, same as §0/§0B). No maps-key dependency here (that's Submit-Property, §0B).
+- **(B) Deferred domain we chose not to build now:** **per-LP account-manager assignment** (no backend; the
+  card now points at real platform support instead of a fabricated manager). Nothing else LP-side.
+
+### (4) Rules held throughout
+**DELETE NOTHING + NEVER fake**, verified after each fix. No element removed — the account-manager card,
+its contact row + both action buttons, and all six LP tabs (overview/operations/reports/withdrawals/
+analytics/documents) + triggers + content were **kept**; the fabricated manager was the single never-fake
+violation, fixed by repointing to real support (not by deletion).
 
 ---
 
