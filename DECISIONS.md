@@ -1627,7 +1627,7 @@ new domain.
   real debited amount). (3) `availableReturns` reads `UserBalance` (withdrawable proceeds) — a buyer can choose between
   reinvesting and withdrawing the same balance, as intended.
 
-## FAMILY accounts — Wave A DELIVERED (records + allocation, NO money); B/C/D DEFERRED
+## FAMILY accounts — Wave A DELIVERED (records + allocation, NO money); Wave B NEXT (auto-allocation accrual — client decided, internal cycle, no bank rail); C/D DEFERRED
 **Source of truth:** FAMILY_SURFACE.md. A primary investor designates family MEMBERS, allocates a % of returns to each,
 links their banks, and configures transfer schedules. **Wave A = the SAFE foundation: records + allocation config ONLY —
 NO money, NO token movement, NO bank payout, NO distribution skim.**
@@ -1651,6 +1651,28 @@ NO money, NO token movement, NO bank payout, NO distribution skim.**
   rejected, 60+40 → ok) → links a bank (`1234567890123456` → stored `****3456`, full number never in response/DB) → records
   a transfer (`pending` FamilyTransaction, **no money/token/Withdrawal moved**, total_transferred stays 0); a second
   investor gets **404** on those rows (self-scoped).
+
+- **✅ NEW — CLIENT DECISION (recorded; Wave B is the next build, NOT yet built):** the client answered the
+  two open Family questions, and the cycle is now **fully internal — NO external bank-payout rail needed.**
+  1. **Members = passive sub-records, NO KYC** (confirms Wave A — members never become Users/wallets).
+  2. **Allocation = FULLY AUTOMATIC:** the owner sets a **%** per member **once**; **every** distribution
+     then auto-splits by that % with **no manual step**.
+  3. **Accrual is INTERNAL:** each member's share **accumulates inside the platform** (an internal accrual
+     ledger). The **ACCOUNT OWNER withdraws/transfers it himself** via the existing withdrawal path (like a
+     normal `Withdrawal`). So the whole allocation→accrual→payout loop is **internal** — the external
+     "auto-transfer to a member's bank on a schedule" stays **deferred (no bank rail)** but is **no longer
+     blocking**: accrual + owner-withdrawal IS the real cycle.
+  4. **Granularity = GLOBAL per-member** (a % of **ALL** returns), matching the current frontend — **NOT
+     per-property.** Per-property would be a later additive layer; for now **follow the frontend = global**.
+  - **NEXT — Family Wave B build plan (auto-allocation ENGINE; money discipline):** hook the distribution
+    settlement so each declared distribution, **inside the same atomic block**, carves each member's share
+    (`member_pct × owner_share`) into an **append-only internal accrual ledger** — **server-authoritative,
+    Decimal, atomic, idempotent** (one accrual row per (distribution, member); replay-safe, like the existing
+    payout/commission guards). The owner draws the accrued total down through the **existing withdrawal path**
+    (no new payout rail). Cent-exact split (remainder discipline like `declare_distribution`). **NOT YET
+    BUILT** — decision + plan only. Waves C (on-chain member transfer) / D (scheduled bank auto-transfer)
+    remain deferred (C = product, D = external bank rail).
+
 - **⚠️ CORRECTION (honesty):** family was NOT "the last Supabase dependency." Family's data layer is now Django, BUT
   satellite hooks/pages still import Supabase. Surveyed in `SUPABASE_CLEANUP.md` (per-surface: existing-Django? / live? /
   classification). Result at survey time: **0 repointable-now (no surface had an existing Django backend to swap onto), 1 dead,
@@ -1869,8 +1891,16 @@ migration** — one tiny read-side enrichment field added (below). FOLLOW-THE-FR
 - **DEFERRED (flagged, NOT built):** a **portfolio-value snapshot-history domain** (would unblock the value
   time-series chart + period-over-period deltas) and a **saved-reports catalog**. Both are separate domains;
   neither built now. tsc clean; +1 enrichment assertion; full suite green.
-- **DEFERRED tabs (recorded, NOT built):** Family (Wave A built — records+allocation; payout awaits an
-  external bank rail), Security & Audit Log (Supabase mini-domain), Documents (property-documents),
+- **FOLLOW-UP — 2 "Coming soon" → real (commit `99f5d5b`, suite 473):** (1) **Reports "View Details"** → real
+  `<Link to=/property/{slug}>` (the `/property/:id` page already existed; `property_id == Property.slug`);
+  (2) **Installments "Export Schedule"** → real export via a **new `installments` adapter** on the Phase-13
+  reports framework (plan + schedule + paid/remaining over real plan data) + an `installments` context in
+  `reportsApi.export`, +1 test. **Wallet per-tx Receipt intentionally left "Coming soon"** (needs a separate
+  per-transaction receipt endpoint — small build, lower priority). Investor realness pass = **CLOSED**
+  (FINAL_STATE.md §0; all 12 tabs real or honest-placeholder).
+- **DEFERRED tabs (recorded, NOT built):** Family (Wave A built — records+allocation; **Wave B = auto-allocation
+  accrual is now the NEXT build per the client decision — internal cycle, owner-withdrawal, no bank rail**),
+  Security & Audit Log (Supabase mini-domain), Documents (property-documents),
   Inheritance/Estate+Gifting ([[inheritance-deferral]] — PropShare port package held), order book, cards
   (visa/saved), payout-destinations (bank/crypto/audit). Detail in **DASHBOARD_GAPS.md** + SUPABASE_CLEANUP.md.
 - **LP MODEL (confirmed from code):** our LP = a **KYB-verified institutional BUYER** providing **exit
