@@ -1024,3 +1024,124 @@ class SubmissionIsolationTests(APITestCase):
         )
         # And the row is untouched.
         self.assertEqual(PropertySubmission.objects.get(pk=sub_id).name, "Marina Tower")
+
+
+# =========================================================================== #
+# Step-5 media (images + video) + Step-2 coordinates + virtual-tour URL — the
+# SubmitProperty realness build. Media reuses the EXACT document multipart pattern
+# (document_type image|video); coords + tour URL persist as real submission fields.
+# =========================================================================== #
+def _img(name="photo.jpg"):
+    return SimpleUploadedFile(name, b"\xff\xd8\xff\xe0fake-jpeg", content_type="image/jpeg")
+
+
+def _video(name="walkthrough.mp4"):
+    return SimpleUploadedFile(name, b"\x00\x00\x00\x18ftypmp42", content_type="video/mp4")
+
+
+class SubmissionMediaTests(APITestCase):
+    def setUp(self):
+        self.user = _approved_owner("media-owner@example.com")
+        self.client.force_authenticate(self.user)
+        self.sub_id = self.client.post(
+            "/api/owner/submissions/", _SUB, format="json"
+        ).data["id"]
+
+    def _upload(self, doc_type, file):
+        return self.client.post(
+            f"/api/owner/submissions/{self.sub_id}/documents/",
+            {"file": file, "document_type": doc_type, "document_name": file.name},
+            format="multipart",
+        )
+
+    def test_image_upload_persists_to_submission(self):
+        resp = self._upload("image", _img("front.jpg"))
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["document_type"], "image")
+        # A real SubmissionDocument row, owned by this submission, with a stored file.
+        doc = SubmissionDocument.objects.get(pk=resp.data["id"])
+        self.assertEqual(str(doc.submission_id), self.sub_id)
+        self.assertEqual(doc.document_type, "image")
+        self.assertTrue(doc.file.name)
+        self.assertGreater(doc.file_size or 0, 0)
+        # And it shows up in the submission's documents list.
+        lst = self.client.get(f"/api/owner/submissions/{self.sub_id}/documents/")
+        self.assertEqual(len(lst.data), 1)
+        self.assertEqual(lst.data[0]["document_type"], "image")
+
+    def test_multiple_images_persist(self):
+        for n in ("a.jpg", "b.jpg", "c.jpg"):
+            self.assertEqual(self._upload("image", _img(n)).status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            SubmissionDocument.objects.filter(submission_id=self.sub_id, document_type="image").count(),
+            3,
+        )
+
+    def test_video_upload_persists(self):
+        resp = self._upload("video", _video())
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        doc = SubmissionDocument.objects.get(pk=resp.data["id"])
+        self.assertEqual(doc.document_type, "video")
+        self.assertEqual(str(doc.submission_id), self.sub_id)
+        self.assertTrue(doc.file.name)
+
+    def test_coords_and_tour_url_persist_via_update(self):
+        resp = self.client.patch(
+            f"/api/owner/submissions/{self.sub_id}/",
+            {"latitude": "25.197200", "longitude": "55.274400",
+             "virtual_tour_url": "https://tours.example.com/marina"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Serialized back as numbers + the URL string.
+        self.assertEqual(float(resp.data["latitude"]), 25.1972)
+        self.assertEqual(float(resp.data["longitude"]), 55.2744)
+        self.assertEqual(resp.data["virtual_tour_url"], "https://tours.example.com/marina")
+        sub = PropertySubmission.objects.get(pk=self.sub_id)
+        self.assertEqual(str(sub.latitude), "25.197200")
+        self.assertEqual(str(sub.longitude), "55.274400")
+        self.assertEqual(sub.virtual_tour_url, "https://tours.example.com/marina")
+
+    def test_out_of_range_coordinate_rejected(self):
+        # Latitude 99 is invalid (> 90) — rejected, never silently stored.
+        resp = self.client.patch(
+            f"/api/owner/submissions/{self.sub_id}/",
+            {"latitude": "99.0"}, format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(PropertySubmission.objects.get(pk=self.sub_id).latitude)
+
+    def test_media_does_not_satisfy_required_docs_gate(self):
+        # Images/video are NOT required docs — uploading only media must NOT let a
+        # submission through the required-document gate (no regression).
+        self._upload("image", _img())
+        self._upload("video", _video())
+        resp = self.client.post(f"/api/owner/submissions/{self.sub_id}/submit/")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "missing_required_documents")
+        self.assertIn("title", resp.data["missing"])
+
+    def test_submit_still_succeeds_with_required_docs_plus_media(self):
+        # Required docs + media together → submit succeeds (media is additive).
+        for t in ("title", "valuation", "legal"):
+            self._upload(t, _pdf(f"{t}.pdf"))
+        self._upload("image", _img())
+        resp = self.client.post(f"/api/owner/submissions/{self.sub_id}/submit/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], SubmissionStatus.SUBMITTED)
+
+    def test_cross_owner_cannot_upload_media_or_read(self):
+        other = _approved_owner("intruder@example.com")
+        self.client.force_authenticate(other)
+        # Can't upload media to A's submission (404, submitter-scoped).
+        up = self._upload("image", _img())
+        self.assertEqual(up.status_code, status.HTTP_404_NOT_FOUND)
+        # Can't read A's documents either.
+        self.assertEqual(
+            self.client.get(f"/api/owner/submissions/{self.sub_id}/documents/").status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        # A's submission has no media leaked in.
+        self.assertEqual(
+            SubmissionDocument.objects.filter(submission_id=self.sub_id).count(), 0
+        )

@@ -99,11 +99,14 @@ export default function SubmitProperty() {
     city: "",
     district: "",
     address: "",
+    latitude: "",
+    longitude: "",
     property_value_usd: "",
     min_investment: "1000",
     expected_yield: "",
     duration_years: "",
     distribution_model: "quarterly",
+    virtual_tour_url: "",
   });
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -111,9 +114,15 @@ export default function SubmitProperty() {
   // uploaded documents keyed by document_type.
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [uploadedDocs, setUploadedDocs] = useState<Record<string, UploadedDoc>>({});
+  // Step-5 media — images (a list, up to IMAGE_SLOTS) + one optional video. Uploaded
+  // through the SAME multipart endpoint as documents (document_type image|video).
+  const [uploadedImages, setUploadedImages] = useState<UploadedDoc[]>([]);
+  const [uploadedVideo, setUploadedVideo] = useState<UploadedDoc | null>(null);
   const [confirms, setConfirms] = useState([false, false, false]);
   const [busy, setBusy] = useState(false);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const imageInputs = useRef<Record<number, HTMLInputElement | null>>({});
+  const videoInput = useRef<HTMLInputElement | null>(null);
 
   const progress = (currentStep / steps.length) * 100;
   const isApprovedSubmitter = submitterProfile?.status === "approved";
@@ -137,11 +146,14 @@ export default function SubmitProperty() {
       city: form.city,
       district: form.district,
       address: form.address,
+      latitude: num(form.latitude),
+      longitude: num(form.longitude),
       property_value_usd: num(form.property_value_usd),
       min_investment: num(form.min_investment),
       expected_yield: num(form.expected_yield),
       duration_years: form.duration_years.trim() === "" ? null : parseInt(form.duration_years, 10),
       distribution_model: form.distribution_model,
+      virtual_tour_url: form.virtual_tour_url,
     };
   };
 
@@ -179,6 +191,51 @@ export default function SubmitProperty() {
       const doc = (await ownerApi.uploadSubmissionDocument(id, file, docId, docName)) as UploadedDoc;
       setUploadedDocs((prev) => ({ ...prev, [docId]: doc }));
       toast.success(isArabic ? "تم رفع المستند" : "Document uploaded");
+    } catch (err: any) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step-5 image upload — reuses the EXACT document multipart pattern (document_type
+  // "image"), persisting a real SubmissionDocument row. Each tile is one image; picking
+  // a file on a filled tile replaces it (deletes the prior row, then uploads).
+  const onPickImage = (index: number) => imageInputs.current[index]?.click();
+  const onImageChange = async (index: number, file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const id = await ensureDraft();
+      if (!id) return;
+      const doc = (await ownerApi.uploadSubmissionDocument(id, file, "image", file.name)) as UploadedDoc;
+      const prev = uploadedImages[index];
+      setUploadedImages((list) => {
+        const next = [...list];
+        next[index] = doc;
+        return next;
+      });
+      if (prev) await ownerApi.deleteSubmissionDocument(id, prev.id).catch(() => {});
+      toast.success(isArabic ? "تم رفع الصورة" : "Image uploaded");
+    } catch (err: any) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step-5 video upload — same pattern (document_type "video"), single optional file.
+  const onVideoChange = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const id = await ensureDraft();
+      if (!id) return;
+      const doc = (await ownerApi.uploadSubmissionDocument(id, file, "video", file.name)) as UploadedDoc;
+      const prev = uploadedVideo;
+      setUploadedVideo(doc);
+      if (prev) await ownerApi.deleteSubmissionDocument(id, prev.id).catch(() => {});
+      toast.success(isArabic ? "تم رفع الفيديو" : "Video uploaded");
     } catch (err: any) {
       toast.error(err?.message || "Upload failed");
     } finally {
@@ -454,10 +511,48 @@ export default function SubmitProperty() {
                   />
                 </div>
 
+                {/* Coordinates — captured by manual entry NOW (real, persisted). */}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "خط العرض (Latitude)" : "Latitude"}
+                    </label>
+                    <Input
+                      type="number"
+                      step="any"
+                      placeholder="25.1972"
+                      value={form.latitude}
+                      onChange={(e) => set("latitude", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "خط الطول (Longitude)" : "Longitude"}
+                    </label>
+                    <Input
+                      type="number"
+                      step="any"
+                      placeholder="55.2744"
+                      value={form.longitude}
+                      onChange={(e) => set("longitude", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* The interactive map PICKER needs a maps-provider key (Google/Mapbox)
+                    we don't have yet — kept as an honest placeholder over the working
+                    manual coordinates above; it lights up once the maps key lands. */}
                 <div className="h-64 bg-muted/50 rounded-lg flex items-center justify-center border-2 border-dashed border-border">
-                  <div className="text-center">
+                  <div className="text-center px-4">
                     <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">Select location on map</p>
+                    <p className="text-muted-foreground">
+                      {isArabic ? "اختيار الموقع على الخريطة" : "Select location on map"}
+                    </p>
+                    <Badge variant="outline" className="mt-2 text-[10px]">
+                      {isArabic
+                        ? "الخريطة التفاعلية قريباً — أدخل الإحداثيات يدوياً الآن"
+                        : "Interactive picker coming with maps integration — enter coordinates manually for now"}
+                    </Badge>
                   </div>
                 </div>
               </>
@@ -596,42 +691,110 @@ export default function SubmitProperty() {
               </>
             )}
 
-            {/* Step 5: Media — visual capture (image/video/tour) is a later wave; the
-                Wave-B submission model stores the fields + documents above only. */}
+            {/* Step 5: Media — images + video upload through the same multipart endpoint
+                as Step-4 documents (document_type image|video); the tour URL persists on
+                the submission. All real, all persisted. */}
             {currentStep === 5 && (
               <>
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Property Images</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "صور العقار" : "Property Images"}
+                  </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        className="aspect-square bg-muted/30 rounded-lg border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
-                      >
-                        <div className="text-center">
-                          <Image className="w-8 h-8 text-muted-foreground mx-auto mb-1" />
-                          <span className="text-xs text-muted-foreground">Add Image</span>
+                    {[0, 1, 2, 3].map((i) => {
+                      const img = uploadedImages[i];
+                      return (
+                        <div key={i}>
+                          <input
+                            ref={(el) => (imageInputs.current[i] = el)}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="hidden"
+                            onChange={(e) => onImageChange(i, e.target.files?.[0])}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => onPickImage(i)}
+                            disabled={busy}
+                            className={`w-full aspect-square rounded-lg border-2 border-dashed flex items-center justify-center transition-colors disabled:opacity-60 ${
+                              img ? "border-emerald-500/50 bg-emerald-500/5" : "border-border hover:border-primary/50 bg-muted/30"
+                            }`}
+                          >
+                            <div className="text-center px-2">
+                              {img ? (
+                                <>
+                                  <Check className="w-7 h-7 text-emerald-500 mx-auto mb-1" />
+                                  <span className="text-xs text-foreground break-all line-clamp-2">{img.document_name}</span>
+                                  <span className="block text-[10px] text-muted-foreground mt-0.5">
+                                    {isArabic ? "استبدال" : "Replace"}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Image className="w-8 h-8 text-muted-foreground mx-auto mb-1" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {isArabic ? "إضافة صورة" : "Add Image"}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    We recommend uploading at least 10 high-quality images (JPG, PNG)
+                    {isArabic
+                      ? "ننصح برفع صور عالية الجودة (JPG، PNG)"
+                      : "We recommend uploading high-quality images (JPG, PNG)"}
                   </p>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Property Video (Optional)</label>
-                  <div className="p-6 bg-muted/30 rounded-lg border-2 border-dashed border-border text-center">
-                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-foreground">Upload Video</p>
-                    <p className="text-xs text-muted-foreground mt-1">MP4, MOV up to 100MB</p>
-                  </div>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "فيديو العقار (اختياري)" : "Property Video (Optional)"}
+                  </label>
+                  <input
+                    ref={videoInput}
+                    type="file"
+                    accept="video/mp4,video/quicktime"
+                    className="hidden"
+                    onChange={(e) => onVideoChange(e.target.files?.[0])}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => videoInput.current?.click()}
+                    disabled={busy}
+                    className={`w-full p-6 rounded-lg border-2 border-dashed text-center transition-colors disabled:opacity-60 ${
+                      uploadedVideo ? "border-emerald-500/50 bg-emerald-500/5" : "border-border hover:border-primary/50 bg-muted/30"
+                    }`}
+                  >
+                    {uploadedVideo ? (
+                      <>
+                        <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                        <p className="text-sm text-foreground break-all">{uploadedVideo.document_name}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{isArabic ? "اضغط للاستبدال" : "Tap to replace"}</p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-foreground">{isArabic ? "رفع فيديو" : "Upload Video"}</p>
+                        <p className="text-xs text-muted-foreground mt-1">MP4, MOV up to 100MB</p>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Virtual Tour (Optional)</label>
-                  <Input placeholder="Enter virtual tour URL..." />
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "جولة افتراضية (اختياري)" : "Virtual Tour (Optional)"}
+                  </label>
+                  <Input
+                    type="url"
+                    placeholder="https://..."
+                    value={form.virtual_tour_url}
+                    onChange={(e) => set("virtual_tour_url", e.target.value)}
+                  />
                 </div>
               </>
             )}

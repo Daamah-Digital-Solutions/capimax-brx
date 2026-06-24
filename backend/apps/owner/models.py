@@ -187,11 +187,16 @@ class PropertySubmission(models.Model):
     construction_status = models.CharField(max_length=32, blank=True, default="")  # ready|under-construction|off-plan
     description = models.TextField(blank=True, default="")
 
-    # Step 2 — Location.
+    # Step 2 — Location. Coordinates are captured by MANUAL entry today (real, persisted);
+    # the interactive map PICKER is layered on the frontend but stays inert until a maps
+    # provider key lands (Google Maps/Mapbox) — exactly how payment providers defer. Lat
+    # ∈ [-90, 90], Lng ∈ [-180, 180]; 6 dp ≈ 0.11 m precision. Nullable (optional + draft).
     country = models.CharField(max_length=120, blank=True, default="")
     city = models.CharField(max_length=120, blank=True, default="")
     district = models.CharField(max_length=255, blank=True, default="")
     address = models.TextField(blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     # Step 3 — Financial details.
     property_value_usd = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
@@ -199,6 +204,11 @@ class PropertySubmission(models.Model):
     expected_yield = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     duration_years = models.PositiveIntegerField(null=True, blank=True)
     distribution_model = models.CharField(max_length=32, blank=True, default="")  # quarterly|semi-annual|annual
+
+    # Step 5 — Media. Images + video are uploaded as SubmissionDocument rows
+    # (document_type image|video — same multipart pattern as the Step-4 documents); the
+    # optional virtual-tour link is a real persisted field here.
+    virtual_tour_url = models.URLField(max_length=500, blank=True, default="")
 
     status = models.CharField(
         max_length=16, choices=SubmissionStatus.choices,
@@ -248,6 +258,9 @@ class SubmissionDocument(models.Model):
         NOC = "noc", _("NOC")
         FINANCIAL = "financial", _("Financial Statements")
         LEGAL = "legal", _("Legal Documents")
+        # Step-5 media — same file-upload pattern, distinct types (NOT required to submit).
+        IMAGE = "image", _("Property Image")
+        VIDEO = "video", _("Property Video")
         OTHER = "other", _("Other")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -962,12 +962,23 @@ Owner Documents, Messages.
     before: bank/crypto managers (Supabase mini-domains `useInvestorBankAccounts`/`useInvestorCryptoWallets`),
     Visa cards (CARDS domain, user decision).
   - **Owner Reports** (`/owner-reports`, = `/asset-validation`) — **made real, commit `ef40b36`** (see block above).
+  - **My Assets / OwnerDashboard** (`/my-assets`) — **fixed, commit `9a31b88`**. `recentUpdates` mock →
+    **real notifications feed** (`useNotifications` + `lib/notifications` category-icon + i18n copy, mirrors
+    Notifications.tsx, latest 5, honest empty). `platformMessages` mock → **honest empty/"Coming soon"** (no
+    announcements backend — NOT repointed to notifications, would duplicate the feed; card + "view all" kept,
+    disabled). Quick Actions **wired** (Upload→`/owner-documents`, View reports→`/owner-reports`, Send update→
+    disabled "Coming soon"). Dead mock (`ownerStats`/`assets`/`selectedAsset`/unused imports) tidied — never-
+    rendered. Real submissions/earnings/stats/verification untouched. DELETE NOTHING.
+  - **Submit Property** (`/submit-property`) — **built out, commit pending**. Backbone was already real
+    (gate→draft→field persistence→Step-4 doc upload→server-validated submit). The 2 deferred steps made REAL:
+    **Step 5 Media** — image tiles + video box now upload through the **same multipart endpoint** as documents
+    (`document_type` image|video, new `SubmissionDocument.DocType.IMAGE/VIDEO`), persist real rows, show
+    uploaded state; **Virtual Tour URL** bound + persisted (new `virtual_tour_url` URLField). **Step 2 coords**
+    — manual **latitude/longitude** number inputs (new Decimal fields, range-validated −90..90 / −180..180),
+    persisted NOW; the interactive map **picker stays inert until a maps-provider key** (Google/Mapbox) lands —
+    honest "interactive picker coming" note over the working manual coords (same inert-until-key pattern as
+    payment providers). Migration `0004`; +8 tests; **suite 497 green**. DELETE NOTHING, nothing faked.
 - **⏳ STILL TO DO:**
-  - **My Assets / OwnerDashboard** (`/my-assets`) — mostly real (`ownerApi.submissions` + `ownerApi.earnings`)
-    but has **MOCK `platformMessages` + `recentUpdates` arrays** ([OwnerDashboard.tsx:128,135](src/pages/OwnerDashboard.tsx),
-    rendered ~:476,511) → make real or honest-placeholder. (The asset list was already real submissions.)
-  - **Submit Property** (`/submit-property`) — real but a large multi-step flow (`ownerApi.create/updateSubmission`
-    + owner/developer profile gate) → verify end-to-end + the doc-upload path.
   - **Messages** (`/messages`) — **BROKEN LINK: no route exists** ([App.tsx](src/App.tsx) has no `/messages`) →
     falls through to NotFound. Decide: honest placeholder / disable in nav / wire to a real surface. DELETE NOTHING.
 - **DECISIONS (recorded):** **Asset Validation** is a **MISLABELED duplicate nav** (`/asset-validation` →

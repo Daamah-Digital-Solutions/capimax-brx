@@ -92,15 +92,22 @@ class PropertySubmissionSerializer(serializers.ModelSerializer):
     expected_yield = serializers.DecimalField(
         max_digits=6, decimal_places=2, coerce_to_string=False, allow_null=True, required=False
     )
+    # Coordinates as JSON numbers (match the frontend's number inputs).
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, coerce_to_string=False, allow_null=True, required=False
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, coerce_to_string=False, allow_null=True, required=False
+    )
 
     class Meta:
         model = PropertySubmission
         fields = (
             "id", "submitter_id",
             "name", "property_type", "construction_status", "description",
-            "country", "city", "district", "address",
+            "country", "city", "district", "address", "latitude", "longitude",
             "property_value_usd", "min_investment", "expected_yield",
-            "duration_years", "distribution_model",
+            "duration_years", "distribution_model", "virtual_tour_url",
             "status", "review_notes", "submitted_at", "reviewed_at",
             "published_property_slug",
             "documents", "created_at", "updated_at",
@@ -132,13 +139,28 @@ class PropertySubmissionWriteSerializer(serializers.ModelSerializer):
         max_digits=6, decimal_places=2, min_value=Decimal("0"),
         allow_null=True, required=False,
     )
+    # Geographic coordinates (manual entry → real persistence). Range-validated so a bad
+    # value is rejected, never silently stored. Optional + nullable (draft-friendly).
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6,
+        min_value=Decimal("-90"), max_value=Decimal("90"),
+        allow_null=True, required=False,
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6,
+        min_value=Decimal("-180"), max_value=Decimal("180"),
+        allow_null=True, required=False,
+    )
+    virtual_tour_url = serializers.URLField(
+        max_length=500, allow_blank=True, required=False,
+    )
 
     class Meta:
         model = PropertySubmission
         fields = (
             "name", "property_type", "construction_status", "description",
-            "country", "city", "district", "address",
+            "country", "city", "district", "address", "latitude", "longitude",
             "property_value_usd", "min_investment", "expected_yield",
-            "duration_years", "distribution_model",
+            "duration_years", "distribution_model", "virtual_tour_url",
         )
         extra_kwargs = {f: {"required": False} for f in fields}
