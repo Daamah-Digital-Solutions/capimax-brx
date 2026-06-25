@@ -1,18 +1,21 @@
 # FINAL_STATE.md — Capimax BRX stage-closing handoff
 
-**Latest commit:** `806c43d` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
+**Latest commit:** `e5a72be` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
 PostgreSQL · **Chain:** BSC Testnet (chain 97), web3.py, custodial Fernet-encrypted wallets ·
-**Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **497 green** (last run).
+**Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **506 green** (last run).
 **Authoritative record:** `DECISIONS.md` — this file is an organized index over it, not a
 replacement; when in doubt, DECISIONS.md wins.
 
-> **Stages just closed (three realness passes), same two firm rules — DELETE NOTHING (every element stays)
+> **Stages just closed (four realness passes), same two firm rules — DELETE NOTHING (every element stays)
 > and NEVER fake a number:**
 > - **INVESTOR DASHBOARD** — all 12 investor tabs audited + made real or honest placeholder. See **§0**.
 > - **OWNER / DEVELOPER DASHBOARD** — all 7 owner/developer tabs audited + made real or honest placeholder.
 >   See **§0B**.
 > - **LP (LIQUIDITY PROVIDER) DASHBOARD** — all LP tabs audited; most confirmed real (most real backend of
 >   any role), only a fabricated account-manager card + a hash-nav defect fixed. See **§0C**.
+> - **BROKER DASHBOARD** — all broker surfaces audited; Commissions/Referrals honesty fixes, Listings
+>   Phase 1 + Broker Reports built real on a new stamped `BrokerCommission` ledger. See **§0D**.
+> - **Next: PARTNER dashboard** (last of the 5 role dashboards — not yet started).
 
 ## What a new engineer / the client should know
 
@@ -184,6 +187,64 @@ account-manager card and a hash-nav defect. Both firm rules held; verified-nothi
 its contact row + both action buttons, and all six LP tabs (overview/operations/reports/withdrawals/
 analytics/documents) + triggers + content were **kept**; the fabricated manager was the single never-fake
 violation, fixed by repointing to real support (not by deletion).
+
+---
+
+## 0D. BROKER DASHBOARD REALNESS PASS — CLOSED (this stage)
+
+The same tab-by-tab audit on the broker dashboard (`roles: ["broker"]`). The broker role earns a
+**platform-borne additive commission** on referred investors' completed primary sales, so this pass was
+both an honesty audit **and** a real backend build: the commission was previously reconstructed by parsing
+transaction memos, with no per-property rate and no stamped record. This pass made it a **real append-only
+ledger** with the **fee_rate-stamp philosophy** (stamp the rate when earned, never recompute from the
+current rate — the same discipline used for every other money path). Both firm rules held; verified-
+nothing-deleted after each fix.
+
+### (1) The broker surfaces — all audited
+| Tab / surface | Outcome |
+|---|---|
+| **Commissions** (`/commissions`) | **Real** ledger / stats / export. The one honesty gap — a **fabricated Payment Method card** (fake bank card `•••• 4567` / "Emirates NBD" + a not-wired "Update Payment" button) shown as the broker's *real* payout method — was **the never-fake violation found in this pass**. Repointed the (kept) card to the honest truth: "Commissions are credited to your wallet balance and withdrawn from your Wallet" + a real `/wallet` link. Filter button disabled (cosmetic, not-wired). Commit `9ea9d54`. |
+| **Referrals** (`/referrals`) | **Real** referral link / roster / stats / copy-share. The dead **"Add Referral" CTA** (brokers don't manually add referrals — attribution is set-once when an investor registers via the link) → **real Share action** (`Share Referral Link`, native share/copy, disabled when no code). Filter + row chevron disabled (cosmetic). Commit `9ea9d54`. |
+| **Listings** (`/listings`, Phase 1) | **Was 100% mock → built real.** Real catalogue (`propertiesApi.list()`, filtered `open_for_promotion`) + real **per-property `broker_commission_rate`** STAMPED at conversion via the new append-only **`BrokerCommission`** ledger (idempotent via `balance_transaction` FK, **$ unchanged** — a mirror of the existing credit, not a new money path; memo backfill `legacy→null`, never invented). **Broker-scoped per-property stats** (`/api/broker/property-stats/` — only *this* broker's attributed conversions/investors/raised, **no property-total leak**). Effective rate = property rate ?? broker fallback. Per-property **leads "—"** (Phase 2). View→`/property/:slug`, Share→real referral link, Inquire disabled "Coming soon". Commit `6232ef9`. |
+| **Broker Reports** (`/broker-reports`) | **Was a broken nav link → built real**, mirroring the already-real `OwnerReports` structure/style. Overview cards + Commissions ledger (real **rate column**, legacy rate → "—", never "0%") + By-Property (broker-scoped stats, leads "—") + Monthly (client-derived) tabs all real; client-side period filter; real export → `reportsApi.export("broker-commissions", "pdf", {period})`. Commit `9c7f756`. |
+| **`/broker-dashboard`** (orphan) | The old broker hub page is superseded by the real Listings / Referrals / Commissions pages. The orphan route → **`<Navigate to="/listings" replace />`** (page file kept off-nav, no dead route, no 404 for old links/notifications). |
+
+### (2) Built along the way (reusing existing money systems — one new structured record)
+- **`Property.broker_commission_rate`** (Decimal 5,2, null, 0–100 validated) **+ `open_for_promotion`**
+  (bool) — per-property commission rate with a **broker-level fallback** (`broker.commission_rate`) when
+  null. Migration `0005`; serializer exposes `brokerCommissionRate` / `openForPromotion`.
+- **`BrokerCommission`** append-only model — `rate_applied` + property **stamped at conversion** (the
+  fee_rate-stamp philosophy), `gross` / `commission`, **idempotent via a `balance_transaction` OneToOne**
+  (NOT `unique(broker, investment)` — one investment can earn multiple credits: down-payment + each
+  installment). **The money path is unchanged** — `credit_broker_share` still credits the identical
+  `BalanceTransaction`; this model is a structured mirror beside it. Read-only admin. Migration `0002`.
+- **Memo backfill** (`0003`) — reconstructs one stamped row per existing commission tx; parses the rate
+  from the memo (`Referral commission (X%)`), **unparseable → `rate_applied=null` + `is_legacy=True`**
+  (never invented), preserves original `created_at`, idempotent, defensive non-UUID-reference guard.
+- **`commission_ledger()` repointed** to read structured `BrokerCommission` rows (no more memo-parsing);
+  **$ totals identical**. **`broker_property_stats()`** — broker-scoped per-property aggregation
+  (only `referred_by_broker=broker` investors counted). **`BrokerReports` page** + `/broker-reports` route.
+- **fee_rate-stamp philosophy applied to broker commissions** — the rate is frozen on the row when earned;
+  a later change to the property/broker rate never rewrites historical commissions (tested:
+  `test_rate_stamped_and_frozen`).
+
+### (3) Remaining deferred on the broker dashboard — grouped by BLOCKER
+- **(A) Deferred domain we chose not to build now:** **Phase 2 per-property LEAD attribution** — needs a
+  property-aware referral link (`/ref/<code>?p=<slug>`) + a `BrokerLead` model + capture; until then every
+  per-property **leads** cell is an honest **"—"** (conversions/investors/raised are real now).
+- **(B) External / no-backend yet:** **broker↔platform Inquire / chat** (the Listings "Inquire" action is
+  disabled "Coming soon" — same class as the AI/chat gap in §0(3)A).
+- **(C) User / product decision:** **cards** (`VisaCards`) — same deferred cards domain as §0/§0B/§0C.
+- **Nothing else broker-side** — every other broker surface is real today.
+
+### (4) Rules held throughout
+**DELETE NOTHING + NEVER fake**, verified after each fix. No element removed — the Commissions Payment-
+Method card (repointed, not deleted), the Referrals CTA (repurposed to Share, not deleted), every Listings
+catalogue card/stat/column, all Broker Reports cards/tabs, and the orphan `/broker-dashboard` page (kept,
+redirected) all stayed. **Two fabricated cards were caught and fixed across this engagement** — the broker
+**Payment Method** (fake bank card) and the earlier LP **account-manager** (fake person, §0C) — *the same
+pattern both times*: a fake person/account shown as real → **repointed to the real support/wallet**, never
+deleted, never re-faked. The only removals were never-rendered dead mock arrays.
 
 ---
 
