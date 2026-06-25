@@ -1531,6 +1531,24 @@ broker-listing model). (3) The referred-investor roster exposes the investor's n
 (the frontend mock's own shape; the referral relationship is consensual) — investor phone is NOT exposed.
 (4) `pending_commission`=0 (commission credits immediately at settlement; no pending state).
 
+**BrokerReports page (commit `9c7f756`) — fixes the broken `/broker-reports` nav link.** A real
+[BrokerReports.tsx](src/pages/BrokerReports.tsx) mirroring [OwnerReports.tsx](src/pages/OwnerReports.tsx): overview cards
+(total/this-month commission, referrals, converted, conversion rate ← `commission_ledger.stats`), a **Commissions**
+tab (real rate-stamped ledger; **null/legacy rate → "—", never 0%**), a broker-scoped **By-Property** tab
+(conversions/raised/commission ← `propertyStats`; **per-property leads "—"** Phase 2), a **Monthly** tab (derived
+client-side from the ledger rows; empty month → "—"), a client-side **period filter**, real **export**
+(`reportsApi.export("broker-commissions", …)`) + Refresh. Route registered in [App.tsx](src/App.tsx) above the
+catch-all; the existing `nav.brokerReports` item now lands here. No backend change; bilingual EN/AR.
+
+> **BROKER DASHBOARD realness pass — COMPLETE ✅** (all 4 nav surfaces real or honest): **Commissions** (real
+> ledger/stats/export; fabricated Payment-Method card → honest wallet-credit flow + `/wallet` link), **Referrals**
+> (real link/roster/stats; dead "Add Referral" → real Share action), **Listings** (Phase 1 — real catalogue + the
+> per-property `broker_commission_rate` STAMPED at conversion on the append-only `BrokerCommission` ledger, broker-
+> scoped per-property stats, leads "—"), **Broker Reports** (broken link → real page). Orphan `/broker-dashboard` →
+> redirect to `/listings`. **Deferred:** Phase 2 per-property LEAD attribution (`/ref/<code>?p=<slug>` + a
+> `BrokerLead` model); broker↔platform Inquire/chat (no backend); cards (VisaCards). **Next dashboard: PARTNER**
+> (not yet started — surface map first).
+
 ## Phase 13 — Reports-export (CSV + PDF over EXISTING self-scoped data) (COMPLETE ✅)
 **Source of truth:** REPORTS_SURFACE.md. A reusable export service that renders ALREADY-served, self-scoped
 data into a downloadable file — **NO new business logic, NO new figures**, just formatting. Unlocks the
