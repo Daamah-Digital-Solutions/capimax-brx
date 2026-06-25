@@ -337,9 +337,12 @@ class WebhookUntouchedTests(TestCase):
 
 
 class NoMoneyModelTests(TestCase):
-    def test_broker_app_owns_only_broker_profile(self):
+    def test_broker_app_models(self):
+        # Wave A owned only BrokerProfile. Broker Listings adds BrokerCommission — a
+        # STRUCTURED, append-only commission RECORD (the money still moves via the wallets
+        # BalanceTransaction; this app holds no balance/escrow of its own).
         names = {m._meta.model_name for m in django_apps.get_app_config("broker").get_models()}
-        self.assertEqual(names, {"brokerprofile"})
+        self.assertEqual(names, {"brokerprofile", "brokercommission"})
 
 
 class DevCommandTests(TestCase):
@@ -546,4 +549,218 @@ class BrokerCommissionTests(APITestCase):
         self.client.force_authenticate(plain)
         self.assertEqual(
             self.client.get("/api/broker/commissions/").status_code, status.HTTP_403_FORBIDDEN
+        )
+
+
+# =========================================================================== #
+# Broker Listings Phase 1 — per-property commission rate, the rate-STAMPED
+# BrokerCommission ledger, the backfill, and the broker-scoped per-property stats.
+# =========================================================================== #
+@_mock.patch("apps.investments.services.chain_service.mint", return_value=_FAKE_MINT_B)
+class BrokerListingsTests(APITestCase):
+    def _prop(self, slug, *, rate=None):
+        owner = _mk_user(email=f"lo-{slug}@ex.com", role=Profile.Role.OWNER)
+        p = _deployed_property(owner, slug=slug)
+        p.broker_commission_rate = rate  # None → fallback to the broker's own rate
+        p.save(update_fields=["broker_commission_rate"])
+        return p
+
+    def test_per_property_rate_stamped_and_frozen(self, _m):
+        from apps.broker.models import BrokerCommission
+
+        broker = _approved_broker("lbk1@ex.com")
+        prop = self._prop("lprop1", rate=_D("3"))  # per-property 3%
+        buyer = User.objects.create_user(email="lbuy1@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)  # gross 1000
+        res = mint_investment(inv)
+        self.assertEqual(res["broker_credited"], "30.00")  # 3% of 1000, NOT the 5% default
+
+        bc = BrokerCommission.objects.get(investment=inv)
+        self.assertEqual(bc.rate_applied, _D("3.00"))
+        self.assertEqual(bc.commission, _D("30.00"))
+        self.assertEqual(bc.property_slug, "lprop1")
+        self.assertIsNotNone(bc.balance_transaction_id)
+        self.assertFalse(bc.is_legacy)
+
+        # A later property-rate change NEVER rewrites the stamped row.
+        prop.broker_commission_rate = _D("10")
+        prop.save(update_fields=["broker_commission_rate"])
+        bc.refresh_from_db()
+        self.assertEqual(bc.rate_applied, _D("3.00"))
+        self.assertEqual(bc.commission, _D("30.00"))
+
+    def test_fallback_to_broker_rate_when_property_null(self, _m):
+        from apps.broker.models import BrokerCommission
+
+        broker = _approved_broker("lbk2@ex.com")
+        self.assertEqual(broker.commission_rate, _D("5.00"))  # default
+        prop = self._prop("lprop2", rate=None)  # no per-property rate
+        buyer = User.objects.create_user(email="lbuy2@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        res = mint_investment(inv)
+        self.assertEqual(res["broker_credited"], "50.00")  # 5% broker fallback
+        bc = BrokerCommission.objects.get(investment=inv)
+        self.assertEqual(bc.rate_applied, _D("5.00"))  # the fallback rate IS stamped
+
+    def test_idempotent_via_balance_transaction(self, _m):
+        from django.db import transaction
+
+        from apps.broker.models import BrokerCommission
+        from apps.investments.services import credit_broker_share
+
+        broker = _approved_broker("lbk3@ex.com")
+        prop = self._prop("lprop3", rate=_D("5"))
+        buyer = User.objects.create_user(email="lbuy3@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        mint_investment(inv)
+        self.assertEqual(BrokerCommission.objects.filter(investment=inv).count(), 1)
+
+        # Re-running the credit for the SAME reference is a no-op (guarded) — no dup row.
+        with transaction.atomic():
+            again = credit_broker_share(inv, gross=_D("1000"), reference=str(inv.id))
+        self.assertIsNone(again)
+        self.assertEqual(BrokerCommission.objects.filter(investment=inv).count(), 1)
+
+    def test_one_investment_two_credits_two_rows(self, _m):
+        # An investment can earn MORE THAN ONE commission credit (e.g. down-payment + a
+        # later installment), each its own BalanceTransaction → two BrokerCommission rows.
+        # Proves idempotency is per-balance_transaction, NOT unique(broker, investment).
+        from django.db import transaction
+
+        from apps.broker.models import BrokerCommission
+        from apps.investments.services import credit_broker_share
+
+        broker = _approved_broker("lbk4@ex.com")
+        prop = self._prop("lprop4", rate=_D("5"))
+        buyer = User.objects.create_user(email="lbuy4@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        with transaction.atomic():
+            credit_broker_share(inv, gross=_D("500"), reference=f"{inv.id}:inst-1")
+            credit_broker_share(inv, gross=_D("500"), reference=f"{inv.id}:inst-2")
+        self.assertEqual(BrokerCommission.objects.filter(investment=inv).count(), 2)
+        # Decimal-exact: 5% of 500 each.
+        self.assertEqual(
+            sorted(str(b.commission) for b in BrokerCommission.objects.filter(investment=inv)),
+            ["25.00", "25.00"],
+        )
+
+    def test_ledger_reads_structured_rows_totals_match(self, _m):
+        broker = _approved_broker("lbk5@ex.com")
+        prop = self._prop("lprop5", rate=_D("4"))
+        buyer = User.objects.create_user(email="lbuy5@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        mint_investment(inv)
+
+        # The money row is unchanged; the ledger reads the structured row + the stamped rate.
+        tx = BalanceTransaction.objects.get(source="broker_commission", reference=str(inv.id))
+        self.assertEqual(tx.amount, _D("40.00"))  # 4% of 1000 — money unchanged
+        self.client.force_authenticate(User.objects.get(pk=broker.user_id))
+        res = self.client.get("/api/broker/commissions/")
+        self.assertEqual(res.data["stats"]["total_commission"], "40.00")
+        self.assertEqual(res.data["commissions"][0]["commission"], "40.00")
+        self.assertEqual(res.data["commissions"][0]["rate"], "4.00")
+        self.assertFalse(res.data["commissions"][0]["is_legacy"])
+
+    def test_backfill_parses_rate_and_legacy_null(self, _m):
+        # Simulate PRE-EXISTING history: broker_commission BalanceTransactions with NO
+        # BrokerCommission yet, then run the migration's backfill function directly.
+        import importlib
+        import uuid
+
+        from django.apps import apps as global_apps
+
+        from apps.broker.models import BrokerCommission
+        from apps.wallets.services import credit_user_balance
+
+        broker = _approved_broker("lbk6@ex.com")
+        prop = self._prop("lprop6", rate=_D("3"))
+        buyer = User.objects.create_user(email="lbuy6@ex.com", password="pw-12345-strong")
+        inv = _completed_investment(buyer, prop, 10, broker=broker)
+        # Parseable memo (rate 3%).
+        credit_user_balance(
+            broker.user, _D("30.00"), source="broker_commission", reference=str(inv.id),
+            memo="Referral commission (3%): BRX1 of lprop6",
+        )
+        # Unparseable memo → must become legacy + null rate (never invented). (A real
+        # reference is always a UUID; the rate-unparseable case is about the MEMO.)
+        legacy_ref = str(uuid.uuid4())
+        credit_user_balance(
+            broker.user, _D("12.34"), source="broker_commission", reference=legacy_ref,
+            memo="historical commission, no rate recorded",
+        )
+        self.assertEqual(BrokerCommission.objects.count(), 0)  # none yet
+
+        mod = importlib.import_module("apps.broker.migrations.0003_backfill_broker_commission")
+        mod.backfill(global_apps, None)
+
+        parsed = BrokerCommission.objects.get(property_slug="lprop6")
+        self.assertEqual(parsed.rate_applied, _D("3.00"))   # parsed from memo
+        self.assertEqual(parsed.commission, _D("30.00"))    # money unchanged
+        self.assertTrue(parsed.is_legacy)
+
+        legacy = BrokerCommission.objects.get(balance_transaction__reference=legacy_ref)
+        self.assertIsNone(legacy.rate_applied)              # NOT invented → null
+        self.assertEqual(legacy.commission, _D("12.34"))
+        self.assertTrue(legacy.is_legacy)
+
+        # Re-running the backfill is idempotent (one row per balance_transaction).
+        mod.backfill(global_apps, None)
+        self.assertEqual(BrokerCommission.objects.count(), 2)
+
+    def test_ledger_null_rate_shows_dash_not_zero(self, _m):
+        # A legacy row with null rate must serialize rate=None (frontend "—"), never "0.00".
+        import importlib
+        import uuid
+
+        from django.apps import apps as global_apps
+
+        from apps.wallets.services import credit_user_balance
+
+        broker = _approved_broker("lbk7@ex.com")
+        credit_user_balance(
+            broker.user, _D("9.99"), source="broker_commission", reference=str(uuid.uuid4()),
+            memo="no rate here",
+        )
+        importlib.import_module(
+            "apps.broker.migrations.0003_backfill_broker_commission"
+        ).backfill(global_apps, None)
+
+        self.client.force_authenticate(User.objects.get(pk=broker.user_id))
+        res = self.client.get("/api/broker/commissions/")
+        row = res.data["commissions"][0]
+        self.assertIsNone(row["rate"])          # honest "—", NOT 0%
+        self.assertTrue(row["is_legacy"])
+        self.assertEqual(row["commission"], "9.99")
+
+    def test_property_stats_broker_scoped_no_leak(self, _m):
+        # Property X has THREE investors: I1 (referred by B1), I2 (NOT referred), I3
+        # (referred by B2). B1's per-property stats must count ONLY I1 — never the
+        # property's total base.
+        b1 = _approved_broker("lb1@ex.com")
+        b2 = _approved_broker("lb2@ex.com")
+        prop = self._prop("lpropX", rate=_D("5"))
+        i1 = User.objects.create_user(email="li1@ex.com", password="pw-12345-strong")
+        i2 = User.objects.create_user(email="li2@ex.com", password="pw-12345-strong")
+        i3 = User.objects.create_user(email="li3@ex.com", password="pw-12345-strong")
+        mint_investment(_completed_investment(i1, prop, 10, broker=b1))  # 1000, B1
+        mint_investment(_completed_investment(i2, prop, 7))              # 700, none
+        mint_investment(_completed_investment(i3, prop, 5, broker=b2))   # 500, B2
+
+        self.client.force_authenticate(User.objects.get(pk=b1.user_id))
+        res = self.client.get("/api/broker/property-stats/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        stats = res.data["by_property"]["lpropX"]
+        self.assertEqual(stats["conversions"], 1)        # only I1
+        self.assertEqual(stats["investors"], 1)          # NOT 3 (no total-base leak)
+        self.assertEqual(stats["raised"], 1000.0)        # only I1's amount, NOT 2200
+        self.assertEqual(stats["commission"], "50.00")   # B1's stamped commission only
+        self.assertIsNone(stats["leads"])                # Phase 2 → frontend "—"
+        self.assertEqual(res.data["broker_rate"], "5.00")
+
+    def test_property_stats_denies_non_broker(self, _m):
+        plain = User.objects.create_user(email="lplain@ex.com", password="pw-12345-strong")
+        self.client.force_authenticate(plain)
+        self.assertEqual(
+            self.client.get("/api/broker/property-stats/").status_code,
+            status.HTTP_403_FORBIDDEN,
         )

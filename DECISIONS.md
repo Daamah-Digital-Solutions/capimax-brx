@@ -1467,6 +1467,64 @@ investor tokens 10 (full); ledger total/this-month=$50.00, 1 referral/1 converte
 $0.00** via the existing `Withdrawal`. (The on-chain mint at this exact hook point was proven on real BSC Testnet in
 Phase 7 Wave D for owner earnings; broker commission is additive at the same line.)
 
+## Broker Listings — Phase 1: per-property rate + rate-STAMPED commission ledger + real Listings (COMPLETE ✅)
+**Source of truth:** the Broker-Listings realness pass. Made `Listings.tsx` (100% mock — fabricated per-property
+commission 2.5/3% + leads 45/32) real, and introduced the **fee_rate-stamp philosophy** to broker commissions so a
+later rate change never rewrites past deals. REAL MONEY discipline throughout (atomic, Decimal, append-only,
+idempotent, **$ unchanged** — no money-flow change).
+
+**LOCKED decisions, as built:**
+1. **Per-property commission rate with broker-level fallback (explicit, two distinct sources).** New
+   `Property.broker_commission_rate` (Decimal, **field default 5%**, nullable) + `Property.open_for_promotion` (bool,
+   default True — no behaviour change today). At credit time the resolver uses the **property's** rate; when null it
+   **falls back to `BrokerProfile.commission_rate`** (NOT a platform setting). Range-validated 0–100 in
+   `Property.clean()`. Migration `properties/0005`. Exposed on the catalogue as `brokerCommissionRate` +
+   `openForPromotion`.
+2. **Real `BrokerCommission` model** (append-only structured business record — the ownership_ledger philosophy;
+   `broker/0002`): `broker`, `investment`, `property_slug/name`, `gross`, **`rate_applied`** (the rate STAMPED at
+   conversion), `commission`, **`balance_transaction` OneToOne**, `is_legacy`, `created_at`. The MONEY still moves
+   via the `BalanceTransaction` (unchanged); this is the queryable source of truth.
+3. **Idempotency tied to the MONEY row, not (broker, investment):** `balance_transaction` is OneToOne → exactly one
+   `BrokerCommission` per commission `BalanceTransaction`. (An investment can earn >1 credit — down-payment + later
+   installments, each its own tx → its own row; a `(broker, investment)` unique would have broken that.)
+4. **Stamp at conversion** (`credit_broker_share`, in the SAME `mint_investment` atomic block): resolve the rate
+   (property → broker fallback), credit the `BalanceTransaction` (same amount as before), then write a
+   `BrokerCommission` with `rate_applied` frozen at that moment + the FK to that tx. A later `Property`/broker rate
+   change **never** alters past rows.
+5. **Backfill (`broker/0003`, DELETE NOTHING for history):** reconstructs `BrokerCommission` rows from existing
+   `broker_commission` `BalanceTransaction`s — parses the rate from the memo (`Referral commission (X%)…`) and stamps
+   THAT; **unparseable → `rate_applied=null` + `is_legacy=True`, never invented**. Preserves the original
+   `created_at`; defensive against non-UUID references; idempotent (one row per tx).
+6. **`commission_ledger()` repointed** to read the structured rows (no memo-parsing). **$ totals identical** to the
+   prior view (money unchanged). A null `rate_applied` serializes as `rate: null` → the UI shows **"—"/legacy, NEVER
+   0%** (honest "rate not recorded for this legacy deal").
+7. **Broker-scoped per-property stats** `GET /api/broker/property-stats/` (approved-broker only): per property →
+   **only THIS broker's** referred investors' conversions/investors/raised (a non-referred or another broker's
+   investor on the same property is EXCLUDED — no leak of the property's total base) + the broker's stamped
+   commission; **per-property `leads: null` (Phase 2)** → UI "—". Returns `broker_rate` so the frontend resolves
+   effective = property rate ?? broker rate.
+
+**Frontend (`Listings.tsx` repoint):** browses the REAL catalogue (`propertiesApi.list`, `openForPromotion`); each
+row shows real yield/min/funding% + the real effective per-property commission rate + THIS broker's conversions +
+honest **leads "—"**; KPIs (conversions/commission) from the real ledger (`useBrokerCommissions`); 3 actions —
+**View** (`/property/:slug`), **Share** (real broker-attributed referral link via `brokerProfile.referral_code`),
+**Inquire** (no chat backend → disabled "Coming soon"). Mock array removed; honest empty state. `brokerApi.propertyStats()`
+added. **Orphan `/broker-dashboard` → `<Navigate to="/listings">`** (off-nav page file KEPT; no dead route / no 404
+for the `BROKER_COMMISSION_CREDITED` notif's old action_url).
+
+**Tests:** +9 (`BrokerListingsTests`), **full suite 506 green**. Cover: per-property rate stamped on a NEW commission
++ a later property-rate change does NOT alter the stamped row; null-property-rate → broker fallback stamped;
+idempotent via the `balance_transaction` (no dup on re-run); one investment + two credits → two rows (no
+constraint break); ledger reads structured rows + **$ totals match** (BalanceTransaction amount identical);
+backfill parses rate (unparseable → null+legacy, not invented) + idempotent; ledger null-rate serializes "—" not
+0%; **per-property stats broker-scoped (3 investors on one property — only the broker's 1 counted; raised = their
+amount only, no total-base leak)**; Decimal-exact; non-broker denied.
+
+**Deferred (Phase 2):** per-broker-per-PROPERTY **lead attribution** (referral is broker-level only today — a
+`/ref/<code>` open isn't tied to a property; needs a property-aware referral link + a lead model) → leads stay "—".
+Also deferred: the broker↔platform **chat/inquire** backend (Inquire disabled). **DELETE NOTHING, never fake** —
+real per-property rate, leads "—", legacy rate "—"; **no money-flow change** (BalanceTransaction amounts unchanged).
+
 **Flags (Wave B):** (1) NO platform-account ledger DEBIT models the commission "expense" — it's simply credited to
 the broker (like the existing null-owner primary-sale case). (2) Broker `listings`/`performance` tabs stay MOCK (no
 broker-listing model). (3) The referred-investor roster exposes the investor's name/email to their referring broker

@@ -166,49 +166,47 @@ def commission_ledger(broker) -> dict:
 
     from django.utils import timezone
 
+    from apps.broker.models import BrokerCommission
     from apps.core.models import Profile
     from apps.investments.models import Investment, PaymentStatus
-    from apps.investments.services import BROKER_COMMISSION_SOURCE
-    from apps.wallets.models import BalanceTransaction
 
-    # The broker's commission ledger entries (one per referred completed sale).
-    txs = list(
-        BalanceTransaction.objects.filter(
-            balance__user=broker.user, source=BROKER_COMMISSION_SOURCE
-        ).order_by("-created_at")
+    # The broker's commission ledger — the STRUCTURED, append-only BrokerCommission rows
+    # (the queryable source of truth; no memo-parsing). The money is still the underlying
+    # BalanceTransaction, so the $ totals are identical to the prior memo-derived view.
+    rows = list(
+        BrokerCommission.objects.filter(broker=broker)
+        .select_related("investment", "investment__user")
+        .order_by("-created_at")
     )
-    # Resolve the referenced investments in one query (property + investor + gross amount).
-    inv_ids = [t.reference for t in txs if t.reference]
-    inv_map = {
-        str(i.id): i
-        for i in Investment.objects.filter(id__in=inv_ids).select_related("user")
-    }
 
     now = timezone.now()
     total_commission = Decimal(broker.total_commission_earned or 0)
     this_month = sum(
-        (t.amount for t in txs if t.created_at.year == now.year and t.created_at.month == now.month),
+        (r.commission for r in rows if r.created_at.year == now.year and r.created_at.month == now.month),
         Decimal("0"),
     )
 
     commissions = []
     commission_by_user = {}  # user_id → Decimal (for the referrals roll-up)
-    for t in txs:
-        inv = inv_map.get(t.reference)
-        investor = inv.user if inv else None
+    for r in rows:
+        investor = r.investment.user if (r.investment_id and r.investment) else None
         if investor is not None:
             commission_by_user[investor.id] = (
-                commission_by_user.get(investor.id, Decimal("0")) + t.amount
+                commission_by_user.get(investor.id, Decimal("0")) + r.commission
             )
         commissions.append({
-            "id": str(t.id),
+            "id": str(r.id),
             "referral": _display_name(investor) if investor else "—",
             "investor_email": getattr(investor, "email", "") if investor else "",
-            "property": inv.property_name if inv else "",
-            "amount": str(inv.amount_invested) if inv else "0.00",   # the investor's purchase
-            "commission": str(t.amount),                              # the broker's commission
+            "property": r.property_name or (r.investment.property_name if r.investment else ""),
+            "amount": str(r.gross),                       # the investor's paid amount this tranche
+            "commission": str(r.commission),              # the broker's commission (stamped)
+            # The stamped rate; NULL for a legacy/unparseable backfill row → frontend shows
+            # "—"/legacy, NEVER 0% (honest "rate not recorded", not a fabricated zero).
+            "rate": (None if r.rate_applied is None else str(r.rate_applied)),
+            "is_legacy": r.is_legacy,
             "status": "paid",  # credited to the broker's balance at settlement (immediate)
-            "date": t.created_at.date().isoformat(),
+            "date": r.created_at.date().isoformat(),
         })
 
     # The referred-investor roster (a referral is "invested" once they have a COMPLETED sale).
@@ -265,3 +263,68 @@ def _display_name(user) -> str:
         return "—"
     profile = getattr(user, "profile", None)
     return (getattr(profile, "full_name", None) or (user.email or "").split("@")[0]) or "Investor"
+
+
+# --------------------------------------------------------------------------- #
+# Per-property broker stats (Broker Listings) — STRICTLY broker-scoped. For the authed
+# broker, per property: THIS broker's conversions + the investors/raised attributable to
+# THIS broker only (their own referred investors) + the broker's stamped commission. It
+# NEVER exposes the property's total investor base. Per-property LEADS are not tracked yet
+# (Phase 2) → null → the frontend shows "—". The frontend overlays this on the public
+# catalogue; `broker_rate` lets it resolve the effective rate (property rate else this).
+# --------------------------------------------------------------------------- #
+def broker_property_stats(broker) -> dict:
+    from decimal import Decimal
+
+    from apps.broker.models import BrokerCommission
+    from apps.core.models import Profile
+    from apps.investments.models import Investment, PaymentStatus
+
+    # ONLY this broker's referred investors (the attribution anchor; first-broker-wins).
+    referred_user_ids = list(
+        Profile.objects.filter(referred_by_broker=broker).values_list("user_id", flat=True)
+    )
+
+    by_property: dict = {}
+    if referred_user_ids:
+        invs = (
+            Investment.objects.filter(
+                user_id__in=referred_user_ids, payment_status=PaymentStatus.COMPLETED
+            )
+            .select_related("property")
+        )
+        for inv in invs:
+            slug = inv.property.slug if inv.property_id else (inv.property_name or "—")
+            slot = by_property.setdefault(slug, {
+                "property_id": slug,
+                "investor_ids": set(),
+                "raised": Decimal("0"),
+                "commission": Decimal("0"),
+            })
+            slot["investor_ids"].add(inv.user_id)
+            slot["raised"] += Decimal(inv.amount_invested or 0)
+
+    # Overlay the REAL stamped commission per property (BrokerCommission — this broker only).
+    for r in BrokerCommission.objects.filter(broker=broker):
+        slot = by_property.get(r.property_slug)
+        if slot is not None:
+            slot["commission"] += Decimal(r.commission or 0)
+
+    out = {}
+    for slug, slot in by_property.items():
+        investors = len(slot["investor_ids"])
+        out[slug] = {
+            "property_id": slug,
+            # A conversion = one of THIS broker's referred investors who invested here.
+            "conversions": investors,
+            "investors": investors,  # same set (a conversion is an attributed investor)
+            "raised": float(slot["raised"]),
+            "commission": str(slot["commission"].quantize(Decimal("0.01"))),
+            "leads": None,  # Phase 2 (no per-property lead tracking yet) → frontend "—"
+        }
+
+    return {
+        # The broker's own rate — the frontend resolves effective = property rate ?? this.
+        "broker_rate": str(broker.commission_rate or 0),
+        "by_property": out,
+    }

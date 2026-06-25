@@ -163,3 +163,66 @@ class BrokerProfile(models.Model):
         self.rejected_at = timezone.now()
         self.license_reviewed_at = timezone.now()
         self.review_notes = (notes or "")[:500]
+
+
+class BrokerCommission(models.Model):
+    """
+    A STRUCTURED, append-only commission record — the queryable source of truth for a
+    broker's earnings (the ownership_ledger / fee_rate-stamp philosophy). One row per
+    money-moving commission credit.
+
+    The actual MONEY still moves via the `BalanceTransaction` (unchanged); this row mirrors
+    it with the business facts and — critically — STAMPS `rate_applied`, the per-property
+    rate resolved AT CONVERSION (Property.broker_commission_rate, else the broker's own
+    rate). A later rate change never rewrites these rows.
+
+    IDEMPOTENCY is tied to the money row: `balance_transaction` is OneToOne, so there is
+    exactly one BrokerCommission per commission BalanceTransaction. (NOT unique on
+    (broker, investment) — one investment can earn more than one commission credit across
+    a down-payment + later installments, each its own BalanceTransaction.)
+
+    `rate_applied` is NULLABLE only for BACKFILLED legacy rows whose rate couldn't be parsed
+    from the historical memo (`is_legacy=True`) — displayed as "—"/legacy, NEVER as 0%.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    broker = models.ForeignKey(
+        BrokerProfile, on_delete=models.CASCADE, related_name="commissions"
+    )
+    # The referred investor's investment that earned this commission (denormalized slug +
+    # name so the ledger reads without re-joining a possibly-deleted property/investment).
+    investment = models.ForeignKey(
+        "investments.Investment", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="broker_commissions",
+    )
+    property_slug = models.CharField(max_length=64, blank=True, default="")
+    property_name = models.CharField(max_length=200, blank=True, default="")
+    # The investor's paid amount this tranche (the commission base) + the stamped rate + the
+    # resulting commission. Decimal throughout; the row is never updated after creation.
+    gross = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    rate_applied = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="The commission % stamped at conversion. Null = legacy row (rate not recorded).",
+    )
+    commission = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    # The money-moving ledger entry. OneToOne = the idempotency anchor (one commission record
+    # per credited BalanceTransaction). SET_NULL keeps the record if the tx is ever purged.
+    balance_transaction = models.OneToOneField(
+        "wallets.BalanceTransaction", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="broker_commission",
+    )
+    is_legacy = models.BooleanField(
+        default=False,
+        help_text="True for backfilled rows reconstructed from a pre-existing BalanceTransaction.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "broker_commissions"
+        verbose_name = _("broker commission")
+        verbose_name_plural = _("broker commissions")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        rate = "—" if self.rate_applied is None else f"{self.rate_applied}%"
+        return f"BrokerCommission {self.commission} ({rate}) → {self.broker_id}"

@@ -14,7 +14,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.template.response import TemplateResponse
 
-from .models import BrokerProfile
+from .models import BrokerCommission, BrokerProfile
 from .services import LicenseNotApprovable, approve_license, reject_license
 
 
@@ -107,3 +107,26 @@ class BrokerProfileAdmin(admin.ModelAdmin):
             "opts": self.model._meta,
         }
         return TemplateResponse(request, "admin/broker/reject_license.html", context)
+
+
+@admin.register(BrokerCommission)
+class BrokerCommissionAdmin(admin.ModelAdmin):
+    """Read-only view of the structured, append-only commission ledger (the money moves
+    via BalanceTransaction; this is the queryable stamped record). Never hand-edited."""
+
+    list_display = (
+        "created_at", "broker", "property_name", "gross", "rate_applied",
+        "commission", "is_legacy",
+    )
+    list_filter = ("is_legacy",)
+    search_fields = ("broker__user__email", "property_slug", "property_name")
+    readonly_fields = (
+        "id", "broker", "investment", "property_slug", "property_name", "gross",
+        "rate_applied", "commission", "balance_transaction", "is_legacy", "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False  # append-only; stamped at conversion, never edited

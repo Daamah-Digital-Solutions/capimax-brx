@@ -349,7 +349,7 @@ def credit_broker_share(inv: Investment, *, gross, reference, memo=None):
     down-payment/full path keys on the investment id and each installment (Wave C) keys on
     its InstallmentPayment id, so the broker accrues commission as money actually arrives.
     """
-    from apps.broker.models import BrokerProfile, BrokerStatus
+    from apps.broker.models import BrokerCommission, BrokerProfile, BrokerStatus
     from apps.wallets.models import BalanceTransaction
     from apps.wallets.services import credit_user_balance
 
@@ -370,11 +370,16 @@ def credit_broker_share(inv: Investment, *, gross, reference, memo=None):
     ).exists():
         return None
 
-    # LOCKED #1: commission = paid amount × rate% (per-broker, server-side). Platform-borne
-    # + additive — computed off the amount ACTUALLY PAID for this tranche, independent of
-    # the owner's fee math.
+    # RATE RESOLUTION (Broker Listings): the PER-PROPERTY rate first
+    # (Property.broker_commission_rate), falling back to the broker's OWN rate
+    # (BrokerProfile.commission_rate) when the property's is null — NOT a platform setting.
+    prop = inv.property
+    prop_rate = getattr(prop, "broker_commission_rate", None)
+    rate = Decimal(prop_rate if prop_rate is not None else (broker.commission_rate or 0))
+
+    # LOCKED #1: commission = paid amount × rate% — platform-borne + additive, off the
+    # amount ACTUALLY PAID this tranche, independent of the owner's fee math.
     gross = Decimal(gross)
-    rate = Decimal(broker.commission_rate or 0)
     commission = (gross * rate / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
@@ -385,7 +390,26 @@ def credit_broker_share(inv: Investment, *, gross, reference, memo=None):
         broker.user, commission,
         source=BROKER_COMMISSION_SOURCE,
         reference=reference,
-        memo=memo or f"Referral commission ({rate}%): {inv.token_symbol} of {inv.property.slug}",
+        memo=memo or f"Referral commission ({rate}%): {inv.token_symbol} of {prop.slug}",
+    )
+
+    # STAMP the structured, append-only commission record in the SAME atomic block. The
+    # money-moving BalanceTransaction we just wrote is unique on (source, reference) by the
+    # guard above, so fetch THAT row and tie the record to it (the idempotency anchor).
+    # `rate_applied` is frozen at THIS rate — a later Property/broker rate change never
+    # rewrites it.
+    money_tx = BalanceTransaction.objects.filter(
+        balance__user=broker.user, source=BROKER_COMMISSION_SOURCE, reference=reference,
+    ).order_by("-created_at").first()
+    BrokerCommission.objects.create(
+        broker=broker,
+        investment=inv,
+        property_slug=prop.slug,
+        property_name=prop.name,
+        gross=gross,
+        rate_applied=rate,
+        commission=commission,
+        balance_transaction=money_tx,
     )
 
     # LOCKED #4: bump the broker's accumulator in the SAME transaction (row-locked).

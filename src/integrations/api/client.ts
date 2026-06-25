@@ -1536,7 +1536,24 @@ export const brokerApi = {
   /** The caller-broker's commission ledger + totals + referred-investor roster (Wave B). */
   commissions: () =>
     rawRequest("/broker/commissions/", { auth: true }) as Promise<BrokerCommissions>,
+  /** Per-property broker stats overlay for Broker Listings (broker-scoped — only the
+   *  caller-broker's own attributed conversions/investors/raised; leads null in Phase 1). */
+  propertyStats: () =>
+    rawRequest("/broker/property-stats/", { auth: true }) as Promise<BrokerPropertyStats>,
 };
+
+export interface BrokerPropertyStatRow {
+  property_id: string;
+  conversions: number;
+  investors: number;
+  raised: number;
+  commission: string;
+  leads: number | null; // Phase 2 — null today → UI shows "—"
+}
+export interface BrokerPropertyStats {
+  broker_rate: string;  // the broker's own % — effective = property rate ?? this
+  by_property: Record<string, BrokerPropertyStatRow>;
+}
 
 // --------------------------------------------------------------------------- //
 // Reports-export API (Phase 13) — self-scoped CSV/PDF downloads of EXISTING data.

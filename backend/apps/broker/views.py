@@ -33,7 +33,12 @@ from .serializers import (
     BrokerLicenseSubmitSerializer,
     BrokerProfileSerializer,
 )
-from .services import commission_ledger, resolve_referral_code, submit_license
+from .services import (
+    broker_property_stats,
+    commission_ledger,
+    resolve_referral_code,
+    submit_license,
+)
 
 log = logging.getLogger(__name__)
 
@@ -163,3 +168,18 @@ class BrokerCommissionsView(APIView):
     def get(self, request):
         broker = request.user.broker_profile
         return Response(commission_ledger(broker))
+
+
+class BrokerPropertyStatsView(APIView):
+    """
+    GET the caller-broker's PER-PROPERTY stats overlay (Broker Listings). Strictly
+    broker-scoped: conversions / investors / raised count ONLY this broker's own referred
+    investors (never the property's total base); commission is the broker's stamped
+    BrokerCommission total per property; per-property leads are null (Phase 2). The
+    frontend merges this onto the public catalogue (propertiesApi.list).
+    """
+
+    permission_classes = [IsAuthenticated, HasActivatedBroker]
+
+    def get(self, request):
+        return Response(broker_property_stats(request.user.broker_profile))

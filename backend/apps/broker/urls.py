@@ -6,6 +6,7 @@ from .views import (
     BrokerLicenseSubmitView,
     BrokerLicenseUploadView,
     BrokerProfileView,
+    BrokerPropertyStatsView,
     ReferralResolveView,
 )
 
@@ -20,4 +21,6 @@ urlpatterns = [
     path("referral/resolve/", ReferralResolveView.as_view(), name="broker-referral-resolve"),
     # Commission ledger + totals + referred-investor roster (Wave B). Approved-broker only.
     path("commissions/", BrokerCommissionsView.as_view(), name="broker-commissions"),
+    # Per-property broker stats overlay for Broker Listings (broker-scoped). Approved-only.
+    path("property-stats/", BrokerPropertyStatsView.as_view(), name="broker-property-stats"),
 ]

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
@@ -19,7 +19,6 @@ import Distributions from "./pages/Distributions";
 import Installments from "./pages/Installments";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import OwnerReports from "./pages/OwnerReports";
-import BrokerDashboard from "./pages/BrokerDashboard";
 import Reports from "./pages/Reports";
 import Documents from "./pages/Documents";
 import OwnerDocuments from "./pages/OwnerDocuments";
@@ -108,7 +107,10 @@ const App = () => (
           <Route path="/cards" element={<Cards />} />
           <Route path="/asset-validation" element={<OwnerReports />} />
           <Route path="/submit-property" element={<SubmitProperty />} />
-          <Route path="/broker-dashboard" element={<BrokerDashboard />} />
+          {/* The broker hub now lives in the real Listings/Referrals/Commissions pages.
+              Redirect the orphan /broker-dashboard (kept off-nav) to Listings — no dead
+              route, no 404 for old links/notifications that pointed here. */}
+          <Route path="/broker-dashboard" element={<Navigate to="/listings" replace />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/referrals" element={<Referrals />} />
           <Route path="/commissions" element={<Commissions />} />

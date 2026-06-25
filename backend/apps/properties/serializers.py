@@ -277,6 +277,8 @@ _COMMON_FIELDS = (
     "funded",
     "investors",
     "minInvestment",
+    "brokerCommissionRate",
+    "openForPromotion",
     "duration",
     "durationAr",
     "exitEligible",
@@ -310,6 +312,10 @@ class _PropertyBaseSerializer(serializers.ModelSerializer):
         source="expected_growth", max_digits=6, decimal_places=2, allow_null=True
     )
     minInvestment = serializers.DecimalField(source="min_investment", max_digits=12, decimal_places=2)
+    brokerCommissionRate = serializers.DecimalField(
+        source="broker_commission_rate", max_digits=5, decimal_places=2, allow_null=True
+    )
+    openForPromotion = serializers.BooleanField(source="open_for_promotion")
     durationAr = serializers.CharField(source="duration_ar")
     exitEligible = serializers.BooleanField(source="exit_eligible")
     exitAvailability = serializers.CharField(source="exit_availability")

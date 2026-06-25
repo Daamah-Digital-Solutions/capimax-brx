@@ -187,6 +187,19 @@ class Property(models.Model):
     fee_management = models.DecimalField(max_digits=5, decimal_places=2, default=0.5)
     fee_exit = models.DecimalField(max_digits=5, decimal_places=2, default=0.5)
 
+    # Broker affiliate program (Phase 12 / Broker Listings) — the PER-PROPERTY commission %
+    # a referring broker earns on a referred investor's primary sale. Default 5% on the
+    # field; at credit time the resolver uses THIS rate, falling back to the broker-level
+    # BrokerProfile.commission_rate when null (see investments.services.credit_broker_share).
+    # The rate ACTUALLY USED is stamped on the append-only BrokerCommission row at conversion,
+    # so a later change here never alters past deals. `open_for_promotion` scopes the
+    # broker-listable set (default True → no behaviour change today).
+    broker_commission_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, default=5,
+        help_text="Per-property broker commission %. Null → fall back to the broker's own rate.",
+    )
+    open_for_promotion = models.BooleanField(default=True, db_index=True)
+
     # catalogue management
     is_published = models.BooleanField(default=True, db_index=True)  # admin unpublish
     is_featured = models.BooleanField(default=False, db_index=True)  # Index featured
@@ -249,6 +262,10 @@ class Property(models.Model):
                 errors[field] = f"{label} must be between 0 and 100 (got {value})."
         if self.funded is not None and not (0 <= self.funded <= 100):
             errors["funded"] = f"Funded % must be between 0 and 100 (got {self.funded})."
+        if self.broker_commission_rate is not None and not (0 <= self.broker_commission_rate <= 100):
+            errors["broker_commission_rate"] = (
+                f"Broker commission % must be between 0 and 100 (got {self.broker_commission_rate})."
+            )
         if errors:
             raise ValidationError(errors)
         # Derive after validation so the (read-only) admin fields reflect the saved values.
