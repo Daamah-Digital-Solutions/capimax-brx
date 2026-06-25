@@ -36,6 +36,7 @@ import Settings from "./pages/Settings";
 import SubmitProperty from "./pages/SubmitProperty";
 import StrategicPartners from "./pages/StrategicPartners";
 import Listings from "./pages/Listings";
+import BrokerReports from "./pages/BrokerReports";
 import Referrals from "./pages/Referrals";
 import Commissions from "./pages/Commissions";
 import PublicReports from "./pages/PublicReports";
@@ -114,6 +115,8 @@ const App = () => (
           <Route path="/listings" element={<Listings />} />
           <Route path="/referrals" element={<Referrals />} />
           <Route path="/commissions" element={<Commissions />} />
+          {/* Broker-only nav item — real commission/per-property reports (was a broken link). */}
+          <Route path="/broker-reports" element={<BrokerReports />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/about" element={<About />} />
           <Route path="/fees" element={<Fees />} />

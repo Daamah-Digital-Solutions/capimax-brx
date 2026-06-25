@@ -1473,6 +1473,8 @@ export interface BrokerCommissionRow {
   property: string;
   amount: string;          // the investor's purchase amount
   commission: string;      // the broker's commission
+  rate: string | null;     // the rate STAMPED at conversion; null = legacy → UI "—"
+  is_legacy: boolean;      // backfilled row reconstructed from a pre-existing tx
   status: "paid";          // credited to the broker's balance at settlement
   date: string;
 }
