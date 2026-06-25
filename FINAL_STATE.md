@@ -1,13 +1,13 @@
 # FINAL_STATE.md — Capimax BRX stage-closing handoff
 
-**Latest commit:** `e5a72be` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
+**Latest commit:** `0d15574` (on `origin/main`) · **Backend:** Django 5.2 + DRF + SimpleJWT, ~26 apps,
 PostgreSQL · **Chain:** BSC Testnet (chain 97), web3.py, custodial Fernet-encrypted wallets ·
-**Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **506 green** (last run).
+**Frontend:** React/Vite/TS, bilingual EN/AR · **Tests:** full suite **508 green** (last run).
 **Authoritative record:** `DECISIONS.md` — this file is an organized index over it, not a
 replacement; when in doubt, DECISIONS.md wins.
 
-> **Stages just closed (four realness passes), same two firm rules — DELETE NOTHING (every element stays)
-> and NEVER fake a number:**
+> **ALL FIVE role-dashboard realness passes are now CLOSED**, same two firm rules throughout — DELETE
+> NOTHING (every element stays) and NEVER fake a number:
 > - **INVESTOR DASHBOARD** — all 12 investor tabs audited + made real or honest placeholder. See **§0**.
 > - **OWNER / DEVELOPER DASHBOARD** — all 7 owner/developer tabs audited + made real or honest placeholder.
 >   See **§0B**.
@@ -15,7 +15,9 @@ replacement; when in doubt, DECISIONS.md wins.
 >   any role), only a fabricated account-manager card + a hash-nav defect fixed. See **§0C**.
 > - **BROKER DASHBOARD** — all broker surfaces audited; Commissions/Referrals honesty fixes, Listings
 >   Phase 1 + Broker Reports built real on a new stamped `BrokerCommission` ledger. See **§0D**.
-> - **Next: PARTNER dashboard** (last of the 5 role dashboards — not yet started).
+> - **PARTNER DASHBOARD** — all partner surfaces audited (non-earning, content already real); fixed the
+>   structural orphan (added the partner role + sidebar nav home), wired deliverable-doc download, repointed
+>   a dead CTA, disabled two cosmetic buttons. See **§0E**.
 
 ## What a new engineer / the client should know
 
@@ -245,6 +247,55 @@ redirected) all stayed. **Two fabricated cards were caught and fixed across this
 **Payment Method** (fake bank card) and the earlier LP **account-manager** (fake person, §0C) — *the same
 pattern both times*: a fake person/account shown as real → **repointed to the real support/wallet**, never
 deleted, never re-faked. The only removals were never-rendered dead mock arrays.
+
+---
+
+## 0E. PARTNER DASHBOARD REALNESS PASS — CLOSED (this stage — LAST of the 5 roles)
+
+The same tab-by-tab audit on the partner dashboard (`roles: ["partner"]`). The partner is a **NON-EARNING
+service vendor** (valuation / property-management / insurance) — there is **no money / wallet / cards
+surface anywhere** in this role. The CONTENT was already fully real from the P11 / P11B builds, so almost
+every surface cleared as **"confirm real."** The pass fixed **one structural gap + four small gaps**; both
+firm rules held, verified-nothing-deleted after each fix. **This pass closes all five role dashboards.**
+
+### (1) The partner surfaces — all audited
+| Tab / surface | Outcome |
+|---|---|
+| **Public directory** (`/partners`) | **Confirmed real** — `partnerApi.directory()` (AllowAny, only directory-approved partners), real client-side search/country/category filter over real rows, honest empty fallback (`catch → []`). `categories`/`countries` are static **filter taxonomy** (not a demo-partner fallback). The one dead element — a **"Contact Us" CTA** with no handler — was repointed to the real `/support` route (kept, not deleted). |
+| **KYB card** (`PartnerVerificationCard`) | **Confirmed real** — `usePartnerProfile` → `partnerApi` apply/submitKYB/updateDirectory; Sumsub mount when configured, else honest dev-path notice (`dev_grant_partner_kyb`); webhook-driven approval; two independent states (KYB + directory). No fabricated person/number. |
+| **4 stat cards** | **Confirmed real** — assigned / in-progress / completed / needs-revision, all derived from real `useAssignments()`. |
+| **Assets tab** | **Confirmed real** — assignment cards from `/api/partner/assignments/` (no mock fallback; `catch → []`); real progress/status/deliverable chips; real upload + submit-for-review. The dead **Filter** button → honestly `disabled` "Coming soon". |
+| **Deliverables tab** | **Confirmed real** — real list + real multipart upload that persists (refetch, not toast-only). The dead row **chevron** → honestly `disabled` "Coming soon". |
+| **Documents tab** | **Made real (download wired)** — was a real list of deliverables-with-documents but with **no way to download** (the self-scoped blob endpoint existed; the serializer never exposed the doc id). Added `document_id` + `document_name` to the serializer + a real **Download** button. |
+| **Activity tab** | **Confirmed real** — derived from the append-only `AssignmentEvent` feed; honest empty state. |
+
+### (2) The structural fix + what was built (no new domain, no new money)
+- **STRUCTURAL — the partner role had a full backend but no sidebar nav home.** Its real dashboard
+  (`/strategic-partners`) was reachable by **direct URL only** (the partner equivalent of broker's orphan
+  `/broker-dashboard`). Added `partner` to `UserRole` + `roleLabels` ("Partner" / "شريك") + a real
+  `menuSections` section (`roles: ["partner"]` → **Partner Dashboard** `/strategic-partners` + **Partners
+  Directory** `/partners`) + `detectRoleFromPath` (`/strategic-partners` → partner; `/partners` kept PUBLIC)
+  + default-expanded; +4 bilingual i18n keys. A partner now gets a nav home like the other four roles.
+- **Deliverable-document download** — the backend `DeliverableDocumentDownloadView` already existed
+  (self-scoped: `assignment__partner=partner` → **cross-partner 404**, asserted). Exposed the latest
+  document's id/filename on `DeliverableSerializer` (`has_document` stays the gate), added
+  `partnerApi.downloadDeliverableDocument` (the LP/Owner doc-vault blob pattern), and a real **Download**
+  button. **Read-side only — serves an already-uploaded file, NO migration, NO money.** +2 tests
+  (partner downloads own doc; cross-partner 404).
+
+### (3) Remaining deferred on the partner dashboard — grouped by BLOCKER
+- **(A) External / no-backend:** broker↔platform-style **Inquire / chat** is N/A here; the only
+  external-class gap is the same provider stack as other roles (none partner-specific).
+- **(B) Nothing else partner-side** — every partner surface is real today. (Tab deep-links were
+  intentionally NOT added — the tabs are local state with no hash contract, so no LP-style hash-nav defect
+  was introduced.)
+
+### (4) Rules held throughout
+**DELETE NOTHING + NEVER fake**, verified after each fix. No element removed — the "Contact Us" CTA
+(repointed to `/support`), the Assets **Filter** + Deliverables **chevron** (kept, honestly disabled), and
+all partner surfaces (directory grid + KYB card + 4 stat cards + 4 tabs) stayed. The **Download** button was
+**added beside** the kept status badge. Zero fabricated person / number / array (only static filter
+taxonomy). The partner pass found **no fabricated person/account** — unlike the LP/broker passes.
 
 ---
 
