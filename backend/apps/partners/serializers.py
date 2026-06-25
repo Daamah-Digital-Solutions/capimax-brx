@@ -137,16 +137,35 @@ class DeliverableSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()      # Arabic (falls back to English)
     dueDate = serializers.DateField(source="due_date", allow_null=True)
     has_document = serializers.SerializerMethodField()
+    # The latest uploaded document (id + filename) so the Documents tab can offer a real
+    # self-scoped download. null when nothing uploaded yet — `has_document` stays the gate.
+    document_id = serializers.SerializerMethodField()
+    document_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Deliverable
-        fields = ("id", "name", "nameEn", "status", "dueDate", "has_document")
+        fields = (
+            "id", "name", "nameEn", "status", "dueDate",
+            "has_document", "document_id", "document_name",
+        )
 
     def get_name(self, obj) -> str:
         return obj.name_ar or obj.name
 
     def get_has_document(self, obj) -> bool:
         return obj.documents.exists()
+
+    def _latest_document(self, obj):
+        # DeliverableDocument default ordering is ("-uploaded_at",) → first() is newest.
+        return obj.documents.first()
+
+    def get_document_id(self, obj):
+        doc = self._latest_document(obj)
+        return str(doc.id) if doc else None
+
+    def get_document_name(self, obj) -> str:
+        doc = self._latest_document(obj)
+        return doc.original_filename if doc else ""
 
 
 class AssignmentSerializer(serializers.ModelSerializer):

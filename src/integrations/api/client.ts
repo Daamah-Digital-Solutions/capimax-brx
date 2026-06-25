@@ -1311,6 +1311,8 @@ export interface ApiDeliverable {
   status: "pending" | "submitted" | "approved" | "revision";
   dueDate: string | null;
   has_document: boolean;
+  document_id: string | null;  // latest uploaded doc (null until uploaded) → Download
+  document_name: string;       // its original filename (for the saved download)
 }
 export interface ApiAssignment {
   id: string;
@@ -1421,6 +1423,29 @@ export const partnerApi = {
       throw buildError((data as any)?.detail || `Upload failed (${res.status})`, res.status, data);
     }
     return (await res.json()) as ApiAssignment;
+  },
+  /**
+   * Download one of the caller-partner's OWN deliverable documents (self-scoped blob;
+   * cross-partner → 404). Mirrors the LP/Owner doc-vault FileResponse pattern: fetch the
+   * blob with the auth header, then trigger a browser save with the original filename.
+   */
+  downloadDeliverableDocument: async (documentId: string, filename?: string): Promise<void> => {
+    const res = await fetch(
+      `${API_BASE_URL}/partner/deliverables/documents/${documentId}/download/`,
+      { headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {} },
+    );
+    if (!res.ok) throw buildError(`Document download failed (${res.status})`, res.status);
+    const blob = await res.blob();
+    const cd = res.headers.get("Content-Disposition") || "";
+    const name = /filename="?([^"]+)"?/.exec(cd)?.[1] || filename || "deliverable";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   },
 };
 

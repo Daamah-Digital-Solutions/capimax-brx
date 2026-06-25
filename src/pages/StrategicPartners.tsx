@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Filter,
   Search,
+  Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -26,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { PartnerVerificationCard } from "@/components/partner/PartnerVerificationCard";
 import { useAssignments } from "@/hooks/useAssignments";
 import { relativeTime } from "@/lib/notifications";
-import type { ApiAssignment } from "@/integrations/api/client";
+import { partnerApi, type ApiAssignment } from "@/integrations/api/client";
 import { toast } from "sonner";
 
 // service_type → localized badge label (the backend stays language-agnostic; mirrors the
@@ -91,6 +92,16 @@ export default function StrategicPartners() {
       return;
     }
     await uploadDeliverable(target.id, file);
+  };
+
+  // Download one of the partner's OWN uploaded deliverable docs (self-scoped, 404 cross-
+  // partner on the backend). Serves the already-uploaded file — persists nothing new.
+  const handleDownload = async (documentId: string, filename: string) => {
+    try {
+      await partnerApi.downloadDeliverableDocument(documentId, filename);
+    } catch {
+      toast.error(language === "ar" ? "تعذّر تنزيل الملف" : "Could not download the file");
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -226,7 +237,8 @@ export default function StrategicPartners() {
                   className={isRTL ? 'pr-10' : 'pl-10'}
                 />
               </div>
-              <Button variant="outline" size="icon">
+              {/* Filter is not wired yet — kept, honestly disabled (no fake action). */}
+              <Button variant="outline" size="icon" disabled title={language === 'ar' ? 'قريبًا' : 'Coming soon'}>
                 <Filter className="w-4 h-4" />
               </Button>
             </div>
@@ -383,7 +395,8 @@ export default function StrategicPartners() {
                         <div className="flex items-center gap-4">
                           {del.dueDate && <span className="text-sm text-muted-foreground">{del.dueDate}</span>}
                           {getStatusBadge(del.status)}
-                          <Button variant="ghost" size="icon">
+                          {/* Row drill-in not wired yet — kept, honestly disabled. */}
+                          <Button variant="ghost" size="icon" disabled title={language === 'ar' ? 'قريبًا' : 'Coming soon'}>
                             <ChevronRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
                           </Button>
                         </div>
@@ -417,7 +430,19 @@ export default function StrategicPartners() {
                               <p className="text-sm text-muted-foreground">{language === 'ar' ? asset.name : asset.nameEn}</p>
                             </div>
                           </div>
-                          {getStatusBadge(del.status)}
+                          <div className="flex items-center gap-3">
+                            {getStatusBadge(del.status)}
+                            {del.document_id && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownload(del.document_id!, del.document_name)}
+                              >
+                                <Download className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                                {language === 'ar' ? 'تنزيل' : 'Download'}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       )),
                   )}

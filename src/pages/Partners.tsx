@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { partnerApi, type PublicPartner } from '@/integrations/api/client';
@@ -253,8 +254,10 @@ export default function Partners() {
                 ? 'هل أنت شركة مهتمة بالشراكة معنا؟ تواصل معنا لمناقشة فرص التعاون.'
                 : 'Are you a company interested in partnering with us? Contact us to discuss collaboration opportunities.'}
             </p>
-            <Button size="lg">
-              {language === 'ar' ? 'تواصل معنا' : 'Contact Us'}
+            <Button size="lg" asChild>
+              <Link to="/support">
+                {language === 'ar' ? 'تواصل معنا' : 'Contact Us'}
+              </Link>
             </Button>
           </CardContent>
         </Card>

@@ -58,7 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type UserRole = "guest" | "investor" | "owner" | "liquidity_provider" | "broker";
+type UserRole = "guest" | "investor" | "owner" | "liquidity_provider" | "broker" | "partner";
 
 interface MenuItem {
   titleKey: string;
@@ -83,6 +83,7 @@ const roleLabels: Record<UserRole, { en: string; ar: string }> = {
   owner: { en: "Owner / Developer", ar: "مالك / مطور" },
   liquidity_provider: { en: "Liquidity Provider", ar: "مزود السيولة" },
   broker: { en: "Broker", ar: "وسيط" },
+  partner: { en: "Partner", ar: "شريك" },
 };
 
 // Public items that are always visible to all roles
@@ -166,6 +167,20 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    // Service partner (NON-EARNING vendor) — its real work portal is /strategic-partners
+    // (KYB + assignments/deliverables/documents/activity). The public directory at
+    // /partners is also surfaced in the always-visible Public section.
+    titleKey: "section.partner",
+    sectionId: "partner",
+    icon: Handshake,
+    color: "text-rose-500",
+    roles: ["partner"],
+    items: [
+      { titleKey: "nav.partnerDashboard", icon: LayoutDashboard, href: "/strategic-partners" },
+      { titleKey: "nav.partnerDirectory", icon: Handshake, href: "/partners" },
+    ],
+  },
+  {
     titleKey: "section.platform",
     sectionId: "platform",
     icon: Landmark,
@@ -208,10 +223,14 @@ const detectRoleFromPath = (pathname: string): UserRole | null => {
   const investorPaths = ['/dashboard', '/portfolio', '/family-investment', '/installments', '/distributions', '/reports', '/wallet', '/documents', '/notifications', '/support'];
   const ownerPaths = ['/my-assets', '/submit-property', '/asset-validation', '/owner-wallet', '/owner-reports', '/owner-documents', '/messages'];
   const brokerPaths = ['/listings', '/referrals', '/commissions', '/broker-reports'];
-  
+  // /partners is the PUBLIC directory (visible to all) — only the partner WORK PORTAL
+  // identifies the partner role.
+  const partnerPaths = ['/strategic-partners'];
+
   if (investorPaths.some(p => pathname.startsWith(p))) return 'investor';
   if (ownerPaths.some(p => pathname.startsWith(p))) return 'owner';
   if (brokerPaths.some(p => pathname.startsWith(p))) return 'broker';
+  if (partnerPaths.some(p => pathname.startsWith(p))) return 'partner';
   if (pathname === '/liquidity-provider' && pathname.includes('#')) return 'liquidity_provider';
   
   return null;
@@ -221,7 +240,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const { t, language } = useLanguage();
   const { unreadCount } = useUnreadCount();
-  const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "public", "cards", "products", "products-uc", "platform", "legal"]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "partner", "public", "cards", "products", "products-uc", "platform", "legal"]);
   
   // Initialize role from localStorage or detect from current path
   const [selectedRole, setSelectedRole] = useState<UserRole>(() => {

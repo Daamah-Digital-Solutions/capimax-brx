@@ -736,6 +736,37 @@ class PartnerPortalApiTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def _upload_doc(self):
+        """Helper: the owning partner uploads a doc and returns its DeliverableDocument."""
+        deliverable = self.assignment.deliverables.first()
+        self.client.force_authenticate(self.user)
+        self.client.post(
+            f"/api/partner/deliverables/{deliverable.id}/upload/",
+            {"file": _pdf("valuation.pdf")}, format="multipart",
+        )
+        return DeliverableDocument.objects.get(deliverable=deliverable)
+
+    def test_partner_downloads_own_deliverable_document(self):
+        doc = self._upload_doc()
+        # The serializer surfaces the document id so the UI can offer a real download.
+        resp = self.client.get("/api/partner/assignments/")
+        dels = resp.data["assignments"][0]["deliverables"]
+        with_doc = next(d for d in dels if d["has_document"])
+        self.assertEqual(with_doc["document_id"], str(doc.id))
+        self.assertEqual(with_doc["document_name"], "valuation.pdf")
+        # Self-scoped blob download serves the already-uploaded file as an attachment.
+        dl = self.client.get(f"/api/partner/deliverables/documents/{doc.id}/download/")
+        self.assertEqual(dl.status_code, status.HTTP_200_OK)
+        self.assertIn("attachment", dl["Content-Disposition"])
+        self.assertEqual(b"".join(dl.streaming_content), b"%PDF-1.4 fake")
+
+    def test_cross_partner_download_404(self):
+        doc = self._upload_doc()
+        other_user, _ = _approved_partner("portal-dl-x@example.com")
+        self.client.force_authenticate(other_user)
+        dl = self.client.get(f"/api/partner/deliverables/documents/{doc.id}/download/")
+        self.assertEqual(dl.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_submit_marks_ready_for_review(self):
         self.client.force_authenticate(self.user)
         resp = self.client.post(f"/api/partner/assignments/{self.assignment.id}/submit/")

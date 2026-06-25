@@ -58,9 +58,12 @@ const translations: Record<Language, Record<string, string>> = {
     "section.investor": "المستثمر",
     "section.owner": "المالك / المطور",
     "section.broker": "الوسيط",
+    "section.partner": "الشريك",
     "section.platform": "المنصة",
     "section.liquidityProvider": "مزود السيولة",
     "section.legal": "القانونية",
+    "nav.partnerDashboard": "لوحة الشريك",
+    "nav.partnerDirectory": "دليل الشركاء",
     
     // Legal Navigation
     "nav.privacyPolicy": "سياسة الخصوصية",
@@ -1493,9 +1496,12 @@ const translations: Record<Language, Record<string, string>> = {
     "section.investor": "Investor",
     "section.owner": "Owner / Developer",
     "section.broker": "Broker",
+    "section.partner": "Partner",
     "section.platform": "Platform",
     "section.liquidityProvider": "Liquidity Provider",
     "section.legal": "Legal",
+    "nav.partnerDashboard": "Partner Dashboard",
+    "nav.partnerDirectory": "Partners Directory",
     
     // Legal Navigation
     "nav.privacyPolicy": "Privacy Policy",

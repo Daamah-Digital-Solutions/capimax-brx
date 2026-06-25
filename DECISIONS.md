@@ -1549,6 +1549,33 @@ catch-all; the existing `nav.brokerReports` item now lands here. No backend chan
 > `BrokerLead` model); broker↔platform Inquire/chat (no backend); cards (VisaCards). **Next dashboard: PARTNER**
 > (not yet started — surface map first).
 
+> **PARTNER DASHBOARD realness pass — COMPLETE ✅** (last of the 5 role dashboards). Partner is a **NON-EARNING
+> service vendor** — no money/wallet/cards surface. The CONTENT was already fully real (P11/P11B): public
+> directory (`/partners`, real `partnerApi.directory()`), the work portal (`/strategic-partners`: KYB card,
+> 4 derived stats, Assets/Deliverables/Documents/Activity tabs — all real `useAssignments` + real upload).
+> The pass fixed **one structural gap + 4 small gaps**, DELETE NOTHING / never-fake held:
+> - **STRUCTURAL (the headline):** the partner role had a full backend but **no sidebar nav home** — its
+>   dashboard `/strategic-partners` was reachable by direct URL only (the partner equivalent of broker's
+>   orphan `/broker-dashboard`). Added `partner` to `UserRole` + `roleLabels` ("Partner"/"شريك") + a real
+>   `menuSections` section (`roles: ["partner"]` → **Partner Dashboard** `/strategic-partners` + **Partners
+>   Directory** `/partners`) + `detectRoleFromPath` (`/strategic-partners` → partner; `/partners` stays
+>   PUBLIC) + default-expanded; +4 bilingual i18n keys. A partner now gets a nav home like the other 4 roles.
+> - **DOCUMENTS DOWNLOAD (was the one Bucket-A gap):** the backend blob endpoint already existed
+>   (`DeliverableDocumentDownloadView`, self-scoped, cross-partner 404) but the serializer never exposed the
+>   doc id, so the UI had no Download. Added `document_id`/`document_name` to `DeliverableSerializer`
+>   (latest upload; `has_document` stays the gate) + `partnerApi.downloadDeliverableDocument` (LP/Owner
+>   doc-vault blob pattern) + a real **Download** button on Documents-tab rows. **No migration** (read-side
+>   only — serves the already-uploaded file). +2 tests (partner downloads own doc; cross-partner 404).
+> - **CONTACT US (Bucket B):** Partners.tsx dead "Contact Us" CTA → real `<Link to="/support">`.
+> - **COSMETIC (Bucket C):** dead Assets **Filter** + Deliverables **row chevron** → honestly `disabled`
+>   "Coming soon" (kept, like broker's).
+> - **Never-fake:** zero fabricated person/number/array across both pages (only static filter taxonomy);
+>   directory rows are real with honest empty fallback. **Deferred:** none content-side — every partner
+>   surface is real. (Tab deep-links intentionally NOT added — tabs are local state, no hash contract, so
+>   no LP-style hash-nav defect introduced.)
+> **This CLOSES all 5 role-dashboard realness passes** (Investor §0, Owner/Developer §0B, LP §0C, Broker,
+> Partner). Suite green; tsc clean.
+
 ## Phase 13 — Reports-export (CSV + PDF over EXISTING self-scoped data) (COMPLETE ✅)
 **Source of truth:** REPORTS_SURFACE.md. A reusable export service that renders ALREADY-served, self-scoped
 data into a downloadable file — **NO new business logic, NO new figures**, just formatting. Unlocks the
