@@ -272,7 +272,9 @@ export default function Referrals() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Phone className="w-3 h-3" />
-                            {referral.phone}
+                            {/* Investor phone is intentionally not exposed to the broker
+                                (privacy) — show an honest "—", never a blank field. */}
+                            {referral.phone || "—"}
                           </span>
                         </div>
                       </div>

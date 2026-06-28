@@ -1576,6 +1576,22 @@ catch-all; the existing `nav.brokerReports` item now lands here. No backend chan
 > **This CLOSES all 5 role-dashboard realness passes** (Investor §0, Owner/Developer §0B, LP §0C, Broker,
 > Partner). Suite green; tsc clean.
 
+> **PLATFORM-WIDE REALNESS SWEEP — DONE ✅** (final read-only re-audit of all 5 dashboards, every tab, after
+> the 5 passes closed). Confirmed the passes HELD — no mock crept back, no element silently deleted, no
+> shared mock-prop leak (ReinvestCard/VisaCards props correctly ignored), no fabricated person/number.
+> Re-verified the prior never-fake fixes are intact: LP account-manager (no "Michael Anderson"; points to
+> real /support), broker Payment-Method (no fake Emirates NBD card; honest wallet flow + /wallet link).
+> - **Investor (12 tabs):** all CLEAN. **Owner/Developer (6):** all CLEAN. **LP (7):** all CLEAN.
+>   **Broker (4):** 3 CLEAN + 1 cosmetic. **Partner (7):** all CLEAN (just closed).
+> - **The ONE finding (TRIVIAL-SAFE):** `Referrals.tsx:275` rendered a Phone icon beside a permanently
+>   blank value (`referral.phone` is hardcoded `""` at :81 — the investor's phone is intentionally NOT
+>   exposed to the broker for privacy). Fixed to an honest `—` (DELETE NOTHING: the Phone icon + span were
+>   KEPT, only the empty value became `—`). Not money/data — pure cosmetic honesty.
+> - **NEEDS-YOUR-DECISION surfaced by the sweep:** none new — every non-real surface across all 5 dashboards
+>   is an already-recorded honest "Coming soon"/"—" gated on an external provider or a deferred domain
+>   (see the deferred lists in FINAL_STATE §0(3)/§2). **Platform-wide realness status: every role-dashboard
+>   surface is real or an honest placeholder; zero fabricated numbers/people; zero silent deletions.**
+
 ## Phase 13 — Reports-export (CSV + PDF over EXISTING self-scoped data) (COMPLETE ✅)
 **Source of truth:** REPORTS_SURFACE.md. A reusable export service that renders ALREADY-served, self-scoped
 data into a downloadable file — **NO new business logic, NO new figures**, just formatting. Unlocks the
