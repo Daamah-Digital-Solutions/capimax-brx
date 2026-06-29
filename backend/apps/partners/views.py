@@ -38,6 +38,7 @@ from .models import (
     Deliverable,
     DeliverableDocument,
     PartnerDirectoryStatus,
+    PartnerKYBDocument,
     PartnerProfile,
 )
 from .serializers import (
@@ -45,11 +46,13 @@ from .serializers import (
     AssignmentSerializer,
     PartnerApplySerializer,
     PartnerDirectorySerializer,
+    PartnerKYBDocumentSerializer,
     PartnerKYBSubmitSerializer,
     PartnerProfileSerializer,
     PublicPartnerSerializer,
 )
 from .services import (
+    mark_documents_pending,
     submit_assignment,
     submit_kyb,
     update_directory_details,
@@ -133,6 +136,77 @@ class PartnerKYBSubmitView(APIView):
         serializer.is_valid(raise_exception=True)
         partner = submit_kyb(partner, business_info=serializer.validated_data)
         return Response(PartnerProfileSerializer(partner).data)
+
+
+class PartnerKYBDocumentsView(APIView):
+    """List the caller's own entity-KYB documents; upload one (multipart).
+
+    Gated on "applied first" (a partner profile must exist) — NOT on Sumsub. SEPARATE
+    from the Wave-B DeliverableDocument (work product). Mirrors apps/lp/views.py
+    LPKYBDocumentsView.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        partner = _get_partner(request.user)
+        if partner is None:
+            return Response(
+                {"detail": "Apply as a partner before uploading KYB documents."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        docs = PartnerKYBDocument.objects.filter(partner=partner)
+        return Response(PartnerKYBDocumentSerializer(docs, many=True).data)
+
+    def post(self, request):
+        partner = _get_partner(request.user)
+        if partner is None:
+            return Response(
+                {"detail": "Apply as a partner before uploading KYB documents."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        upload = request.FILES.get("file")
+        document_type = request.data.get("document_type") or "other"
+        document_name = request.data.get("document_name") or (
+            upload.name if upload else "document"
+        )
+        doc = PartnerKYBDocument.objects.create(
+            partner=partner,
+            user=request.user,
+            document_name=document_name,
+            document_type=document_type,
+            file=upload,
+            file_size=getattr(upload, "size", None),
+        )
+        mark_documents_pending(partner)
+        return Response(
+            PartnerKYBDocumentSerializer(doc).data, status=status.HTTP_201_CREATED
+        )
+
+
+class PartnerKYBDocumentDownloadView(APIView):
+    """Partner-scoped download of one of their OWN entity-KYB documents (blob).
+
+    Cross-user / cross-role → 404 (the queryset is filtered to the caller's own
+    partner profile). Mirrors the partner DeliverableDocumentDownloadView self-scoping.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, doc_id):
+        partner = _get_partner(request.user)
+        if partner is None:
+            return Response(
+                {"detail": "No partner profile for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        doc = get_object_or_404(PartnerKYBDocument, pk=doc_id, partner=partner)
+        if not doc.file:
+            return Response({"detail": "No file."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(
+            doc.file.open("rb"), as_attachment=True, filename=doc.document_name
+        )
 
 
 class PartnerKYBAccessTokenView(APIView):

@@ -8,6 +8,8 @@ from .views import (
     PartnerAssignmentDetailView,
     PartnerAssignmentsView,
     PartnerKYBAccessTokenView,
+    PartnerKYBDocumentDownloadView,
+    PartnerKYBDocumentsView,
     PartnerKYBSubmitView,
     PartnerProfileView,
 )
@@ -19,6 +21,9 @@ urlpatterns = [
     path("profile/", PartnerProfileView.as_view(), name="partner-profile"),
     path("kyb/submit/", PartnerKYBSubmitView.as_view(), name="partner-kyb-submit"),
     path("kyb/access-token/", PartnerKYBAccessTokenView.as_view(), name="partner-kyb-access-token"),
+    path("kyb/documents/", PartnerKYBDocumentsView.as_view(), name="partner-kyb-documents"),
+    path("kyb/documents/<uuid:doc_id>/download/",
+         PartnerKYBDocumentDownloadView.as_view(), name="partner-kyb-document-download"),
     # Assignment / deliverable work portal (Wave B) — self-scoped to the caller-partner.
     path("assignments/", PartnerAssignmentsView.as_view(), name="partner-assignments"),
     path("assignments/<uuid:assignment_id>/", PartnerAssignmentDetailView.as_view(),

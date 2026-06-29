@@ -749,6 +749,41 @@ export interface LpKybAccessToken {
   code?: string;
 }
 
+// --------------------------------------------------------------------------- //
+// Entity-KYB document vault (Owner / Developer / Partner) — manual-admin-approval
+// support. Mirrors the LP KYB-doc pattern: multipart upload + self-scoped blob
+// download. Shared row shape + download helper so the three role APIs stay DRY.
+// --------------------------------------------------------------------------- //
+export interface KybDocumentRow {
+  id: string;
+  document_name: string;
+  document_type: string;
+  file_path: string | null;
+  file_size: number | null;
+  status: string;
+  created_at: string;
+}
+
+/** Fetch a self-scoped KYB document blob (auth header) and trigger a browser save.
+ *  Mirrors partnerApi.downloadDeliverableDocument. */
+async function downloadKybDocumentBlob(path: string, filename?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
+  });
+  if (!res.ok) throw buildError(`Document download failed (${res.status})`, res.status);
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const name = /filename="?([^"]+)"?/.exec(cd)?.[1] || filename || "kyb-document";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const lpApi = {
   /** The caller's LP profile, or null when none exists yet (404). */
   profile: async (): Promise<any | null> => {
@@ -890,6 +925,20 @@ export const ownerApi = {
       return { configured: false, code: data.code || "kyb_provider_unconfigured" };
     }
   },
+  /** The caller's own entity-KYB documents (self-scoped). */
+  kybDocuments: () =>
+    rawRequest("/owner/kyb/documents/", { auth: true }) as Promise<KybDocumentRow[]>,
+  /** Upload an entity-KYB document (multipart). Gated on "applied first", not Sumsub. */
+  uploadKYBDocument: (file: File, documentType: string, documentName: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("document_type", documentType);
+    form.append("document_name", documentName);
+    return rawUpload("/owner/kyb/documents/", form) as Promise<KybDocumentRow>;
+  },
+  /** Download one of the caller's OWN entity-KYB documents (self-scoped blob save). */
+  downloadKYBDocument: (docId: string, filename?: string) =>
+    downloadKybDocumentBlob(`/owner/kyb/documents/${docId}/download/`, filename),
 
   // --- Property submission intake (Phase 7 Wave B) — gated to approved owners. --- //
   /** The caller's property submissions (drafts + submitted). */
@@ -1087,6 +1136,20 @@ export const developerApi = {
       return { configured: false, code: data.code || "kyb_provider_unconfigured" };
     }
   },
+  /** The caller's own entity-KYB documents (self-scoped). */
+  kybDocuments: () =>
+    rawRequest("/developer/kyb/documents/", { auth: true }) as Promise<KybDocumentRow[]>,
+  /** Upload an entity-KYB document (multipart). Gated on "applied first", not Sumsub. */
+  uploadKYBDocument: (file: File, documentType: string, documentName: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("document_type", documentType);
+    form.append("document_name", documentName);
+    return rawUpload("/developer/kyb/documents/", form) as Promise<KybDocumentRow>;
+  },
+  /** Download one of the caller's OWN entity-KYB documents (self-scoped blob save). */
+  downloadKYBDocument: (docId: string, filename?: string) =>
+    downloadKybDocumentBlob(`/developer/kyb/documents/${docId}/download/`, filename),
 };
 
 // --------------------------------------------------------------------------- //
@@ -1392,6 +1455,20 @@ export const partnerApi = {
       return { configured: false, code: data.code || "kyb_provider_unconfigured" };
     }
   },
+  /** The caller's own entity-KYB documents (self-scoped). SEPARATE from deliverables. */
+  kybDocuments: () =>
+    rawRequest("/partner/kyb/documents/", { auth: true }) as Promise<KybDocumentRow[]>,
+  /** Upload an entity-KYB document (multipart). Gated on "applied first", not Sumsub. */
+  uploadKYBDocument: (file: File, documentType: string, documentName: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("document_type", documentType);
+    form.append("document_name", documentName);
+    return rawUpload("/partner/kyb/documents/", form) as Promise<KybDocumentRow>;
+  },
+  /** Download one of the caller's OWN entity-KYB documents (self-scoped blob save). */
+  downloadKYBDocument: (docId: string, filename?: string) =>
+    downloadKybDocumentBlob(`/partner/kyb/documents/${docId}/download/`, filename),
   /** The PUBLIC partners directory (AllowAny) — only directory-approved partners. */
   directory: () =>
     rawRequest("/partners/directory/", {}) as Promise<PublicPartner[]>,

@@ -23,7 +23,13 @@ from apps.properties.models import (
     YieldType,
 )
 
-from .models import OwnerProfile, PropertySubmission, SubmissionDocument, SubmissionStatus
+from .models import (
+    OwnerKYBDocument,
+    OwnerProfile,
+    PropertySubmission,
+    SubmissionDocument,
+    SubmissionStatus,
+)
 from .services import (
     SubmissionNotReviewable,
     approve_kyb,
@@ -32,6 +38,20 @@ from .services import (
     reject_submission,
 )
 from .services import _property_defaults_from  # initial prefill for the review form
+
+
+class OwnerKYBDocumentInline(admin.TabularInline):
+    """READONLY view of the owner's uploaded entity-KYB documents — so the admin can
+    review the business evidence before manually approving KYB. Mirrors the owner
+    SubmissionDocumentInline (read-only, no add)."""
+
+    model = OwnerKYBDocument
+    extra = 0
+    readonly_fields = ("id", "document_type", "document_name", "file", "file_size", "status", "created_at")
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(OwnerProfile)
@@ -45,6 +65,7 @@ class OwnerProfileAdmin(admin.ModelAdmin):
         "sumsub_applicant_id", "sumsub_review_answer",
         "created_at", "updated_at",
     )
+    inlines = [OwnerKYBDocumentInline]
     actions = ["exception_approve_kyb", "exception_reject_kyb"]
 
     def has_add_permission(self, request):

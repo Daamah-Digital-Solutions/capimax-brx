@@ -7,7 +7,7 @@ No Sumsub ids are exposed.
 """
 from rest_framework import serializers
 
-from .models import DeveloperProfile
+from .models import DeveloperKYBDocument, DeveloperProfile
 
 
 class DeveloperProfileSerializer(serializers.ModelSerializer):
@@ -53,3 +53,21 @@ class DeveloperKYBSubmitSerializer(serializers.Serializer):
     tax_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
     business_address = serializers.CharField(max_length=500)
     business_description = serializers.CharField(required=False, allow_blank=True)
+
+
+class DeveloperKYBDocumentSerializer(serializers.ModelSerializer):
+    """A developer entity-KYB document (read shape). Mirrors OwnerKYBDocumentSerializer."""
+
+    developer_id = serializers.UUIDField(read_only=True)
+    file_path = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeveloperKYBDocument
+        fields = (
+            "id", "developer_id", "document_name", "document_type",
+            "file_path", "file_size", "status", "created_at",
+        )
+        read_only_fields = fields
+
+    def get_file_path(self, obj) -> str:
+        return obj.file.name if obj.file else ""

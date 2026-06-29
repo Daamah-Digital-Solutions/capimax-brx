@@ -404,3 +404,48 @@ class AssignmentEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} ({self.assignment_id})"
+
+
+# --------------------------------------------------------------------------- #
+# Partner ENTITY-KYB document vault — manual-admin-approval support (deploy prep).
+# A SEPARATE concern from the Wave-B DeliverableDocument above (work-product a
+# partner uploads against an assignment): this is the partner's BUSINESS-verification
+# evidence (registration certificate / trade licence / …), uploaded during the KYB
+# step so an admin can review it before manually approving KYB when Sumsub is
+# deferred. Mirrors apps/lp/models.py LPKYBDocument EXACTLY. NO money fields.
+# --------------------------------------------------------------------------- #
+class PartnerKYBDocument(models.Model):
+    """Partner entity-KYB verification document. Mirrors LPKYBDocument."""
+
+    class DocStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile, on_delete=models.CASCADE, related_name="kyb_documents"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="partner_kyb_documents",
+    )
+    document_name = models.CharField(max_length=255)
+    document_type = models.CharField(max_length=64)
+    file = models.FileField(upload_to="partner_kyb_documents/%Y/%m/", null=True, blank=True)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(
+        max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING
+    )
+    rejection_reason = models.CharField(max_length=500, blank=True, null=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "partner_kyb_documents"
+        verbose_name = _("partner KYB document")
+        verbose_name_plural = _("partner KYB documents")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.document_name} [{self.status}] ({self.partner_id})"

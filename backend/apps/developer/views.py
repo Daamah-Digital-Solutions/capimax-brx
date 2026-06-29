@@ -14,20 +14,24 @@ level) — no admin in the normal path. Mirrors apps/owner/views.py (KYB subset)
 """
 import logging
 
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.kyc import sumsub
 
-from .models import DeveloperProfile
+from .models import DeveloperKYBDocument, DeveloperProfile
 from .serializers import (
     DeveloperApplySerializer,
+    DeveloperKYBDocumentSerializer,
     DeveloperKYBSubmitSerializer,
     DeveloperProfileSerializer,
 )
-from .services import submit_kyb
+from .services import mark_documents_pending, submit_kyb
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +92,76 @@ class DeveloperKYBSubmitView(APIView):
         serializer.is_valid(raise_exception=True)
         developer = submit_kyb(developer, business_info=serializer.validated_data)
         return Response(DeveloperProfileSerializer(developer).data)
+
+
+class DeveloperKYBDocumentsView(APIView):
+    """List the caller's own entity-KYB documents; upload one (multipart).
+
+    Gated on "applied first" (a developer profile must exist) — NOT on Sumsub.
+    Mirrors apps/lp/views.py LPKYBDocumentsView.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        developer = _get_developer(request.user)
+        if developer is None:
+            return Response(
+                {"detail": "Apply as a developer before uploading KYB documents."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        docs = DeveloperKYBDocument.objects.filter(developer=developer)
+        return Response(DeveloperKYBDocumentSerializer(docs, many=True).data)
+
+    def post(self, request):
+        developer = _get_developer(request.user)
+        if developer is None:
+            return Response(
+                {"detail": "Apply as a developer before uploading KYB documents."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        upload = request.FILES.get("file")
+        document_type = request.data.get("document_type") or "other"
+        document_name = request.data.get("document_name") or (
+            upload.name if upload else "document"
+        )
+        doc = DeveloperKYBDocument.objects.create(
+            developer=developer,
+            user=request.user,
+            document_name=document_name,
+            document_type=document_type,
+            file=upload,
+            file_size=getattr(upload, "size", None),
+        )
+        mark_documents_pending(developer)
+        return Response(
+            DeveloperKYBDocumentSerializer(doc).data, status=status.HTTP_201_CREATED
+        )
+
+
+class DeveloperKYBDocumentDownloadView(APIView):
+    """Developer-scoped download of one of their OWN entity-KYB documents (blob).
+
+    Cross-user / cross-role → 404 (the queryset is filtered to the caller's own
+    developer profile). Mirrors the partner DeliverableDocumentDownloadView self-scoping.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, doc_id):
+        developer = _get_developer(request.user)
+        if developer is None:
+            return Response(
+                {"detail": "No developer profile for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        doc = get_object_or_404(DeveloperKYBDocument, pk=doc_id, developer=developer)
+        if not doc.file:
+            return Response({"detail": "No file."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(
+            doc.file.open("rb"), as_attachment=True, filename=doc.document_name
+        )
 
 
 class DeveloperKYBAccessTokenView(APIView):

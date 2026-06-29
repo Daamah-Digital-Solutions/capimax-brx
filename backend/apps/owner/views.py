@@ -25,16 +25,28 @@ from rest_framework.views import APIView
 from apps.core.permissions import HasActivatedPropertySubmitter
 from apps.kyc import sumsub
 
-from .models import OwnerProfile, PropertySubmission, SubmissionDocument, SubmissionStatus
+from .models import (
+    OwnerKYBDocument,
+    OwnerProfile,
+    PropertySubmission,
+    SubmissionDocument,
+    SubmissionStatus,
+)
 from .serializers import (
     OwnerApplySerializer,
+    OwnerKYBDocumentSerializer,
     OwnerKYBSubmitSerializer,
     OwnerProfileSerializer,
     PropertySubmissionSerializer,
     PropertySubmissionWriteSerializer,
     SubmissionDocumentSerializer,
 )
-from .services import MissingRequiredDocuments, submit_kyb, submit_submission
+from .services import (
+    MissingRequiredDocuments,
+    mark_documents_pending,
+    submit_kyb,
+    submit_submission,
+)
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +107,77 @@ class OwnerKYBSubmitView(APIView):
         serializer.is_valid(raise_exception=True)
         owner = submit_kyb(owner, business_info=serializer.validated_data)
         return Response(OwnerProfileSerializer(owner).data)
+
+
+class OwnerKYBDocumentsView(APIView):
+    """List the caller's own entity-KYB documents; upload one (multipart).
+
+    Gated on "applied first" (an owner profile must exist) — NOT on Sumsub, so the
+    doc vault works while the provider is deferred and an admin reviews manually.
+    Mirrors apps/lp/views.py LPKYBDocumentsView.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        owner = _get_owner(request.user)
+        if owner is None:
+            return Response(
+                {"detail": "Apply as an owner before uploading KYB documents."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        docs = OwnerKYBDocument.objects.filter(owner=owner)
+        return Response(OwnerKYBDocumentSerializer(docs, many=True).data)
+
+    def post(self, request):
+        owner = _get_owner(request.user)
+        if owner is None:
+            return Response(
+                {"detail": "Apply as an owner before uploading KYB documents."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        upload = request.FILES.get("file")
+        document_type = request.data.get("document_type") or "other"
+        document_name = request.data.get("document_name") or (
+            upload.name if upload else "document"
+        )
+        doc = OwnerKYBDocument.objects.create(
+            owner=owner,
+            user=request.user,
+            document_name=document_name,
+            document_type=document_type,
+            file=upload,
+            file_size=getattr(upload, "size", None),
+        )
+        mark_documents_pending(owner)
+        return Response(
+            OwnerKYBDocumentSerializer(doc).data, status=status.HTTP_201_CREATED
+        )
+
+
+class OwnerKYBDocumentDownloadView(APIView):
+    """Owner-scoped download of one of their OWN entity-KYB documents (blob).
+
+    Cross-user / cross-role → 404 (the queryset is filtered to the caller's own
+    owner profile). Mirrors the partner DeliverableDocumentDownloadView self-scoping.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, doc_id):
+        owner = _get_owner(request.user)
+        if owner is None:
+            return Response(
+                {"detail": "No owner profile for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        doc = get_object_or_404(OwnerKYBDocument, pk=doc_id, owner=owner)
+        if not doc.file:
+            return Response({"detail": "No file."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(
+            doc.file.open("rb"), as_attachment=True, filename=doc.document_name
+        )
 
 
 class OwnerKYBAccessTokenView(APIView):

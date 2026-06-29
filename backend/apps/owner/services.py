@@ -130,6 +130,17 @@ def submit_kyb(owner: OwnerProfile, *, business_info: dict | None = None) -> Own
     return owner
 
 
+def mark_documents_pending(owner: OwnerProfile) -> None:
+    """Move KYB from not_started → documents_pending when the first doc lands.
+
+    Mirrors apps/lp/services.mark_documents_pending — lets an owner attach KYB
+    evidence before formally submitting the business info.
+    """
+    if owner.kyb_status == OwnerKYBStatus.NOT_STARTED:
+        owner.kyb_status = OwnerKYBStatus.DOCUMENTS_PENDING
+        owner.save(update_fields=["kyb_status", "updated_at"])
+
+
 # --------------------------------------------------------------------------- #
 # Shared Sumsub webhook routing (the automation hinge for owner KYB).
 # --------------------------------------------------------------------------- #

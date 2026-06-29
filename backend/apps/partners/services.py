@@ -132,6 +132,16 @@ def submit_kyb(partner: PartnerProfile, *, business_info: dict | None = None) ->
     return partner
 
 
+def mark_documents_pending(partner: PartnerProfile) -> None:
+    """Move KYB from not_started → documents_pending when the first doc lands.
+
+    Mirrors apps/lp/services.mark_documents_pending.
+    """
+    if partner.kyb_status == PartnerKYBStatus.NOT_STARTED:
+        partner.kyb_status = PartnerKYBStatus.DOCUMENTS_PENDING
+        partner.save(update_fields=["kyb_status", "updated_at"])
+
+
 def update_directory_details(partner: PartnerProfile, *, details: dict) -> PartnerProfile:
     """
     The PARTNER fills/updates their own public-directory fields. Editing the directory

@@ -9,8 +9,22 @@ apps/owner/admin.py (OwnerProfileAdmin).
 """
 from django.contrib import admin, messages
 
-from .models import DeveloperProfile
+from .models import DeveloperKYBDocument, DeveloperProfile
 from .services import approve_kyb, reject_kyb
+
+
+class DeveloperKYBDocumentInline(admin.TabularInline):
+    """READONLY view of the developer's uploaded entity-KYB documents — so the admin
+    can review the business evidence before manually approving KYB. Mirrors the owner
+    KYB-doc inline (read-only, no add)."""
+
+    model = DeveloperKYBDocument
+    extra = 0
+    readonly_fields = ("id", "document_type", "document_name", "file", "file_size", "status", "created_at")
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(DeveloperProfile)
@@ -24,6 +38,7 @@ class DeveloperProfileAdmin(admin.ModelAdmin):
         "sumsub_applicant_id", "sumsub_review_answer",
         "created_at", "updated_at",
     )
+    inlines = [DeveloperKYBDocumentInline]
     actions = ["exception_approve_kyb", "exception_reject_kyb"]
 
     def has_add_permission(self, request):

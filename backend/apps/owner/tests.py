@@ -1145,3 +1145,71 @@ class SubmissionMediaTests(APITestCase):
         self.assertEqual(
             SubmissionDocument.objects.filter(submission_id=self.sub_id).count(), 0
         )
+
+
+# --------------------------------------------------------------------------- #
+# Owner entity-KYB document vault (manual-admin-approval support, deploy prep).
+# Mirrors the LP doc-vault tests: upload persists (self-scoped, applied-gated),
+# own download works, cross-user download 404 (no leak), admin inline shows docs.
+# --------------------------------------------------------------------------- #
+class OwnerKYBDocumentTests(APITestCase):
+    def setUp(self):
+        self.user = _mk_user("owner-doc@example.com")
+        self.client.force_authenticate(self.user)
+        self.owner, _ = get_or_create_owner(
+            self.user, defaults={"contact_name": "J", "email": self.user.email}
+        )
+
+    def _upload(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile("trade-licence.pdf", b"%PDF-1.4 fake", content_type="application/pdf")
+        return self.client.post(
+            "/api/owner/kyb/documents/",
+            {"file": f, "document_type": "registration_certificate", "document_name": "Trade Licence"},
+            format="multipart",
+        )
+
+    def test_upload_persists_self_scoped_and_advances_kyb(self):
+        from .models import OwnerKYBDocument, OwnerKYBStatus
+        up = self._upload()
+        self.assertEqual(up.status_code, status.HTTP_201_CREATED)
+        doc = OwnerKYBDocument.objects.get(id=up.data["id"])
+        self.assertEqual(doc.owner_id, self.owner.id)
+        self.assertEqual(doc.user_id, self.user.id)
+        lst = self.client.get("/api/owner/kyb/documents/")
+        self.assertEqual(len(lst.data), 1)
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.kyb_status, OwnerKYBStatus.DOCUMENTS_PENDING)
+
+    def test_upload_requires_applied(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        other = _mk_user("owner-noprofile@example.com")
+        self.client.force_authenticate(other)
+        f = SimpleUploadedFile("x.pdf", b"%PDF-1.4 fake", content_type="application/pdf")
+        resp = self.client.post("/api/owner/kyb/documents/", {"file": f}, format="multipart")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_download_own_doc(self):
+        doc_id = self._upload().data["id"]
+        resp = self.client.get(f"/api/owner/kyb/documents/{doc_id}/download/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("attachment", resp.get("Content-Disposition", ""))
+        self.assertEqual(b"".join(resp.streaming_content), b"%PDF-1.4 fake")
+
+    def test_cross_user_download_404(self):
+        doc_id = self._upload().data["id"]
+        other = _mk_user("owner-other@example.com")
+        get_or_create_owner(other, defaults={"contact_name": "O", "email": other.email})
+        self.client.force_authenticate(other)
+        resp = self.client.get(f"/api/owner/kyb/documents/{doc_id}/download/")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_admin_inline_shows_docs(self):
+        from django.urls import reverse
+        self._upload()
+        admin = User.objects.create_superuser(email="owner-doc-admin@ex.com", password="pw-12345-strong")
+        self.client.force_authenticate(None)
+        self.client.force_login(admin)
+        resp = self.client.get(reverse("admin:owner_ownerprofile_change", args=[self.owner.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Trade Licence")

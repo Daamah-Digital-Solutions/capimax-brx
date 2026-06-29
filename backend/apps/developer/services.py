@@ -114,6 +114,16 @@ def submit_kyb(developer: DeveloperProfile, *, business_info: dict | None = None
     return developer
 
 
+def mark_documents_pending(developer: DeveloperProfile) -> None:
+    """Move KYB from not_started → documents_pending when the first doc lands.
+
+    Mirrors apps/lp/services.mark_documents_pending.
+    """
+    if developer.kyb_status == DeveloperKYBStatus.NOT_STARTED:
+        developer.kyb_status = DeveloperKYBStatus.DOCUMENTS_PENDING
+        developer.save(update_fields=["kyb_status", "updated_at"])
+
+
 # --------------------------------------------------------------------------- #
 # Shared Sumsub webhook routing (the automation hinge for developer KYB).
 # --------------------------------------------------------------------------- #

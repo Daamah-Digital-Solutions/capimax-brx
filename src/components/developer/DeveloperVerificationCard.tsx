@@ -14,6 +14,7 @@ import {
   HardHat,
 } from "lucide-react";
 import { developerApi } from "@/integrations/api/client";
+import { KybDocumentVault } from "@/components/kyb/KybDocumentVault";
 import { mountSumsubWebSdk } from "@/lib/sumsub";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -231,6 +232,18 @@ export function DeveloperVerificationCard() {
               : isArabic ? "بدء التحقق" : "Start verification"}
           </Button>
         </div>
+      )}
+
+      {/* Entity-KYB document vault — upload business evidence for admin review. Shown
+          once a developer profile exists and until approved (mirrors the LP KYB docs). */}
+      {developerProfile && status !== "approved" && (
+        <KybDocumentVault
+          isArabic={isArabic}
+          list={developerApi.kybDocuments}
+          upload={developerApi.uploadKYBDocument}
+          download={developerApi.downloadKYBDocument}
+          onUploaded={refresh}
+        />
       )}
 
       {/* Sumsub WebSDK mounts here when the provider is configured. */}

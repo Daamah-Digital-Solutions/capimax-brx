@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import OwnerProfile, PropertySubmission, SubmissionDocument
+from .models import OwnerKYBDocument, OwnerProfile, PropertySubmission, SubmissionDocument
 
 
 class OwnerProfileSerializer(serializers.ModelSerializer):
@@ -55,6 +55,26 @@ class OwnerKYBSubmitSerializer(serializers.Serializer):
     tax_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
     business_address = serializers.CharField(max_length=500)
     business_description = serializers.CharField(required=False, allow_blank=True)
+
+
+class OwnerKYBDocumentSerializer(serializers.ModelSerializer):
+    """An owner entity-KYB document (read shape). Mirrors LPDocumentSerializer:
+    the blob is fetched from the owner-only download endpoint; `file_path` is the
+    stored path only."""
+
+    owner_id = serializers.UUIDField(read_only=True)
+    file_path = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OwnerKYBDocument
+        fields = (
+            "id", "owner_id", "document_name", "document_type",
+            "file_path", "file_size", "status", "created_at",
+        )
+        read_only_fields = fields
+
+    def get_file_path(self, obj) -> str:
+        return obj.file.name if obj.file else ""
 
 
 # --------------------------------------------------------------------------- #

@@ -152,3 +152,47 @@ class DeveloperProfile(models.Model):
         self.rejection_reason = (reason or "")[:500]
         if review_answer:
             self.sumsub_review_answer = review_answer
+
+
+# --------------------------------------------------------------------------- #
+# Developer ENTITY-KYB document vault — manual-admin-approval support (deploy prep).
+# The developer's BUSINESS-verification evidence (registration certificate / trade
+# licence / …), uploaded during the KYB step so an admin can review it before
+# manually approving KYB when Sumsub is deferred. Mirrors apps/lp/models.py
+# LPKYBDocument EXACTLY (developer entity-KYB had no document model before).
+# --------------------------------------------------------------------------- #
+class DeveloperKYBDocument(models.Model):
+    """Developer entity-KYB verification document. Mirrors LPKYBDocument."""
+
+    class DocStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    developer = models.ForeignKey(
+        DeveloperProfile, on_delete=models.CASCADE, related_name="kyb_documents"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="developer_kyb_documents",
+    )
+    document_name = models.CharField(max_length=255)
+    document_type = models.CharField(max_length=64)
+    file = models.FileField(upload_to="developer_kyb_documents/%Y/%m/", null=True, blank=True)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(
+        max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING
+    )
+    rejection_reason = models.CharField(max_length=500, blank=True, null=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "developer_kyb_documents"
+        verbose_name = _("developer KYB document")
+        verbose_name_plural = _("developer KYB documents")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.document_name} [{self.status}] ({self.developer_id})"

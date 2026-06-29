@@ -15,6 +15,7 @@ import {
   Building2,
 } from "lucide-react";
 import { partnerApi } from "@/integrations/api/client";
+import { KybDocumentVault } from "@/components/kyb/KybDocumentVault";
 import { mountSumsubWebSdk } from "@/lib/sumsub";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -307,6 +308,19 @@ export function PartnerVerificationCard() {
                 : isArabic ? "بدء التحقق" : "Start verification"}
             </Button>
           </div>
+        )}
+
+        {/* Entity-KYB document vault — upload business evidence for admin review. Shown
+            once a partner profile exists and until approved. SEPARATE from Wave-B
+            deliverables (work product). Mirrors the LP KYB docs. */}
+        {partnerProfile && status !== "approved" && (
+          <KybDocumentVault
+            isArabic={isArabic}
+            list={partnerApi.kybDocuments}
+            upload={partnerApi.uploadKYBDocument}
+            download={partnerApi.downloadKYBDocument}
+            onUploaded={refresh}
+          />
         )}
 
         {/* Sumsub WebSDK mounts here when the provider is configured. */}

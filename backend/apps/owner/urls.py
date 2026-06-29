@@ -6,6 +6,8 @@ from .views import (
     OwnerEarningsView,
     OwnerInvestorsView,
     OwnerKYBAccessTokenView,
+    OwnerKYBDocumentDownloadView,
+    OwnerKYBDocumentsView,
     OwnerKYBSubmitView,
     OwnerProfileView,
     SubmissionDetailView,
@@ -23,6 +25,12 @@ urlpatterns = [
     path("profile/", OwnerProfileView.as_view(), name="owner-profile"),
     path("kyb/submit/", OwnerKYBSubmitView.as_view(), name="owner-kyb-submit"),
     path("kyb/access-token/", OwnerKYBAccessTokenView.as_view(), name="owner-kyb-access-token"),
+    path("kyb/documents/", OwnerKYBDocumentsView.as_view(), name="owner-kyb-documents"),
+    path(
+        "kyb/documents/<uuid:doc_id>/download/",
+        OwnerKYBDocumentDownloadView.as_view(),
+        name="owner-kyb-document-download",
+    ),
     # Owner analytics (Wave D + OwnerReports realness) — all period-aware, owner-scoped.
     path("earnings/", OwnerEarningsView.as_view(), name="owner-earnings"),
     path("distributions/", OwnerDistributionsView.as_view(), name="owner-distributions"),

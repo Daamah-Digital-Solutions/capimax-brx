@@ -130,6 +130,13 @@ VPS readiness audit found only OS + SSH present (no repo, venv, Postgres, nginx,
   allowed *before* enabling, or risk lockout.
 - **Verify:** `ufw status` shows 22/80/443 allow; SSH session stays alive; Postgres 5432 NOT exposed.
 
+> **KYB for the 4 business roles (LP / Owner / Developer / Partner) can be approved MANUALLY by an
+> admin** — Sumsub KYB is deferred (paid tier). Each role now has an **entity-KYB document vault**
+> (upload registration cert / trade licence; admin reviews it inline before `exception_approve_kyb`
+> activates the role). So a full soft launch can run on **investor KYC (individual Sumsub level) +
+> manual admin KYB** without the paid Company-KYB tier. The 5 `SUMSUB_*_LEVEL_NAME` levels below only
+> matter if/when automated Sumsub KYB is turned on. See DECISIONS.md "Entity-KYB document vault".
+
 ## STEP 11 — Provider webhooks (Yahia, in dashboards)
 - **Owner:** **Yahia** (Stripe/Sumsub dashboards) · **Depends on:** 9 (public HTTPS URL exists).
 - Stripe → webhook endpoint `https://api.capimaxbrx.com/api/payments/stripe/webhook/`

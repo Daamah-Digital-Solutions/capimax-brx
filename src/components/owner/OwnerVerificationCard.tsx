@@ -14,6 +14,7 @@ import {
   Building2,
 } from "lucide-react";
 import { ownerApi } from "@/integrations/api/client";
+import { KybDocumentVault } from "@/components/kyb/KybDocumentVault";
 import { mountSumsubWebSdk } from "@/lib/sumsub";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -229,6 +230,18 @@ export function OwnerVerificationCard() {
               : isArabic ? "بدء التحقق" : "Start verification"}
           </Button>
         </div>
+      )}
+
+      {/* Entity-KYB document vault — upload business evidence for admin review. Shown
+          once an owner profile exists and until approved (mirrors the LP KYB docs). */}
+      {ownerProfile && status !== "approved" && (
+        <KybDocumentVault
+          isArabic={isArabic}
+          list={ownerApi.kybDocuments}
+          upload={ownerApi.uploadKYBDocument}
+          download={ownerApi.downloadKYBDocument}
+          onUploaded={refresh}
+        />
       )}
 
       {/* Sumsub WebSDK mounts here when the provider is configured. */}

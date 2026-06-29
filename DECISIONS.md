@@ -2455,3 +2455,38 @@ FLAGGED (left static on purpose — wiring would change displayed content, again
   $127M, 9.8%), NOT computed from properties today. `/api/properties/stats/` ready.
 - `Products.tsx` / `ProductCategory.tsx` — static ownership-MODEL taxonomy + marketing copy +
   an explicitly-labeled "illustrative" sample (PropertyModelTemplate). Not property records.
+
+---
+
+## Entity-KYB document vault for Owner / Developer / Partner (deploy prep — manual KYB review)
+
+**Decision (testnet soft launch):** KYB for the 4 business roles is approved MANUALLY by an admin
+(Sumsub KYB is deferred — it needs a paid tier). The manual approval path already existed
+(`exception_approve_kyb` on each ModelAdmin → routes through the same `approve_kyb` → activates the
+role). **Gap:** only LP had a KYB-document vault (`LPKYBDocument`); Owner/Developer/Partner entity-KYB
+docs were designed to flow through Sumsub's WebSDK, so an admin had only typed business fields to
+review for those three. **Built** an entity-KYB document vault for the 3 roles, mirroring the LP
+pattern EXACTLY:
+
+- **Models** (each mirrors `LPKYBDocument`): `OwnerKYBDocument` ([owner/models.py](backend/apps/owner/models.py)),
+  `DeveloperKYBDocument` ([developer/models.py](backend/apps/developer/models.py)),
+  `PartnerKYBDocument` ([partners/models.py](backend/apps/partners/models.py)) — FileField + document_type
+  + status + FK to the role profile + FK to user. Migrations: `owner.0005`, `developer.0002`,
+  `partners.0003`. **Partner KYB doc is SEPARATE from the Wave-B `DeliverableDocument`** (work product) —
+  not conflated; the no-money-model test was extended to include `partnerkybdocument` (NO money fields).
+- **Endpoints** (gated on "applied first" — a profile must exist — NOT on Sumsub, so the vault works
+  while the provider is deferred): `POST/GET /api/{owner,developer,partner}/kyb/documents/` (upload +
+  self-scoped list) + `GET /api/.../kyb/documents/<id>/download/` (self-scoped blob; cross-user /
+  cross-role → 404, asserted). First upload advances `kyb_status` not_started→documents_pending
+  (`mark_documents_pending`, mirrors LP).
+- **Admin:** a READONLY `*KYBDocumentInline` on each profile admin — so the admin sees the uploaded
+  business evidence when reviewing `kyb_status=under_review` before `exception_approve_kyb`.
+- **Frontend:** one shared `KybDocumentVault` component ([src/components/kyb/KybDocumentVault.tsx](src/components/kyb/KybDocumentVault.tsx))
+  — real multipart upload + filename/status list + self-scoped download — rendered on the Owner /
+  Developer / Partner verification cards (shown while a profile exists and not yet approved). Bilingual
+  EN/AR. Shared `KybDocumentRow` + `downloadKybDocumentBlob` + per-role `kybDocuments` /
+  `uploadKYBDocument` / `downloadKYBDocument` in [client.ts](src/integrations/api/client.ts).
+- **Manual-approval flow now has docs to review for all 4 roles:** apply → submit KYB → upload KYB docs
+  → admin sees them inline → `exception_approve_kyb` activates the role (identical end-state to a GREEN
+  webhook). **DELETE NOTHING; no money (KYB documents only).** Verify: 15 new tests (5/role) green;
+  full suite 523 green; tsc clean.

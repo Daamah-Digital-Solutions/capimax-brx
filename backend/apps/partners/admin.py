@@ -27,6 +27,7 @@ from .models import (
     AssignmentEvent,
     Deliverable,
     DeliverableDocument,
+    PartnerKYBDocument,
     PartnerProfile,
     PartnerStatus,
 )
@@ -39,6 +40,20 @@ from .services import (
     reject_kyb,
     request_revision,
 )
+
+
+class PartnerKYBDocumentInline(admin.TabularInline):
+    """READONLY view of the partner's uploaded entity-KYB documents — so the admin can
+    review the business evidence before manually approving KYB. SEPARATE from the
+    Wave-B DeliverableDocument (work product). Mirrors the owner KYB-doc inline."""
+
+    model = PartnerKYBDocument
+    extra = 0
+    readonly_fields = ("id", "document_type", "document_name", "file", "file_size", "status", "created_at")
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(PartnerProfile)
@@ -56,6 +71,7 @@ class PartnerProfileAdmin(admin.ModelAdmin):
         "directory_status", "directory_reviewed_at",
         "created_at", "updated_at",
     )
+    inlines = [PartnerKYBDocumentInline]
     actions = [
         "exception_approve_kyb",
         "exception_reject_kyb",

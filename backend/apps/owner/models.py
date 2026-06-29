@@ -292,3 +292,48 @@ REQUIRED_SUBMISSION_DOC_TYPES = (
     SubmissionDocument.DocType.VALUATION,
     SubmissionDocument.DocType.LEGAL,
 )
+
+
+# --------------------------------------------------------------------------- #
+# Owner ENTITY-KYB document vault — manual-admin-approval support (deploy prep).
+# A SEPARATE concern from the per-PROPERTY SubmissionDocument above (title-deed /
+# valuation evidence for one property): this is the owner's BUSINESS-verification
+# evidence (registration certificate / trade licence / …), uploaded during the KYB
+# step so an admin can review it before manually approving KYB when Sumsub is
+# deferred. Mirrors apps/lp/models.py LPKYBDocument EXACTLY.
+# --------------------------------------------------------------------------- #
+class OwnerKYBDocument(models.Model):
+    """Owner entity-KYB verification document. Mirrors LPKYBDocument."""
+
+    class DocStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        OwnerProfile, on_delete=models.CASCADE, related_name="kyb_documents"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="owner_kyb_documents",
+    )
+    document_name = models.CharField(max_length=255)
+    document_type = models.CharField(max_length=64)
+    file = models.FileField(upload_to="owner_kyb_documents/%Y/%m/", null=True, blank=True)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(
+        max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING
+    )
+    rejection_reason = models.CharField(max_length=500, blank=True, null=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "owner_kyb_documents"
+        verbose_name = _("owner KYB document")
+        verbose_name_plural = _("owner KYB documents")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.document_name} [{self.status}] ({self.owner_id})"
