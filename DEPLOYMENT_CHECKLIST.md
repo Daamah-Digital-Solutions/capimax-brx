@@ -8,6 +8,20 @@ VPS readiness audit found only OS + SSH present (no repo, venv, Postgres, nginx,
 > **Scope:** TESTNET soft launch only (sandbox keys, BSC Testnet chain 97, **no real money**).
 > **Mainnet items are OUT OF SCOPE** — see the bottom section.
 
+> ## CURRENT PROGRESS (as of this update)
+> **We are cleanly paused BEFORE Step 1 — nothing on the VPS has been installed, deployed, or written.**
+> The only things that exist so far:
+> - ✅ **SSH key access** — dedicated key `~/.ssh/capimax_brx_vps` authorized for `root@148.230.125.240`
+>   (the old `capimax_staging` key was unrelated/dead and is not used).
+> - ✅ **Step 8 — DNS A record DONE** (Yahia): `api.capimaxbrx.com` → `148.230.125.240`, verified
+>   resolving via external resolvers (1.1.1.1 + 8.8.8.8). *(Listed at its dependency position below, but
+>   completed early — harmless, it just needs to resolve before Step 9 TLS.)*
+> - ✅ **Chain trio already done locally** (factory deployed + deployer funded on BSC Testnet) — the
+>   values get **copied into the server `.env` at Step 4, no redeploy**.
+>
+> **Everything else (Steps 0–7, 9–13) is NOT started.** The VPS is still bare Ubuntu + SSH. Next action
+> when we resume = **Step 1 (system packages)** — but only on an explicit "go".
+
 ## Roles & ground rules
 - **Yahia** = the human operator (panel/DNS/dashboards + **all secrets**).
 - **Claude** = runs VPS commands over SSH (key `~/.ssh/capimax_brx_vps`, root), read/confirm per step.
@@ -98,10 +112,12 @@ VPS readiness audit found only OS + SSH present (no repo, venv, Postgres, nginx,
 - **Verify:** `nginx -t` OK; `systemctl reload nginx`; `curl -H "Host: api.capimaxbrx.com"
   http://148.230.125.240/` reaches Django.
 
-## STEP 8 — DNS A record for `api.` (Yahia)
+## STEP 8 — DNS A record for `api.` (Yahia) — ✅ DONE
 - **Owner:** **Yahia** (DNS registrar/panel) · **Depends on:** 7 (so it answers when it resolves).
 - Add **A record: `api.capimaxbrx.com` → 148.230.125.240** (TTL low for launch).
 - **Verify:** `nslookup api.capimaxbrx.com` → `148.230.125.240` from an external resolver (propagation).
+- **STATUS: ✅ DONE** — record added by Yahia; confirmed resolving to `148.230.125.240` via 1.1.1.1 and
+  8.8.8.8. (Completed ahead of its position; only needs to be live before Step 9 TLS issuance.)
 
 ## STEP 9 — TLS (certbot) for `api.capimaxbrx.com`
 - **Owner:** Claude · **Depends on:** 8 (cert issuance needs DNS resolving to this box).
@@ -152,6 +168,7 @@ VPS readiness audit found only OS + SSH present (no repo, venv, Postgres, nginx,
   blocking; can be wired after the gate passes.
 
 ## Dependency summary
-`0 → 1 → {2,3} → 4 → 5 → 6 → 7 → 8(Yahia) → 9 → 10 → 11(Yahia) → 12(Yahia) → 13`.
-Steps owned by **Yahia**: 2 (DB password), 4 (all secrets), 8 (DNS A), 11 (webhooks), 12 (Netlify/DNS).
+`0 → 1 → {2,3} → 4 → 5 → 6 → 7 → 8(Yahia ✅) → 9 → 10 → 11(Yahia) → 12(Yahia) → 13`.
+Steps owned by **Yahia**: 2 (DB password), 4 (all secrets), **8 (DNS A — ✅ DONE)**, 11 (webhooks),
+12 (Netlify/DNS). **Done so far: SSH access + Step 8 (DNS). Not started: everything else (still pre-Step 1).**
 Everything else: **Claude**, read/confirm per step, nothing destructive without explicit OK.
