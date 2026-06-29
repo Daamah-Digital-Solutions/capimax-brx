@@ -1,0 +1,17 @@
+# Netlify configuration for the Capimax BRX frontend (Vite + React SPA).
+# The backend (Django) is deployed separately on the VPS at api.capimaxbrx.com;
+# Netlify builds only the repo-root frontend.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA catch-all: serve index.html for any non-asset path so client-side routing
+# (React Router) handles deep links and page refreshes instead of 404ing.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
