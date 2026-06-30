@@ -296,8 +296,11 @@ class Command(BaseCommand):
     def _seed_ledger(self, users: dict, *, on_chain: bool = False) -> None:
         from apps.chain.service import token_symbol_for_slug
         from apps.investments.models import Investment, PaymentStatus
+        from apps.lp.models import LiquidityProvider, LPHolding, LPTransaction
         from apps.partners.models import Assignment
-        from apps.partners.services import approve_directory, create_assignment, get_or_create_partner
+        from apps.partners.services import (
+            approve_directory, create_assignment, get_or_create_partner, update_directory_details,
+        )
         from apps.properties.models import Property
         from apps.wallets.models import OwnershipToken
         from apps.wallets.services import credit_user_balance, get_or_create_custodial_wallet
@@ -368,6 +371,14 @@ class Command(BaseCommand):
                     "rate_applied": Decimal("5.00"), "commission": Decimal("900"),
                 },
             )
+        # Headline total = the real sum of the broker's commission rows (the SAME field the
+        # mint hook maintains, investments/services.py), so the dashboard top-line matches
+        # the list instead of showing 0. Recompute (not increment) → idempotent.
+        from django.db.models import Sum
+        broker.total_commission_earned = (
+            broker.commissions.aggregate(s=Sum("commission"))["s"] or Decimal("0")
+        )
+        broker.save(update_fields=["total_commission_earned", "updated_at"])
 
         # 6) Partner assignment + directory listing (no money — workflow only).
         partner, _ = get_or_create_partner(users["partner"])
@@ -377,10 +388,42 @@ class Command(BaseCommand):
                 service_type="valuation", due_date=None, admin=users["admin"],
                 deliverables=[{"name": "Valuation Report", "name_ar": "تقرير التقييم"}],
             )
+        # Public-directory details via the real partner path. The directory filter requires
+        # a non-blank company_name, so without these the partner is approved but hidden.
+        update_directory_details(partner, details={
+            "company_name": "Gulf Valuation Partners",
+            "company_name_ar": "شركاء الخليج للتقييم",
+            "category": "valuation",
+            "description": "Independent RICS-accredited property valuation and advisory across the GCC.",
+            "description_ar": "تقييم عقاري مستقل ومعتمد واستشارات عقارية في دول مجلس التعاون الخليجي.",
+            "country": "United Arab Emirates",
+            "country_ar": "الإمارات العربية المتحدة",
+            "website": "https://gulfvaluation.example.com",
+            "logo_url": "https://placehold.co/200x200?text=GVP",
+        })
         try:
             approve_directory(partner, admin=users["admin"])
         except Exception:  # noqa: BLE001 - directory listing is best-effort for the demo
             pass
+
+        # 7) LP ledger history — real LPTransaction + LPHolding rows so the LP dashboard's
+        #    transactions/holdings aren't empty, consistent with the seeded accumulators
+        #    (deposit 150k + earnings 18.5k − withdrawal 25k; balance 125k). Idempotent.
+        lp = LiquidityProvider.objects.filter(user=users["lp"]).first()
+        if lp and not LPTransaction.objects.filter(lp=lp).exists():
+            LPTransaction.objects.create(lp=lp, tx_type="deposit", amount=Decimal("150000"),
+                                         status="completed", notes="Demo initial deposit")
+            LPTransaction.objects.create(lp=lp, tx_type="earnings", amount=Decimal("18500"),
+                                         status="completed", notes="Demo accrued earnings")
+            LPTransaction.objects.create(lp=lp, tx_type="withdrawal", amount=Decimal("25000"),
+                                         status="completed", withdrawal_method="bank",
+                                         notes="Demo withdrawal")
+        if lp and not LPHolding.objects.filter(lp=lp).exists():
+            LPHolding.objects.create(
+                lp=lp, property_id="demo-2", property_name="Marina Gate Residences",
+                token_symbol=token_symbol_for_slug("demo-2"), token_amount=300,
+                purchase_price=Decimal("30000"), current_value=Decimal("31500"), status="held",
+            )
 
     # ----------------------------------------------------------------------- #
     def _credit_once(self, user, amount, source, reference, memo=""):

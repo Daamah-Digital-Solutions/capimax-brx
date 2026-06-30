@@ -89,6 +89,24 @@ class SeedDemoTests(TestCase):
         # Partner has an assignment (workflow only).
         self.assertEqual(Assignment.objects.count(), 1)
 
+        # Partner shows in the PUBLIC directory (approved + non-blank company_name).
+        from apps.partners.models import PartnerDirectoryStatus, PartnerProfile
+        self.assertTrue(
+            PartnerProfile.objects.filter(directory_status=PartnerDirectoryStatus.APPROVED)
+            .exclude(company_name__isnull=True).exclude(company_name="").exists()
+        )
+
+        # Broker headline total matches the sum of its commission rows ($900).
+        from apps.broker.models import BrokerProfile
+        broker = BrokerProfile.objects.get(user__email=f"broker@{DOMAIN}")
+        self.assertEqual(broker.total_commission_earned, Decimal("900"))
+
+        # LP history is populated (transactions + a holding), consistent with the balance.
+        from apps.lp.models import LiquidityProvider, LPHolding, LPTransaction
+        lp = LiquidityProvider.objects.get(user__email=f"lp@{DOMAIN}")
+        self.assertEqual(LPTransaction.objects.filter(lp=lp).count(), 3)
+        self.assertEqual(LPHolding.objects.filter(lp=lp).count(), 1)
+
     def test_ledger_only_no_chain(self):
         """No mint occurred: no on-chain deploy recorded, no mint WalletTransaction."""
         self._seed()
@@ -115,6 +133,15 @@ class SeedDemoTests(TestCase):
         self.assertEqual(Distribution.objects.filter(property_id="demo-1").count(), 1)
         self.assertEqual(BrokerCommission.objects.count(), 1)
         self.assertEqual(Assignment.objects.count(), 1)
+        # Refinements stay idempotent: LP history not duplicated, broker total stable.
+        from apps.broker.models import BrokerProfile
+        from apps.lp.models import LPHolding, LPTransaction
+        self.assertEqual(LPTransaction.objects.count(), 3)
+        self.assertEqual(LPHolding.objects.count(), 1)
+        self.assertEqual(
+            BrokerProfile.objects.get(user__email=f"broker@{DOMAIN}").total_commission_earned,
+            Decimal("900"),
+        )
         # The opening deposit credited exactly once.
         self.assertEqual(
             BalanceTransaction.objects.filter(
