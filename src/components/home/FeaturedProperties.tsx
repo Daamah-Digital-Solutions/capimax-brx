@@ -1,83 +1,57 @@
+import { useEffect, useState } from "react";
 import { MapPin, TrendingUp, Clock, ArrowRight, ArrowLeft, Building2, Home, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Link } from "react-router-dom";
+import { propertiesApi } from "@/integrations/api/client";
 
-interface Property {
+// Home featured carousel — real data from GET /api/properties/featured/ (admin flags
+// `is_featured`). Same camelCase Property shape the Marketplace renders. No hardcoded
+// cards: on an empty / featured-less catalogue the section renders nothing.
+interface FeaturedProperty {
   id: string;
   name: string;
   nameAr: string;
   location: string;
   locationAr: string;
   image: string;
-  assetType: "residential" | "commercial" | "industrial";
+  assetType: string;
   status: "ready" | "construction" | "sold-out";
   expectedYield?: number;
   expectedGrowth?: number;
   minInvestment: number;
   funded: number;
-  durationYears: number;
+  duration: string;
+  durationAr: string;
   exitEligible: boolean;
 }
-
-const properties: Property[] = [
-  {
-    id: "1",
-    name: "Marina Bay Tower",
-    nameAr: "برج مارينا باي",
-    location: "Dubai, UAE",
-    locationAr: "دبي، الإمارات",
-    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800",
-    assetType: "commercial",
-    status: "ready",
-    expectedYield: 9.5,
-    minInvestment: 1000,
-    funded: 78,
-    durationYears: 5,
-    exitEligible: true,
-  },
-  {
-    id: "2",
-    name: "Palm Residences",
-    nameAr: "مساكن النخلة",
-    location: "Abu Dhabi, UAE",
-    locationAr: "أبوظبي، الإمارات",
-    image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800",
-    assetType: "residential",
-    status: "construction",
-    expectedGrowth: 25,
-    minInvestment: 2500,
-    funded: 45,
-    durationYears: 3,
-    exitEligible: false,
-  },
-  {
-    id: "3",
-    name: "Industrial Park",
-    nameAr: "المجمع الصناعي",
-    location: "Riyadh, KSA",
-    locationAr: "الرياض، السعودية",
-    image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800",
-    assetType: "industrial",
-    status: "ready",
-    expectedYield: 11.2,
-    minInvestment: 5000,
-    funded: 92,
-    durationYears: 7,
-    exitEligible: true,
-  },
-];
 
 export function FeaturedProperties() {
   const { t, language, isRTL } = useLanguage();
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
 
-  const assetTypeConfig = {
-    residential: { icon: Home, labelKey: "featured.residential" },
-    commercial: { icon: Building2, labelKey: "featured.commercial" },
-    industrial: { icon: Warehouse, labelKey: "featured.industrial" },
+  const [properties, setProperties] = useState<FeaturedProperty[]>([]);
+  useEffect(() => {
+    let active = true;
+    propertiesApi
+      .featured()
+      .then((data) => active && setProperties(data as FeaturedProperty[]))
+      .catch(() => active && setProperties([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // All 6 asset types (mirror PropertyCard) so real data can't crash the lookup.
+  const assetTypeConfig: Record<string, { icon: React.ElementType; label: string }> = {
+    residential: { icon: Home, label: t("featured.residential") },
+    commercial: { icon: Building2, label: t("featured.commercial") },
+    industrial: { icon: Warehouse, label: t("featured.industrial") },
+    mixed: { icon: Building2, label: language === "ar" ? "متعدد الاستخدامات" : "Mixed Use" },
+    hospitality: { icon: Building2, label: language === "ar" ? "ضيافة" : "Hospitality" },
+    land: { icon: Warehouse, label: language === "ar" ? "أرض" : "Land" },
   };
 
   const statusConfig = {
@@ -85,6 +59,9 @@ export function FeaturedProperties() {
     construction: { variant: "construction" as const, labelKey: "featured.underConstruction" },
     "sold-out": { variant: "sold-out" as const, labelKey: "featured.soldOut" },
   };
+
+  // No featured properties yet → render nothing (never fabricated cards).
+  if (properties.length === 0) return null;
 
   return (
     <section className="py-20 bg-background">
@@ -111,8 +88,9 @@ export function FeaturedProperties() {
         {/* Properties Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {properties.map((property, index) => {
-            const AssetIcon = assetTypeConfig[property.assetType].icon;
-            const statusInfo = statusConfig[property.status];
+            const assetInfo = assetTypeConfig[property.assetType] ?? assetTypeConfig.commercial;
+            const AssetIcon = assetInfo.icon;
+            const statusInfo = statusConfig[property.status] ?? statusConfig.ready;
             
               return (
               <Link
@@ -141,7 +119,7 @@ export function FeaturedProperties() {
                   {/* Asset Type */}
                   <div className="absolute bottom-4 left-4 flex items-center gap-2 text-sm text-foreground">
                     <AssetIcon className="w-4 h-4" />
-                    <span>{t(assetTypeConfig[property.assetType].labelKey)}</span>
+                    <span>{assetInfo.label}</span>
                   </div>
                 </div>
 
@@ -171,7 +149,9 @@ export function FeaturedProperties() {
                     <div className="bg-muted rounded-lg p-3 text-center">
                       <div className="flex items-center justify-center gap-1 text-foreground mb-1">
                         <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-bold text-lg">{property.durationYears} {t("common.years")}</span>
+                        <span className="font-bold text-lg">
+                          {language === "ar" ? property.durationAr : property.duration}
+                        </span>
                       </div>
                       <div className="text-xs text-muted-foreground">{t("featured.duration")}</div>
                     </div>
