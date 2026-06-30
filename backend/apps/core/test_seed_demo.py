@@ -70,8 +70,8 @@ class SeedDemoTests(TestCase):
         # Investor: KYC approved (wallet auto-created), 3 holdings, 3 completed buys.
         investor = User.objects.get(email=f"investor@{DOMAIN}")
         self.assertEqual(investor.kyc.status, "approved")
-        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 3)
-        self.assertEqual(Investment.objects.filter(user=investor).count(), 3)
+        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 4)
+        self.assertEqual(Investment.objects.filter(user=investor).count(), 4)
 
         # Distribution paid on demo-1 → investor (sole holder) credited; balance > deposit.
         self.assertTrue(Distribution.objects.filter(property_id="demo-1", status="paid").exists())
@@ -110,8 +110,8 @@ class SeedDemoTests(TestCase):
         self.assertEqual(User.objects.filter(email__endswith=f"@{DOMAIN}").count(), 7)
         self.assertEqual(Property.objects.filter(slug__startswith="demo-").count(), 6)
         investor = User.objects.get(email=f"investor@{DOMAIN}")
-        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 3)
-        self.assertEqual(Investment.objects.filter(user=investor).count(), 3)
+        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 4)
+        self.assertEqual(Investment.objects.filter(user=investor).count(), 4)
         self.assertEqual(Distribution.objects.filter(property_id="demo-1").count(), 1)
         self.assertEqual(BrokerCommission.objects.count(), 1)
         self.assertEqual(Assignment.objects.count(), 1)
@@ -187,9 +187,9 @@ class SeedDemoOnChainTests(TestCase):
             .exclude(deployed_contract_address="").count(),
             2,
         )
-        # 3 holdings total: demo-1 + demo-2 minted on-chain, demo-3 ledger-only.
+        # 4 holdings total: demo-3 + demo-5 minted on-chain, demo-1 + demo-2 ledger-only.
         investor = User.objects.get(email=f"investor@{DOMAIN}")
-        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 3)
+        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 4)
         # The mint path wrote a real 'mint' WalletTransaction for each of the 2.
         self.assertEqual(WalletTransaction.objects.filter(tx_type="mint").count(), 2)
 
@@ -208,9 +208,9 @@ class SeedDemoOnChainTests(TestCase):
         self.assertEqual(m_deploy.call_count, 2)
         self.assertEqual(m_mint.call_count, 2)
         investor = User.objects.get(email=f"investor@{DOMAIN}")
-        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 3)
+        self.assertEqual(OwnershipToken.objects.filter(wallet__user=investor).count(), 4)
         self.assertEqual(WalletTransaction.objects.filter(tx_type="mint").count(), 2)
-        self.assertEqual(Investment.objects.filter(user=investor).count(), 3)
+        self.assertEqual(Investment.objects.filter(user=investor).count(), 4)
 
     @patch("apps.chain.service.deployed_token_address", return_value=None)
     @patch("apps.chain.client.deployer_address", return_value="0xDEPLOYER")

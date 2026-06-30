@@ -44,7 +44,9 @@ TOKEN_PRICE = Decimal("100")                # platform-wide nominal ($100/token)
 
 # The properties that get a REAL testnet contract + mint under --on-chain. Everything
 # else stays ledger-only. Keep this list small + explicit so we never deploy by accident.
-ON_CHAIN_SLUGS = ["demo-1", "demo-2"]
+# These are deliberately FRESH slugs (never deployed on the factory) so their on-chain
+# totalSupply starts honestly at 0 — no stranded/leftover dust inflating the count.
+ON_CHAIN_SLUGS = ["demo-3", "demo-5"]
 
 # Pre-flight floor: refuse --on-chain if the deployer holds less than this much tBNB.
 # 2 deploys + a couple mints cost < 0.002 tBNB at current gas; this is a wide margin.
@@ -133,8 +135,10 @@ PROPERTIES = [
     ),
 ]
 
-# Investor holdings (slug -> whole shares). All ledger-only in this command.
-HOLDINGS = {"demo-1": 200, "demo-2": 150, "demo-3": 100}
+# Investor holdings (slug -> whole shares). Ledger-only unless the slug is in
+# ON_CHAIN_SLUGS (then minted on-chain). demo-3 + demo-5 are the on-chain pair, so the
+# investor holds both — each gets a real mint under --on-chain.
+HOLDINGS = {"demo-1": 200, "demo-2": 150, "demo-3": 100, "demo-5": 80}
 
 # Demo users: email-local -> role.
 USERS = {
