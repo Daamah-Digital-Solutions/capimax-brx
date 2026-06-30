@@ -9,9 +9,13 @@
 // + a long-lived refresh token kept in localStorage (same persistence the Supabase
 // client used). On a 401 we transparently try the refresh token once.
 
+// Fail-safe base resolution. `VITE_API_BASE_URL` (set per environment) always wins.
+// `||` (not `??`) so an empty-string var also falls back. When the var is unset/empty,
+// a PRODUCTION build must NEVER silently call localhost — it defaults to the real API;
+// only DEV defaults to the local backend.
 const API_BASE_URL: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
-  "http://localhost:8000/api";
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
+  (import.meta.env.PROD ? "https://api.capimaxbrx.com/api" : "http://localhost:8000/api");
 
 const ACCESS_KEY = "capimax.access";
 const REFRESH_KEY = "capimax.refresh";
