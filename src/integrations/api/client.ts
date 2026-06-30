@@ -9,13 +9,20 @@
 // + a long-lived refresh token kept in localStorage (same persistence the Supabase
 // client used). On a 401 we transparently try the refresh token once.
 
-// Fail-safe base resolution. `VITE_API_BASE_URL` (set per environment) always wins.
-// `||` (not `??`) so an empty-string var also falls back. When the var is unset/empty,
-// a PRODUCTION build must NEVER silently call localhost — it defaults to the real API;
-// only DEV defaults to the local backend.
-const API_BASE_URL: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
-  (import.meta.env.PROD ? "https://api.capimaxbrx.com/api" : "http://localhost:8000/api");
+// Fail-safe base resolution. A PRODUCTION build must NEVER call localhost — not when the
+// var is unset/empty, and not even if it's MISCONFIGURED to a localhost value (which would
+// otherwise ship a dead bundle). `VITE_API_BASE_URL` still wins for any real (non-localhost)
+// value; DEV keeps the local backend default.
+const PROD_API_BASE = "https://api.capimaxbrx.com/api";
+function resolveApiBase(): string {
+  const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+  if (import.meta.env.PROD) {
+    if (!raw || raw.includes("localhost") || raw.includes("127.0.0.1")) return PROD_API_BASE;
+    return raw;
+  }
+  return raw || "http://localhost:8000/api";
+}
+const API_BASE_URL: string = resolveApiBase();
 
 const ACCESS_KEY = "capimax.access";
 const REFRESH_KEY = "capimax.refresh";
