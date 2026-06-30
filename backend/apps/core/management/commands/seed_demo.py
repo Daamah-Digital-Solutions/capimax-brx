@@ -42,9 +42,13 @@ DEMO_DOMAIN = "demo.capimaxbrx.com"         # every demo user lives here → tri
 DEMO_SLUG_PREFIX = "demo-"                  # every demo property slug starts here
 TOKEN_PRICE = Decimal("100")                # platform-wide nominal ($100/token)
 
-# Reserved for the follow-up on-chain step: the 2-3 properties that will get a REAL
-# testnet contract + mint. INERT today (ledger-only). Do NOT deploy without confirmation.
+# The properties that get a REAL testnet contract + mint under --on-chain. Everything
+# else stays ledger-only. Keep this list small + explicit so we never deploy by accident.
 ON_CHAIN_SLUGS = ["demo-1", "demo-2"]
+
+# Pre-flight floor: refuse --on-chain if the deployer holds less than this much tBNB.
+# 2 deploys + a couple mints cost < 0.002 tBNB at current gas; this is a wide margin.
+MIN_DEPLOY_BALANCE = Decimal("0.02")
 
 
 # --------------------------------------------------------------------------- #
@@ -156,16 +160,11 @@ class Command(BaseCommand):
         parser.add_argument("--purge", action="store_true", help="Remove all demo data instead of seeding.")
         parser.add_argument(
             "--on-chain", action="store_true",
-            help="(Reserved) Deploy + real-mint the ON_CHAIN_SLUGS. NOT yet enabled.",
+            help="Deploy + real-mint the ON_CHAIN_SLUGS on testnet (the rest stay ledger-only).",
         )
 
     # ----------------------------------------------------------------------- #
     def handle(self, *args, **opts):
-        if opts["on_chain"]:
-            raise CommandError(
-                "--on-chain is reserved for the follow-up step and is not wired yet. "
-                "This command seeds LEDGER-ONLY data (no testnet deploy/mint)."
-            )
         if not opts["yes"]:
             raise CommandError("Refusing to run without --yes (this writes to the database).")
 
@@ -173,12 +172,29 @@ class Command(BaseCommand):
             self._purge()
             return
 
+        on_chain = opts["on_chain"]
+
+        # Users + properties first (atomic). Their on_commit side effects (role
+        # activation, wallet auto-create) fire when this block commits.
         with transaction.atomic():
             users = self._seed_users()
             self._seed_properties(users)
-            self._seed_ledger(users)
 
-        self._print_credentials()
+        # On-chain deploy + mint runs OUTSIDE any wrapping DB transaction: a testnet
+        # deploy is irreversible, so its TokenMetadata record must never be rolled back
+        # by an unrelated later failure (which would orphan the on-chain contract).
+        if on_chain:
+            self._preflight_balance()
+            for slug in ON_CHAIN_SLUGS:
+                self._deploy_once(slug)
+                self._mint_onchain_holding(users["investor"], slug)
+
+        # Ledger pass (atomic): balances, ledger-only holdings, distribution, owner /
+        # broker / partner data. The on-chain slugs' holdings already exist from the mint.
+        with transaction.atomic():
+            self._seed_ledger(users, on_chain=on_chain)
+
+        self._print_credentials(on_chain=on_chain)
 
     # ----------------------------------------------------------------------- #
     # Users — one approved account per role, via the SAME service hinges the
@@ -273,7 +289,7 @@ class Command(BaseCommand):
     # Ledger — holdings, balance, distribution, owner/broker credits, partner work.
     # All through the real models/services; guarded for idempotency.
     # ----------------------------------------------------------------------- #
-    def _seed_ledger(self, users: dict) -> None:
+    def _seed_ledger(self, users: dict, *, on_chain: bool = False) -> None:
         from apps.chain.service import token_symbol_for_slug
         from apps.investments.models import Investment, PaymentStatus
         from apps.partners.models import Assignment
@@ -293,7 +309,11 @@ class Command(BaseCommand):
                           "Demo opening balance")
 
         # 2) Investor holdings + matching completed Investment history rows (ledger-only).
+        #    On-chain slugs are SKIPPED here — they were already minted on-chain (the mint
+        #    service wrote their real OwnershipToken + WalletTransaction).
         for slug, amount in HOLDINGS.items():
+            if on_chain and slug in ON_CHAIN_SLUGS:
+                continue
             prop = Property.objects.get(slug=slug)
             supply = int(prop.token_supply or 0)
             symbol = token_symbol_for_slug(slug)
@@ -375,6 +395,100 @@ class Command(BaseCommand):
         )
 
     # ----------------------------------------------------------------------- #
+    # On-chain — deploy + REAL mint for the ON_CHAIN_SLUGS, via the production
+    # chain path. Idempotent: skip-if-deployed and skip-if-minted. Runs outside the
+    # ledger transaction so an irreversible deploy is never rolled back.
+    # ----------------------------------------------------------------------- #
+    def _preflight_balance(self) -> None:
+        """Print the deployer's live balance and refuse if below the safety floor."""
+        from apps.chain.client import deployer_address, require_connection
+
+        w3 = require_connection()  # also asserts we're on the configured chain id
+        addr = deployer_address()
+        balance = Decimal(w3.eth.get_balance(addr)) / Decimal(10 ** 18)
+        self.stdout.write(f"  on-chain pre-flight: deployer {addr} holds {balance:.6f} tBNB")
+        if balance < MIN_DEPLOY_BALANCE:
+            raise CommandError(
+                f"Deployer balance {balance:.6f} tBNB is below the {MIN_DEPLOY_BALANCE} tBNB "
+                f"safety floor. Fund {addr} before running --on-chain."
+            )
+
+    def _is_deployed(self, prop) -> bool:
+        """True iff this property already has a contract recorded on the current chain."""
+        from django.conf import settings
+
+        meta = getattr(prop, "token_metadata", None)
+        if not meta or not meta.deployed_contract_address:
+            return False
+        return meta.deployment_chain_id == int(settings.CHAIN_ID)
+
+    def _deploy_once(self, slug: str) -> None:
+        """
+        Deploy the property's PropertyToken via the factory — idempotent on TWO levels:
+          * skip if our DB already records a deployment on this chain (_is_deployed);
+          * else ask the FACTORY (authoritative): if it already has a token for this slug
+            (e.g. a prior run against a since-reset DB), record that address and skip the
+            deploy — never re-deploy, never crash on the factory's AlreadyDeployedError.
+        """
+        from django.conf import settings
+
+        from apps.chain import service as chain_service
+        from apps.properties.models import Property, TokenMetadata
+
+        prop = Property.objects.get(slug=slug)
+        if self._is_deployed(prop):
+            self.stdout.write(f"  on-chain: {slug} already deployed (db) — skip")
+            return
+
+        existing = chain_service.deployed_token_address(slug)
+        if existing:
+            meta, _ = TokenMetadata.objects.get_or_create(property=prop)
+            meta.deployed_contract_address = existing
+            meta.deployment_chain_id = int(settings.CHAIN_ID)
+            meta.deployment_network = getattr(settings, "WALLET_NETWORK", "bsc-testnet")
+            meta.save()
+            self.stdout.write(
+                f"  on-chain: {slug} already on factory at {existing} — recorded, skip deploy"
+            )
+            return
+
+        res = chain_service.deploy_property_token(prop)  # real deploy + records TokenMetadata
+        self.stdout.write(self.style.SUCCESS(
+            f"  on-chain: deployed {slug} -> {res.get('token_address')}"
+        ))
+
+    def _mint_onchain_holding(self, investor, slug: str) -> None:
+        """Create the investor's completed Investment (once) then REAL-mint it (idempotent)."""
+        from apps.chain.service import token_symbol_for_slug
+        from apps.investments.models import Investment, PaymentStatus
+        from apps.investments.services import mint_investment
+        from apps.properties.models import Property
+        from apps.wallets.services import get_or_create_custodial_wallet
+
+        prop = Property.objects.get(slug=slug)
+        amount = HOLDINGS[slug]
+        wallet, _ = get_or_create_custodial_wallet(investor)
+
+        inv = Investment.objects.filter(user=investor, property=prop).first()
+        if inv is None:
+            supply = int(prop.token_supply or 0)
+            value = Decimal(amount) * prop.token_price
+            pct = (Decimal(amount) / Decimal(supply) * Decimal("100")) if supply else Decimal("0")
+            inv = Investment.objects.create(
+                user=investor, property=prop, property_name=prop.name,
+                amount_invested=value, token_amount=amount,
+                token_symbol=token_symbol_for_slug(slug), price_per_token=prop.token_price,
+                ownership_percentage=pct, payment_method="balance",
+                payment_status=PaymentStatus.COMPLETED, wallet=wallet,
+            )
+        # Idempotent: returns {"already": True} (no chain call) once tokens_minted is set.
+        result = mint_investment(inv)
+        action = "already minted" if result.get("already") else "minted"
+        self.stdout.write(self.style.SUCCESS(
+            f"  on-chain: {action} {amount} {slug} (tx {result.get('tx_hash', '-')})"
+        ))
+
+    # ----------------------------------------------------------------------- #
     # Purge — remove exactly the demo footprint.
     # ----------------------------------------------------------------------- #
     def _purge(self) -> None:
@@ -398,12 +512,18 @@ class Command(BaseCommand):
         ))
 
     # ----------------------------------------------------------------------- #
-    def _print_credentials(self) -> None:
+    def _print_credentials(self, *, on_chain: bool = False) -> None:
         self.stdout.write(self.style.SUCCESS("\n=== DEMO CREDENTIALS ==="))
         self.stdout.write(f"Shared password: {DEMO_PASSWORD}\n")
         for local, role in USERS.items():
             self.stdout.write(f"  {role:<10} {local}@{DEMO_DOMAIN}")
-        self.stdout.write(self.style.SUCCESS(
-            "\nLedger-only demo seeded. (On-chain mint for "
-            f"{ON_CHAIN_SLUGS} is a separate, confirmed step.)"
-        ))
+        if on_chain:
+            self.stdout.write(self.style.SUCCESS(
+                f"\nDemo seeded. {ON_CHAIN_SLUGS} are REAL on testnet (deployed + minted); "
+                "the other demo properties are ledger-only."
+            ))
+        else:
+            self.stdout.write(self.style.SUCCESS(
+                f"\nLedger-only demo seeded. (Run with --on-chain to make {ON_CHAIN_SLUGS} "
+                "real on testnet.)"
+            ))

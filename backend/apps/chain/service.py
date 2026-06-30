@@ -232,6 +232,20 @@ def deploy_property_token(property_obj) -> dict:
 # --------------------------------------------------------------------------- #
 # Read-only views
 # --------------------------------------------------------------------------- #
+def deployed_token_address(slug: str) -> str | None:
+    """
+    The factory's recorded PropertyToken address for `slug`, or None if the factory has
+    none. Read-only (no tx). Lets callers reconcile on-chain truth with the DB — e.g. a
+    contract deployed in a prior run against a since-reset database.
+    """
+    w3 = require_connection()
+    factory = _get_factory(w3)
+    addr = factory.functions.tokenForSlug(slug).call()
+    if not addr or addr == ZERO_ADDRESS:
+        return None
+    return w3.to_checksum_address(addr)
+
+
 def _token(w3, token_address):
     return w3.eth.contract(
         address=w3.to_checksum_address(token_address), abi=get_abi("PropertyToken")
