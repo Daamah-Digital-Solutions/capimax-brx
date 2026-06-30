@@ -160,8 +160,36 @@ class PropertyApiTests(APITestCase):
     def test_stats_endpoint(self):
         resp = self.client.get("/api/properties/stats/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("totalProperties", resp.data)
+        # All real aggregate keys the GlobalStats band binds to are present.
+        for key in (
+            "totalProperties", "ready", "construction", "funded",
+            "totalInvestors", "totalValue", "avgYield", "developers", "cities",
+        ):
+            self.assertIn(key, resp.data, key)
         self.assertEqual(resp.data["funded"], 6)
+        # developers = approved DeveloperProfile count (none seeded here) → real 0.
+        self.assertEqual(resp.data["developers"], 0)
+        # cities = distinct non-empty cities among published rows (real, matches the DB).
+        expected_cities = (
+            Property.objects.filter(is_published=True)
+            .exclude(city="").values("city").distinct().count()
+        )
+        self.assertEqual(resp.data["cities"], expected_cities)
+        self.assertGreaterEqual(resp.data["cities"], 1)
+
+    def test_stats_zero_on_empty_catalogue(self):
+        """Never-fake-a-number: with no published properties and no approved developers,
+        every GlobalStats figure is a real 0 — not a marketing constant."""
+        Property.objects.all().delete()
+        resp = self.client.get("/api/properties/stats/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for key in (
+            "totalProperties", "ready", "construction", "funded",
+            "totalInvestors", "developers", "cities",
+        ):
+            self.assertEqual(resp.data[key], 0, key)
+        self.assertEqual(resp.data["totalValue"], 0.0)
+        self.assertEqual(resp.data["avgYield"], 0.0)
 
     def test_token_economics_supply_derived(self):
         # SPEC §7C.6: supply = total_value / token_price (100).

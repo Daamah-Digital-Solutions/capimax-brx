@@ -221,6 +221,19 @@ export const propertiesApi = {
   featured: () => publicGet("/properties/featured/") as Promise<any[]>,
   /** Closed deals for FundedProperties. */
   funded: () => publicGet("/properties/funded/") as Promise<any[]>,
+  /** Real aggregate platform stats for the Marketplace GlobalStats band (all 0 on an empty catalogue). */
+  stats: () =>
+    publicGet("/properties/stats/") as Promise<{
+      totalProperties: number;
+      ready: number;
+      construction: number;
+      funded: number;
+      totalInvestors: number;
+      totalValue: number;
+      avgYield: number;
+      developers: number;
+      cities: number;
+    }>,
 };
 
 // --------------------------------------------------------------------------- //

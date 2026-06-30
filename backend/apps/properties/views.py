@@ -9,9 +9,10 @@ plain array and filters client-side — keeping that shape avoids any UI change.
     GET /api/properties/{slug}/          full detail (model-specific nested + data-room)
     GET /api/properties/featured/        Index featured
     GET /api/properties/funded/          FundedProperties (closed deals)
-    GET /api/properties/stats/           aggregate stats (optional GlobalStats source)
+    GET /api/properties/stats/           aggregate stats (Marketplace GlobalStats source)
 """
 from django.db.models import Avg, Sum
+from apps.developer.models import DeveloperProfile, DeveloperStatus
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
@@ -89,9 +90,14 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False)
     def stats(self, request):
         """
-        Aggregate marketplace stats (count by status, totals, avg yield).
-        Provided for a future GlobalStats wiring; GlobalStats currently shows static
-        marketing numbers and is intentionally NOT wired here (see DECISIONS.md flag).
+        Real aggregate marketplace stats for the Marketplace GlobalStats band — all
+        computed from live data (published Property rows + approved developer entities).
+        Every value reads the true state (0 on an empty catalogue). NO hardcoded numbers.
+
+          * ready / construction / funded / totalProperties — counts by status
+          * totalInvestors / totalValue / avgYield — aggregates over published rows
+          * developers — distinct VERIFIED developer entities (approved DeveloperProfile)
+          * cities — distinct non-empty cities among published properties
         """
         qs = Property.objects.filter(is_published=True)
         agg = qs.aggregate(
@@ -108,5 +114,9 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
                 "totalInvestors": agg["total_investors"] or 0,
                 "totalValue": float(agg["total_value"] or 0),
                 "avgYield": round(float(agg["avg_yield"] or 0), 1),
+                "developers": DeveloperProfile.objects.filter(
+                    status=DeveloperStatus.APPROVED
+                ).count(),
+                "cities": qs.exclude(city="").values("city").distinct().count(),
             }
         )
