@@ -28,8 +28,28 @@ VPS readiness audit found only OS + SSH present (no repo, venv, Postgres, nginx,
 - **SECRETS RULE:** every secret value is **"Yahia pastes, never Claude."** Claude creates the file,
   sets non-secret lines, and tells Yahia exactly which keys to fill — Claude never writes a secret
   value, never echoes one, never commits one. `backend/.env` is gitignored and stays on the server only.
+- **OPERATIONAL RULE — never `source` the server `.env`.** Bash `. ./.env` / `source .env` *executes*
+  the file, so any value with shell-special chars gets echoed to the terminal (= leaked to the
+  transcript). For one-off `manage.py` commands that need the env, use the **systemd EnvironmentFile**
+  mechanism (e.g. `systemd-run` with `EnvironmentFile=/opt/capimax-brx/backend/.env`, or
+  `systemctl restart capimax-api` for the live process) — NOT `source`.
 - **No destructive action without explicit OK.** Each step is non-destructive unless flagged.
 - **Status legend:** `[ ]` todo · `[~]` in progress · `[x]` done. **Owner** column = who acts.
+
+## ⚠️ PRE-LAUNCH SECRET ROTATION (REQUIRED before go-live)
+- **[ ] Rotate ALL provider sandbox/test secrets + the DB password, then re-merge.** Every secret below
+  was exposed in chat at some point (pasted by Yahia early, and one `.env`-source accident during the
+  `7aead94` redeploy) — all are **test/sandbox only (no live money)**, but must be rolled once, together,
+  before launch:
+  - **Stripe:** `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`
+  - **Sumsub:** `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY`, `SUMSUB_WEBHOOK_SECRET`
+  - **NOW Payments:** `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`
+  - **Postgres:** the `capimax` DB password (in `DATABASE_URL`) — rotate via `\password capimax`.
+  - *(Chain trio `WALLET_ENCRYPTION_KEY` / `DEPLOYER_PRIVATE_KEY` / `PROPERTY_TOKEN_FACTORY_ADDRESS`
+    were NEVER echoed — do NOT rotate; regenerating the Fernet key orphans all custodial wallets.)*
+- **Re-merge after rotating** via the **opaque scp → server-merge → shred** flow (values never pass
+  through Claude/chat), then `systemctl restart capimax-api`. Same flow used to set the secrets
+  originally. When switching to **live** (non-sandbox) keys at the real cutover, use this same step.
 
 ## Facts (from the readiness audit)
 - VPS: Ubuntu 24.04.4 LTS, KVM8 (8 vCPU / 32 GB / 400 GB), IPv4 **148.230.125.240**, host `srv1775962`.
