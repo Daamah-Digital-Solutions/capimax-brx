@@ -2490,3 +2490,38 @@ pattern EXACTLY:
   → admin sees them inline → `exception_approve_kyb` activates the role (identical end-state to a GREEN
   webhook). **DELETE NOTHING; no money (KYB documents only).** Verify: 15 new tests (5/role) green;
   full suite 523 green; tsc clean.
+
+## Supabase fully removed (deploy prep — testnet soft-launch)
+
+- **Decision (owner): no external datastore ships — Supabase is removed ENTIRELY; the project is 100%
+  Django-backed.** Background in `SUPABASE_CLEANUP.md` (now headed with a FINAL STATUS banner): the last 5
+  Supabase-only surfaces had **no Django backend**, so removing Supabase removed those UI surfaces too —
+  accepted for the soft launch; they are a **future Django build** (a production gate), NOT a Supabase
+  dependency. The 5: **investor bank accounts, investor crypto wallets, saved cards, visa cards,
+  payment-method audit log**.
+- **Deleted (15 files + 1 dir + 1 lockfile):** `src/integrations/supabase/{client,types}.ts`,
+  `src/integrations/lovable/index.ts` (a dead Supabase-auth shim, zero importers), the 4 hooks
+  (`useInvestorBankAccounts`/`useInvestorCryptoWallets`/`useSavedCards`/`useVisaCards`), `pages/AuditLog.tsx`,
+  `pages/Cards.tsx`, the 6 wrapper components (`BankAccountsManager`, `CryptoWalletsManager`,
+  `SavedCardsManager`, `VisaCardsSection`, `CreateCardDialog`, `CreateVirtualCardButton`), the root
+  `supabase/` dir (config.toml + 6 edge functions + 28 SQL migrations), and `bun.lockb`. Deps removed:
+  `@supabase/supabase-js` + `@lovable.dev/cloud-auth-js` (lockfile resynced via `npm install`; 11 packages
+  removed). `lovable-tagger` (dev Vite plugin, unrelated) kept.
+- **Nav/routes removed cleanly (no half-states):** routes `/cards` + `/audit-log` ([App.tsx](src/App.tsx))
+  + their sidebar entries (the "BRX Cards" collapsible + "Security & Audit Log" item, [AppSidebar.tsx](src/components/layout/AppSidebar.tsx))
+  + the `/cards` promo item in [NotificationsSection.tsx](src/components/home/NotificationsSection.tsx). No
+  dead links, no orphaned routes, no empty sections (each removed mount took its wrapper heading/Card/Tab).
+- **Django wallet KEPT fully working (stays-vs-goes held):** removed ONLY the Supabase Payment-Methods mounts
+  from [Wallet.tsx](src/pages/Wallet.tsx) (the "Payment Methods" card), [OwnerWallet.tsx](src/pages/OwnerWallet.tsx)
+  (Bank/Crypto tabs + Visa + card button), [LiquidityProvider.tsx](src/pages/LiquidityProvider.tsx) (Visa +
+  card button on the Withdrawals tab), [BrokerDashboard.tsx](src/pages/BrokerDashboard.tsx) (the wallet tab),
+  [Portfolio.tsx](src/pages/Portfolio.tsx) (card button), and
+  [WalletSection.tsx](src/components/portfolio/WalletSection.tsx). **All Django features stay:** balance,
+  deposit (Stripe/NOW), withdraw (`/api/wallets/withdrawals/`), totals, ledger, reinvest, owner earnings,
+  the real LP withdrawal flow.
+- **Frontend env reduced to ONE var:** `VITE_API_BASE_URL` (`.env` + `.env.example` stripped of all
+  `VITE_SUPABASE_*`). Netlify needs only that var now.
+- **Verify:** 0 functional `supabase` refs in `src/` (38 remaining hits are historical comments); `tsc`
+  clean (exit 0); `npm run build` clean, **no `VITE_SUPABASE` in the bundle**; no remaining nav/route to
+  `/cards` or `/audit-log` (the one `/v1/audit-log` hit is doc text in DeveloperHub's public-API list);
+  backend untouched (0 `backend/` files changed) → suite **523 green**.

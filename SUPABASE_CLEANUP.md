@@ -1,5 +1,25 @@
 # SUPABASE_CLEANUP.md — the remaining Supabase-backed surfaces
 
+> ## ✅ FINAL STATUS — SUPABASE FULLY REMOVED (deploy prep, testnet soft-launch)
+> **Decision (owner): no external datastore ships. Supabase is gone entirely — the project is 100% Django-backed.**
+> The last 5 Supabase-only surfaces had **no Django backend**, so removing Supabase removed those UI surfaces
+> too (accepted for the soft launch; they become a **future Django build** — a production gate, NOT a Supabase
+> dependency): **investor bank accounts, investor crypto wallets, saved cards, visa cards, payment-method audit log**.
+>
+> **Deleted:** `src/integrations/supabase/*` (client + types), `src/integrations/lovable/*` (dead Supabase-auth
+> shim), the 4 hooks + `AuditLog.tsx` + `Cards.tsx`, the 6 wrapper components (Bank/Crypto/Saved/Visa managers +
+> CreateCardDialog + CreateVirtualCardButton), the root `supabase/` dir (config + 6 edge functions + 28 SQL
+> migrations), `bun.lockb`, and the deps `@supabase/supabase-js` + `@lovable.dev/cloud-auth-js`. Routes `/cards`
+> + `/audit-log` and their nav entries removed; the Supabase Payment-Methods mounts removed from `/wallet`,
+> `/owner-wallet`, `/lp`, broker, and portfolio — **every Django-backed wallet feature (balance, deposit,
+> withdraw, totals, ledger, reinvest, earnings) kept fully working.** Frontend now reads **only**
+> `VITE_API_BASE_URL` (no `VITE_SUPABASE_*`). Verified: 0 functional `supabase` refs in `src/`, `tsc` clean,
+> `npm run build` clean (no `VITE_SUPABASE` in bundle), backend suite **523 green**.
+>
+> The survey below is retained as the historical record of how these surfaces were classified.
+
+---
+
 READ-ONLY survey (no fixes). Covers the 8 hooks/pages still importing
 `@/integrations/supabase/client`. For each: what it does, whether a Django backend
 already exists, and a classification — **(A) repointable now**, **(B) needs a backend

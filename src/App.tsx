@@ -24,7 +24,6 @@ import Documents from "./pages/Documents";
 import OwnerDocuments from "./pages/OwnerDocuments";
 import OwnerWallet from "./pages/OwnerWallet";
 import Messages from "./pages/Messages";
-import Cards from "./pages/Cards";
 import Notifications from "./pages/Notifications";
 import Support from "./pages/Support";
 import HowItWorks from "./pages/HowItWorks";
@@ -58,7 +57,6 @@ import Regulation from "./pages/Regulation";
 import FAQ from "./pages/FAQ";
 import ProductCategory from "./pages/ProductCategory";
 import Products from "./pages/Products";
-import AuditLog from "./pages/AuditLog";
 import ExitsHub from "./pages/ExitsHub";
 import InstitutionalPackages from "./pages/InstitutionalPackages";
 import DeveloperHub from "./pages/DeveloperHub";
@@ -105,7 +103,6 @@ const App = () => (
           <Route path="/owner-documents" element={<OwnerDocuments />} />
           {/* Owner-only nav item — honest "Coming soon" placeholder (no messaging backend yet). */}
           <Route path="/messages" element={<Messages />} />
-          <Route path="/cards" element={<Cards />} />
           <Route path="/asset-validation" element={<OwnerReports />} />
           <Route path="/submit-property" element={<SubmitProperty />} />
           {/* The broker hub now lives in the real Listings/Referrals/Commissions pages.
@@ -137,7 +134,6 @@ const App = () => (
           <Route path="/liquidity-provider" element={<LiquidityProvider />} />
           <Route path="/family-investment" element={<FamilyInvestment />} />
           <Route path="/lp-market" element={<LPMarket />} />
-          <Route path="/audit-log" element={<AuditLog />} />
           <Route path="/exits-hub" element={<ExitsHub />} />
           <Route path="/institutional" element={<InstitutionalPackages />} />
           <Route path="/developers" element={<DeveloperHub />} />

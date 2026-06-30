@@ -149,10 +149,14 @@ VPS readiness audit found only OS + SSH present (no repo, venv, Postgres, nginx,
 
 ## STEP 12 — Netlify frontend (Yahia)
 - **Owner:** **Yahia** (Netlify + DNS) · **Depends on:** apex DNS to Netlify + the API live.
-- Point `capimaxbrx.com` (+ `www`) at Netlify; set the frontend's API base env var to
-  `https://api.capimaxbrx.com`; redeploy.
+- Point `capimaxbrx.com` (+ `www`) at Netlify; redeploy. Build/publish/Node are pinned in `netlify.toml`
+  (`npm run build` → `dist`, Node 20, SPA catch-all) — no manual UI build config needed.
+- **Env var — only ONE now:** `VITE_API_BASE_URL = https://api.capimaxbrx.com/api` (include `/api`, no
+  trailing slash). **Supabase was fully removed** (see DECISIONS.md "Supabase fully removed") — there are
+  **NO `VITE_SUPABASE_*` vars anymore**; do not set them.
 - **Verify:** the live site loads and its API calls hit `api.capimaxbrx.com` (CORS allows the origin
-  set in step 4); login/marketplace render against the real backend.
+  set in step 4); login/marketplace render against the real backend. Test via the real
+  `https://capimaxbrx.com` (not the `*.netlify.app` preview) to avoid a CORS-origin mismatch.
 
 ## STEP 13 — Sandbox end-to-end gate (the launch acceptance test)
 - **Owner:** Claude drives / observes · **Yahia** does dashboard side · **Depends on:** 11, 12.

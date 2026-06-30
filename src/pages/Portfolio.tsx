@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Link, useSearchParams } from "react-router-dom";
@@ -147,7 +146,6 @@ export default function Portfolio() {
                 <p className="text-muted-foreground">{t("portfolio.subtitle")}</p>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <CreateVirtualCardButton roleLabel="Investor" />
                 <Button variant="outline" className="gap-2" onClick={handleExport} disabled={exporting}>
                   <Download className="w-4 h-4" />
                   {t("portfolio.exportReport")}

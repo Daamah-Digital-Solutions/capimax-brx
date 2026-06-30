@@ -17,7 +17,6 @@ import {
   ChevronRight,
   Receipt,
   FileText,
-  Settings,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -41,9 +40,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard";
-import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
-import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
-import { SavedCardsManager } from "@/components/wallet/SavedCardsManager";
 // Phase 12 finishing: the investor wallet now uses the REAL Django flow + the shared
 // Django withdrawal dialog (replaces the legacy Supabase-OTP WithdrawalDialog).
 import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
@@ -351,28 +347,6 @@ export default function Wallet() {
             <div className="space-y-6">
               {/* Real internal balance (no clamp; mirrors Portfolio). */}
               <ReinvestReturnsCard availableReturns={balance} />
-
-              {/* Payment Methods Management */}
-              <div className="bg-card rounded-2xl border border-border p-6 space-y-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-primary" />
-                    <h2 className="font-display text-lg font-semibold text-foreground">
-                      {language === "ar" ? "طرق الدفع والسحب" : "Payment Methods"}
-                    </h2>
-                  </div>
-                </div>
-
-                <BankAccountsManager />
-                
-                <div className="border-t border-border pt-6">
-                  <CryptoWalletsManager />
-                </div>
-                
-                <div className="border-t border-border pt-6">
-                  <SavedCardsManager />
-                </div>
-              </div>
             </div>
           </div>
         </div>

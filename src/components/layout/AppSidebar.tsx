@@ -43,7 +43,6 @@ import {
   HardHat,
   ArrowRightLeft,
   Newspaper,
-  CreditCard,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -117,7 +116,6 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
       { titleKey: "nav.secondaryMarket", icon: TrendingUp, href: "/secondary-market" },
       { titleKey: "Live Exits Hub", icon: ArrowRightLeft, href: "/exits-hub" },
-      { titleKey: "Security & Audit Log", icon: ShieldCheck, href: "/audit-log" },
       { titleKey: "nav.documents", icon: FileText, href: "/documents" },
       { titleKey: "nav.notifications", icon: Bell, href: "/notifications" },
       { titleKey: "nav.support", icon: HelpCircle, href: "/support" },
@@ -240,7 +238,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const { t, language } = useLanguage();
   const { unreadCount } = useUnreadCount();
-  const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "partner", "public", "cards", "products", "products-uc", "platform", "legal"]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "partner", "public", "products", "products-uc", "platform", "legal"]);
   
   // Initialize role from localStorage or detect from current path
   const [selectedRole, setSelectedRole] = useState<UserRole>(() => {
@@ -423,58 +421,6 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
               )}
             </div>
           ))}
-
-          {/* BRX CARDS SECTION (after Reports & Analytics — visible to all) */}
-          <div className="mb-2">
-            <button
-              onClick={() => toggleSection("cards")}
-              className={cn(
-                "w-full flex items-center gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all duration-200 border-l-4",
-                expandedSections.includes("cards")
-                  ? "bg-sidebar-accent/50 border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/30",
-                !isOpen && "lg:hidden"
-              )}
-            >
-              <CreditCard className="w-4 h-4 text-pink-500" />
-              {expandedSections.includes("cards") ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
-              <span>{language === "ar" ? "بطاقات BRX" : "BRX Cards"}</span>
-            </button>
-
-            {(expandedSections.includes("cards") || !isOpen) && (
-              <ul className="mt-1 space-y-1 px-2">
-                <li>
-                  <NavLink
-                    to="/cards"
-                    className={({ isActive: active }) =>
-                      cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                        active || isActive("/cards")
-                          ? "bg-sidebar-accent text-sidebar-primary"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-foreground",
-                        !isOpen && "lg:justify-center lg:px-0"
-                      )
-                    }
-                    title={!isOpen ? (language === "ar" ? "بطاقاتي" : "My Cards") : undefined}
-                  >
-                    <CreditCard className={cn("w-5 h-5 shrink-0", isActive("/cards") && "text-primary")} />
-                    {isOpen && (
-                      <>
-                        <span className="flex-1">{language === "ar" ? "بطاقاتي" : "My Cards"}</span>
-                        <span className="px-2 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full">
-                          NEW
-                        </span>
-                      </>
-                    )}
-                  </NavLink>
-                </li>
-              </ul>
-            )}
-          </div>
 
           {/* 2. PUBLIC SECTION (Secondary - visible to all roles) */}
           <div className="mb-2">

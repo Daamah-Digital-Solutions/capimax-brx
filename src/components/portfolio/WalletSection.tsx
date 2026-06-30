@@ -17,7 +17,6 @@ import { useUserWallet } from "@/hooks/useUserWallet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { TokenHoldings } from "./TokenHoldings";
-import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
 import { KycVerification } from "@/components/kyc/KycVerification";
 
 export function WalletSection() {
@@ -229,11 +228,6 @@ export function WalletSection() {
       {wallet && (
         <TokenHoldings walletId={wallet.id} />
       )}
-
-      {/* Visa Cards */}
-      <VisaCardsSection
-        roleLabel={{ en: "Investor", ar: "مستثمر" }}
-      />
 
       {/* Transactions Card */}
       {wallet && (

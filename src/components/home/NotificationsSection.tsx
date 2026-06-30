@@ -1,7 +1,7 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, RefreshCcw, Users, ExternalLink, ArrowRight, ArrowLeft, CreditCard, Shield, LayoutGrid } from "lucide-react";
+import { Building2, RefreshCcw, Users, ExternalLink, ArrowRight, ArrowLeft, Shield, LayoutGrid } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export function NotificationsSection() {
@@ -56,23 +56,6 @@ export function NotificationsSection() {
       buttonText: isRTL ? "الاستثمار العائلي" : "Family Investment",
       gradient: "from-purple-500/20 to-pink-500/20",
       iconBg: "bg-purple-500",
-    },
-    {
-      id: 4,
-      icon: CreditCard,
-      title: isRTL ? "بطاقات افتراضية للعائلة والمعالين" : "Family & Dependent Virtual Cards",
-      description: isRTL
-        ? "أنشئ بطاقات افتراضية إضافية مرتبطة بالاستثمارات العائلية والمعالين والمحافظ المخصصة داخل حسابك."
-        : "Create additional virtual cards linked to family investments, dependents, and allocated portfolios inside your account.",
-      highlights: [
-        isRTL ? "بطاقة شخصية أساسية وبطاقات إضافية" : "Primary card plus additional virtual cards",
-        isRTL ? "تجميد/إلغاء تجميد وتتبع المعاملات" : "Freeze/unfreeze and transaction tracking",
-      ],
-      linkType: "internal",
-      link: "/cards",
-      buttonText: isRTL ? "إدارة البطاقات" : "Manage Cards",
-      gradient: "from-amber-500/20 to-orange-500/20",
-      iconBg: "bg-amber-500",
     },
     {
       id: 5,

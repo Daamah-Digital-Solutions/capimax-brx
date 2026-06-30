@@ -1,23 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
-import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
 import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
-import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
-import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
 import { walletsApi, ownerApi } from "@/integrations/api/client";
 import {
   Wallet,
-  Building,
-  Coins,
   ArrowDownToLine,
   TrendingUp,
-  DollarSign,
   Package,
 } from "lucide-react";
 
@@ -66,13 +58,12 @@ export default function OwnerWallet() {
                   {language === "ar" ? "محفظة المالك" : "Owner Wallet"}
                 </h1>
                 <p className="text-muted-foreground">
-                  {language === "ar" 
-                    ? "إدارة حساباتك المصرفية ومحافظك الرقمية" 
-                    : "Manage your bank accounts and crypto wallets"}
+                  {language === "ar"
+                    ? "رصيدك وأرباحك وطلبات السحب"
+                    : "Your balance, earnings, and withdrawals"}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <CreateVirtualCardButton roleLabel="Property Owner" />
                 <Button
                   variant="hero"
                   className="gap-2"
@@ -150,65 +141,6 @@ export default function OwnerWallet() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Payment Methods Tabs */}
-          <Tabs defaultValue="bank" className="space-y-6">
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="bank" className="gap-2">
-                <Building className="w-4 h-4" />
-                {language === "ar" ? "الحسابات البنكية" : "Bank Accounts"}
-              </TabsTrigger>
-              <TabsTrigger value="crypto" className="gap-2">
-                <Coins className="w-4 h-4" />
-                {language === "ar" ? "المحافظ الرقمية" : "Crypto Wallets"}
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="bank">
-              <Card className="bg-card/50 backdrop-blur border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">
-                    {language === "ar" ? "إدارة الحسابات البنكية" : "Bank Account Management"}
-                  </CardTitle>
-                  <CardDescription>
-                    {language === "ar"
-                      ? "أضف أو عدّل حساباتك البنكية لاستقبال السحوبات"
-                      : "Add or edit your bank accounts for receiving withdrawals"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <BankAccountsManager />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="crypto">
-              <Card className="bg-card/50 backdrop-blur border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">
-                    {language === "ar" ? "إدارة المحافظ الرقمية" : "Crypto Wallet Management"}
-                  </CardTitle>
-                  <CardDescription>
-                    {language === "ar"
-                      ? "أضف أو عدّل محافظك الرقمية لاستقبال السحوبات"
-                      : "Add or edit your crypto wallets for receiving withdrawals"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CryptoWalletsManager />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-
-          {/* Visa Cards */}
-          <div className="mt-6">
-            <VisaCardsSection
-              walletBalance={availableBalance}
-              roleLabel={{ en: "Property Owner", ar: "مالك عقار" }}
-            />
-          </div>
-
 
           {/* Info Section */}
           <Card className="mt-6 bg-muted/30 border-border/50">
