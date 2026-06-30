@@ -63,6 +63,11 @@ media/
 # --- Solidity / Hardhat (backend/blockchain) --------------------------------
 backend/blockchain/node_modules/
 backend/blockchain/artifacts/
+# EXCEPTION: two compiled ABIs are force-added (git add -f) and tracked, because the
+# Django runtime loads them at deploy/mint time (apps/chain/contracts.py) and the VPS
+# has no Node to run `npx hardhat compile`. Recompiling refreshes them; keep them tracked:
+#   backend/blockchain/artifacts/contracts/PropertyTokenFactory.sol/PropertyTokenFactory.json
+#   backend/blockchain/artifacts/contracts/PropertyToken.sol/PropertyToken.json
 backend/blockchain/cache/
 backend/blockchain/coverage/
 backend/blockchain/coverage.json
