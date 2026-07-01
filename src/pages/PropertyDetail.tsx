@@ -203,6 +203,9 @@ export default function PropertyDetail() {
   const { t, language, isRTL } = useLanguage();
   const [selectedImage, setSelectedImage] = useState(0);
   const [copied, setCopied] = useState(false);
+  // Units chosen in the catalogue-branch investment sidebar; drives the live total
+  // and is forwarded to Checkout (which reads ?units=). Real state, not a dead stepper.
+  const [units, setUnits] = useState(1);
 
   // Catalogue property from the API (replaces synchronous properties.ts lookup).
   // Fetched for every id; for ids "1"/"2" the inline `propertyDatabase` legacy
@@ -270,7 +273,9 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          <div className="container py-8 space-y-8">
+          <div className="container py-8">
+            <div className="grid lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-8">
             {/* Hero */}
             <div className="relative h-72 md:h-96 rounded-2xl overflow-hidden">
               <img src={cp.image} alt={cpName} className="w-full h-full object-cover" />
@@ -370,13 +375,117 @@ export default function PropertyDetail() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <Button variant="hero" size="lg" className="flex-1" onClick={() => navigate(`/checkout?property=${id}`)}>
+                <Button variant="hero" size="lg" className="flex-1" onClick={() => navigate(`/checkout?property=${id}&units=${units}`)}>
                   {t("property.investNow")}
                 </Button>
                 <Button variant="outline" size="lg" asChild>
                   <Link to="/marketplace">{language === "ar" ? "العودة إلى السوق" : "Back to Marketplace"}</Link>
                 </Button>
               </div>
+            </div>
+              </div>
+
+              {/* ─────────── Investment sidebar — real catalogue data + real Checkout flow ─────────── */}
+              <aside className="lg:col-span-1">
+                <div className="bg-card rounded-2xl border border-border p-6 sticky top-36 animate-fade-in">
+                  {/* Unit price */}
+                  <div className="text-center mb-6">
+                    <div className="text-sm text-muted-foreground mb-1">{t("propertyDetail.unitPrice")}</div>
+                    <div className="text-3xl font-bold text-gradient-gold">${Number(cp.tokenPrice).toLocaleString()}</div>
+                  </div>
+
+                  {/* Funding progress bar */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">{t("propertyDetail.funding")}</span>
+                      <span className="font-semibold text-primary">{cp.funded}%</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-gold rounded-full" style={{ width: `${cp.funded}%` }} />
+                    </div>
+                    {cp.totalValue ? (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                        <span>${Math.round((cp.totalValue * cp.funded) / 100).toLocaleString()} {t("propertyDetail.raised")}</span>
+                        <span>${cp.totalValue.toLocaleString()} {t("propertyDetail.target")}</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Yield + investors */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="p-3 bg-muted rounded-lg text-center">
+                      <div className="text-lg font-bold text-primary">{cp.expectedYield ?? cp.expectedGrowth}%</div>
+                      <div className="text-xs text-muted-foreground">{cp.expectedYield ? t("propertyDetail.annualYield") : t("property.growth")}</div>
+                    </div>
+                    <div className="p-3 bg-muted rounded-lg text-center">
+                      <div className="text-lg font-bold text-foreground">{cp.investors}</div>
+                      <div className="text-xs text-muted-foreground">{t("property.investors")}</div>
+                    </div>
+                  </div>
+
+                  {/* Number of units — working stepper with live total */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-foreground mb-2">{t("propertyDetail.numberOfUnits")}</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label="decrease units"
+                        onClick={() => setUnits((u) => Math.max(1, u - 1))}
+                        className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        value={units}
+                        onChange={(e) => setUnits(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="flex-1 h-10 bg-muted rounded-lg text-center font-semibold outline-none focus:ring-2 focus:ring-primary"
+                      />
+                      <button
+                        type="button"
+                        aria-label="increase units"
+                        onClick={() => setUnits((u) => u + 1)}
+                        className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="text-center mt-2 text-sm text-muted-foreground">
+                      {t("propertyDetail.total")}: <span className="font-semibold text-foreground">${(units * Number(cp.tokenPrice)).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* CTA — Own Now → real Checkout with the chosen quantity */}
+                  <Button
+                    variant="hero"
+                    size="lg"
+                    className="w-full mb-4"
+                    onClick={() => navigate(`/checkout?property=${id}&units=${units}`)}
+                  >
+                    {t("property.investNow")}
+                  </Button>
+                  <Button variant="outline" className="w-full">
+                    {t("propertyDetail.addToFavorites")}
+                  </Button>
+
+                  {/* Trust badges */}
+                  <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-border">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Shield className="w-4 h-4 text-primary" />
+                      <span>{t("propertyDetail.secure")}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Lock className="w-4 h-4 text-primary" />
+                      <span>{t("propertyDetail.encrypted")}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Blocks className="w-4 h-4 text-primary" />
+                      <span>{t("propertyDetail.tokenVerified")}</span>
+                    </div>
+                  </div>
+                </div>
+              </aside>
             </div>
           </div>
         </div>
