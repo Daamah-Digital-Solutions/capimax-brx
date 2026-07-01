@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useUnreadCount } from "@/hooks/useNotifications";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Select,
   SelectContent,
@@ -236,14 +237,30 @@ const detectRoleFromPath = (pathname: string): UserRole | null => {
   if (brokerPaths.some(p => pathname.startsWith(p))) return 'broker';
   if (partnerPaths.some(p => pathname.startsWith(p))) return 'partner';
   if (pathname === '/liquidity-provider' && pathname.includes('#')) return 'liquidity_provider';
-  
+
   return null;
+};
+
+// Map the authenticated user's profile role to a sidebar role. `developer` shares the
+// Owner/Developer section; `admin` gets a functional (investor) view; unknown/none => guest.
+const roleFromProfile = (profileRole?: string): UserRole => {
+  switch (profileRole) {
+    case "investor": return "investor";
+    case "owner": return "owner";
+    case "developer": return "owner";
+    case "lp": return "liquidity_provider";
+    case "broker": return "broker";
+    case "partner": return "partner";
+    case "admin": return "investor";
+    default: return "guest";
+  }
 };
 
 export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const { t, language } = useLanguage();
   const { unreadCount } = useUnreadCount();
+  const { user } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "partner", "public", "products", "products-uc", "platform", "legal"]);
   
   // Initialize role from localStorage or detect from current path
@@ -261,6 +278,21 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   useEffect(() => {
     localStorage.setItem('capimax_sidebar_role', selectedRole);
   }, [selectedRole]);
+
+  // Default the sidebar to the LOGGED-IN user's role so their real nav shows immediately
+  // (no manual selector step). Runs once per logged-in user; manual switching still works
+  // afterward, and a fresh login (new user id) re-syncs to that user's role.
+  const [roleSyncedFor, setRoleSyncedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (user?.id) {
+      if (user.id !== roleSyncedFor) {
+        setSelectedRole(roleFromProfile(user.profile?.role));
+        setRoleSyncedFor(user.id);
+      }
+    } else if (roleSyncedFor !== null) {
+      setRoleSyncedFor(null); // logged out → allow re-sync on next login
+    }
+  }, [user, roleSyncedFor]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) =>
