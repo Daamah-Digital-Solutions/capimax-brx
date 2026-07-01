@@ -87,6 +87,19 @@ const roleLabels: Record<UserRole, { en: string; ar: string }> = {
   partner: { en: "Partner", ar: "شريك" },
 };
 
+// Label for the footer identity from the REAL backend profile role (distinct from
+// the "view as" selector's roleLabels above): covers every role, incl. admin and
+// developer, so the footer always names the actual logged-in user's role.
+const profileRoleLabels: Record<string, { en: string; ar: string }> = {
+  investor: { en: "Investor", ar: "مستثمر" },
+  owner: { en: "Owner", ar: "مالك" },
+  developer: { en: "Developer", ar: "مطور" },
+  lp: { en: "Liquidity Provider", ar: "مزود السيولة" },
+  broker: { en: "Broker", ar: "وسيط" },
+  partner: { en: "Partner", ar: "شريك" },
+  admin: { en: "Admin", ar: "مسؤول" },
+};
+
 // Public items that are always visible to all roles
 const publicItems: MenuItem[] = [
   { titleKey: "nav.marketplace", icon: Store, href: "/marketplace" },
@@ -308,6 +321,16 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   // Get platform and legal sections
   const platformSection = menuSections.find((section) => section.sectionId === "platform");
   const legalSection = menuSections.find((section) => section.sectionId === "legal");
+
+  // Sidebar footer identity — the REAL logged-in user (never a placeholder). Name
+  // falls back to email like the dashboard greeting; role comes from the actual
+  // profile, not the "view as" selector.
+  const isAr = language === "ar";
+  const footerName = user?.profile?.full_name || user?.email || (isAr ? "زائر" : "Guest");
+  const footerRole = user?.profile?.role
+    ? profileRoleLabels[user.profile.role]?.[isAr ? "ar" : "en"] ?? user.profile.role
+    : isAr ? "زائر" : "Guest";
+  const footerInitial = footerName.trim().charAt(0).toUpperCase() || (isAr ? "ز" : "G");
 
   return (
     <>
@@ -797,22 +820,22 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gradient-gold flex items-center justify-center">
                 <span className="text-sm font-bold text-primary-foreground">
-                  {language === "ar" ? "م" : "M"}
+                  {footerInitial}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">
-                  {language === "ar" ? "محمد أحمد" : "Mohamed Ahmed"}
+                  {footerName}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {language === "ar" ? roleLabels[selectedRole].ar : roleLabels[selectedRole].en}
+                  {footerRole}
                 </p>
               </div>
             </div>
           ) : (
             <div className="w-8 h-8 rounded-full bg-gradient-gold flex items-center justify-center">
               <span className="text-xs font-bold text-primary-foreground">
-                {language === "ar" ? "م" : "M"}
+                {footerInitial}
               </span>
             </div>
           )}
