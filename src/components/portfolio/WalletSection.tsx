@@ -14,6 +14,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useUserWallet } from "@/hooks/useUserWallet";
+import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { TokenHoldings } from "./TokenHoldings";
@@ -290,6 +291,11 @@ export function WalletSection() {
           </CardContent>
         </Card>
       )}
+
+      {/* Visa Cards */}
+      <VisaCardsSection
+        roleLabel={{ en: "Investor", ar: "مستثمر" }}
+      />
     </div>
   );
 }

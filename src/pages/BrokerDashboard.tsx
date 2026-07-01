@@ -26,6 +26,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
+import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -140,6 +142,9 @@ export default function BrokerDashboard() {
                 </h1>
                 <p className="text-muted-foreground">إدارة الإحالات والعمولات</p>
               </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <CreateVirtualCardButton roleLabel="Broker" />
+              </div>
             </div>
           </div>
         </div>
@@ -213,6 +218,7 @@ export default function BrokerDashboard() {
               <TabsTrigger value="commissions">العمولات</TabsTrigger>
               <TabsTrigger value="listings">العقارات</TabsTrigger>
               <TabsTrigger value="performance">الأداء</TabsTrigger>
+              <TabsTrigger value="wallet">المحفظة والبطاقات</TabsTrigger>
             </TabsList>
 
             {/* Referrals Tab */}
@@ -472,6 +478,13 @@ export default function BrokerDashboard() {
                   </div>
                 </div>
               </div>
+            </TabsContent>
+
+            <TabsContent value="wallet">
+              <VisaCardsSection
+                walletBalance={balance}
+                roleLabel={{ en: "Broker", ar: "وسيط" }}
+              />
             </TabsContent>
           </Tabs>
         </div>

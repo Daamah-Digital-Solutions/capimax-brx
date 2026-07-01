@@ -21,6 +21,7 @@ import OwnerDashboard from "./pages/OwnerDashboard";
 import OwnerReports from "./pages/OwnerReports";
 import Reports from "./pages/Reports";
 import Documents from "./pages/Documents";
+import Cards from "./pages/Cards";
 import OwnerDocuments from "./pages/OwnerDocuments";
 import OwnerWallet from "./pages/OwnerWallet";
 import Messages from "./pages/Messages";
@@ -54,6 +55,7 @@ import FamilyInvestment from "./pages/FamilyInvestment";
 import LPMarket from "./pages/LPMarket";
 import Reinvestment from "./pages/Reinvestment";
 import Regulation from "./pages/Regulation";
+import AuditLog from "./pages/AuditLog";
 import FAQ from "./pages/FAQ";
 import ProductCategory from "./pages/ProductCategory";
 import Products from "./pages/Products";
@@ -91,6 +93,7 @@ const App = () => (
           <Route path="/public-analytics" element={<PublicAnalytics />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/cards" element={<Cards />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/support" element={<Support />} />
           <Route path="/auth" element={<Auth />} />
@@ -120,6 +123,7 @@ const App = () => (
           <Route path="/exit-mechanism" element={<ExitMechanism />} />
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/regulation" element={<Regulation />} />
+          <Route path="/audit-log" element={<AuditLog />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/strategic-partners" element={<StrategicPartners />} />

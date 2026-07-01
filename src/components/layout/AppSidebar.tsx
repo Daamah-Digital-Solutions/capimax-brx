@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronRight,
+  CreditCard,
   X,
   Landmark,
   Building,
@@ -113,6 +114,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.distributions", icon: DollarSign, href: "/distributions" },
       { titleKey: "nav.reports", icon: BarChart3, href: "/reports" },
       { titleKey: "nav.wallet", icon: Wallet, href: "/wallet" },
+      { titleKey: "BRX Cards", icon: CreditCard, href: "/cards", badge: "NEW" },
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
       { titleKey: "nav.secondaryMarket", icon: TrendingUp, href: "/secondary-market" },
       { titleKey: "Live Exits Hub", icon: ArrowRightLeft, href: "/exits-hub" },
@@ -192,6 +194,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.fees", icon: DollarSign, href: "/fees" },
       { titleKey: "nav.exitMechanism", icon: LogOut, href: "/exit-mechanism" },
       { titleKey: "nav.settings", icon: Settings, href: "/settings" },
+      { titleKey: "Security & Audit Log", icon: ShieldCheck, href: "/audit-log" },
     ],
   },
   {

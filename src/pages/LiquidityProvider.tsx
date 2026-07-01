@@ -8,6 +8,8 @@ import { LPRegistrationFlow } from "@/components/liquidity/LPRegistrationFlow";
 import { LPOperationsDashboard } from "@/components/liquidity/LPOperationsDashboard";
 import { LPReports } from "@/components/liquidity/LPReports";
 import { LPWithdrawals } from "@/components/liquidity/LPWithdrawals";
+import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
+import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
 import { LPDocuments } from "@/components/liquidity/LPDocuments";
 import { LPAccountManager } from "@/components/liquidity/LPAccountManager";
 import { LPAnalyticsCharts } from "@/components/liquidity/LPAnalyticsCharts";
@@ -179,6 +181,7 @@ export default function LiquidityProvider() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {lpProfile && renderStatusBadge()}
+            <CreateVirtualCardButton roleLabel="Liquidity Provider" />
             <Button
               variant="outline"
               size="sm"
@@ -382,6 +385,10 @@ export default function LiquidityProvider() {
                 onUpdateBank={updateBankDetails}
                 onUpdateCrypto={updateCryptoDetails}
                 isRTL={isRTL}
+              />
+              <VisaCardsSection
+                walletBalance={lpProfile?.current_balance ?? 0}
+                roleLabel={{ en: "Liquidity Provider", ar: "مزود سيولة" }}
               />
             </TabsContent>
 
