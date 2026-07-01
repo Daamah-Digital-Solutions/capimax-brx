@@ -205,6 +205,25 @@ export const authApi = {
       tokenStore.clear();
     }
   },
+
+  /** Request a password-reset link. Always resolves (server never reveals if the email exists). */
+  async requestPasswordReset(email: string): Promise<void> {
+    await rawRequest("/auth/password/reset/", { method: "POST", body: { email } });
+  },
+
+  /** Set a new password from the emailed uid+token. Throws on an invalid/expired token (400). */
+  async confirmPasswordReset(payload: {
+    uid: string;
+    token: string;
+    new_password: string;
+  }): Promise<void> {
+    await rawRequest("/auth/password/reset/confirm/", { method: "POST", body: payload });
+  },
+
+  /** Confirm an email-verification link (uid+token). Throws on an invalid/expired token (400). */
+  async verifyEmail(payload: { uid: string; token: string }): Promise<void> {
+    await rawRequest("/auth/email/verify/", { method: "POST", body: payload });
+  },
 };
 
 // --------------------------------------------------------------------------- //

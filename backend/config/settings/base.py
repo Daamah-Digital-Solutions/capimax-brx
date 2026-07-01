@@ -264,6 +264,8 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
 # Swallow send errors in dev; env-controlled. Prod overrides the default to loud.
 EMAIL_FAIL_SILENTLY = env.bool("EMAIL_FAIL_SILENTLY", default=True)
+# Fail fast on a stalled SMTP connect instead of tying up a gunicorn worker.
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=15)
 # Public base URL of the React app — used for email links AND the certificate QR /
 # verification URL ({FRONTEND_URL}/verify/{code}). The Vite dev server is on :8080.
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:8080")

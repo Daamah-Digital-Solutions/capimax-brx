@@ -11,6 +11,9 @@ import PropertyDetail from "./pages/PropertyDetail";
 import Dashboard from "./pages/Dashboard";
 import SecondaryMarket from "./pages/SecondaryMarket";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import RegisterRole from "./pages/RegisterRole";
 import NotFound from "./pages/NotFound";
 import Portfolio from "./pages/Portfolio";
@@ -97,6 +100,9 @@ const App = () => (
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/support" element={<Support />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/register" element={<RegisterRole />} />
           {/* Broker referral landing (Phase 12 Wave A): stash code → registration. */}
           <Route path="/ref/:code" element={<ReferralCapture />} />
