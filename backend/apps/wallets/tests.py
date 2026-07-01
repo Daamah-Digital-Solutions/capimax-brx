@@ -241,8 +241,11 @@ class BalanceTransactionHistoryTests(APITestCase):
         self.assertEqual(by_source["distribution"]["amount"], 840.0)
         self.assertEqual(by_source["withdrawal"]["entry_type"], "debit")
         self.assertEqual(by_source["withdrawal"]["amount"], 200.0)
-        # The other user's row is NOT visible.
-        self.assertNotIn("999", str(rows))
+        # The other user's row (reference "DX", amount 999) is NOT visible. Check the
+        # actual fields, not a stringified blob (a timestamp's microseconds could contain
+        # "999" and falsely trip a substring match).
+        self.assertNotIn("DX", {r["reference"] for r in rows})
+        self.assertNotIn(999.0, [r["amount"] for r in rows])
 
     def test_history_is_read_only(self):
         self.client.force_authenticate(self.user)
