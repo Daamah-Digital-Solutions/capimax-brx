@@ -28,7 +28,8 @@ interface AuthContextType {
     metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string }
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  // Exchange a Google GIS id_token (obtained by the browser) for a backend session.
+  loginWithGoogle: (idToken: string) => Promise<{ error: Error | null }>;
   signInWithApple: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -107,14 +108,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // OAuth (Google/Apple) is scaffolded on the backend but not wired end-to-end yet
-  // (provider keys pending — SPEC §6 / DECISIONS.md). Return a clear, non-throwing
-  // error so the existing UI shows a toast instead of breaking.
-  const oauthNotReady = async () => ({
-    error: new Error("Social sign-in isn't enabled yet. Please use email and password."),
+  // Google Sign-In: the browser (GIS button) obtains a signed id_token and hands
+  // it here; the backend verifies it and returns the same { user, session } as
+  // login. First sign-in creates the account (baseline investor). SPEC §6.
+  const loginWithGoogle = async (idToken: string) => {
+    try {
+      const result = await authApi.googleOAuth(idToken);
+      setUser(toAuthUser(result.user));
+      setSession({ access_token: result.session.access_token });
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  };
+
+  // Apple sign-in is scaffolded on the backend but not wired end-to-end yet
+  // (provider keys pending — SPEC §6). Return a clear, non-throwing error.
+  const signInWithApple = async () => ({
+    error: new Error("Apple sign-in isn't enabled yet. Please use email and password."),
   });
-  const signInWithGoogle = oauthNotReady;
-  const signInWithApple = oauthNotReady;
 
   const signOut = async () => {
     try {
@@ -127,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, loading, signUp, signIn, signInWithGoogle, signInWithApple, signOut }}
+      value={{ user, session, loading, signUp, signIn, loginWithGoogle, signInWithApple, signOut }}
     >
       {children}
     </AuthContext.Provider>

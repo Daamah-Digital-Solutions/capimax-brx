@@ -1,7 +1,10 @@
 """
 Smoke tests for the auth foundation — one per endpoint. SPEC §6 (quality baseline).
 """
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -200,3 +203,59 @@ class BrandedEmailTests(APITestCase):
         self.assertIn("/reset-password?uid=", link)
         self.assertEqual(len(mail.outbox), 1)
         self._assert_branded(mail.outbox[0], "Reset password", "/reset-password?uid=")
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id.apps.googleusercontent.com")
+class GoogleOAuthTests(APITestCase):
+    """POST /api/auth/oauth/google/ verifies a GIS id_token and returns a JWT
+    session, creating the account on first sign-in. SPEC §6."""
+
+    def setUp(self):
+        self.url = reverse("core:oauth_google")
+
+    def _claims(self, email="newuser@gmail.com", name="Grace Hopper"):
+        return {
+            "iss": "https://accounts.google.com",
+            "email": email,
+            "email_verified": True,
+            "name": name,
+        }
+
+    @patch("apps.core.views.verify_google_id_token")
+    def test_first_signin_creates_verified_user_with_session(self, mock_verify):
+        mock_verify.return_value = self._claims()
+        resp = self.client.post(self.url, {"id_token": "fake"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("access_token", resp.data["session"])
+        self.assertIn("refresh_token", resp.data["session"])
+        user = User.objects.get(email__iexact="newuser@gmail.com")
+        self.assertTrue(user.is_email_verified)
+        # Baseline profile from the signal; Google display name applied on first sight.
+        self.assertEqual(user.profile.role, "investor")
+        self.assertEqual(user.profile.full_name, "Grace Hopper")
+        # OAuth-only account has no usable password.
+        self.assertFalse(user.has_usable_password())
+
+    @patch("apps.core.views.verify_google_id_token")
+    def test_returning_user_is_not_duplicated(self, mock_verify):
+        existing = User.objects.create_user(email="dev@gmail.com", password="Str0ng-Passw0rd!")
+        mock_verify.return_value = self._claims(email="DEV@gmail.com", name="Ignored")
+        resp = self.client.post(self.url, {"id_token": "fake"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(User.objects.filter(email__iexact="dev@gmail.com").count(), 1)
+        self.assertEqual(str(resp.data["user"]["id"]), str(existing.id))
+
+    @patch("apps.core.views.verify_google_id_token")
+    def test_invalid_token_is_rejected(self, mock_verify):
+        from apps.core.oauth import GoogleTokenError
+
+        mock_verify.side_effect = GoogleTokenError("Invalid Google token.")
+        resp = self.client.post(self.url, {"id_token": "bad"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.exists())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="")
+    def test_unconfigured_server_returns_400(self):
+        # No mock: the real helper short-circuits on missing client id (no network).
+        resp = self.client.post(self.url, {"id_token": "whatever"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

@@ -11,6 +11,7 @@ django-environ>=0.12
 django-allauth>=65.3
 requests>=2.32          # allauth Google provider token exchange
 cryptography>=44.0      # allauth Apple provider client-secret signing
+google-auth>=2.28       # verify GIS id_token for /api/auth/oauth/google/
 
 # Read-API filtering for the property domain (Phase 2). SPEC §3.3 / §2.12.
 django-filter>=24,<26

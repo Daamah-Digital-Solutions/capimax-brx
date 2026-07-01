@@ -26,6 +26,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .emails import send_password_reset_email, send_verification_email
+from .oauth import GoogleTokenError, verify_google_id_token
 from .serializers import (
     EmailVerificationConfirmSerializer,
     PasswordResetConfirmSerializer,
@@ -202,6 +203,53 @@ class EmailVerifyConfirmView(APIView):
             user.is_email_verified = True
             user.save(update_fields=["is_email_verified"])
         return Response({"detail": "Email verified."})
+
+
+class GoogleOAuthView(APIView):
+    """
+    POST /api/auth/oauth/google/ — sign in / sign up with a Google id_token.
+
+    The SPA (GIS button) sends { id_token }. We verify it server-side, then
+    get-or-create the user by email and return the same { user, session } shape
+    as login. A signal creates the baseline (investor, active) profile on
+    first sight; Google-verified email marks the account email-verified. SPEC §6.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = request.data.get("id_token") or request.data.get("credential")
+        try:
+            claims = verify_google_id_token(token)
+        except GoogleTokenError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = claims["email"]
+        user = User.objects.filter(email__iexact=email).first()
+        created = user is None
+        if created:
+            # OAuth-only account: create_user(password=None) sets an unusable
+            # password, so there's nothing to guess against. The post_save signal
+            # creates the baseline (investor, active) profile.
+            user = User.objects.create_user(email=email)
+
+        # Google already verified the email; reflect that on our side.
+        if not user.is_email_verified:
+            user.is_email_verified = True
+            user.save(update_fields=["is_email_verified"])
+
+        if created:
+            # Set the display name on first sight (never overwrite a later edit).
+            profile = getattr(user, "profile", None)
+            full_name = claims.get("name") or ""
+            if profile is not None and full_name and not profile.full_name:
+                profile.full_name = full_name
+                profile.save(update_fields=["full_name"])
+
+        return Response(
+            {"user": UserSerializer(user).data, "session": _token_pair(user)},
+            status=status.HTTP_200_OK,
+        )
 
 
 def _user_from_uid(uidb64: str):

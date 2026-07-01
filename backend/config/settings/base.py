@@ -165,11 +165,17 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "optional"
 
+# Google OAuth web client id — shared by the allauth provider below AND the DRF
+# POST /api/auth/oauth/google/ endpoint, which verifies the audience of the GIS
+# id_token against it. Public value; the secret is only needed for the (unused)
+# authorization-code flow. SPEC §6.
+GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="")
+
 # OAuth providers — keys injected via env (empty = inert stub). SPEC §6.
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
-            "client_id": env("GOOGLE_OAUTH_CLIENT_ID", default=""),
+            "client_id": GOOGLE_OAUTH_CLIENT_ID,
             "secret": env("GOOGLE_OAUTH_CLIENT_SECRET", default=""),
             "key": "",
         },

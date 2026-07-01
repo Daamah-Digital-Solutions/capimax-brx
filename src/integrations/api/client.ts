@@ -224,6 +224,16 @@ export const authApi = {
   async verifyEmail(payload: { uid: string; token: string }): Promise<void> {
     await rawRequest("/auth/email/verify/", { method: "POST", body: payload });
   },
+
+  /** Sign in / up with a Google GIS id_token. Returns the same shape as login. */
+  async googleOAuth(idToken: string): Promise<AuthResult> {
+    const data = (await rawRequest("/auth/oauth/google/", {
+      method: "POST",
+      body: { id_token: idToken },
+    })) as AuthResult;
+    tokenStore.set(data.session.access_token, data.session.refresh_token);
+    return data;
+  },
 };
 
 // --------------------------------------------------------------------------- //
