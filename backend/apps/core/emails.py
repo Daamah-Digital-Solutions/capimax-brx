@@ -27,7 +27,7 @@ def send_verification_email(user) -> str:
         message=f"Confirm your email to activate your account: {link}",
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=True,
+        fail_silently=settings.EMAIL_FAIL_SILENTLY,
     )
     return link
 
@@ -42,6 +42,6 @@ def send_password_reset_email(user) -> str:
         message=f"Reset your password: {link}",
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=True,
+        fail_silently=settings.EMAIL_FAIL_SILENTLY,
     )
     return link

@@ -254,6 +254,16 @@ BLOCKCHAIN_ARTIFACTS_DIR = BASE_DIR / "blockchain" / "artifacts" / "contracts"
 # phase for verification, password reset, withdrawal OTP, notifications. SPEC §6.
 # --------------------------------------------------------------------------- #
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@capimax.local")
+# SMTP transport (read from env; inert until EMAIL_HOST is set — Django's default is
+# localhost:25, which silently fails). Provide these in the prod .env to send real mail.
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+# Swallow send errors in dev; env-controlled. Prod overrides the default to loud.
+EMAIL_FAIL_SILENTLY = env.bool("EMAIL_FAIL_SILENTLY", default=True)
 # Public base URL of the React app — used for email links AND the certificate QR /
 # verification URL ({FRONTEND_URL}/verify/{code}). The Vite dev server is on :8080.
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:8080")
