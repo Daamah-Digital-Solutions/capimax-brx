@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,37 @@ export default function Settings() {
   const { user } = useAuth();
 
   const isAdmin = user?.profile?.role === 'admin';
+
+  // Real identity from the authenticated profile — never a placeholder persona.
+  const isAr = language === "ar";
+  const profileName = user?.profile?.full_name || user?.email || "";
+  const avatarInitial = (profileName || "U").trim().charAt(0).toUpperCase();
+  const roleKey = user?.profile?.role;
+  const roleLabels: Record<string, { en: string; ar: string }> = {
+    investor: { en: "Investor", ar: "مستثمر" },
+    owner: { en: "Owner", ar: "مالك" },
+    developer: { en: "Developer", ar: "مطور" },
+    lp: { en: "Liquidity Provider", ar: "مزود السيولة" },
+    broker: { en: "Broker", ar: "وسيط" },
+    partner: { en: "Partner", ar: "شريك" },
+    admin: { en: "Admin", ar: "مسؤول" },
+  };
+  const roleLabel = roleKey ? roleLabels[roleKey]?.[isAr ? "ar" : "en"] ?? roleKey : "";
+
+  // Personal-info form: prefill from the real profile, then stay editable so the
+  // user edits their own data (not a fixed placeholder). Re-syncs once the profile
+  // resolves after mount.
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [emailField, setEmailField] = useState("");
+  const [phoneField, setPhoneField] = useState("");
+  useEffect(() => {
+    const parts = (user?.profile?.full_name || "").trim().split(/\s+/).filter(Boolean);
+    setFirstName(parts[0] || "");
+    setLastName(parts.slice(1).join(" "));
+    setEmailField(user?.email || "");
+    setPhoneField((user?.profile as { phone?: string | null } | null | undefined)?.phone || "");
+  }, [user]);
 
   return (
     <MainLayout>
@@ -100,7 +131,7 @@ export default function Settings() {
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
                       <span className="text-3xl font-bold text-primary-foreground">
-                        {language === "ar" ? "م" : "M"}
+                        {avatarInitial}
                       </span>
                     </div>
                     <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
@@ -109,9 +140,9 @@ export default function Settings() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground">
-                      {language === "ar" ? "محمد أحمد" : "Mohammed Ahmed"}
+                      {profileName}
                     </h3>
-                    <p className="text-sm text-muted-foreground">{t("settings.verifiedInvestor")}</p>
+                    <p className="text-sm text-muted-foreground">{roleLabel}</p>
                     <Badge variant="success" className="mt-2">
                       <Check className="w-3 h-3 mr-1" />
                       {t("settings.verified")}
@@ -123,19 +154,19 @@ export default function Settings() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.firstName")}</label>
-                    <Input defaultValue={language === "ar" ? "محمد" : "Mohammed"} />
+                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.lastName")}</label>
-                    <Input defaultValue={language === "ar" ? "أحمد" : "Ahmed"} />
+                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.email")}</label>
-                    <Input type="email" defaultValue="mohammed@example.com" />
+                    <Input type="email" value={emailField} onChange={(e) => setEmailField(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.phone")}</label>
-                    <Input type="tel" defaultValue="+971 50 XXX XXXX" />
+                    <Input type="tel" value={phoneField} onChange={(e) => setPhoneField(e.target.value)} placeholder="+971 50 000 0000" />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.country")}</label>
