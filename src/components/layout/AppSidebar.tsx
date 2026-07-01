@@ -89,6 +89,10 @@ const roleLabels: Record<UserRole, { en: string; ar: string }> = {
 // Public items that are always visible to all roles
 const publicItems: MenuItem[] = [
   { titleKey: "nav.marketplace", icon: Store, href: "/marketplace" },
+  // BRX Cards — visible to ALL roles (mirrors the pre-f8add09 standalone all-roles
+  // section). Lives here, not in a role section, so it isn't hidden by the "View as
+  // role" selector defaulting to Guest.
+  { titleKey: "BRX Cards", icon: CreditCard, href: "/cards", badge: "NEW" },
   { titleKey: "nav.secondaryMarket", icon: TrendingUp, href: "/secondary-market" },
   { titleKey: "nav.fundedProperties", icon: Award, href: "/funded-properties" },
   { titleKey: "nav.publicAnalytics", icon: BarChart3, href: "/public-analytics" },
@@ -114,7 +118,6 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.distributions", icon: DollarSign, href: "/distributions" },
       { titleKey: "nav.reports", icon: BarChart3, href: "/reports" },
       { titleKey: "nav.wallet", icon: Wallet, href: "/wallet" },
-      { titleKey: "BRX Cards", icon: CreditCard, href: "/cards", badge: "NEW" },
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
       { titleKey: "nav.secondaryMarket", icon: TrendingUp, href: "/secondary-market" },
       { titleKey: "Live Exits Hub", icon: ArrowRightLeft, href: "/exits-hub" },
