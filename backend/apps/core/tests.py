@@ -157,3 +157,46 @@ class AuthFoundationTests(APITestCase):
         # The blacklisted refresh token can no longer be used.
         again = self.client.post(self.refresh_url, {"refresh": refresh}, format="json")
         self.assertEqual(again.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class BrandedEmailTests(APITestCase):
+    """The transactional emails send a branded HTML part + a text fallback that
+    both carry the real action link. SPEC §6."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="mailtest@example.com", password="Str0ng-Passw0rd!"
+        )
+
+    def _assert_branded(self, msg, cta_label, path_fragment):
+        # A multipart alternative: text/plain body + one text/html alternative.
+        self.assertEqual(len(msg.alternatives), 1)
+        html, mime = msg.alternatives[0]
+        self.assertEqual(mime, "text/html")
+        # Branding + CTA + the real link land in the HTML.
+        self.assertIn("CAPIMAX", html)
+        self.assertIn(cta_label, html)
+        self.assertIn(path_fragment, html)
+        # The plain-text fallback carries the same link (no-HTML clients).
+        self.assertIn(path_fragment, msg.body)
+        self.assertIn("Capimax BRX", msg.body)
+
+    def test_verification_email_is_branded_html_plus_text(self):
+        from django.core import mail
+
+        from apps.core.emails import send_verification_email
+
+        link = send_verification_email(self.user)
+        self.assertIn("/verify-email?uid=", link)
+        self.assertEqual(len(mail.outbox), 1)
+        self._assert_branded(mail.outbox[0], "Verify email", "/verify-email?uid=")
+
+    def test_password_reset_email_is_branded_html_plus_text(self):
+        from django.core import mail
+
+        from apps.core.emails import send_password_reset_email
+
+        link = send_password_reset_email(self.user)
+        self.assertIn("/reset-password?uid=", link)
+        self.assertEqual(len(mail.outbox), 1)
+        self._assert_branded(mail.outbox[0], "Reset password", "/reset-password?uid=")
