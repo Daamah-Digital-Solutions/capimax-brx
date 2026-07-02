@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,6 @@ export function PartnerVerificationCard() {
   const [busy, setBusy] = useState(false);
   const [devNotice, setDevNotice] = useState(false);
   const [sdkMounted, setSdkMounted] = useState(false);
-  const containerId = useId().replace(/:/g, "");
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [biz, setBiz] = useState({
@@ -126,16 +125,16 @@ export function PartnerVerificationCard() {
     try {
       await submitKYB(biz);
       const access = await partnerApi.kybAccessToken();
-      if (access.configured && access.token) {
+      if (access.configured && access.token && containerRef.current) {
         await mountSumsubWebSdk({
-          containerSelector: `#${containerId}`,
+          container: containerRef.current,
           accessToken: access.token,
           lang: isArabic ? "ar" : "en",
           onStatusChanged: () => refresh(),
           onComplete: () => refresh(),
         });
         setSdkMounted(true);
-      } else {
+      } else if (!access.configured) {
         setDevNotice(true);
       }
     } finally {
@@ -324,7 +323,7 @@ export function PartnerVerificationCard() {
         )}
 
         {/* Sumsub WebSDK mounts here when the provider is configured. */}
-        <div id={containerId} ref={containerRef} className={sdkMounted ? "min-h-[480px]" : ""} />
+        <div ref={containerRef} className={sdkMounted ? "min-h-[480px]" : ""} />
 
         {devNotice && (
           <div className="flex items-start gap-3 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">

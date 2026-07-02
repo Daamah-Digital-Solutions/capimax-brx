@@ -47,7 +47,8 @@ function loadSdk(): Promise<SnsWebSdk> {
 }
 
 export interface MountOptions {
-  containerSelector: string;
+  /** The live container element to launch the SDK into (must be in the DOM). */
+  container: HTMLElement;
   accessToken: string;
   /** Lang for the SDK UI ("en" | "ar"). */
   lang?: string;
@@ -57,14 +58,25 @@ export interface MountOptions {
   onComplete?: () => void;
 }
 
+// Monotonic id source for SDK containers. Sumsub's launch() takes a CSS selector,
+// so each container needs a plain, valid, unique id (NOT a useId()-derived value,
+// which React may wrap in guillemets like «r0» → an invalid selector → the
+// "Provide a valid selector for the iframe container" error).
+let sdkContainerSeq = 0;
+
 /**
- * Mount and launch the Sumsub WebSDK into the given container. Resolves once the
- * SDK is launched; rejects if the script/SDK can't load. The caller still relies
- * on the signed webhook (not the SDK callbacks) as the source of truth for
- * approval — the callbacks here only trigger a status re-fetch in the UI.
+ * Mount and launch the Sumsub WebSDK into the given container ELEMENT. We build
+ * the selector from an id we assign to the element we were handed, so the selector
+ * always resolves — no dependency on a caller-built selector that may be invalid or
+ * point at a node that isn't in the DOM after a React re-render. Resolves once the
+ * SDK is launched; rejects if the script/SDK can't load. Approval is still driven by
+ * the signed webhook (the callbacks here only trigger a status re-fetch in the UI).
  */
 export async function mountSumsubWebSdk(opts: MountOptions): Promise<void> {
   const sdk = await loadSdk();
+  const el = opts.container;
+  if (!el.id) el.id = `sumsub-sdk-container-${sdkContainerSeq++}`;
+  const selector = `#${el.id}`;
   const instance = sdk
     .init(opts.accessToken, (cb) => {
       // The token is short-lived; the simplest refresh is to re-issue via our API.
@@ -79,5 +91,5 @@ export async function mountSumsubWebSdk(opts: MountOptions): Promise<void> {
     .on("idCheck.applicantStatus", () => opts.onStatusChanged?.())
     .on("idCheck.onComplete", () => opts.onComplete?.())
     .build();
-  instance.launch(opts.containerSelector);
+  instance.launch(selector);
 }

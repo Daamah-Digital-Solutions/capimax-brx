@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,7 +37,6 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
   const [busy, setBusy] = useState(false);
   const [devNotice, setDevNotice] = useState(false);
   const [sdkMounted, setSdkMounted] = useState(false);
-  const containerId = useId().replace(/:/g, "");
   const containerRef = useRef<HTMLDivElement>(null);
 
   const status = kycStatus?.status ?? "pending";
@@ -52,16 +51,19 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
 
       // 2) Try to mount the provider SDK. Inert when keys are deferred.
       const access = await kycApi.accessToken();
-      if (access.configured && access.token) {
+      if (access.configured && access.token && containerRef.current) {
+        // Launch into the live container element (always rendered below), so the
+        // selector always resolves — no useId()-derived selector that React may
+        // wrap in invalid characters, and no dependency on DOM timing.
         await mountSumsubWebSdk({
-          containerSelector: `#${containerId}`,
+          container: containerRef.current,
           accessToken: access.token,
           lang: isArabic ? "ar" : "en",
           onStatusChanged: () => onUpdated?.(),
           onComplete: () => onUpdated?.(),
         });
         setSdkMounted(true);
-      } else {
+      } else if (!access.configured) {
         // Keys not provisioned yet → show the dev path rather than break.
         setDevNotice(true);
       }
@@ -170,8 +172,9 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
         </div>
       )}
 
-      {/* Sumsub WebSDK mounts here when the provider is configured. */}
-      <div id={containerId} ref={containerRef} className={sdkMounted ? "min-h-[480px]" : ""} />
+      {/* Sumsub WebSDK mounts here when the provider is configured. The container is
+          always rendered (regardless of status) so its ref is stable at launch time. */}
+      <div ref={containerRef} className={sdkMounted ? "min-h-[480px]" : ""} />
 
       {devNotice && (
         <div className="flex items-start gap-3 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
