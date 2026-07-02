@@ -47,7 +47,14 @@ export function PaymentMethodSelector({
   const hasBalance = availableBalance !== null && availableBalance !== undefined;
   const balanceEnough = hasBalance && (availableBalance as number) >= balanceChargeAmount;
 
-  const paymentMethods = [
+  const paymentMethods: Array<{
+    id: PaymentMethod;
+    name: string;
+    icon: typeof CreditCard;
+    description: string;
+    badge?: string;
+    disabled?: boolean;
+  }> = [
     // Reinvestment: spend accrued returns (no PSP). Shown first when a balance exists.
     ...(hasBalance && (availableBalance as number) > 0
       ? [{
@@ -62,7 +69,6 @@ export function PaymentMethodSelector({
           disabled: !balanceEnough,
         }]
       : []),
-  ].concat([
     {
       id: "card" as PaymentMethod,
       name: t("payment.creditDebitCard"),
@@ -70,47 +76,12 @@ export function PaymentMethodSelector({
       description: "Visa, Mastercard, Amex",
     },
     {
-      id: "apple_pay" as PaymentMethod,
-      name: "Apple Pay",
-      icon: Smartphone,
-      description: t("payment.fastPaymentApple"),
-    },
-    {
-      id: "google_pay" as PaymentMethod,
-      name: "Google Pay",
-      icon: Wallet,
-      description: t("payment.fastPaymentGoogle"),
-    },
-    {
       id: "crypto" as PaymentMethod,
       name: t("payment.crypto"),
       icon: Coins,
       description: "BTC, ETH, USDT, USDC",
     },
-    {
-      id: "pronova" as PaymentMethod,
-      name: t("payment.pronova"),
-      icon: Coins,
-      description: language === "ar" ? "خصم 5% على جميع المدفوعات" : "5% discount on all payments",
-      badge: language === "ar" ? "5% خصم" : "5% Off",
-      highlight: true,
-    },
-    {
-      id: "sukuk" as PaymentMethod,
-      name: t("payment.sukuk"),
-      icon: FileText,
-      description: language === "ar" ? "أداة تمويل متوافقة مع الشريعة" : "Sharia-compliant financing",
-      badge: t("payment.financing"),
-    },
-  ] as Array<{
-    id: PaymentMethod;
-    name: string;
-    icon: typeof CreditCard;
-    description: string;
-    badge?: string;
-    highlight?: boolean;
-    disabled?: boolean;
-  }>);
+  ];
 
   const handleSelectMethod = (methodId: PaymentMethod, disabled?: boolean) => {
     if (disabled) return;
@@ -182,8 +153,7 @@ export function PaymentMethodSelector({
                 "rounded-2xl border transition-all duration-300",
                 isSelected
                   ? "border-primary bg-card shadow-gold"
-                  : "border-border bg-card hover:border-primary/50",
-                method.highlight && !isSelected && "border-success/50 bg-success/5"
+                  : "border-border bg-card hover:border-primary/50"
               )}
             >
               {/* Method Header */}
@@ -212,21 +182,13 @@ export function PaymentMethodSelector({
                 <div
                   className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
-                    isSelected
-                      ? "bg-primary/20"
-                      : method.highlight
-                      ? "bg-success/20"
-                      : "bg-muted"
+                    isSelected ? "bg-primary/20" : "bg-muted"
                   )}
                 >
                   <Icon
                     className={cn(
                       "w-6 h-6",
-                      isSelected
-                        ? "text-primary"
-                        : method.highlight
-                        ? "text-success"
-                        : "text-muted-foreground"
+                      isSelected ? "text-primary" : "text-muted-foreground"
                     )}
                   />
                 </div>
@@ -236,13 +198,7 @@ export function PaymentMethodSelector({
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-foreground">{method.name}</h3>
                     {method.badge && (
-                      <Badge
-                        variant={method.highlight ? "default" : "secondary"}
-                        className={cn(
-                          "text-xs",
-                          method.highlight && "bg-success text-success-foreground"
-                        )}
-                      >
+                      <Badge variant="secondary" className="text-xs">
                         {method.badge}
                       </Badge>
                     )}

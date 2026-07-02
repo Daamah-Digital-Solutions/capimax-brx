@@ -11,10 +11,12 @@ from apps.properties.models import Property
 
 from .models import Investment
 
-# Payment methods the frontend offers (src/pages/Checkout.tsx PaymentMethod).
-# "balance" = reinvestment (spend accrued internal balance — no PSP); see
-# investments.services.BALANCE_METHOD.
-PAYMENT_METHODS = ["card", "apple_pay", "google_pay", "crypto", "pronova", "sukuk", "balance"]
+# Payment methods actually implemented + accepted. "card" (Stripe) and "crypto"
+# (NOWPayments) settle via a signed webhook; "balance" spends the investor's accrued
+# internal balance (no PSP; see investments.services.BALANCE_METHOD). Apple Pay /
+# Google Pay / Pronova / Sukuk are NOT wired (they would mark an investment completed
+# without a real charge), so they are rejected here until implemented.
+PAYMENT_METHODS = ["card", "crypto", "balance"]
 
 
 class InvestmentCreateSerializer(serializers.Serializer):

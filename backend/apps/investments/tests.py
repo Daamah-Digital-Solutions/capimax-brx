@@ -287,6 +287,20 @@ class InvestmentApiTests(APITestCase):
         inv = Investment.objects.get(id=body["investment_id"])
         self.assertEqual(inv.ownership_percentage, Decimal("0.200000"))
 
+    def test_unsupported_payment_method_rejected(self):
+        """Only card / crypto / balance are accepted; the unwired methods 400 (they
+        would otherwise mark an investment completed with no real charge)."""
+        self.client.force_authenticate(self.user)
+        for method in ("apple_pay", "google_pay", "pronova", "sukuk"):
+            resp = self.client.post(
+                "/api/investments/",
+                {"property_id": self.prop.slug, "token_amount": 10, "payment_method": method},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, method)
+        # Nothing was created for any of the rejected methods.
+        self.assertFalse(Investment.objects.filter(user=self.user).exists())
+
     def test_overpurchase_returns_422(self):
         small = _make_property("papismall", total_value=500, token_price=100)  # supply 5
         self.client.force_authenticate(self.user)
