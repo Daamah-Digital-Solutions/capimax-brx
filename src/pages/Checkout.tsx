@@ -20,6 +20,15 @@ import { toast } from "sonner";
 export type PaymentMethod = "card" | "apple_pay" | "google_pay" | "crypto" | "pronova" | "sukuk" | "balance";
 export type PaymentStatus = "idle" | "processing" | "success" | "failed";
 
+// Methods that are displayed but NOT wired to a real settlement yet. They must never
+// complete a purchase (the backend also rejects them); selecting one and trying to pay
+// shows an honest "use another method" message instead of charging.
+const UNWIRED_METHODS: PaymentMethod[] = ["apple_pay", "google_pay", "pronova", "sukuk"];
+const UNWIRED_MESSAGE = {
+  en: "This payment method isn't available yet — please use Card, Crypto, or Pay from Balance.",
+  ar: "طريقة الدفع هذه غير متاحة بعد — يرجى استخدام البطاقة أو العملة الرقمية أو الدفع من الرصيد.",
+};
+
 export interface InvestmentData {
   propertyId: string;
   propertyName: string;
@@ -259,6 +268,14 @@ export default function Checkout() {
     if (kycApproved === false) {
       setPaymentStatus("idle");
       routeToKyc();
+      return;
+    }
+
+    // Backstop for unwired methods (the button already blocks them, and the backend
+    // 400s them): never charge / complete — show the honest message instead.
+    if (selectedMethod && UNWIRED_METHODS.includes(selectedMethod)) {
+      toast.info(isRTL ? UNWIRED_MESSAGE.ar : UNWIRED_MESSAGE.en);
+      setPaymentStatus("idle");
       return;
     }
 
@@ -615,11 +632,14 @@ export default function Checkout() {
                     size="xl"
                     className="flex-1"
                     disabled={!canProceed || paymentStatus === "processing"}
-                    onClick={() =>
-                      user && kycApproved === false
-                        ? routeToKyc()
-                        : setShowConfirmation(true)
-                    }
+                    onClick={() => {
+                      if (user && kycApproved === false) return routeToKyc();
+                      if (selectedMethod && UNWIRED_METHODS.includes(selectedMethod)) {
+                        toast.info(isRTL ? UNWIRED_MESSAGE.ar : UNWIRED_MESSAGE.en);
+                        return;
+                      }
+                      setShowConfirmation(true);
+                    }}
                   >
                     {paymentStatus === "processing" ? (
                       <>
