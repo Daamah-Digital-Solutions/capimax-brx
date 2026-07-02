@@ -242,6 +242,42 @@ class DevGrantKYCTests(APITestCase):
         self.assertTrue(UserWallet.objects.filter(user=user).exists())
 
 
+class ResetKYCTests(APITestCase):
+    """reset_kyc returns a stuck KYC to a clean pending state (prod-safe, --yes-gated)."""
+
+    def test_reset_clears_state_back_to_pending(self):
+        from django.utils import timezone
+
+        user = _mk_user("stuck@example.com")
+        kyc = get_or_create_kyc(user)
+        kyc.status = KYCStatus.SUBMITTED
+        kyc.sumsub_applicant_id = "app-123"
+        kyc.submitted_at = timezone.now()
+        kyc.approved_at = timezone.now()
+        kyc.rejection_reason = "x"
+        kyc.save()
+
+        call_command("reset_kyc", "--email", "stuck@example.com", "--yes", stdout=StringIO())
+
+        kyc.refresh_from_db()
+        self.assertEqual(kyc.status, KYCStatus.PENDING)
+        self.assertEqual(kyc.sumsub_applicant_id, "")
+        self.assertIsNone(kyc.submitted_at)
+        self.assertIsNone(kyc.approved_at)
+        self.assertEqual(kyc.rejection_reason, "")
+
+    def test_reset_requires_yes(self):
+        _mk_user("noyes@example.com")
+        with self.assertRaises(Exception):
+            call_command("reset_kyc", "--email", "noyes@example.com", stdout=StringIO())
+
+    def test_reset_no_record_is_noop(self):
+        _mk_user("norec@example.com")
+        # No KYC row created — the command reports and exits cleanly (no crash).
+        call_command("reset_kyc", "--email", "norec@example.com", "--yes", stdout=StringIO())
+        self.assertFalse(UserKYC.objects.filter(user__email="norec@example.com").exists())
+
+
 # --------------------------------------------------------------------------- #
 # KYC status/submit/access-token endpoints + provider inert default
 # --------------------------------------------------------------------------- #
