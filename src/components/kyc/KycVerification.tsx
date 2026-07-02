@@ -45,26 +45,30 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
     setBusy(true);
     setDevNotice(false);
     try {
-      // 1) Persist + advance to submitted (idempotent, server-side).
-      await kycApi.submit(personalInfo ?? {});
-      onUpdated?.();
-
-      // 2) Try to mount the provider SDK. Inert when keys are deferred.
+      // Fetch the SDK access token FIRST, then mount the widget BEFORE any parent
+      // refresh. onUpdated() flips the wallet section into its loading state, which
+      // unmounts this whole card (and the SDK container) — so it must run only AFTER
+      // the widget is open, and only when the user actually submits their documents.
       const access = await kycApi.accessToken();
       if (access.configured && access.token && containerRef.current) {
+        // Persist any personal info (optional) — WITHOUT triggering a UI refresh/unmount.
+        await kycApi.submit(personalInfo ?? {});
         // Launch into the live container element (always rendered below), so the
-        // selector always resolves — no useId()-derived selector that React may
-        // wrap in invalid characters, and no dependency on DOM timing.
+        // selector always resolves and the widget opens and stays open.
         await mountSumsubWebSdk({
           container: containerRef.current,
           accessToken: access.token,
           lang: isArabic ? "ar" : "en",
-          onStatusChanged: () => onUpdated?.(),
+          // Move to "under review" only after the user submits docs (or the SDK
+          // completes) — never on intermediate status changes.
+          onSubmitted: () => onUpdated?.(),
           onComplete: () => onUpdated?.(),
         });
         setSdkMounted(true);
       } else if (!access.configured) {
-        // Keys not provisioned yet → show the dev path rather than break.
+        // Keys not provisioned yet → persist + show the dev path rather than break.
+        await kycApi.submit(personalInfo ?? {});
+        onUpdated?.();
         setDevNotice(true);
       }
     } catch {
@@ -147,6 +151,12 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
             {isArabic ? "تحديث الحالة" : "Refresh status"}
           </Button>
         </div>
+      ) : sdkMounted ? (
+        <p className="text-sm text-muted-foreground">
+          {isArabic
+            ? "أكمل خطوات التحقق أدناه."
+            : "Complete the verification steps below."}
+        </p>
       ) : (
         <div className="space-y-3">
           {status === "rejected" && kycStatus?.rejection_reason && (

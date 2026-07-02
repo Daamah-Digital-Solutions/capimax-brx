@@ -52,7 +52,13 @@ export interface MountOptions {
   accessToken: string;
   /** Lang for the SDK UI ("en" | "ar"). */
   lang?: string;
-  /** Called when the applicant reaches a terminal status change (poll backend after). */
+  /**
+   * Called when the applicant actually SUBMITS their documents. This is the moment
+   * to move our UI to "under review" — not on every intermediate status change,
+   * which would tear down the open widget mid-flow.
+   */
+  onSubmitted?: () => void;
+  /** Called on intermediate applicant-status changes (informational; safe to omit). */
   onStatusChanged?: () => void;
   /** Called when the SDK signals completion. */
   onComplete?: () => void;
@@ -86,8 +92,10 @@ export async function mountSumsubWebSdk(opts: MountOptions): Promise<void> {
       });
     })
     .withConf({ lang: opts.lang || "en" })
+    // Only the SUBMIT + COMPLETE events drive our UI transition; intermediate status
+    // changes are informational so the open widget is never torn down mid-flow.
+    .on("idCheck.onApplicantSubmitted", () => opts.onSubmitted?.())
     .on("idCheck.onApplicantStatusChanged", () => opts.onStatusChanged?.())
-    .on("idCheck.onApplicantSubmitted", () => opts.onStatusChanged?.())
     .on("idCheck.applicantStatus", () => opts.onStatusChanged?.())
     .on("idCheck.onComplete", () => opts.onComplete?.())
     .build();

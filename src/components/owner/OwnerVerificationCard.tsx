@@ -79,7 +79,9 @@ export function OwnerVerificationCard() {
           container: containerRef.current,
           accessToken: access.token,
           lang: isArabic ? "ar" : "en",
-          onStatusChanged: () => refresh(),
+          // Refresh only after a real submission / completion — not on intermediate
+          // status changes (which would disrupt the open widget mid-flow).
+          onSubmitted: () => refresh(),
           onComplete: () => refresh(),
         });
         setSdkMounted(true);
