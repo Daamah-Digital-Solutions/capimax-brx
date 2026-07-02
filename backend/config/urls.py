@@ -7,6 +7,12 @@ Phase 1 wires only the admin and the auth foundation. Domain routers
 from django.contrib import admin
 from django.urls import include, path
 
+# Brand the admin so it reads as the Capimax BRX console, not the generic
+# "Django site administration" (client-facing admin tool).
+admin.site.site_header = "Capimax BRX Administration"
+admin.site.site_title = "Capimax BRX Admin"
+admin.site.index_title = "Administration"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     # Auth foundation: register / login / refresh / logout / session / me + OAuth.

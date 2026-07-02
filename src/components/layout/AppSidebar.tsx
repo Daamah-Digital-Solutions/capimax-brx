@@ -19,6 +19,7 @@ import {
   Settings,
   Info,
   ShieldCheck,
+  ExternalLink,
   ChevronDown,
   ChevronRight,
   CreditCard,
@@ -478,6 +479,34 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
               )}
             </div>
           ))}
+
+          {/* ADMIN PANEL — visible only to admin/staff. Opens the Django admin console
+              on the API host in a new tab, so an admin isn't stranded on the investor
+              dashboard with no path to their tools. Gated on the REAL profile role. */}
+          {user?.profile?.role === "admin" && (
+            <div className="mb-2">
+              <a
+                href="https://api.capimaxbrx.com/admin/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all duration-200 border-l-4 border-transparent text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/30",
+                  !isOpen && "lg:justify-center lg:px-0"
+                )}
+                title={!isOpen ? (language === "ar" ? "لوحة الإدارة" : "Admin Panel") : undefined}
+              >
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                {isOpen && (
+                  <>
+                    <span className="flex-1 text-start">
+                      {language === "ar" ? "لوحة الإدارة" : "Admin Panel"}
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </a>
+            </div>
+          )}
 
           {/* BRX CARDS SECTION (its own section — visible to ALL roles, matches the
               pre-f8add09 sidebar; NOT gated by the role selector). */}
