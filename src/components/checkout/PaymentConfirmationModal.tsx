@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentMethod, InvestmentData } from "@/pages/Checkout";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PaymentConfirmationModalProps {
   open: boolean;
@@ -31,14 +32,14 @@ const methodIcons: Record<PaymentMethod, React.ComponentType<{ className?: strin
   balance: Wallet,
 };
 
-const methodNames: Record<PaymentMethod, string> = {
-  card: "بطاقة ائتمان / خصم",
-  apple_pay: "Apple Pay",
-  google_pay: "Google Pay",
-  crypto: "العملات الرقمية",
-  pronova: "توكن برونوفا",
-  sukuk: "صكوك نوفا",
-  balance: "الدفع من الرصيد",
+const methodNames: Record<PaymentMethod, { en: string; ar: string }> = {
+  card: { en: "Credit/Debit Card", ar: "بطاقة ائتمان / خصم" },
+  apple_pay: { en: "Apple Pay", ar: "Apple Pay" },
+  google_pay: { en: "Google Pay", ar: "Google Pay" },
+  crypto: { en: "Cryptocurrency", ar: "العملات الرقمية" },
+  pronova: { en: "Pronova Token", ar: "توكن برونوفا" },
+  sukuk: { en: "Nova Sukuk", ar: "صكوك نوفا" },
+  balance: { en: "Pay from Balance", ar: "الدفع من الرصيد" },
 };
 
 export function PaymentConfirmationModal({
@@ -50,28 +51,38 @@ export function PaymentConfirmationModal({
   pronovaDiscount,
   onConfirm,
 }: PaymentConfirmationModalProps) {
+  const { language, isRTL } = useLanguage();
+  const isArabic = language === "ar";
+
   if (!selectedMethod) return null;
 
   const Icon = methodIcons[selectedMethod];
+  const method = methodNames[selectedMethod];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" dir={isRTL ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
-            تأكيد الدفع
+            {isArabic ? "تأكيد الدفع" : "Confirm Payment"}
           </DialogTitle>
           <DialogDescription>
-            يرجى مراجعة تفاصيل الدفع قبل التأكيد
+            {isArabic
+              ? "يرجى مراجعة تفاصيل الدفع قبل التأكيد"
+              : "Please review the payment details before confirming"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Property */}
           <div className="p-4 bg-muted rounded-xl">
-            <div className="text-sm text-muted-foreground mb-1">العقار</div>
-            <div className="font-semibold text-foreground">{investment.propertyNameAr}</div>
+            <div className="text-sm text-muted-foreground mb-1">
+              {isArabic ? "العقار" : "Property"}
+            </div>
+            <div className="font-semibold text-foreground">
+              {isArabic ? investment.propertyNameAr : investment.propertyName}
+            </div>
           </div>
 
           {/* Payment Method */}
@@ -80,22 +91,30 @@ export function PaymentConfirmationModal({
               <Icon className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">طريقة الدفع</div>
-              <div className="font-semibold text-foreground">{methodNames[selectedMethod]}</div>
+              <div className="text-sm text-muted-foreground">
+                {isArabic ? "طريقة الدفع" : "Payment method"}
+              </div>
+              <div className="font-semibold text-foreground">
+                {isArabic ? method.ar : method.en}
+              </div>
             </div>
           </div>
 
           {/* Amount */}
           <div className="p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl border border-primary/30">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-muted-foreground">المبلغ الإجمالي</span>
+              <span className="text-muted-foreground">
+                {isArabic ? "المبلغ الإجمالي" : "Total amount"}
+              </span>
               <span className="text-2xl font-bold text-gradient-gold">
                 ${finalAmount.toLocaleString()}
               </span>
             </div>
             {pronovaDiscount > 0 && (
               <Badge className="bg-success text-success-foreground">
-                خصم 5% مُطبق (-${pronovaDiscount.toLocaleString()})
+                {isArabic
+                  ? `خصم 5% مُطبق (-$${pronovaDiscount.toLocaleString()})`
+                  : `5% discount applied (-$${pronovaDiscount.toLocaleString()})`}
               </Badge>
             )}
           </div>
@@ -104,18 +123,19 @@ export function PaymentConfirmationModal({
           <div className="flex items-start gap-2 p-3 bg-warning/10 border border-warning/30 rounded-lg">
             <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
-              بالنقر على "تأكيد الدفع"، أنت توافق على إتمام هذه المعاملة. 
-              لا يمكن إلغاء المعاملة بعد التأكيد.
+              {isArabic
+                ? 'بالنقر على "تأكيد الدفع"، أنت توافق على إتمام هذه المعاملة. لا يمكن إلغاء المعاملة بعد التأكيد.'
+                : 'By clicking "Confirm Payment", you agree to complete this transaction. It cannot be cancelled after confirmation.'}
             </p>
           </div>
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
-            إلغاء
+            {isArabic ? "إلغاء" : "Cancel"}
           </Button>
           <Button variant="hero" onClick={onConfirm} className="flex-1">
-            تأكيد الدفع
+            {isArabic ? "تأكيد الدفع" : "Confirm Payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

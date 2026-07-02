@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,12 @@ export function PaymentResultModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
+        {/* Accessible title for screen readers; the visible heading is the h2 below. */}
+        <DialogTitle className="sr-only">
+          {isSuccess
+            ? isArabic ? "تم الدفع بنجاح" : "Payment Successful"
+            : isArabic ? "فشل الدفع" : "Payment Failed"}
+        </DialogTitle>
         <div className="flex flex-col items-center text-center py-6">
           {/* Status Icon */}
           <div
