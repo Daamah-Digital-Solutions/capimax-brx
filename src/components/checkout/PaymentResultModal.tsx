@@ -30,6 +30,7 @@ const methodNames: Record<PaymentMethod, { en: string; ar: string }> = {
   crypto: { en: "Cryptocurrency", ar: "العملات الرقمية" },
   pronova: { en: "Pronova Token", ar: "توكن برونوفا" },
   sukuk: { en: "Nova Sukuk", ar: "صكوك نوفا" },
+  balance: { en: "Pay from Balance", ar: "الدفع من الرصيد" },
 };
 
 export function PaymentResultModal({

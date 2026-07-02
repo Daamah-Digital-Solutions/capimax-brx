@@ -28,6 +28,7 @@ const methodIcons: Record<PaymentMethod, React.ComponentType<{ className?: strin
   crypto: Coins,
   pronova: Coins,
   sukuk: FileText,
+  balance: Wallet,
 };
 
 const methodNames: Record<PaymentMethod, string> = {
@@ -37,6 +38,7 @@ const methodNames: Record<PaymentMethod, string> = {
   crypto: "العملات الرقمية",
   pronova: "توكن برونوفا",
   sukuk: "صكوك نوفا",
+  balance: "الدفع من الرصيد",
 };
 
 export function PaymentConfirmationModal({
