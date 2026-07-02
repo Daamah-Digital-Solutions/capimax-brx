@@ -446,15 +446,21 @@ def _deployed_on_this_chain(prop: Property):
 
 def mint_investment(investment: Investment) -> dict:
     """
-    Mint `token_amount` shares to the user's custodial wallet on the property's
-    deployed PropertyToken contract. Idempotent; serialized per-investment.
+    Issue `token_amount` shares to the user's custodial wallet. Idempotent;
+    serialized per-investment.
+
+    Settlement follows the property: a property deployed on THIS chain gets a REAL
+    on-chain mint (+ a WalletTransaction with the real tx hash); a ledger-only
+    property settles the SAME OwnershipToken + owner/broker credits in our ledger,
+    WITHOUT an on-chain tx — so buying ANY property produces a visible holding.
 
     Returns:
-      {"minted": True, "already": True}            already minted
-      {"minted": True, "tx_hash": …, "block": …}   minted now (REAL tx)
-      {"minted": False, "reason": "<why>"}         pending (no wallet / not deployed)
+      {"minted": True, "already": True}                  already issued
+      {"minted": True, "on_chain": True,  "tx_hash": …}  minted now (REAL tx)
+      {"minted": True, "on_chain": False, "tx_hash": None} settled in the ledger
+      {"minted": False, "reason": "no_wallet"}           pending (no custodial wallet)
 
-    Never records a transaction that didn't occur on a chain.
+    Never records a WalletTransaction that didn't occur on a chain.
     """
     with transaction.atomic():
         # Lock the investment row → idempotency + no concurrent double-mint of it.
@@ -478,15 +484,18 @@ def mint_investment(investment: Investment) -> dict:
 
         prop = inv.property
         contract_address = _deployed_on_this_chain(prop)
-        if not contract_address:
-            # Expected in Wave 2 until the testnet deploy lands. Mark pending; do NOT
-            # fabricate a mint. (DECISIONS.md: live testnet deploy is a pending item.)
-            return {"minted": False, "reason": "contract_not_deployed"}
 
-        # REAL on-chain mint. Held under the per-investment lock so a concurrent
-        # request for the SAME investment blocks rather than double-minting.
-        result = chain_service.mint(
-            contract_address, wallet.wallet_address, inv.token_amount
+        # A property deployed on THIS chain gets a REAL on-chain mint. A ledger-only
+        # property (no deployed contract yet) settles the SAME way in our ledger —
+        # the OwnershipToken + owner/broker credits below — but WITHOUT an on-chain tx,
+        # so buying ANY property produces a visible holding (and pays owner/broker).
+        # `result` is the chain receipt (on-chain) or None (ledger-only). Held under the
+        # per-investment lock so a concurrent request for the SAME investment blocks
+        # rather than double-minting.
+        result = (
+            chain_service.mint(contract_address, wallet.wallet_address, inv.token_amount)
+            if contract_address
+            else None
         )
 
         # Record the confirmed on-chain result (race-safe additive upsert).
@@ -536,16 +545,21 @@ def mint_investment(investment: Investment) -> dict:
 
         token.save()
 
-        WalletTransaction.objects.create(
-            wallet=wallet,
-            tx_hash=result["tx_hash"],          # REAL chain hash
-            tx_type="mint",
-            amount=inv.amount_invested,
-            token_symbol=inv.token_symbol,
-            status="confirmed",
-            block_number=result.get("block_number"),  # REAL block
-            chain_id=result.get("chain_id"),
-        )
+        # Only an on-chain mint records a WalletTransaction — its tx_hash/block are
+        # ALWAYS real chain values (wallets/models). A ledger-only settlement has no
+        # tx to record; the OwnershipToken + Investment + BalanceTransaction are the
+        # trail (the same shape seed_demo produces for ledger holdings).
+        if result is not None:
+            WalletTransaction.objects.create(
+                wallet=wallet,
+                tx_hash=result["tx_hash"],          # REAL chain hash
+                tx_type="mint",
+                amount=inv.amount_invested,
+                token_symbol=inv.token_symbol,
+                status="confirmed",
+                block_number=result.get("block_number"),  # REAL block
+                chain_id=result.get("chain_id"),
+            )
 
         inv.tokens_minted = True
         inv.minted_at = timezone.now()
@@ -594,8 +608,9 @@ def mint_investment(investment: Investment) -> dict:
 
     return {
         "minted": True,
-        "tx_hash": result["tx_hash"],
-        "block_number": result.get("block_number"),
+        "on_chain": result is not None,
+        "tx_hash": result["tx_hash"] if result is not None else None,
+        "block_number": result.get("block_number") if result is not None else None,
         "ownership_token_id": str(token.id),
         "owner_credited": None if owner_net is None else str(owner_net),
         "broker_credited": None if broker_result is None else str(broker_result[1]),

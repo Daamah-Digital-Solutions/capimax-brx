@@ -192,20 +192,61 @@ class MintingTests(TestCase):
         self.assertEqual(ot.token_amount, 50)  # 30 + 20 merged additively
         self.assertEqual(ot.ownership_percentage, Decimal("0.100000"))  # 50/50000*100
 
-    def test_no_fake_hash_when_contract_not_deployed(self):
-        """If the property has no on-chain contract, NOTHING is recorded as minted."""
+    def test_ledger_only_mint_creates_holding_without_wallet_tx(self):
+        """A property not deployed on-chain settles in the LEDGER: the OwnershipToken
+        (holding) is created and tokens_minted=True, but NO WalletTransaction is recorded
+        (its tx_hash must be a real chain value — never fabricated)."""
         prop = _make_property("pnodeploy", total_value=1_000_000, token_price=100, deployed=False)
         result = create_investment(
             user=self.user, prop=prop, token_amount=5, payment_method=COMPLETING_METHOD
         )
-        self.assertFalse(result["tokens_minted"])
+        self.assertTrue(result["tokens_minted"])  # ledger-settled (wallet exists)
         inv = result["investment"]
         inv.refresh_from_db()
-        self.assertFalse(inv.tokens_minted)
-        self.assertIsNone(inv.minted_at)
-        # No transaction and no ownership token fabricated.
+        self.assertTrue(inv.tokens_minted)
+        self.assertIsNotNone(inv.minted_at)
+        # Holding created — the portfolio reads OwnershipTokens, so this is what appears.
+        ot = OwnershipToken.objects.get(wallet=self.wallet, property_id=prop.slug)
+        self.assertEqual(ot.token_amount, 5)
+        self.assertEqual(ot.token_value_usd, Decimal("500.00"))
+        # NO on-chain tx fabricated — a ledger settlement records no WalletTransaction.
         self.assertFalse(WalletTransaction.objects.filter(wallet=self.wallet).exists())
-        self.assertFalse(OwnershipToken.objects.filter(wallet=self.wallet).exists())
+
+    def test_ledger_only_mint_credits_owner_and_broker(self):
+        """Ledger settlement runs the SAME owner + broker credits as an on-chain mint."""
+        from apps.broker.models import BrokerProfile, BrokerStatus
+        from apps.wallets.models import BalanceTransaction
+
+        owner = User.objects.create_user(email="own-l@example.com", password="pw12345!")
+        broker_user = User.objects.create_user(email="brk-l@example.com", password="pw12345!")
+        broker = BrokerProfile.objects.create(
+            user=broker_user, contact_name="Brk", email="brk-l@example.com",
+            status=BrokerStatus.APPROVED, commission_rate=Decimal("5"),
+        )
+        self.user.profile.referred_by_broker = broker
+        self.user.profile.save(update_fields=["referred_by_broker"])
+
+        prop = _make_property("pledgercred", total_value=1_000_000, token_price=100, deployed=False)
+        prop.submitted_by = owner
+        prop.save(update_fields=["submitted_by"])
+
+        res = create_investment(
+            user=self.user, prop=prop, token_amount=5, payment_method=COMPLETING_METHOD
+        )
+        self.assertTrue(res["tokens_minted"])
+        inv_id = str(res["investment"].id)
+        # Owner net credited (gross $500 − fees > 0), keyed on the investment id.
+        owner_credit = BalanceTransaction.objects.get(
+            balance__user=owner, source="primary_sale", reference=inv_id
+        )
+        self.assertGreater(owner_credit.amount, Decimal("0"))
+        # Broker commission = 5% of $500 gross = $25.
+        broker_credit = BalanceTransaction.objects.get(
+            balance__user=broker_user, source="broker_commission", reference=inv_id
+        )
+        self.assertEqual(broker_credit.amount, Decimal("25.00"))
+        # Still no on-chain tx for a ledger settlement.
+        self.assertFalse(WalletTransaction.objects.filter(wallet=self.wallet).exists())
 
 
 class InvestmentApiTests(APITestCase):
