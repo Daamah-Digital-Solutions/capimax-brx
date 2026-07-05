@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useUnreadCount } from "@/hooks/useNotifications";
+import { useInstallmentPlans } from "@/hooks/useInstallmentPlans";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Select,
@@ -125,7 +126,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.portfolio", icon: Briefcase, href: "/portfolio" },
       { titleKey: "Re Investment", icon: RefreshCw, href: "/reinvestment" },
       { titleKey: "nav.familyInvestment", icon: UsersRound, href: "/family-investment" },
-      { titleKey: "nav.installments", icon: Calendar, href: "/installments", badge: "3" },
+      { titleKey: "nav.installments", icon: Calendar, href: "/installments" },
       { titleKey: "nav.distributions", icon: DollarSign, href: "/distributions" },
       { titleKey: "nav.reports", icon: BarChart3, href: "/reports" },
       { titleKey: "nav.wallet", icon: Wallet, href: "/wallet" },
@@ -271,6 +272,10 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const { t, language } = useLanguage();
   const { unreadCount } = useUnreadCount();
   const { user } = useAuth();
+  // Live installments badge — the caller's active plans (real, self-scoped), replacing the
+  // old hardcoded "3". 0 → no badge, mirroring the notifications count.
+  const { data: installmentData } = useInstallmentPlans();
+  const installmentCount = installmentData?.stats?.activePlans ?? 0;
   const [expandedSections, setExpandedSections] = useState<string[]>(["investor", "owner", "liquidity_provider", "broker", "partner", "public", "cards", "products", "products-uc", "platform", "legal"]);
   
   // Initialize role from localStorage or detect from current path
@@ -461,6 +466,12 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                               unreadCount > 0 && (
                                 <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
                                   {unreadCount > 9 ? "9+" : unreadCount}
+                                </span>
+                              )
+                            ) : item.href === "/installments" ? (
+                              installmentCount > 0 && (
+                                <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
+                                  {installmentCount > 9 ? "9+" : installmentCount}
                                 </span>
                               )
                             ) : (

@@ -51,15 +51,21 @@ export function InstallmentCalculator({
   const [units, setUnits] = useState(1);
   const [selectedDuration, setSelectedDuration] = useState(installmentDurations[0]?.months || 12);
   const [showSchedule, setShowSchedule] = useState(false);
+  // Down-payment % is investor-chosen (the plan is per-investor). Seed the options with the
+  // property's advertised default so it's always offered, plus the standard tiers.
+  const downOptions = Array.from(new Set([downPaymentPercent, 20, 30, 40]))
+    .filter((n) => n > 0 && n < 100)
+    .sort((a, b) => a - b);
+  const [downPct, setDownPct] = useState<number>(downPaymentPercent);
 
   const calculation = useMemo(() => {
     const totalInvestment = units * unitPrice;
-    const downPayment = Math.round(totalInvestment * (downPaymentPercent / 100));
+    const downPayment = Math.round(totalInvestment * (downPct / 100));
     const remainingBalance = totalInvestment - downPayment;
     const installmentAmount = Math.round(remainingBalance / selectedDuration);
     const platformFee = Math.round(totalInvestment * 0.015);
     const totalWithFees = totalInvestment + platformFee;
-    const downPaymentWithFee = Math.round(downPayment + (platformFee * (downPaymentPercent / 100)));
+    const downPaymentWithFee = Math.round(downPayment + (platformFee * (downPct / 100)));
     
     // Generate payment schedule
     const schedule = [];
@@ -98,7 +104,7 @@ export function InstallmentCalculator({
       schedule,
       numberOfInstallments: selectedDuration
     };
-  }, [units, unitPrice, downPaymentPercent, selectedDuration]);
+  }, [units, unitPrice, downPct, selectedDuration]);
 
   const handleUnitsChange = (delta: number) => {
     const newUnits = Math.max(1, Math.min(100, units + delta));
@@ -106,13 +112,13 @@ export function InstallmentCalculator({
   };
 
   const handleInvest = () => {
-    // Wave B: carry the full installment terms so Checkout charges the DOWN-PAYMENT
-    // (down% + n installments + frequency). This calculator's plan is monthly.
+    // Wave B: carry the full installment terms so Checkout charges the DOWN-PAYMENT + the
+    // buyer-borne fee (down% + n installments + frequency). This calculator's plan is monthly.
     const params = new URLSearchParams({
       property: propertyId,
       units: String(units),
       type: "installment",
-      down: String(downPaymentPercent),
+      down: String(downPct),
       duration: String(selectedDuration),
       frequency: "monthly",
     });
@@ -205,6 +211,30 @@ export function InstallmentCalculator({
         </div>
       </div>
 
+      {/* Down-payment Selection (investor-chosen) */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-foreground mb-2">
+          {language === "ar" ? "الدفعة المقدمة" : "Down payment"}
+        </label>
+        <div className="flex gap-2">
+          {downOptions.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setDownPct(v)}
+              className={cn(
+                "flex-1 h-10 rounded-lg text-sm font-medium transition-colors",
+                downPct === v
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted hover:bg-muted/80 text-foreground"
+              )}
+            >
+              {v}%
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Duration Selection */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-foreground mb-2">
@@ -233,7 +263,7 @@ export function InstallmentCalculator({
         
         <div className="flex items-center justify-between py-2 border-b border-border">
           <span className="text-muted-foreground flex items-center gap-1">
-            {t("installmentCalc.downPayment")} ({downPaymentPercent}%)
+            {t("installmentCalc.downPayment")} ({downPct}%)
             <Info className="w-3 h-3" />
           </span>
           <span className="font-bold text-primary">${calculation.downPayment.toLocaleString()}</span>
@@ -267,10 +297,12 @@ export function InstallmentCalculator({
           <span className="font-medium text-foreground">{t("installmentCalc.payAtCheckout")}</span>
         </div>
         <div className="text-2xl font-bold text-gradient-gold">
-          ${calculation.downPaymentWithFee.toLocaleString()}
+          ${calculation.downPayment.toLocaleString()}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {t("installmentCalc.downPaymentNote")}
+          {language === "ar"
+            ? "الدفعة المقدمة + رسوم المنصة والإدارة تُضاف عند الدفع."
+            : "Down payment shown; platform & management fees are added at checkout."}
         </p>
       </div>
 

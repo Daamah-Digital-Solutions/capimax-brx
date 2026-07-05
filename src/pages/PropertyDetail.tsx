@@ -321,6 +321,29 @@ export default function PropertyDetail() {
             {/* Model-specific template */}
             <PropertyModelSection property={cp} />
 
+            {/* Installment purchase entry — real per-investor plan builder → Checkout charges
+                the down-payment + buyer-borne fee, mints-then-locks the full position. Only
+                for the installment model (the CTA carries type=installment + the terms). */}
+            {cp.model === "installment" && (
+              <InstallmentCalculator
+                propertyId={id || cp.id}
+                totalPropertyPrice={Number(cp.totalValue ?? 0)}
+                downPaymentPercent={20}
+                installmentDurations={[
+                  { months: 12, label: "12 Months", labelAr: "12 شهر" },
+                  { months: 24, label: "24 Months", labelAr: "24 شهر" },
+                  { months: 36, label: "36 Months", labelAr: "36 شهر" },
+                ]}
+                unitPrice={Number(cp.tokenPrice)}
+                expectedGrowth={Number(cp.expectedGrowth ?? 0)}
+                constructionProgress={Number(cp.constructionProgress ?? 0)}
+                expectedCompletion={
+                  cp.installment?.activationDate ??
+                  (language === "ar" ? cp.durationAr ?? "" : cp.duration ?? "")
+                }
+              />
+            )}
+
             {/* Institutional Data Room — full digital investment center */}
             <PropertyDataRoom property={cp} />
 

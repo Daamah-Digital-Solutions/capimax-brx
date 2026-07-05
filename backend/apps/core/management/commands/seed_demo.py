@@ -288,6 +288,28 @@ class Command(BaseCommand):
             obj.token_price = TOKEN_PRICE
             obj.save()  # _sync_derived sets category + token_supply
             self.stdout.write(f"  property: {slug} ({obj.token_supply} tokens, funded {obj.funded}%)")
+            # Per-property advertised installment schedule (the display block that drives
+            # PropertyModelSection's "Installment Plan" card). Idempotent (update_or_create).
+            if obj.model == "installment":
+                self._seed_installment_schedule(obj)
+
+    def _seed_installment_schedule(self, prop) -> None:
+        from datetime import timedelta
+
+        from apps.properties.models import InstallmentSchedule
+
+        today = timezone.now().date()
+        InstallmentSchedule.objects.update_or_create(
+            property=prop,
+            defaults={
+                "total_installments": 24,
+                "paid_installments": 0,
+                "monthly_amount": Decimal("2500"),
+                "next_payment_date": today + timedelta(days=30),
+                "activation_date": today + timedelta(days=545),  # ~18 months out
+                "completion_percent": Decimal(prop.construction_progress or 0),
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     # Ledger — holdings, balance, distribution, owner/broker credits, partner work.
@@ -424,6 +446,43 @@ class Command(BaseCommand):
                 token_symbol=token_symbol_for_slug("demo-2"), token_amount=300,
                 purchase_price=Decimal("30000"), current_value=Decimal("31500"), status="held",
             )
+
+        # 8) Investor INSTALLMENT plan on demo-4 (the installment/construction property),
+        #    built through the REAL Wave B/C services + ledger-settled so the Installments
+        #    page + sidebar badge show real data (a live plan: down-payment cleared + 1/12
+        #    installments paid → part of the position released, the rest locked). Idempotent.
+        from apps.installments.models import InstallmentPlan
+        from apps.installments.services import build_installment_plan, settle_installment_payment
+        from apps.investments.services import fee_amount_for, mint_investment
+
+        demo4 = Property.objects.get(slug="demo-4")
+        if not InstallmentPlan.objects.filter(investor=investor, property=demo4).exists():
+            units = 24  # whole tokens (base $2,400 at $100/token)
+            base = Decimal(units) * demo4.token_price
+            supply4 = int(demo4.token_supply or 0)
+            plan = build_installment_plan(
+                investor, demo4, total_amount=base,
+                down_payment_percent=Decimal("20"), n_installments=12, frequency="monthly",
+            )
+            inv = Investment.objects.create(
+                user=investor, property=demo4, property_name=demo4.name,
+                amount_invested=base, token_amount=units,
+                token_symbol=token_symbol_for_slug("demo-4"), price_per_token=demo4.token_price,
+                ownership_percentage=(
+                    (Decimal(units) / Decimal(supply4) * Decimal("100")) if supply4 else Decimal("0")
+                ),
+                payment_method="card", payment_status=PaymentStatus.COMPLETED,
+                is_installment=True, down_payment_amount=plan.down_payment_amount,
+                fee_amount=fee_amount_for(demo4, base), installment_plan=plan,
+            )
+            # Full-mint-then-lock (ledger — demo-4 is not on-chain) + activate the plan +
+            # credit the owner (developer) the down-payment's token value.
+            mint_investment(inv)
+            # Pay one installment → visible progress + more released tokens.
+            first_due = plan.payments.order_by("sequence").first()
+            if first_due is not None:
+                settle_installment_payment(first_due.id)
+            self.stdout.write("  installment plan: demo-4 for investor (down paid + 1/12)")
 
     # ----------------------------------------------------------------------- #
     def _credit_once(self, user, amount, source, reference, memo=""):
