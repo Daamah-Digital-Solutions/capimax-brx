@@ -12,12 +12,14 @@ from apps.properties.models import Property
 from .models import Investment
 
 # Payment methods actually implemented + accepted. "card" (Stripe) and "crypto"
-# (NOWPayments) settle via a signed webhook; "balance" spends the investor's accrued
-# internal balance (no PSP; see investments.services.BALANCE_METHOD); "sukuk" (the Nova
-# certificate) settles on ADMIN approval of an uploaded certificate (no PSP, no auto-
-# complete — see investments.services.SUKUK_METHOD). Apple Pay / Google Pay / Pronova are
-# NOT wired (they would mark an investment completed without a real charge) → rejected.
-PAYMENT_METHODS = ["card", "crypto", "balance", "sukuk"]
+# (NOWPayments) settle via a signed webhook; "pronova" is a branded, admin-discounted method
+# that settles over the SAME Stripe charge as card (the platform absorbs the discount) while
+# staying a DISTINCT method (see investments.services.PRONOVA_METHOD); "balance" spends the
+# investor's accrued internal balance (no PSP; see investments.services.BALANCE_METHOD);
+# "sukuk" (the Nova certificate) settles on ADMIN approval of an uploaded certificate (no PSP,
+# no auto-complete — see investments.services.SUKUK_METHOD). Apple Pay / Google Pay are NOT
+# wired (they would mark an investment completed without a real charge) → rejected.
+PAYMENT_METHODS = ["card", "crypto", "balance", "sukuk", "pronova"]
 
 
 class InvestmentCreateSerializer(serializers.Serializer):
@@ -100,6 +102,9 @@ class InvestmentSerializer(serializers.ModelSerializer):
             # Fees (buyer-borne, Option A): the platform+management fee charged on top of
             # the token value, and the resulting total the buyer paid.
             "fee_amount",
+            # Pronova (platform-absorbed) discount subtracted from settlement (0 otherwise);
+            # platform net for the sale = fee_amount − discount_amount.
+            "discount_amount",
             "settlement_amount",
             # Nova certificate (sukuk) review state (null for other methods).
             "sukuk",

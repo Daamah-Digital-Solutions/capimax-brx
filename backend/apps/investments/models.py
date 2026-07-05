@@ -77,6 +77,12 @@ class Investment(models.Model):
     # platform's; the owner receives the full token value (NO fee carved out). For an
     # installment the full fee is charged once, with the down-payment.
     fee_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    # Pronova discount (buyer perk, PLATFORM-ABSORBED). Subtracted from `settlement_amount`
+    # ONLY — the buyer pays less, but the owner still receives the full token value
+    # (`charge_amount`) and tokens/ownership are unchanged. 0 for every non-Pronova method.
+    # Set at create time from the property's admin rate (Property.fee_pronova_discount). The
+    # platform's net for the sale = fee_amount − discount_amount (UNCAPPED — may be negative).
+    discount_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     installment_plan = models.ForeignKey(
         "installments.InstallmentPlan",
         on_delete=models.SET_NULL,
@@ -107,12 +113,18 @@ class Investment(models.Model):
     def settlement_amount(self):
         """
         What the BUYER actually pays at the gated (down-payment / full) settlement:
-        the token-value `charge_amount` PLUS the buyer-borne fee (Option A). Used by the
-        PSP charge (Stripe/NOW) and the balance debit so the amount collected equals the
-        displayed total. A normal buy pays amount_invested + fee; an installment pays the
-        down-payment + the full fee (charged once). Later installments carry no extra fee.
+        the token-value `charge_amount` PLUS the buyer-borne fee (Option A), LESS the
+        platform-absorbed Pronova discount (`discount_amount`, 0 for every non-Pronova
+        method). Used by the PSP charge (Stripe/NOW) and the balance debit so the amount
+        collected equals the displayed total. A normal buy pays amount_invested + fee; a
+        Pronova buy pays value + fee − discount; an installment pays the down-payment + the
+        full fee (charged once). Later installments carry no extra fee.
         """
-        return self.charge_amount + (self.fee_amount or Decimal("0"))
+        return (
+            self.charge_amount
+            + (self.fee_amount or Decimal("0"))
+            - (self.discount_amount or Decimal("0"))
+        )
 
     class Meta:
         verbose_name = _("investment")

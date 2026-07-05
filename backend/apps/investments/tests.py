@@ -34,11 +34,12 @@ from .services import (
 _FAKE_TX_HASH = "0x" + "ab" * 32
 _FAKE_BLOCK = 4242
 
-# Phase 5 Wave 1: the `card` method is now payment-gated (completes + mints only via
-# the Stripe webhook). Tests that exercise method-AGNOSTIC mint/economics use a
-# still-simulated method so they continue to assert completion+mint at creation.
-# (Card's payment-gated behaviour is covered in apps/payments/tests.py.)
-COMPLETING_METHOD = "pronova"
+# Phase 5 Wave 1: the `card` method is payment-gated (completes + mints only via the Stripe
+# webhook); Pronova is now the SAME (a discounted rail over Stripe — see PronovaDiscountTests).
+# Tests that exercise method-AGNOSTIC mint/economics use a STILL-simulated method (Apple Pay,
+# which auto-completes at the service level) so they keep asserting completion+mint at creation.
+# (Card/Pronova payment-gated behaviour is covered here + in apps/payments/tests.py.)
+COMPLETING_METHOD = "apple_pay"
 
 
 def _fake_mint(contract_address, to_address, amount):
@@ -341,10 +342,11 @@ class InvestmentApiTests(APITestCase):
         self.assertEqual(inv.ownership_percentage, Decimal("0.200000"))
 
     def test_unsupported_payment_method_rejected(self):
-        """Only card / crypto / balance / sukuk are accepted; the unwired methods 400 (they
-        would otherwise mark an investment completed with no real charge)."""
+        """Only card / crypto / balance / sukuk / pronova are accepted; the unwired methods
+        (Apple/Google Pay) 400 (they would otherwise mark an investment completed with no
+        real charge)."""
         self.client.force_authenticate(self.user)
-        for method in ("apple_pay", "google_pay", "pronova"):
+        for method in ("apple_pay", "google_pay"):
             resp = self.client.post(
                 "/api/investments/",
                 {"property_id": self.prop.slug, "token_amount": 10, "payment_method": method},
@@ -368,6 +370,24 @@ class InvestmentApiTests(APITestCase):
         inv = Investment.objects.get(user=self.user, property=self.prop)
         self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
         self.assertEqual(inv.payment_method, "sukuk")
+
+    def test_pronova_method_accepted_and_deferred(self):
+        """Pronova IS accepted: it creates a PENDING investment (settled later by the Stripe
+        webhook for the DISCOUNTED total) and never mints at creation."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            "/api/investments/",
+            {"property_id": self.prop.slug, "token_amount": 10, "payment_method": "pronova"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(resp.data["tokens_minted"])
+        self.assertTrue(resp.data["payment_required"])
+        inv = Investment.objects.get(user=self.user, property=self.prop)
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
+        self.assertEqual(inv.payment_method, "pronova")
+        # The admin-set discount is applied to settlement (default 5% on this API property).
+        self.assertGreater(inv.discount_amount, Decimal("0"))
 
     def test_overpurchase_returns_422(self):
         small = _make_property("papismall", total_value=500, token_price=100)  # supply 5
@@ -609,3 +629,113 @@ class ReinvestmentApiTests(APITestCase):
         self.client.force_authenticate(other)
         resp2 = self.client.get("/api/investments/reinvestments/")
         self.assertEqual(resp2.json(), [])
+
+
+class PronovaDiscountTests(TestCase):
+    """
+    Pronova (temporary rail): an ADMIN-set, PLATFORM-ABSORBED discount off the settlement
+    subtotal (token value + fees). The buyer pays the discounted total; the OWNER is credited
+    the FULL token value; the platform absorbs the discount (net = fee − discount, may be < 0).
+    Pronova DEFERS like card/crypto (settles on the Stripe webhook) and inherits the stale-
+    inflight sweep, but is NEVER an installment.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="pron-owner@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="pron-inv@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        # Ledger-only, owner-linked; DEFAULT fees (1.5%+0.5%=2%) + DEFAULT pronova discount (5%).
+        self.prop = _make_property("pron-prop", total_value=1_000_000, token_price=100)
+        self.prop.submitted_by = self.owner
+        self.prop.save(update_fields=["submitted_by"])
+
+    def test_pronova_discount_uses_admin_rate(self):
+        from .services import pronova_discount_for
+
+        # 5% of the 306 subtotal = 15.30 (the property's default admin rate).
+        self.assertEqual(pronova_discount_for(self.prop, Decimal("306")), Decimal("15.30"))
+        # Admin raises it to 10% → 30.60; a 0% property gives nothing.
+        self.prop.fee_pronova_discount = Decimal("10")
+        self.assertEqual(pronova_discount_for(self.prop, Decimal("306")), Decimal("30.60"))
+        self.prop.fee_pronova_discount = Decimal("0")
+        self.assertEqual(pronova_discount_for(self.prop, Decimal("306")), Decimal("0.00"))
+
+    def test_pronova_charge_discounted_owner_full_platform_net(self):
+        from apps.wallets.models import BalanceTransaction
+
+        from .services import settle_investment
+
+        # 3 tokens × $100 = $300 value; fee 2% = $6; discount 5% × $306 = $15.30.
+        inv = create_investment(
+            user=self.investor, prop=self.prop, token_amount=3, payment_method="pronova",
+        )["investment"]
+        # Deferred: PENDING + not minted at creation (settles on the confirmed Stripe webhook).
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
+        self.assertFalse(inv.tokens_minted)
+        self.assertEqual(inv.amount_invested, Decimal("300.00"))
+        self.assertEqual(inv.fee_amount, Decimal("6.00"))
+        self.assertEqual(inv.discount_amount, Decimal("15.30"))
+        # Buyer pays the DISCOUNTED total (value + fee − discount).
+        self.assertEqual(inv.settlement_amount, Decimal("290.70"))
+        # Platform net = fee − discount = −9.30 (an intended, VISIBLE subsidy).
+        self.assertEqual(inv.fee_amount - inv.discount_amount, Decimal("-9.30"))
+        # Settle (simulate the confirmed webhook) → the OWNER is credited the FULL token value.
+        settle_investment(inv)
+        bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
+        self.assertEqual(bt.amount, Decimal("300.00"))  # full value, NOT the discounted total
+
+    def test_pronova_admin_rate_change_changes_discount(self):
+        self.prop.fee_pronova_discount = Decimal("8")
+        self.prop.save(update_fields=["fee_pronova_discount"])
+        inv = create_investment(
+            user=self.investor, prop=self.prop, token_amount=3, payment_method="pronova",
+        )["investment"]
+        # 8% of 306 = 24.48 → settlement 306 − 24.48 = 281.52.
+        self.assertEqual(inv.discount_amount, Decimal("24.48"))
+        self.assertEqual(inv.settlement_amount, Decimal("281.52"))
+
+    def test_non_pronova_unaffected(self):
+        # A card buy on the SAME property carries NO discount (settlement = value + fee).
+        inv = create_investment(
+            user=self.investor, prop=self.prop, token_amount=3, payment_method="card",
+        )["investment"]
+        self.assertEqual(inv.discount_amount, Decimal("0"))
+        self.assertEqual(inv.settlement_amount, Decimal("306.00"))
+
+    def test_pronova_inherits_stale_inflight_expiry(self):
+        # An abandoned Pronova in-flight past the threshold is expired to FAILED on the next
+        # create (Pronova joined PSP_INFLIGHT_METHODS), so a retry proceeds instead of 500ing.
+        stale = create_investment(
+            user=self.investor, prop=self.prop, token_amount=1, payment_method="pronova",
+        )["investment"]
+        self.assertEqual(stale.payment_status, PaymentStatus.PENDING)
+        Investment.objects.filter(pk=stale.pk).update(
+            created_at=timezone.now() - timezone.timedelta(minutes=45)
+        )
+        new = create_investment(
+            user=self.investor, prop=self.prop, token_amount=1, payment_method="pronova",
+        )["investment"]
+        self.assertEqual(new.payment_status, PaymentStatus.PENDING)
+        stale.refresh_from_db()
+        self.assertEqual(stale.payment_status, PaymentStatus.FAILED)
+
+    def test_pronova_installment_rejected(self):
+        # Pronova is full-buy only — the installment gate (card/crypto) rejects it.
+        from rest_framework.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError):
+            create_investment(
+                user=self.investor, prop=self.prop, token_amount=3, payment_method="pronova",
+                is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+            )
+
+    def test_serializer_exposes_discount_amount(self):
+        from .serializers import InvestmentSerializer
+
+        inv = create_investment(
+            user=self.investor, prop=self.prop, token_amount=3, payment_method="pronova",
+        )["investment"]
+        data = InvestmentSerializer(inv).data
+        self.assertIn("discount_amount", data)
+        self.assertEqual(Decimal(str(data["discount_amount"])), Decimal("15.30"))
+        self.assertEqual(Decimal(str(data["settlement_amount"])), Decimal("290.70"))

@@ -33,15 +33,27 @@ MAX_AMOUNT_USD = Decimal("10000000")
 
 # One-active-per-property: the DB has a partial unique index allowing AT MOST ONE in-flight
 # (pending/processing) Investment per (user, property). A genuinely-abandoned webhook-gated
-# (card/crypto) attempt that never confirmed is expired to FAILED on the next create for the
+# (card/crypto/Pronova) attempt that never confirmed is expired to FAILED on the next create for the
 # same (user, property) — after this many minutes — so a retry isn't blocked. A real payment
 # confirms well within it. Sukuk (admin-reviewed) + balance (auto-settle) are NEVER expired.
 # Override via settings.INVESTMENT_STALE_INFLIGHT_MINUTES.
 DEFAULT_STALE_INFLIGHT_MINUTES = 30
 
 # Methods whose completion + mint are driven by a real PSP webhook (NOT simulated at
-# creation). Phase 5 Wave 1: card (Stripe). Wave 2: crypto (NOW Payments IPN).
+# creation). Phase 5 Wave 1: card (Stripe). Wave 2: crypto (NOW Payments IPN). ALSO the
+# gate for INSTALLMENTS (a plan's down-payment must settle via a real PSP — card/crypto only).
 WEBHOOK_PAID_METHODS = {"card", "crypto"}
+
+# Pronova (temporary rail): a branded, discounted method that settles over the SAME Stripe
+# charge as card, but stays a DISTINCT payment_method end-to-end (its own discount_amount,
+# separately reported, swappable for on-chain PRN later). Deferred + stale-inflight-swept like
+# card/crypto — but NOT an installment method (a Pronova buy is always full-amount).
+PRONOVA_METHOD = "pronova"
+
+# PSP-settled, webhook-gated, abandonable methods → DEFERRED at creation (no simulated
+# auto-complete/mint) and swept by the stale-inflight expiry: card + crypto + Pronova. Kept
+# SEPARATE from WEBHOOK_PAID_METHODS so widening the PSP set never widens the installment gate.
+PSP_INFLIGHT_METHODS = {"card", "crypto", PRONOVA_METHOD}
 
 # Reinvestment funding: spend the investor's accrued internal balance (distribution /
 # sale yield in UserBalance) instead of a PSP charge. NOT webhook-gated — settlement IS
@@ -96,6 +108,24 @@ def fee_amount_for(prop: Property, base_amount) -> Decimal:
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
     return platform + management
+
+
+def pronova_discount_for(prop: Property, base_amount) -> Decimal:
+    """
+    The PLATFORM-ABSORBED Pronova discount for a settlement `base_amount` (the subtotal =
+    token value + buyer-borne fee).
+
+    Admin-set % per property (Property.fee_pronova_discount), quantised to cents
+    (ROUND_HALF_UP) mirroring the checkout display EXACTLY, so the amount charged equals the
+    amount shown. Reduces `settlement_amount` ONLY — the owner still receives the full token
+    value. UNCAPPED: the discount may exceed the fee, so the platform's net (fee − discount)
+    can go negative (an intended marketing subsidy; surfaced in the admin, not silent).
+    """
+    # str()-coerce: the model's numeric default is a float on an unsaved instance, and
+    # Decimal * float raises; Decimal(str(x)) is exact for both float + Decimal.
+    base = Decimal(str(base_amount))
+    rate = Decimal(str(prop.fee_pronova_discount or "0"))
+    return (base * rate / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 # --------------------------------------------------------------------------- #
@@ -184,6 +214,15 @@ def create_investment(
         # installment (charged once, with the down-payment).
         fee_amount = fee_amount_for(locked_prop, amount)
 
+        # Pronova (temporary rail): a PLATFORM-ABSORBED discount off the settlement subtotal
+        # (token value + buyer-borne fee), from the property's admin rate. Reduces ONLY
+        # settlement_amount (what the buyer pays via Stripe); the owner still receives the FULL
+        # token value. Pronova is full-buy (the installment gate below rejects it), so the
+        # basis is amount + fee_amount. Non-Pronova → 0.
+        discount_amount = Decimal("0")
+        if payment_method == PRONOVA_METHOD:
+            discount_amount = pronova_discount_for(locked_prop, amount + fee_amount)
+
         # Installments (Wave B): build the plan + resolve the DOWN-PAYMENT. The full
         # `amount` above stays the position value (token_amount × price); the gated
         # charge is the down-payment. Installments are settlement-gated ONLY (the
@@ -216,7 +255,7 @@ def create_investment(
             down_payment_amount = installment_plan.down_payment_amount
 
         # One-active-per-property. First EXPIRE a genuinely-abandoned webhook-gated
-        # (card/crypto) attempt that never confirmed, so a retry can proceed; sukuk
+        # (card/crypto/Pronova) attempt that never confirmed, so a retry can proceed; sukuk
         # (admin-reviewed) + balance (auto-settle) are excluded — their PENDING is a real
         # state we must not clobber. Runs under the per-property lock above → no race.
         stale_minutes = getattr(
@@ -225,7 +264,7 @@ def create_investment(
         stale_cutoff = timezone.now() - timezone.timedelta(minutes=stale_minutes)
         expired = Investment.objects.filter(
             user=user, property=locked_prop,
-            payment_method__in=WEBHOOK_PAID_METHODS,
+            payment_method__in=PSP_INFLIGHT_METHODS,
             payment_status__in=[PaymentStatus.PENDING, PaymentStatus.PROCESSING],
             created_at__lt=stale_cutoff,
         ).update(payment_status=PaymentStatus.FAILED, updated_at=timezone.now())
@@ -260,6 +299,7 @@ def create_investment(
             is_installment=is_installment,
             down_payment_amount=down_payment_amount,
             fee_amount=fee_amount,
+            discount_amount=discount_amount,
             installment_plan=installment_plan,
         )
 
@@ -285,20 +325,21 @@ def create_investment(
                     {"payment_method": "Insufficient balance to reinvest this amount."}
                 )
 
-        # Phase 5 Wave 1: REAL payment for the card method. The investment stays
-        # PENDING here — a real Stripe charge + SIGNATURE-VERIFIED webhook drives
-        # completion + mint (apps/payments). We never mint on a frontend success and
-        # never pretend money moved.
+        # Phase 5 Wave 1: REAL payment for the card method — AND the Pronova rail, which
+        # settles over the SAME Stripe charge (see PRONOVA_METHOD) while staying a distinct
+        # method. The investment stays PENDING here — a real Stripe charge + SIGNATURE-VERIFIED
+        # webhook drives completion + mint (apps/payments). We never mint on a frontend success
+        # and never pretend money moved.
         #
         # Other methods keep their interim SIMULATED behaviour this wave (no real PSP
-        # yet): marked completed to drive the flow. ⚠️ Still simulated — Apple/Google/
-        # Pronova remain their manual flows.
+        # yet): marked completed to drive the flow. ⚠️ Still simulated — Apple/Google Pay
+        # remain their manual flows (Pronova now settles over the Stripe rail, above).
         # TODO(Payments Wave 2+): replace the simulated branch per method.
         # Installments are ALWAYS gated (real money; full-mint-then-lock on the webhook),
         # so they never take the simulated auto-complete/auto-mint branch. The Nova
         # certificate (sukuk) is admin-gated → deferred here, settled on approval.
         defer_payment = (
-            (payment_method in WEBHOOK_PAID_METHODS)
+            (payment_method in PSP_INFLIGHT_METHODS)
             or is_installment
             or payment_method == SUKUK_METHOD
         )

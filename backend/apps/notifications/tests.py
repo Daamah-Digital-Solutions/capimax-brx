@@ -102,7 +102,9 @@ class EmitPointTests(TestCase):
         prop.save(update_fields=["submitted_by"])
 
         with mock.patch("apps.investments.services.chain_service.mint", side_effect=_fake_mint):
-            create_investment(user=investor, prop=prop, token_amount=10, payment_method="pronova")
+            # Apple Pay is a still-simulated method that auto-completes + mints at the service
+            # level (card/crypto/pronova now defer to the Stripe webhook).
+            create_investment(user=investor, prop=prop, token_amount=10, payment_method="apple_pay")
 
         self.assertIn(Notification.Type.INVESTMENT_MINTED, _types(investor))
         earn = _one(owner, Notification.Type.EARNINGS_CREDITED)

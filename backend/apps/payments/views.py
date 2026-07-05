@@ -56,8 +56,10 @@ class StripeConfigView(APIView):
 
 class CreateStripeIntentView(APIView):
     """
-    Start a Stripe card payment for one of the caller's investments. Requires an
-    approved KYC (investing is KYC-gated) and ownership of the investment.
+    Start a Stripe payment for one of the caller's investments. Serves BOTH the "card"
+    method and the branded "pronova" rail — Pronova settles over the SAME Stripe charge but
+    for the DISCOUNTED total (investment.settlement_amount already nets the platform-absorbed
+    discount). Requires an approved KYC (investing is KYC-gated) + ownership of the investment.
     """
 
     permission_classes = [IsAuthenticated, KYCApprovedPermission]
@@ -76,9 +78,9 @@ class CreateStripeIntentView(APIView):
                 {"detail": "Investment not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        if investment.payment_method != "card":
+        if investment.payment_method not in ("card", "pronova"):
             return Response(
-                {"detail": "This investment is not a card payment."},
+                {"detail": "This investment is not a card/Pronova payment."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if investment.payment_status not in (PaymentStatus.PENDING, PaymentStatus.PROCESSING):
@@ -93,9 +95,10 @@ class CreateStripeIntentView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # Charge the amount due for THIS payment = the token value + the buyer-borne
-        # platform/management fee (`settlement_amount`), so the charge equals the displayed
-        # total. For an installment this is the down-payment + the full fee (charged once).
+        # Charge the amount due for THIS payment = `settlement_amount` (token value + the
+        # buyer-borne platform/management fee, LESS the platform-absorbed Pronova discount for
+        # a pronova buy), so the charge equals the displayed total. For an installment this is
+        # the down-payment + the full fee (charged once).
         payment = get_or_create_payment(
             investment, amount=investment.settlement_amount, currency="usd"
         )

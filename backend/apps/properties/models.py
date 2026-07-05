@@ -186,6 +186,11 @@ class Property(models.Model):
     fee_platform = models.DecimalField(max_digits=5, decimal_places=2, default=1.5)
     fee_management = models.DecimalField(max_digits=5, decimal_places=2, default=0.5)
     fee_exit = models.DecimalField(max_digits=5, decimal_places=2, default=0.5)
+    # Pronova discount rate (buyer perk, PLATFORM-ABSORBED). % off the settlement subtotal
+    # (token value + platform/management fee) when paying via the Nova/Pronova rail. Admin-set
+    # per property, same as the fee rates above (default 5%). The owner still receives the FULL
+    # token value; this reduces ONLY the platform's net. UNCAPPED — may exceed the fee (net < 0).
+    fee_pronova_discount = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
 
     # Broker affiliate program (Phase 12 / Broker Listings) — the PER-PROPERTY commission %
     # a referring broker earns on a referred investor's primary sale. Default 5% on the

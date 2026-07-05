@@ -1,4 +1,4 @@
-import { Coins, Percent, Check, Wallet, AlertCircle } from "lucide-react";
+import { Percent } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { NovaFinancePledgeNotice } from "@/components/legal/NovaFinancePledgeNotice";
@@ -8,13 +8,14 @@ interface PronovaPaymentProps {
   discount: number;
 }
 
+// The Pronova method's in-selector EXPLAINER (branded discount + breakdown). The actual
+// settlement happens in PronovaCheckout (the action area): a real Stripe charge for the
+// discounted total, credited to the owner in full with the platform absorbing the discount.
+// This panel is display-only — the old mock balance + connected-wallet blocks were removed
+// (they showed fabricated figures the flow never used).
 export function PronovaPayment({ totalAmount, discount }: PronovaPaymentProps) {
-  const { t, isRTL } = useLanguage();
+  const { t } = useLanguage();
   const finalAmount = totalAmount - discount;
-  
-  // Mock user balance
-  const userBalance = 10000;
-  const hasEnoughBalance = userBalance >= finalAmount;
 
   return (
     <div className="space-y-4">
@@ -54,50 +55,10 @@ export function PronovaPayment({ totalAmount, discount }: PronovaPaymentProps) {
         <div className="pt-3 border-t border-border flex items-center justify-between">
           <span className="font-semibold text-foreground">{t("pronova.finalAmount")}</span>
           <span className="text-xl font-bold text-gradient-gold">
-            ${finalAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">PNOVA</span>
+            ${finalAmount.toLocaleString()}
           </span>
         </div>
       </div>
-
-      {/* Balance Check */}
-      <div className={`flex items-center gap-3 p-4 rounded-xl ${hasEnoughBalance ? 'bg-success/10 border border-success/30' : 'bg-destructive/10 border border-destructive/30'}`}>
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasEnoughBalance ? 'bg-success/20' : 'bg-destructive/20'}`}>
-          {hasEnoughBalance ? (
-            <Check className="w-5 h-5 text-success" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-destructive" />
-          )}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-foreground">{t("pronova.balance")}</span>
-            <span className={`font-bold ${hasEnoughBalance ? 'text-success' : 'text-destructive'}`}>
-              {userBalance.toLocaleString()} PNOVA
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {hasEnoughBalance 
-              ? t("pronova.sufficientBalance")
-              : t("pronova.insufficientBalance")
-            }
-          </p>
-        </div>
-      </div>
-
-      {/* Wallet Connection (UI Only) */}
-      <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-        <Wallet className="w-5 h-5 text-primary" />
-        <div className="flex-1">
-          <span className="text-sm font-medium text-foreground">{t("pronova.connectedWallet")}</span>
-          <p className="text-xs text-muted-foreground font-mono">0x7a23...f3a4</p>
-        </div>
-        <Badge variant="secondary" className="text-xs">{t("pronova.connected")}</Badge>
-      </div>
-
-      {/* Info */}
-      <p className="text-xs text-muted-foreground text-center">
-        {t("pronova.deductionNote")}
-      </p>
 
       {/* Mandatory Pledge / Mortgage Disclosure */}
       <NovaFinancePledgeNotice />

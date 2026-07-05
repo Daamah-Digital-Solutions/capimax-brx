@@ -224,7 +224,7 @@ class PropertyAdmin(admin.ModelAdmin):
             "Narrative",
             {"fields": ("description", "description_ar", "construction_progress")},
         ),
-        ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"),)}),
+        ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount",))}),
         (
             "Catalogue management",
             {"fields": (("is_published", "is_featured"), ("funded_date", "display_order"))},

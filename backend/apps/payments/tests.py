@@ -104,15 +104,17 @@ class CardDefersPaymentTests(APITestCase):
         self.assertTrue(res["payment_required"])
         m.assert_not_called()
 
-    def test_non_card_method_still_completes_and_mints(self):
+    def test_pronova_defers_like_card_and_does_not_mint(self):
+        # Pronova now settles over the Stripe rail (for the DISCOUNTED total), so it DEFERS
+        # exactly like card/crypto — no auto-complete, no mint at creation.
         user = _approved_user("pronova@example.com")
         get_or_create_custodial_wallet(user)
-        with mock.patch("apps.chain.service.mint", side_effect=_fake_mint):
+        with mock.patch("apps.chain.service.mint", side_effect=_fake_mint) as m:
             res = create_investment(user=user, prop=self.prop, token_amount=2,
                                     payment_method="pronova")
-        self.assertEqual(res["investment"].payment_status, PaymentStatus.COMPLETED)
-        self.assertTrue(res["tokens_minted"])
-        self.assertFalse(res["payment_required"])
+        self.assertEqual(res["investment"].payment_status, PaymentStatus.PENDING)
+        self.assertTrue(res["payment_required"])
+        m.assert_not_called()
 
 
 # --------------------------------------------------------------------------- #
@@ -164,6 +166,29 @@ class CreateIntentTests(APITestCase):
         self.assertEqual(inv.payment_status, PaymentStatus.PROCESSING)
         pay = Payment.objects.get(investment=inv)
         self.assertEqual(pay.stripe_payment_intent_id, "pi_test_123")
+
+    @override_settings(STRIPE_SECRET_KEY="sk_test_x", STRIPE_PUBLISHABLE_KEY="pk_test_x")
+    def test_creates_intent_for_pronova_charges_discounted_settlement(self):
+        # Pronova reuses the SAME Stripe intent endpoint (distinct method), charging the
+        # DISCOUNTED settlement_amount — NOT value + fee.
+        user = _approved_user("pron-intent@example.com")
+        res = create_investment(user=user, prop=self.prop, token_amount=2,
+                                payment_method="pronova")
+        inv = res["investment"]
+        self.client.force_authenticate(user)
+        fake = {"id": "pi_pron_1", "client_secret": "pi_pron_1_secret"}
+        with mock.patch("apps.payments.stripe_service.create_payment_intent",
+                        return_value=fake) as pi:
+            resp = self.client.post("/api/payments/stripe/create-intent/",
+                                    {"investment_id": str(inv.id)}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.PROCESSING)
+        # The Payment + the Stripe charge are the DISCOUNTED settlement (discount applied).
+        pay = Payment.objects.get(investment=inv)
+        self.assertEqual(pay.amount, inv.settlement_amount)
+        self.assertEqual(pi.call_args.kwargs["amount"], inv.settlement_amount)
+        self.assertLess(inv.settlement_amount, inv.amount_invested + inv.fee_amount)
 
 
 # --------------------------------------------------------------------------- #

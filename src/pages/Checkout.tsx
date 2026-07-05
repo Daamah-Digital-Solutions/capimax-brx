@@ -8,6 +8,7 @@ import { PaymentResultModal } from "@/components/checkout/PaymentResultModal";
 import { StripeCardCheckout } from "@/components/checkout/StripeCardCheckout";
 import { NowCryptoCheckout } from "@/components/checkout/NowCryptoCheckout";
 import { SukukPayment } from "@/components/checkout/methods/SukukPayment";
+import { PronovaCheckout } from "@/components/checkout/PronovaCheckout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -23,9 +24,10 @@ export type PaymentStatus = "idle" | "processing" | "success" | "failed";
 
 // Methods that are displayed but NOT wired to a real settlement yet. They must never
 // complete a purchase (the backend also rejects them); selecting one and trying to pay
-// shows an honest "use another method" message instead of charging. ("sukuk" is now wired
-// as the admin-reviewed Nova-certificate flow; "balance" spends internal balance.)
-const UNWIRED_METHODS: PaymentMethod[] = ["apple_pay", "google_pay", "pronova"];
+// shows an honest "use another method" message instead of charging. ("sukuk" is the admin-
+// reviewed Nova-certificate flow; "pronova" settles the discounted total over Stripe;
+// "balance" spends internal balance — all wired.)
+const UNWIRED_METHODS: PaymentMethod[] = ["apple_pay", "google_pay"];
 const UNWIRED_MESSAGE = {
   en: "This payment method isn't available yet — please use Card, Crypto, or Pay from Balance.",
   ar: "طريقة الدفع هذه غير متاحة بعد — يرجى استخدام البطاقة أو العملة الرقمية أو الدفع من الرصيد.",
@@ -53,6 +55,8 @@ const MIN_UNITS = 1;
 // Fallback fee rates if a property doesn't carry its own (seeded properties all do).
 const DEFAULT_PLATFORM_FEE_RATE = 0.015;
 const DEFAULT_MANAGEMENT_FEE_RATE = 0.005;
+// Fallback Pronova discount rate; property.fees.pronovaDiscount is the admin-set source.
+const DEFAULT_PRONOVA_DISCOUNT_RATE = 0.05;
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -231,7 +235,17 @@ export default function Checkout() {
     };
   }, [units, unitPrice, platformRate, managementRate, property, propertyId]);
 
-  const pronovaDiscount = selectedMethod === "pronova" ? investment.totalPayable * 0.05 : 0;
+  // Pronova: the ADMIN-set discount rate (property.fees.pronovaDiscount), mirrored client-side
+  // so the displayed total equals the server's charge. Applied to the subtotal (value + fees)
+  // and rounded to cents — exactly like the server's pronova_discount_for.
+  const pronovaRate =
+    property?.fees && property.fees.pronovaDiscount != null
+      ? Number(property.fees.pronovaDiscount) / 100
+      : DEFAULT_PRONOVA_DISCOUNT_RATE;
+  const pronovaDiscount =
+    selectedMethod === "pronova"
+      ? Math.round(investment.totalPayable * pronovaRate * 100) / 100
+      : 0;
   // The buyer-borne fee (platform + management), added on top of the token value. For an
   // installment the FULL fee is due once, with the down-payment (matches the server).
   const feeTotal = investment.platformFee + investment.managementFee;
@@ -644,6 +658,31 @@ export default function Checkout() {
                     ready={termsAccepted && riskAccepted && !!property}
                     onRouteToKyc={routeToKyc}
                     onProcessing={() => setPaymentStatus("processing")}
+                  />
+                  <Button
+                    variant="outline"
+                    size="xl"
+                    className="w-full"
+                    onClick={() => navigate(-1)}
+                    disabled={paymentStatus === "processing"}
+                  >
+                    {t("checkout.cancelPayment")}
+                  </Button>
+                </div>
+              ) : selectedMethod === "pronova" && !isInstallment && user && kycApproved !== false ? (
+                /* Pronova: branded, admin-discounted method settling the DISCOUNTED total over
+                   Stripe. Distinct from card so a later on-chain PRN swap touches only
+                   PronovaCheckout. No mint here; the Stripe webhook settles + mints. */
+                <div className="space-y-4">
+                  <PronovaCheckout
+                    propertyId={propertyId}
+                    tokenAmount={units}
+                    finalAmount={finalAmount}
+                    discount={pronovaDiscount}
+                    ready={termsAccepted && riskAccepted && !!property}
+                    onRouteToKyc={routeToKyc}
+                    onProcessing={() => setPaymentStatus("processing")}
+                    onResult={handlePspResult}
                   />
                   <Button
                     variant="outline"

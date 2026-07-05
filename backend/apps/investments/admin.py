@@ -11,8 +11,11 @@ class InvestmentAdmin(admin.ModelAdmin):
         "property_name",
         "amount_invested",
         "token_amount",
+        "payment_method",
         "payment_status",
         "tokens_minted",
+        "discount_amount",
+        "platform_net",
         "created_at",
     )
     list_filter = ("payment_status", "tokens_minted", "payment_method")
@@ -32,9 +35,18 @@ class InvestmentAdmin(admin.ModelAdmin):
         "tokens_minted",
         "minted_at",
         "wallet",
+        "fee_amount",
+        "discount_amount",
+        "platform_net",
         "created_at",
         "updated_at",
     )
+
+    @admin.display(description="Platform net")
+    def platform_net(self, obj):
+        # The platform's take for this sale = buyer-borne fee − platform-absorbed discount.
+        # NEGATIVE when a Pronova discount exceeds the fee (an intended, VISIBLE subsidy).
+        return (obj.fee_amount or 0) - (obj.discount_amount or 0)
 
     def has_add_permission(self, request):
         # Investments are created via the API (with payment + mint orchestration).

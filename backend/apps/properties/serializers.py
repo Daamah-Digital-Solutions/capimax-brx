@@ -414,6 +414,9 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "platformFee": float(obj.fee_platform),
             "managementFee": float(obj.fee_management),
             "exitFee": float(obj.fee_exit),
+            # Pronova rail: admin-set % discount off the settlement subtotal (value + fees).
+            # The frontend mirrors this so the charged total equals the displayed total.
+            "pronovaDiscount": float(obj.fee_pronova_discount),
         }
 
 

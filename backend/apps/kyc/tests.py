@@ -110,6 +110,13 @@ class InvestKYCEnforcementTests(APITestCase):
             approve_kyc(get_or_create_kyc(user), source="dev")
         self.assertTrue(UserWallet.objects.filter(user=user).exists())
 
+        # Seed internal balance so the "balance" method settles + mints IN-REQUEST. The real
+        # PSP methods (card/crypto/pronova) now defer to a webhook and sukuk to admin review,
+        # so "balance" is the only accepted method that completes at creation — exactly what
+        # this gate+mint test needs to exercise the KYC→wallet→invest→mint happy path.
+        from apps.wallets.services import credit_user_balance
+        credit_user_balance(user, Decimal("1000000"), source="deposit", reference="seed-kyc")
+
         # Re-fetch so the reverse `.kyc` cache reflects the approval (each real
         # request loads the user fresh via JWT auth — no stale cache in prod).
         user = User.objects.get(pk=user.pk)
@@ -117,9 +124,7 @@ class InvestKYCEnforcementTests(APITestCase):
         with mock.patch("apps.chain.service.mint", side_effect=_fake_mint):
             resp = self.client.post(
                 "/api/investments/",
-                # Phase 5: `card` is payment-gated (mints via the Stripe webhook), so
-                # this gate+mint test uses a still-simulated method to mint at creation.
-                {"property_id": "1", "token_amount": 2, "payment_method": "pronova"},
+                {"property_id": "1", "token_amount": 2, "payment_method": "balance"},
                 format="json",
             )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
