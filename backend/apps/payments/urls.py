@@ -9,6 +9,8 @@ from .views import (
     NowPaymentsIpnView,
     StripeConfigView,
     StripeWebhookView,
+    SukukCertificateDownloadView,
+    SukukCertificateUploadView,
 )
 
 app_name = "payments"
@@ -26,4 +28,14 @@ urlpatterns = [
     # Deposit / top-up — reuses the gated Stripe/NOW path; credits balance (no mint).
     path("deposit/stripe/", CreateDepositStripeIntentView.as_view(), name="deposit-stripe"),
     path("deposit/nowpayments/", CreateDepositNowPaymentsView.as_view(), name="deposit-nowpayments"),
+    # Nova certificate (sukuk) — upload the caller's own cert; private staff/owner download.
+    # Settlement is admin-gated (Django admin), never here.
+    path(
+        "sukuk/<uuid:investment_id>/certificate/",
+        SukukCertificateUploadView.as_view(), name="sukuk-upload",
+    ),
+    path(
+        "sukuk/<uuid:cert_id>/file/",
+        SukukCertificateDownloadView.as_view(), name="sukuk-download",
+    ),
 ]

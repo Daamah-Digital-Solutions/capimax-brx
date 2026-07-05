@@ -40,6 +40,8 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   installment_paid: "financial",
   // Installments (Wave D) — a plan defaulted (missed payment past grace).
   installment_defaulted: "alert",
+  // Nova certificate (sukuk) payment rejected by the admin reviewer.
+  sukuk_rejected: "alert",
 };
 
 export function categoryOf(type: string): NotificationCategory {

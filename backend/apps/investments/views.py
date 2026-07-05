@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Investment
+from .models import Investment, PaymentStatus
 from .serializers import InvestmentCreateSerializer, InvestmentSerializer
 from .services import mint_investment
 
@@ -123,6 +123,48 @@ class ReinvestmentHistoryView(APIView):
             }
             for inv in rows
         ]
+        return Response(data)
+
+
+class SukukInvestmentsView(APIView):
+    """
+    GET /api/investments/sukuk/ — the caller's Nova certificate (sukuk) investments that are
+    NOT yet a holding: PENDING (certificate under review) or FAILED (certificate rejected).
+    Approved ones become real OwnershipToken holdings and are read from the wallet instead.
+    Self-scoped; only rows that actually have an uploaded certificate.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = (
+            Investment.objects.filter(
+                user=request.user,
+                payment_method="sukuk",
+                sukuk_certificate__isnull=False,
+            )
+            .exclude(payment_status=PaymentStatus.COMPLETED)
+            .select_related("property", "sukuk_certificate")
+            .order_by("-created_at")
+        )
+        data = []
+        for inv in rows:
+            cert = inv.sukuk_certificate
+            rejected = (
+                cert.status == "rejected" or inv.payment_status == PaymentStatus.FAILED
+            )
+            data.append(
+                {
+                    "id": str(inv.id),
+                    "property_id": inv.property.slug,
+                    "property_name": inv.property_name,
+                    "token_amount": inv.token_amount,
+                    "settlement_amount": float(inv.settlement_amount),
+                    "state": "rejected" if rejected else "under_review",
+                    "review_notes": cert.review_notes if rejected else "",
+                    "created_at": inv.created_at.isoformat(),
+                }
+            )
         return Response(data)
 
 

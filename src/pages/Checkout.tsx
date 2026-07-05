@@ -7,6 +7,7 @@ import { PaymentConfirmationModal } from "@/components/checkout/PaymentConfirmat
 import { PaymentResultModal } from "@/components/checkout/PaymentResultModal";
 import { StripeCardCheckout } from "@/components/checkout/StripeCardCheckout";
 import { NowCryptoCheckout } from "@/components/checkout/NowCryptoCheckout";
+import { SukukPayment } from "@/components/checkout/methods/SukukPayment";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -22,8 +23,9 @@ export type PaymentStatus = "idle" | "processing" | "success" | "failed";
 
 // Methods that are displayed but NOT wired to a real settlement yet. They must never
 // complete a purchase (the backend also rejects them); selecting one and trying to pay
-// shows an honest "use another method" message instead of charging.
-const UNWIRED_METHODS: PaymentMethod[] = ["apple_pay", "google_pay", "pronova", "sukuk"];
+// shows an honest "use another method" message instead of charging. ("sukuk" is now wired
+// as the admin-reviewed Nova-certificate flow; "balance" spends internal balance.)
+const UNWIRED_METHODS: PaymentMethod[] = ["apple_pay", "google_pay", "pronova"];
 const UNWIRED_MESSAGE = {
   en: "This payment method isn't available yet — please use Card, Crypto, or Pay from Balance.",
   ar: "طريقة الدفع هذه غير متاحة بعد — يرجى استخدام البطاقة أو العملة الرقمية أو الدفع من الرصيد.",
@@ -621,6 +623,28 @@ export default function Checkout() {
                       onResult={handlePspResult}
                     />
                   )}
+                  <Button
+                    variant="outline"
+                    size="xl"
+                    className="w-full"
+                    onClick={() => navigate(-1)}
+                    disabled={paymentStatus === "processing"}
+                  >
+                    {t("checkout.cancelPayment")}
+                  </Button>
+                </div>
+              ) : selectedMethod === "sukuk" && !isInstallment && user && kycApproved !== false ? (
+                /* Nova certificate (Sukuk): upload a PDF → PENDING investment awaiting admin
+                   review. No charge + no mint here; settlement is on admin approval. */
+                <div className="space-y-4">
+                  <SukukPayment
+                    propertyId={propertyId}
+                    tokenAmount={units}
+                    finalAmount={finalAmount}
+                    ready={termsAccepted && riskAccepted && !!property}
+                    onRouteToKyc={routeToKyc}
+                    onProcessing={() => setPaymentStatus("processing")}
+                  />
                   <Button
                     variant="outline"
                     size="xl"

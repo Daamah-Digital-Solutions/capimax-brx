@@ -42,6 +42,7 @@ import { CertificatesSection } from "@/components/portfolio/CertificatesSection"
 import { TokenHoldings } from "@/components/portfolio/TokenHoldings";
 import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard";
 import { ExitOptionsCard } from "@/components/portfolio/ExitOptionsCard";
+import { SukukReviewCard } from "@/components/portfolio/SukukReviewCard";
 import { useUserWallet } from "@/hooks/useUserWallet";
 import { useOwnershipTokens } from "@/hooks/useOwnershipTokens";
 import { useDistributions } from "@/hooks/useDistributions";
@@ -252,6 +253,11 @@ export default function Portfolio() {
 
             {/* Holdings Tab */}
             <TabsContent value="holdings" className="space-y-6">
+              {/* Nova certificate (sukuk) investments awaiting review / rejected — shown
+                  above holdings so a buyer sees their pending certificate even before it
+                  becomes a real holding. Renders nothing when there are none. */}
+              <SukukReviewCard />
+
               {/* Exit Options Card - Prominent display for eligible assets */}
               {filteredHoldings.some(h => h.exitEligible) && (
                 <ExitOptionsCard className="animate-fade-in" />

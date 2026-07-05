@@ -41,6 +41,12 @@ WEBHOOK_PAID_METHODS = {"card", "crypto"}
 BALANCE_METHOD = "balance"
 REINVESTMENT_SOURCE = "reinvestment"
 
+# Nova certificate (Sukuk) funding: the buyer uploads a certificate; settlement is gated
+# on ADMIN approval (apps.payments.sukuk_service), NOT a PSP webhook and NOT the simulated
+# auto-complete. So a sukuk buy is DEFERRED at creation (stays PENDING, no mint) exactly
+# like a card/crypto buy, then settled by approve_certificate → settle_investment.
+SUKUK_METHOD = "sukuk"
+
 
 class DuplicateInvestmentError(APIException):
     status_code = 409
@@ -256,12 +262,17 @@ def create_investment(
         # never pretend money moved.
         #
         # Other methods keep their interim SIMULATED behaviour this wave (no real PSP
-        # yet): marked completed to drive the flow. ⚠️ Still simulated — NOW Payments
-        # (crypto) is Wave 2; Pronova/Sukuk remain their manual flows.
+        # yet): marked completed to drive the flow. ⚠️ Still simulated — Apple/Google/
+        # Pronova remain their manual flows.
         # TODO(Payments Wave 2+): replace the simulated branch per method.
         # Installments are ALWAYS gated (real money; full-mint-then-lock on the webhook),
-        # so they never take the simulated auto-complete/auto-mint branch.
-        defer_payment = (payment_method in WEBHOOK_PAID_METHODS) or is_installment
+        # so they never take the simulated auto-complete/auto-mint branch. The Nova
+        # certificate (sukuk) is admin-gated → deferred here, settled on approval.
+        defer_payment = (
+            (payment_method in WEBHOOK_PAID_METHODS)
+            or is_installment
+            or payment_method == SUKUK_METHOD
+        )
         if not defer_payment:
             investment.payment_status = PaymentStatus.COMPLETED
             investment.save(update_fields=["payment_status", "updated_at"])
@@ -655,6 +666,25 @@ def mint_investment(investment: Investment) -> dict:
         "owner_credited": None if owner_net is None else str(owner_net),
         "broker_credited": None if broker_result is None else str(broker_result[1]),
     }
+
+
+def settle_investment(investment: Investment) -> dict:
+    """
+    Settle a COMPLETED buy: mark the investment `completed` (idempotent, row-locked) then
+    mint. This is the SINGLE shared settlement step every non-simulated rail funnels
+    through, so tokens, owner/broker credit, and the buyer-borne fee behave IDENTICALLY
+    regardless of how the money arrived:
+      * a confirmed PSP webhook/IPN  → apps.payments.services._complete_payment (card/crypto
+        buy + installment down-payment),
+      * an ADMIN-approved Nova certificate → apps.payments.sukuk_service.approve_certificate.
+    Returns `mint_investment`'s result (mint is itself idempotent + null-safe on no-wallet).
+    """
+    with transaction.atomic():
+        inv = Investment.objects.select_for_update().get(pk=investment.pk)
+        if inv.payment_status != PaymentStatus.COMPLETED:
+            inv.payment_status = PaymentStatus.COMPLETED
+            inv.save(update_fields=["payment_status", "updated_at"])
+    return mint_investment(inv)
 
 
 def record_acquisition_cost(

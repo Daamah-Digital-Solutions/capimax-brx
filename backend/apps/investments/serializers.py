@@ -13,10 +13,11 @@ from .models import Investment
 
 # Payment methods actually implemented + accepted. "card" (Stripe) and "crypto"
 # (NOWPayments) settle via a signed webhook; "balance" spends the investor's accrued
-# internal balance (no PSP; see investments.services.BALANCE_METHOD). Apple Pay /
-# Google Pay / Pronova / Sukuk are NOT wired (they would mark an investment completed
-# without a real charge), so they are rejected here until implemented.
-PAYMENT_METHODS = ["card", "crypto", "balance"]
+# internal balance (no PSP; see investments.services.BALANCE_METHOD); "sukuk" (the Nova
+# certificate) settles on ADMIN approval of an uploaded certificate (no PSP, no auto-
+# complete — see investments.services.SUKUK_METHOD). Apple Pay / Google Pay / Pronova are
+# NOT wired (they would mark an investment completed without a real charge) → rejected.
+PAYMENT_METHODS = ["card", "crypto", "balance", "sukuk"]
 
 
 class InvestmentCreateSerializer(serializers.Serializer):
@@ -66,6 +67,15 @@ class InvestmentSerializer(serializers.ModelSerializer):
     settlement_amount = serializers.DecimalField(
         max_digits=16, decimal_places=2, read_only=True
     )
+    # Nova certificate (sukuk) review state, so the checkout poll / portfolio can show
+    # "under review" or "rejected + reason". Null for non-sukuk buys.
+    sukuk = serializers.SerializerMethodField()
+
+    def get_sukuk(self, obj):
+        cert = getattr(obj, "sukuk_certificate", None)
+        if cert is None:
+            return None
+        return {"status": cert.status, "review_notes": cert.review_notes}
 
     class Meta:
         model = Investment
@@ -91,6 +101,8 @@ class InvestmentSerializer(serializers.ModelSerializer):
             # the token value, and the resulting total the buyer paid.
             "fee_amount",
             "settlement_amount",
+            # Nova certificate (sukuk) review state (null for other methods).
+            "sukuk",
             "created_at",
             "updated_at",
         )

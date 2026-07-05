@@ -325,8 +325,50 @@ export const investmentsApi = {
       tokens_minted: boolean;
       token_amount: number;
       token_symbol: string;
+      // Nova certificate (sukuk) review state (null for other methods).
+      sukuk?: { status: "pending" | "approved" | "rejected"; review_notes: string } | null;
     }>,
+  /**
+   * Nova certificate (sukuk): attach the PDF + optional reviewer metadata to a PENDING
+   * sukuk investment (multipart). Settlement is ADMIN-gated — this only submits for review
+   * (no charge, no mint).
+   */
+  uploadSukukCertificate: (
+    investmentId: string,
+    file: File,
+    meta?: { sukukId?: string; issuer?: string; claimedValue?: string; validityDate?: string },
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (meta?.sukukId) form.append("sukuk_id", meta.sukukId);
+    if (meta?.issuer) form.append("issuer", meta.issuer);
+    if (meta?.claimedValue) form.append("claimed_value", meta.claimedValue);
+    if (meta?.validityDate) form.append("validity_date", meta.validityDate);
+    return rawUpload(`/payments/sukuk/${investmentId}/certificate/`, form) as Promise<{
+      id: string;
+      investment_id: string;
+      status: string;
+    }>;
+  },
+  /**
+   * The caller's Nova certificate (sukuk) investments that aren't yet holdings — PENDING
+   * (certificate under review) or FAILED (rejected + reason). Approved ones appear as real
+   * token holdings instead.
+   */
+  sukukInvestments: () =>
+    rawRequest("/investments/sukuk/", { auth: true }) as Promise<SukukInvestmentRow[]>,
 };
+
+export interface SukukInvestmentRow {
+  id: string;
+  property_id: string;
+  property_name: string;
+  token_amount: number;
+  settlement_amount: number;
+  state: "under_review" | "rejected";
+  review_notes: string;
+  created_at: string;
+}
 
 // --------------------------------------------------------------------------- //
 // Payments API (Phase 5 Wave 1) — Stripe card. SPEC §6.

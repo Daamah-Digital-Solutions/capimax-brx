@@ -13,6 +13,7 @@ per-provider payment id is the idempotency anchor — a given payment mints exac
 """
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -112,3 +113,61 @@ class Payment(models.Model):
     def __str__(self):
         ref = self.stripe_payment_intent_id or self.nowpayments_payment_id or "(no-ref)"
         return f"{self.provider}:{ref} {self.amount}{self.currency} [{self.status}]"
+
+
+class SukukCertificate(models.Model):
+    """
+    A Nova / Sukuk certificate a buyer uploads to fund an investment — the manual,
+    admin-approved payment rail (DECISIONS.md "Nova / Pronova"). The PDF evidences an
+    off-platform, USD-pegged Nova instrument; on ADMIN approval the investment settles
+    exactly like any completed buy (sukuk_service.approve_certificate → settle_investment),
+    so tokens + owner/broker credit + the buyer-borne fee behave identically to card/crypto.
+
+    Amount authority: the investment's OWN economics settle (token_amount × price + the
+    buyer-borne fee, server-computed). `claimed_value` / `sukuk_id` / `issuer` /
+    `validity_date` are BUYER-SUPPLIED REVIEWER METADATA only — the admin verifies the
+    certificate covers the amount due; the user never dictates the settled amount.
+
+    File privacy: financial evidence — served ONLY via the self-scoped/staff-gated download
+    view (never public /media/), mirroring the KYC/KYB document vaults.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending review")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # One certificate per investment (its proof of funds).
+    investment = models.OneToOneField(
+        "investments.Investment", on_delete=models.CASCADE, related_name="sukuk_certificate"
+    )
+    file = models.FileField(upload_to="sukuk_certificates/%Y/%m/")
+    file_size = models.PositiveIntegerField(null=True, blank=True)
+    file_type = models.CharField(max_length=100, blank=True, default="")
+
+    # Reviewer metadata (buyer-supplied claims; NOT the settled amount).
+    sukuk_id = models.CharField(max_length=100, blank=True, default="")
+    issuer = models.CharField(max_length=200, blank=True, default="")
+    claimed_value = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
+    validity_date = models.DateField(null=True, blank=True)
+
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    review_notes = models.CharField(max_length=500, blank=True, default="")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("sukuk certificate")
+        verbose_name_plural = _("sukuk certificates")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"sukuk cert [{self.status}] for investment {self.investment_id}"

@@ -17,7 +17,7 @@ import logging
 from django.db import transaction
 
 from apps.investments.models import Investment, PaymentStatus
-from apps.investments.services import mint_investment
+from apps.investments.services import settle_investment
 
 from .models import Payment, PaymentState
 
@@ -97,12 +97,10 @@ def _complete_payment(payment: Payment) -> dict:
         is_installment_payoff = payment.is_installment_payoff
         investment_id = None
         if deposit_id is None and installment_payment_id is None:
-            # Down-payment / full purchase: complete the investment, mint below.
-            inv = payment.investment
-            if inv.payment_status != PaymentStatus.COMPLETED:
-                inv.payment_status = PaymentStatus.COMPLETED
-                inv.save(update_fields=["payment_status", "updated_at"])
-            investment_id = inv.pk
+            # Down-payment / full purchase: settled AFTER commit via the shared helper
+            # (mark completed + mint), so a PSP settlement and a Nova-certificate approval
+            # run the exact same path. Read the id here (plain column, no join).
+            investment_id = payment.investment_id
 
     # Side-effect AFTER commit. Every branch is itself idempotent (lock + status/flag
     # guard) and never fabricates a tx.
@@ -137,11 +135,11 @@ def _complete_payment(payment: Payment) -> dict:
     minted = False
     reason = None
     try:
-        result = mint_investment(Investment.objects.get(pk=investment_id))
+        result = settle_investment(Investment.objects.get(pk=investment_id))
         minted = bool(result.get("minted"))
         reason = result.get("reason")
-    except Exception:  # noqa: BLE001 - payment is recorded; mint can be retried
-        log.exception("Mint after payment failed for payment %s", payment.pk)
+    except Exception:  # noqa: BLE001 - payment is recorded; settlement can be retried
+        log.exception("Settlement after payment failed for payment %s", payment.pk)
 
     return {"processed": not already, "minted": minted, "reason": reason}
 

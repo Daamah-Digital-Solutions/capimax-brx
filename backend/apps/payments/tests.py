@@ -11,9 +11,11 @@ Covers the real-money safety constraints:
   * RAW CARD DATA never reaches the backend (no card fields on the model/serializer).
 """
 import json
+import tempfile
 from decimal import Decimal
 from unittest import mock
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -24,16 +26,24 @@ from apps.investments.services import create_investment
 from apps.kyc.services import get_or_create_kyc
 from apps.properties.models import Property, TokenMetadata
 from apps.properties.tests import _valid_property_kwargs
-from apps.wallets.models import OwnershipToken, UserWallet, WalletTransaction
+from apps.wallets.models import (
+    BalanceTransaction,
+    OwnershipToken,
+    UserWallet,
+    WalletTransaction,
+)
 from apps.wallets.services import get_or_create_custodial_wallet
 
 from . import nowpayments_service, stripe_service
-from .models import Payment, PaymentState
+from .models import Payment, PaymentState, SukukCertificate
 from .services import (
     get_or_create_payment,
     mark_payment_failed,
     process_successful_payment,
 )
+from .sukuk_service import approve_certificate, reject_certificate
+
+_SUKUK_MEDIA = tempfile.mkdtemp()
 
 _WEBHOOK_SECRET = "whsec_test_secret"
 _FAKE_TX = "0x" + "ef" * 32
@@ -485,3 +495,210 @@ class DepositTests(APITestCase):
         for bad in ("0", "-5", "abc", ""):
             resp = self.client.post("/api/payments/deposit/stripe/", {"amount": bad}, format="json")
             self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, bad)
+
+
+# --------------------------------------------------------------------------- #
+# Nova certificate (sukuk) — the manual, admin-approved payment rail.
+# --------------------------------------------------------------------------- #
+def _ledger_owned_property(owner, slug="sukuk-prop"):
+    """A published LEDGER property (no on-chain contract) owned by `owner`, default fees."""
+    p = Property(**_valid_property_kwargs(
+        slug=slug, model="ready", category="ready",
+        total_value=Decimal("5000000"), token_price=Decimal("100"), is_published=True,
+    ))
+    p.submitted_by = owner
+    p.save()  # default fees 1.5% + 0.5% = 2%; no TokenMetadata → ledger mint (no chain)
+    return p
+
+
+@override_settings(MEDIA_ROOT=_SUKUK_MEDIA)
+class SukukCertificateFlowTests(APITestCase):
+    """
+    Nova certificate (sukuk): create defers (PENDING, no mint); the buyer uploads a PDF;
+    admin approval SETTLES via the shared settle_investment (mint + owner credit + the
+    buyer-borne fee); rejection FAILS it (never mints) + notifies. Ledger property → the
+    mint needs no chain mock. Fees 2% → owner nets the full token value (Option A).
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-sk@ex.com", password="pw-12345-strong")
+        self.investor = _approved_user("inv-sk@ex.com")
+        get_or_create_custodial_wallet(self.investor)
+        self.prop = _ledger_owned_property(self.owner)
+
+    def _make_sukuk_investment(self, tokens=10):
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=tokens, payment_method="sukuk",
+        )
+        return res["investment"]
+
+    def _pdf(self, name="cert.pdf"):
+        return SimpleUploadedFile(name, b"%PDF-1.4 fake certificate", content_type="application/pdf")
+
+    def test_sukuk_create_defers_no_mint(self):
+        inv = self._make_sukuk_investment()
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)  # awaiting review
+        self.assertFalse(inv.tokens_minted)
+        self.assertEqual(inv.fee_amount, Decimal("20.00"))           # 2% of $1000
+        self.assertEqual(inv.settlement_amount, Decimal("1020.00"))  # value + fee
+        self.assertFalse(OwnershipToken.objects.filter(wallet__user=self.investor).exists())
+
+    def test_owner_uploads_certificate_stays_pending(self):
+        inv = self._make_sukuk_investment()
+        self.client.force_authenticate(self.investor)
+        resp = self.client.post(
+            f"/api/payments/sukuk/{inv.id}/certificate/",
+            {"file": self._pdf(), "sukuk_id": "NOVA-1", "issuer": "Nova Digital Finance",
+             "claimed_value": "1020"},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        cert = SukukCertificate.objects.get(investment=inv)
+        self.assertEqual(cert.status, SukukCertificate.Status.PENDING)
+        self.assertEqual(cert.sukuk_id, "NOVA-1")
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)  # upload never mints
+        self.assertFalse(inv.tokens_minted)
+
+    def test_upload_rejects_non_pdf(self):
+        inv = self._make_sukuk_investment()
+        self.client.force_authenticate(self.investor)
+        bad = SimpleUploadedFile("cert.txt", b"nope", content_type="text/plain")
+        resp = self.client.post(
+            f"/api/payments/sukuk/{inv.id}/certificate/", {"file": bad}, format="multipart"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(SukukCertificate.objects.filter(investment=inv).exists())
+
+    def test_upload_rejects_second_certificate(self):
+        inv = self._make_sukuk_investment()
+        SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        self.client.force_authenticate(self.investor)
+        resp = self.client.post(
+            f"/api/payments/sukuk/{inv.id}/certificate/", {"file": self._pdf()}, format="multipart"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+
+    def test_approve_settles_mints_and_credits_owner_full_value(self):
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        admin = User.objects.create_superuser(email="admin-sk@ex.com", password="pw-12345-strong")
+
+        result = approve_certificate(cert, admin)
+        self.assertTrue(result["approved"])
+        self.assertTrue(result["minted"])
+
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.COMPLETED)
+        self.assertTrue(inv.tokens_minted)
+        token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+        self.assertEqual(token.token_amount, 10)
+        # Buyer-borne fee (Option A): the owner is credited the FULL token value ($1000).
+        bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
+        self.assertEqual(bt.amount, Decimal("1000.00"))
+        cert.refresh_from_db()
+        self.assertEqual(cert.status, SukukCertificate.Status.APPROVED)
+        self.assertEqual(cert.reviewed_by, admin)
+        self.assertIsNotNone(cert.reviewed_at)
+
+    def test_reject_fails_investment_no_mint_and_notifies(self):
+        from apps.notifications.models import Notification
+
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(
+            investment=inv, file=self._pdf(), review_notes="Certificate could not be verified"
+        )
+        admin = User.objects.create_superuser(email="admin-sk2@ex.com", password="pw-12345-strong")
+
+        reject_certificate(cert, admin)
+
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.FAILED)
+        self.assertFalse(inv.tokens_minted)
+        self.assertFalse(OwnershipToken.objects.filter(wallet__user=self.investor).exists())
+        cert.refresh_from_db()
+        self.assertEqual(cert.status, SukukCertificate.Status.REJECTED)
+        self.assertTrue(
+            Notification.objects.filter(user=self.investor, type="sukuk_rejected").exists()
+        )
+
+    def test_approve_is_idempotent(self):
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        admin = User.objects.create_superuser(email="admin-sk3@ex.com", password="pw-12345-strong")
+
+        approve_certificate(cert, admin)
+        again = approve_certificate(cert, admin)
+        self.assertTrue(again.get("already"))
+        # No double-credit, no double-mint.
+        self.assertEqual(
+            BalanceTransaction.objects.filter(source="primary_sale", reference=str(inv.id)).count(), 1
+        )
+        token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+        self.assertEqual(token.token_amount, 10)
+
+    def test_reject_after_approve_does_not_downgrade(self):
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        admin = User.objects.create_superuser(email="admin-sk5@ex.com", password="pw-12345-strong")
+        approve_certificate(cert, admin)
+        res = reject_certificate(cert, admin)  # a settled cert must not be un-settled
+        self.assertTrue(res.get("already_approved"))
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.COMPLETED)  # still settled
+        self.assertTrue(inv.tokens_minted)
+
+    def test_non_owner_cannot_upload_or_download(self):
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        other = _approved_user("other-sk@ex.com")
+
+        # Upload against someone else's investment → 404 (not found for this user).
+        self.client.force_authenticate(other)
+        up = self.client.post(
+            f"/api/payments/sukuk/{inv.id}/certificate/", {"file": self._pdf()}, format="multipart"
+        )
+        self.assertEqual(up.status_code, status.HTTP_404_NOT_FOUND)
+        # Download someone else's certificate → 404 (don't reveal existence).
+        dl = self.client.get(f"/api/payments/sukuk/{cert.id}/file/")
+        self.assertEqual(dl.status_code, status.HTTP_404_NOT_FOUND)
+
+        # The owning buyer CAN download their own certificate.
+        self.client.force_authenticate(self.investor)
+        self.assertEqual(
+            self.client.get(f"/api/payments/sukuk/{cert.id}/file/").status_code, status.HTTP_200_OK
+        )
+        # A staff reviewer CAN download it.
+        admin = User.objects.create_superuser(email="admin-sk4@ex.com", password="pw-12345-strong")
+        self.client.force_authenticate(admin)
+        self.assertEqual(
+            self.client.get(f"/api/payments/sukuk/{cert.id}/file/").status_code, status.HTTP_200_OK
+        )
+
+    def test_sukuk_investments_list_reflects_state(self):
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        self.client.force_authenticate(self.investor)
+
+        # Under review while pending.
+        rows = self.client.get("/api/investments/sukuk/").data
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["state"], "under_review")
+        self.assertEqual(rows[0]["token_amount"], 10)
+        self.assertEqual(rows[0]["settlement_amount"], 1020.0)
+
+        # Rejected → shows with the reason.
+        admin = User.objects.create_superuser(email="admin-list@ex.com", password="pw-12345-strong")
+        reject_certificate(cert, admin, reason="Certificate could not be verified")
+        rows = self.client.get("/api/investments/sukuk/").data
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["state"], "rejected")
+        self.assertEqual(rows[0]["review_notes"], "Certificate could not be verified")
+
+    def test_sukuk_investments_list_excludes_approved(self):
+        inv = self._make_sukuk_investment()
+        cert = SukukCertificate.objects.create(investment=inv, file=self._pdf())
+        admin = User.objects.create_superuser(email="admin-list2@ex.com", password="pw-12345-strong")
+        approve_certificate(cert, admin)  # settles → a real holding, not a review row
+        self.client.force_authenticate(self.investor)
+        self.assertEqual(self.client.get("/api/investments/sukuk/").data, [])

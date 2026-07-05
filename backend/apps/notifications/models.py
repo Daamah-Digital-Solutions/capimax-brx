@@ -59,6 +59,9 @@ class Notification(models.Model):
         # Installments (Wave D). A plan defaulted (missed payment past grace): the investor
         # KEEPS their paid tokens; unpaid tokens are forfeited. params.kept/forfeited/property.
         INSTALLMENT_DEFAULTED = "installment_defaulted", _("Installment plan defaulted")
+        # Nova certificate (sukuk) payment rejected by the admin. params.property/slug/reason.
+        # (Approval reuses INVESTMENT_MINTED — the investment settles like any completed buy.)
+        SUKUK_REJECTED = "sukuk_rejected", _("Nova certificate rejected")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

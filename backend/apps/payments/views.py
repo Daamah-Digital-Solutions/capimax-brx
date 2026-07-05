@@ -13,9 +13,13 @@ Minting is gated on the signed webhook, never on a frontend success. Raw card da
 never reaches this server (Stripe Elements tokenises it in the browser).
 """
 import logging
+import os
 
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,7 +28,7 @@ from apps.core.permissions import KYCApprovedPermission
 from apps.investments.models import Investment, PaymentStatus
 
 from . import nowpayments_service, stripe_service
-from .models import Payment
+from .models import Payment, SukukCertificate
 from .services import (
     get_or_create_payment,
     mark_nowpayments_failed,
@@ -441,3 +445,115 @@ class NowPaymentsIpnView(APIView):
         # waiting / confirming / sending / partially_paid → no mint, just acknowledge.
 
         return Response({"ok": True})
+
+
+# --------------------------------------------------------------------------- #
+# Nova certificate (sukuk) — the manual, admin-approved payment rail. The buyer creates a
+# PENDING sukuk investment (POST /api/investments/ with payment_method="sukuk"), then
+# uploads the certificate here. Settlement is gated on ADMIN approval (Django admin →
+# sukuk_service.approve_certificate → settle_investment) — NEVER on this upload, NEVER a mint.
+# The PDF is PRIVATE: served only via the self-scoped / staff-gated download below (never
+# public /media/), mirroring the KYC/KYB document vaults.
+# --------------------------------------------------------------------------- #
+_SUKUK_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+_SUKUK_ALLOWED_EXT = {".pdf"}
+_SUKUK_ALLOWED_CT = {"application/pdf"}
+
+
+def _validate_certificate(upload):
+    """Return an error string if the upload is missing / oversize / not a PDF, else None."""
+    if upload is None:
+        return "A certificate PDF is required."
+    if upload.size and upload.size > _SUKUK_MAX_BYTES:
+        return f"File too large (max {_SUKUK_MAX_BYTES // (1024 * 1024)} MB)."
+    ext = os.path.splitext(upload.name or "")[1].lower()
+    if ext not in _SUKUK_ALLOWED_EXT:
+        return f"Disallowed file type '{ext or 'unknown'}'. Only PDF is accepted."
+    content_type = getattr(upload, "content_type", None)
+    if content_type and content_type not in _SUKUK_ALLOWED_CT:
+        return f"Disallowed content type '{content_type}'. Only PDF is accepted."
+    return None
+
+
+class SukukCertificateUploadView(APIView):
+    """
+    Attach the Nova/Sukuk certificate to the caller's OWN pending sukuk investment
+    (multipart). Self-scoped + KYC-gated (mirrors the buy flow). Creates the certificate
+    `pending` — it does NOT settle or mint; an admin reviews + approves later.
+
+      POST /api/payments/sukuk/<investment_id>/certificate/
+      multipart: file=<PDF>, [sukuk_id, issuer, claimed_value, validity_date]
+    """
+
+    permission_classes = [IsAuthenticated, KYCApprovedPermission]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, investment_id):
+        investment = get_object_or_404(Investment, pk=investment_id, user=request.user)
+        if investment.payment_method != "sukuk":
+            return Response(
+                {"detail": "This investment is not a Nova certificate purchase."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if investment.payment_status != PaymentStatus.PENDING:
+            return Response(
+                {"detail": "This investment is not awaiting a certificate."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if SukukCertificate.objects.filter(investment=investment).exists():
+            return Response(
+                {"detail": "A certificate has already been submitted for this investment."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        upload = request.FILES.get("file")
+        error = _validate_certificate(upload)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Optional reviewer metadata (buyer-supplied claims only; NOT the settled amount).
+        raw_value = request.data.get("claimed_value")
+        try:
+            claimed = Decimal(str(raw_value)).quantize(Decimal("0.01")) if raw_value else None
+        except (InvalidOperation, TypeError, ValueError):
+            claimed = None
+        validity = request.data.get("validity_date") or None
+
+        cert = SukukCertificate.objects.create(
+            investment=investment,
+            file=upload,
+            file_size=getattr(upload, "size", None),
+            file_type=getattr(upload, "content_type", "") or "",
+            sukuk_id=(request.data.get("sukuk_id") or "")[:100],
+            issuer=(request.data.get("issuer") or "")[:200],
+            claimed_value=claimed,
+            validity_date=validity if validity else None,
+        )
+        return Response(
+            {"id": str(cert.id), "investment_id": str(investment.id), "status": cert.status},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SukukCertificateDownloadView(APIView):
+    """
+    Stream a Nova certificate PDF. PRIVATE — only the owning buyer OR a staff reviewer may
+    fetch it (anyone else gets 404); certificates never live at a public /media/ URL.
+
+      GET /api/payments/sukuk/<cert_id>/file/
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, cert_id):
+        cert = get_object_or_404(
+            SukukCertificate.objects.select_related("investment"), pk=cert_id
+        )
+        if not (request.user.is_staff or cert.investment.user_id == request.user.id):
+            return Response(status=status.HTTP_404_NOT_FOUND)  # don't reveal existence
+        if not cert.file:
+            return Response({"detail": "No file."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(
+            cert.file.open("rb"), as_attachment=True,
+            filename=f"sukuk_certificate_{cert.investment_id}.pdf",
+        )

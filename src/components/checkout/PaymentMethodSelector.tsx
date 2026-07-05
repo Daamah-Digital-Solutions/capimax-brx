@@ -19,7 +19,6 @@ import { ApplePayButton } from "./methods/ApplePayButton";
 import { GooglePayButton } from "./methods/GooglePayButton";
 import { CryptoPayment } from "./methods/CryptoPayment";
 import { PronovaPayment } from "./methods/PronovaPayment";
-import { SukukPayment } from "./methods/SukukPayment";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PaymentMethodSelectorProps {
@@ -156,7 +155,13 @@ export function PaymentMethodSelector({
       case "pronova":
         return <PronovaPayment totalAmount={totalAmount} discount={pronovaDiscount} />;
       case "sukuk":
-        return <SukukPayment />;
+        return (
+          <p className="text-sm text-muted-foreground">
+            {language === "ar"
+              ? "ارفع شهادة نوفا (صكوك) بصيغة PDF أدناه لإتمام الاستثمار — يراجعها فريقنا يدويًا وتُصدر رموزك بعد الموافقة."
+              : "Upload your Nova certificate (Sukuk) PDF below to complete — our team reviews it manually and your tokens are issued once approved."}
+          </p>
+        );
       default:
         return null;
     }

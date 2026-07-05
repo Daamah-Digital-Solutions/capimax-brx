@@ -971,6 +971,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.installment_paid.body": "تم سداد القسط {sequence} من {total} لـ {property} — تم تحرير {released} من {tokens} رمز.",
     "notif.installment_defaulted.title": "تعثّرت خطة الأقساط",
     "notif.installment_defaulted.body": "تعثّرت خطة {property}: تحتفظ بـ {kept} رمز مدفوع، وتمت مصادرة {forfeited} رمز غير مدفوع.",
+    "notif.sukuk_rejected.title": "تم رفض شهادة نوفا",
+    "notif.sukuk_rejected.body": "تم رفض شهادة نوفا لعقار {property}. السبب: {reason}",
 
     // Support
     "support.title": "الدعم والمساعدة",
@@ -2409,6 +2411,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.installment_paid.body": "Installment {sequence} of {total} for {property} — {released} of {tokens} tokens released.",
     "notif.installment_defaulted.title": "Installment Plan Defaulted",
     "notif.installment_defaulted.body": "Your {property} plan defaulted: you keep {kept} paid tokens; {forfeited} unpaid tokens were forfeited.",
+    "notif.sukuk_rejected.title": "Nova Certificate Rejected",
+    "notif.sukuk_rejected.body": "Your Nova certificate for {property} was rejected. Reason: {reason}",
 
     // Support
     "support.title": "Support & Help",
