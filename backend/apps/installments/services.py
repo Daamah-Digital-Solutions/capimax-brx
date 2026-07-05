@@ -359,6 +359,42 @@ def settle_installment_payment(installment_payment_id) -> dict:
     }
 
 
+def settle_installment_payoff(anchor_installment_payment_id) -> dict:
+    """
+    EARLY PAYOFF — settle ALL still-unpaid installments of a plan at once.
+
+    Given the ANCHOR installment payment (the plan's first unpaid row, referenced by the
+    single payoff Payment), settle EVERY unpaid row (pending or missed) of its plan in
+    sequence order, reusing the per-installment settlement (`settle_installment_payment`)
+    for each. By the final row: total_paid == total ⇒ the position is fully unlocked and
+    the plan flips to `completed`; owner/broker are credited per row (each keyed on its own
+    InstallmentPayment id). Idempotent — a replayed webhook re-runs but every already-PAID
+    row no-ops. NO new mint, NO clawback — only locked→released movement.
+    """
+    anchor = InstallmentPayment.objects.get(pk=anchor_installment_payment_id)
+    unpaid_ids = list(
+        InstallmentPayment.objects.filter(
+            plan_id=anchor.plan_id,
+            status__in=[InstallmentPaymentStatus.PENDING, InstallmentPaymentStatus.MISSED],
+        )
+        .order_by("sequence")
+        .values_list("id", flat=True)
+    )
+    rows_settled = 0
+    last = None
+    for ip_id in unpaid_ids:
+        last = settle_installment_payment(ip_id)
+        if last.get("settled") and not last.get("already"):
+            rows_settled += 1
+    return {
+        "settled": True,
+        "rows_settled": rows_settled,
+        "released": last.get("released") if last else None,
+        "token_amount": last.get("token_amount") if last else None,
+        "plan_completed": bool(last and last.get("plan_completed")),
+    }
+
+
 def installment_locked_tokens(user_id, property_slug) -> int:
     """
     Tokens currently LOCKED (unpaid) across a holder's ACTIVE installment plans for one

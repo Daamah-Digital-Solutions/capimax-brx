@@ -30,7 +30,7 @@ class PaymentNotFound(Exception):
 
 def get_or_create_payment(
     investment: Investment, *, amount, currency: str, provider: str = "stripe",
-    installment_payment=None,
+    installment_payment=None, is_installment_payoff: bool = False,
 ) -> Payment:
     """
     Return the pending Payment for this investment + provider, creating one if needed.
@@ -39,11 +39,14 @@ def get_or_create_payment(
     `installment_payment` (Wave C) scopes the reuse to ONE scheduled installment: a normal
     purchase / down-payment passes None → the filter matches the historical NULL-FK rows
     (behaviour identical to before), while each installment gets its OWN pending Payment.
+    `is_installment_payoff` (early payoff) distinguishes a "pay everything remaining" charge
+    (anchored on the first unpaid row) from a single-installment charge on that same row.
     """
     existing = (
         Payment.objects.filter(
             investment=investment, provider=provider, status=PaymentState.PENDING,
             installment_payment=installment_payment,
+            is_installment_payoff=is_installment_payoff,
         )
         .order_by("-created_at")
         .first()
@@ -53,6 +56,7 @@ def get_or_create_payment(
     return Payment.objects.create(
         investment=investment, provider=provider, amount=amount, currency=currency,
         installment_payment=installment_payment,
+        is_installment_payoff=is_installment_payoff,
     )
 
 
@@ -90,6 +94,7 @@ def _complete_payment(payment: Payment) -> dict:
 
         deposit_id = payment.deposit_id
         installment_payment_id = payment.installment_payment_id
+        is_installment_payoff = payment.is_installment_payoff
         investment_id = None
         if deposit_id is None and installment_payment_id is None:
             # Down-payment / full purchase: complete the investment, mint below.
@@ -110,9 +115,17 @@ def _complete_payment(payment: Payment) -> dict:
     if installment_payment_id is not None:
         settled = False
         try:
-            from apps.installments.services import settle_installment_payment
+            # Early payoff settles EVERY remaining row (full unlock + complete); a normal
+            # per-installment charge settles only its own row. Both: progressive release +
+            # per-installment owner/broker credit, NO new mint (tokens minted on down-pay).
+            if is_installment_payoff:
+                from apps.installments.services import settle_installment_payoff
 
-            result = settle_installment_payment(installment_payment_id)
+                result = settle_installment_payoff(installment_payment_id)
+            else:
+                from apps.installments.services import settle_installment_payment
+
+                result = settle_installment_payment(installment_payment_id)
             settled = bool(result.get("settled"))
         except Exception:  # noqa: BLE001 - payment is recorded; settlement can be retried
             log.exception(

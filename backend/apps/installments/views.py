@@ -241,11 +241,13 @@ class PayNextInstallmentView(APIView):
             )
 
         if provider == "stripe":
-            return self._start_stripe(inv, ip)
-        return self._start_nowpayments(request, inv, ip)
+            return self._start_stripe(inv, ip, ip.amount)
+        return self._start_nowpayments(request, inv, ip, ip.amount)
 
-    # -- providers (mirror apps/payments/views.py, charging the installment amount) -- #
-    def _start_stripe(self, inv, ip):
+    # -- providers (mirror apps/payments/views.py, charging `amount` against `ip`) -- #
+    # `amount` is one installment for pay-next, or the SUM of all remaining rows for a
+    # payoff; `is_payoff` flags the Payment so the webhook settles every remaining row.
+    def _start_stripe(self, inv, ip, amount, is_payoff=False):
         if not stripe_service.is_configured():
             return Response(
                 {"configured": False, "code": "stripe_unconfigured",
@@ -253,17 +255,18 @@ class PayNextInstallmentView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         payment = get_or_create_payment(
-            inv, amount=ip.amount, currency="usd", provider="stripe",
-            installment_payment=ip,
+            inv, amount=amount, currency="usd", provider="stripe",
+            installment_payment=ip, is_installment_payoff=is_payoff,
         )
         try:
             intent = stripe_service.create_payment_intent(
-                amount=ip.amount,
+                amount=amount,
                 currency=payment.currency,
                 metadata={
                     "investment_id": str(inv.id),
                     "payment_id": str(payment.id),
                     "installment_payment_id": str(ip.id),
+                    "installment_payoff": "1" if is_payoff else "0",
                 },
             )
         except stripe_service.StripeError:
@@ -280,10 +283,11 @@ class PayNextInstallmentView(APIView):
             "payment_id": str(payment.id),
             "installment_payment_id": str(ip.id),
             "sequence": ip.sequence,
-            "amount": str(ip.amount),
+            "amount": str(amount),
+            "payoff": is_payoff,
         })
 
-    def _start_nowpayments(self, request, inv, ip):
+    def _start_nowpayments(self, request, inv, ip, amount, is_payoff=False):
         pay_currency = (request.data.get("pay_currency") or "").strip().lower()
         if not pay_currency:
             return Response(
@@ -297,13 +301,13 @@ class PayNextInstallmentView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         payment = get_or_create_payment(
-            inv, amount=ip.amount, currency="usd", provider="nowpayments",
-            installment_payment=ip,
+            inv, amount=amount, currency="usd", provider="nowpayments",
+            installment_payment=ip, is_installment_payoff=is_payoff,
         )
         ipn_url = request.build_absolute_uri(reverse("payments:nowpayments-ipn"))
         try:
             created = nowpayments_service.create_payment(
-                price_amount=ip.amount,
+                price_amount=amount,
                 price_currency="usd",
                 pay_currency=pay_currency,
                 order_id=str(payment.id),
@@ -330,5 +334,66 @@ class PayNextInstallmentView(APIView):
             "pay_currency": created["pay_currency"],
             "installment_payment_id": str(ip.id),
             "sequence": ip.sequence,
-            "amount": str(ip.amount),
+            "amount": str(amount),
+            "payoff": is_payoff,
         })
+
+
+class PayoffInstallmentView(PayNextInstallmentView):
+    """
+    EARLY PAYOFF — start a single GATED charge for ALL remaining installments of an ACTIVE
+    plan (Stripe or NOW). Reuses the pay-next provider machinery, but charges the SUM of the
+    plan's unpaid rows in one payment, anchored on the FIRST unpaid row and flagged as a
+    payoff. On the confirmed webhook/IPN the shared core routes to `settle_installment_payoff`
+    (settle every remaining row → full unlock + complete the plan) — NO new mint.
+
+      POST /api/installments/plans/<plan_id>/pay-off/
+      body: { "provider": "stripe" | "nowpayments", "pay_currency": "<for crypto>" }
+    """
+
+    def post(self, request, plan_id):
+        provider = (request.data.get("provider") or "stripe").strip().lower()
+        if provider not in ("stripe", "nowpayments"):
+            return Response(
+                {"detail": "provider must be 'stripe' or 'nowpayments'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            plan = InstallmentPlan.objects.get(id=plan_id, investor=request.user)
+        except (InstallmentPlan.DoesNotExist, ValueError, Exception):
+            return Response(
+                {"detail": "Installment plan not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        if plan.status != InstallmentPlanStatus.ACTIVE:
+            return Response(
+                {"detail": "This plan is not active yet (the down-payment must clear first)."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ALL unpaid rows (pending or missed), earliest first. The first is the anchor; the
+        # charge is their exact cent-summed total (the final row may carry the rounding cent).
+        unpaid = list(
+            plan.payments.filter(
+                status__in=[InstallmentPaymentStatus.PENDING, InstallmentPaymentStatus.MISSED]
+            ).order_by("sequence")
+        )
+        if not unpaid:
+            return Response(
+                {"detail": "No installments remain on this plan."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        anchor = unpaid[0]
+        total = sum((Decimal(p.amount) for p in unpaid), Decimal("0"))
+
+        inv = plan.investments.order_by("created_at").first()
+        if inv is None or not inv.tokens_minted:
+            return Response(
+                {"detail": "The plan position has not been minted yet."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if provider == "stripe":
+            return self._start_stripe(inv, anchor, total, is_payoff=True)
+        return self._start_nowpayments(request, inv, anchor, total, is_payoff=True)

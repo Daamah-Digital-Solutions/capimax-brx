@@ -61,6 +61,15 @@ class Payment(models.Model):
         blank=True,
         related_name="payments",
     )
+    # Early payoff (Installments): when True — with `installment_payment` set to the plan's
+    # FIRST still-pending row as the anchor — this ONE charge funds ALL remaining
+    # installments at once (amount = sum of the pending rows). On the confirmed webhook the
+    # gated core routes it to `settle_installment_payoff` (settle EVERY pending row →
+    # progressive release to full unlock + complete the plan) instead of settling a single
+    # installment. A normal per-installment charge leaves this False and settles only its
+    # own row. NO new mint, NO clawback — only locked→released movement, exactly like a
+    # per-installment settlement, just for all remaining rows in one atomic block.
+    is_installment_payoff = models.BooleanField(default=False)
     provider = models.CharField(
         max_length=16, choices=PaymentProvider.choices, default=PaymentProvider.STRIPE
     )

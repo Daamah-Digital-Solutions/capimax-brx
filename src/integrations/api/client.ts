@@ -1348,6 +1348,18 @@ export const installmentsApi = {
       auth: true,
       body: { provider, ...(payCurrency ? { pay_currency: payCurrency } : {}) },
     }) as Promise<PayNextResult>,
+  /**
+   * Early payoff: start ONE gated charge for ALL remaining installments of the plan. Same
+   * Stripe/NOW shape as payNext (`amount` is the summed remainder). On the confirmed
+   * webhook/IPN the server settles every remaining row → full unlock + completes the plan;
+   * there is NO new mint.
+   */
+  payoff: (planId: string, provider: "stripe" | "nowpayments", payCurrency?: string) =>
+    rawRequest(`/installments/plans/${planId}/pay-off/`, {
+      method: "POST",
+      auth: true,
+      body: { provider, ...(payCurrency ? { pay_currency: payCurrency } : {}) },
+    }) as Promise<PayNextResult>,
 };
 
 // --------------------------------------------------------------------------- //

@@ -56,6 +56,8 @@ export interface InstallmentPayDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called once the installment is confirmed settled (the page refetches). */
   onPaid: () => void;
+  /** "next" (default) charges the next due installment; "payoff" clears ALL remaining. */
+  mode?: "next" | "payoff";
 }
 
 const CRYPTO_OPTIONS = [
@@ -72,6 +74,13 @@ const POLL_MAX_TRIES = 20; // ~60s for the webhook/IPN to confirm + settle
 function nextDueAmount(plan: InstallmentPlanRow): number {
   const row = plan.payments.find((p) => p.type === "installment" && p.status === "pending");
   return row ? row.amount : plan.installmentAmount;
+}
+
+/** Early payoff total = the sum of every still-unpaid installment row. */
+function remainingInstallmentTotal(plan: InstallmentPlanRow): number {
+  return plan.payments
+    .filter((p) => p.type === "installment" && (p.status === "pending" || p.status === "missed"))
+    .reduce((sum, p) => sum + p.amount, 0);
 }
 
 /** Poll the plans list until THIS plan's paid-installment count grows past `startPaid`. */
@@ -103,8 +112,10 @@ function CardForm(props: InstallmentPayDialogProps & { amount: number }) {
     setBusy(true);
     try {
       const startPaid = props.plan.paidInstallments;
-      // 1) Start the gated charge for the next due installment.
-      const res = await installmentsApi.payNext(props.plan.id, "stripe");
+      // 1) Start the gated charge — the next due installment, or ALL remaining (payoff).
+      const res = await (props.mode === "payoff"
+        ? installmentsApi.payoff(props.plan.id, "stripe")
+        : installmentsApi.payNext(props.plan.id, "stripe"));
       if (res.provider !== "stripe") return;
       // 2) Confirm the card DIRECTLY with Stripe (card data never hits our server).
       const card = elements.getElement(CardElement);
@@ -259,7 +270,9 @@ function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
     setNotConfigured(false);
     try {
       const startPaid = props.plan.paidInstallments;
-      const res = await installmentsApi.payNext(props.plan.id, "nowpayments", option.code);
+      const res = await (props.mode === "payoff"
+        ? installmentsApi.payoff(props.plan.id, "nowpayments", option.code)
+        : installmentsApi.payNext(props.plan.id, "nowpayments", option.code));
       if (res.provider !== "nowpayments") return;
       setPay(res);
       const ok = await pollUntilPaid(props.plan.id, startPaid);
@@ -386,7 +399,8 @@ function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
 export function InstallmentPayDialog(props: InstallmentPayDialogProps) {
   const { language } = useLanguage();
   const isArabic = language === "ar";
-  const amount = nextDueAmount(props.plan);
+  const isPayoff = props.mode === "payoff";
+  const amount = isPayoff ? remainingInstallmentTotal(props.plan) : nextDueAmount(props.plan);
   const remainingTokens =
     props.plan.tokenAmount != null && props.plan.releasedTokens != null
       ? props.plan.tokenAmount - props.plan.releasedTokens
@@ -396,7 +410,11 @@ export function InstallmentPayDialog(props: InstallmentPayDialogProps) {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isArabic ? "سداد القسط" : "Pay installment"}</DialogTitle>
+          <DialogTitle>
+            {isPayoff
+              ? isArabic ? "سداد كامل المتبقي" : "Pay off remaining"
+              : isArabic ? "سداد القسط" : "Pay installment"}
+          </DialogTitle>
           <DialogDescription>
             {isArabic ? props.plan.property : props.plan.propertyEn} — ${amount.toLocaleString()}
           </DialogDescription>

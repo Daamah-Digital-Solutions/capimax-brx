@@ -43,6 +43,7 @@ export default function Installments() {
   const { exporting, run } = useExport();
   const [filter, setFilter] = useState("all");
   const [payPlan, setPayPlan] = useState<InstallmentPlanRow | null>(null);
+  const [payMode, setPayMode] = useState<"next" | "payoff">("next");
 
   const stats = data?.stats;
   const plans = data?.plans ?? [];
@@ -331,10 +332,21 @@ export default function Installments() {
                                   <div className="text-sm text-muted-foreground">{plan.nextDueDate}</div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-3">
                                 <div className="text-right">
                                   <div className="text-xl font-bold text-foreground">${plan.installmentAmount.toLocaleString()}</div>
                                 </div>
+                                {/* Early payoff: clear ALL remaining installments in one charge
+                                    (only worth showing when more than one remains). */}
+                                {plan.status === "active" && plan.remainingInstallments > 1 && (
+                                  <Button
+                                    variant="outline"
+                                    className="gap-2"
+                                    onClick={() => { setPayMode("payoff"); setPayPlan(plan); }}
+                                  >
+                                    {language === "ar" ? "سداد الكل" : "Pay off"}
+                                  </Button>
+                                )}
                                 <Button
                                   variant="hero"
                                   className="gap-2"
@@ -346,7 +358,7 @@ export default function Installments() {
                                         : "Available once the down-payment confirms"
                                       : undefined
                                   }
-                                  onClick={() => setPayPlan(plan)}
+                                  onClick={() => { setPayMode("next"); setPayPlan(plan); }}
                                 >
                                   <CreditCard className="w-4 h-4" />
                                   {t("installments.payNow")}
@@ -369,6 +381,7 @@ export default function Installments() {
         <InstallmentPayDialog
           plan={payPlan}
           open={!!payPlan}
+          mode={payMode}
           onOpenChange={(o) => !o && setPayPlan(null)}
           onPaid={refresh}
         />

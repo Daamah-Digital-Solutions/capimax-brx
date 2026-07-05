@@ -1,7 +1,11 @@
 """Installments routes — mounted at /api/installments/ (see config/urls.py). Wave A + C."""
 from django.urls import path
 
-from .views import InstallmentPlansView, PayNextInstallmentView
+from .views import (
+    InstallmentPlansView,
+    PayNextInstallmentView,
+    PayoffInstallmentView,
+)
 
 app_name = "installments"
 
@@ -13,5 +17,11 @@ urlpatterns = [
         "plans/<uuid:plan_id>/pay-next/",
         PayNextInstallmentView.as_view(),
         name="installment-pay-next",
+    ),
+    # Early payoff: one gated charge for ALL remaining installments → full unlock + complete.
+    path(
+        "plans/<uuid:plan_id>/pay-off/",
+        PayoffInstallmentView.as_view(),
+        name="installment-pay-off",
     ),
 ]
