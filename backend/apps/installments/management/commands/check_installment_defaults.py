@@ -8,14 +8,19 @@ any plan whose earliest unpaid installment is overdue by MORE than the grace per
 NOTHING (services.default_plan). SAFE TO RUN REPEATEDLY — an already-defaulted plan is a
 no-op (no double-forfeit).
 
-This command HOLDS the detection logic and is run manually / in tests today. SCHEDULING it
-to run daily (cron / Celery beat) is a PRODUCTION-DEPLOY concern — NOT wired here (see
-DECISIONS.md "Installments" deploy items), exactly like the provider keys / mainnet audit.
+TRIGGER (deliberate + safe): this is a MANUAL, gated management command. It is NOT wired to
+any auto-scheduler — nothing forfeits tokens on its own. Because the apply path is
+DESTRUCTIVE (forfeits unpaid tokens), it refuses to write unless you pass `--yes`; run with
+no flags to PREVIEW exactly which plans would default (writes nothing). Scheduling it (cron /
+systemd-timer / Celery beat calling it with `--yes`) is a conscious PRODUCTION-DEPLOY
+decision — see DECISIONS.md "Installments" — not something this code does silently.
 
 Usage:
-  python manage.py check_installment_defaults
-  python manage.py check_installment_defaults --grace-days 14
-  python manage.py check_installment_defaults --today 2026-09-01 --dry-run
+  python manage.py check_installment_defaults                     # PREVIEW (no writes)
+  python manage.py check_installment_defaults --dry-run           # PREVIEW (explicit)
+  python manage.py check_installment_defaults --yes               # APPLY (mark missed + default)
+  python manage.py check_installment_defaults --yes --grace-days 14
+  python manage.py check_installment_defaults --today 2026-09-01  # PREVIEW at a date
 """
 from datetime import date
 
@@ -34,6 +39,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--yes", action="store_true",
+            help="APPLY the sweep (mark overdue missed + default plans past grace, forfeiting "
+                 "unpaid tokens). WITHOUT this flag the command only PREVIEWS — it writes nothing.",
+        )
+        parser.add_argument(
             "--grace-days", type=int, default=None,
             help="Overdue-days grace before default (default: settings.INSTALLMENT_DEFAULT_GRACE_DAYS).",
         )
@@ -43,7 +53,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--dry-run", action="store_true",
-            help="Report what WOULD default without changing anything.",
+            help="Force preview even with --yes (report what WOULD default; change nothing).",
         )
 
     def handle(self, *args, **opts):
@@ -60,13 +70,20 @@ class Command(BaseCommand):
             except ValueError:
                 raise CommandError("--today must be an ISO date (YYYY-MM-DD).")
 
-        dry_run = opts["dry_run"]
+        # SAFE BY DEFAULT: only --yes (and not --dry-run) actually writes. Any other
+        # invocation previews what WOULD default and forfeits nothing — so a stray/scheduled
+        # run without the explicit flag can never silently destroy tokens.
+        apply = bool(opts["yes"]) and not opts["dry_run"]
 
-        if dry_run:
+        if not apply:
             ids = find_defaultable_plan_ids(grace_days, today)
             self.stdout.write(
-                f"[dry-run] grace_days={grace_days} → {len(ids)} plan(s) would default: "
+                f"[preview] grace_days={grace_days} -> {len(ids)} plan(s) would default: "
                 + (", ".join(str(i) for i in ids) or "(none)")
+            )
+            self.stdout.write(
+                "No changes written. Re-run with --yes to APPLY "
+                "(destructive: forfeits unpaid tokens)."
             )
             return
 

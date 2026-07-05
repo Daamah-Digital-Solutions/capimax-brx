@@ -302,6 +302,175 @@ class WaveBDownPaymentTests(TestCase):
         self.assertEqual(listing.token_amount, 3)
 
 
+class FeesBuyerBorneTests(TestCase):
+    """
+    Option A (buyer-borne fees): the platform + management fee (admin rates) is charged to
+    the BUYER on top of the token value (settlement_amount = charge + fee), and the OWNER
+    receives the FULL token value (no fee carved out). Same for a normal buy and an
+    installment (the full fee is charged once, with the down-payment).
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-fee@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-fee@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        # 10000 value / 100 price → supply 100. DEFAULT fees 1.5% + 0.5% = 2% (fees0=False).
+        self.prop = _deployed_installment_property("inst-fee", self.owner, fees0=False)
+
+    def test_fee_amount_for_uses_admin_rates(self):
+        from apps.investments.services import fee_amount_for
+
+        # base 1000 → 1.5% (15.00) + 0.5% (5.00) = 20.00, each quantised to cents then summed.
+        self.assertEqual(fee_amount_for(self.prop, Decimal("1000")), Decimal("20.00"))
+        # a zero-fee property adds nothing.
+        self.prop.fee_platform = Decimal("0")
+        self.prop.fee_management = Decimal("0")
+        self.assertEqual(fee_amount_for(self.prop, Decimal("1000")), Decimal("0.00"))
+
+    def test_normal_buy_settlement_is_value_plus_fee_owner_gets_full(self):
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
+        )
+        inv = res["investment"]
+        self.assertFalse(inv.is_installment)
+        self.assertEqual(inv.amount_invested, Decimal("1000.00"))     # token value only
+        self.assertEqual(inv.fee_amount, Decimal("20.00"))            # 2% buyer-borne fee
+        self.assertEqual(inv.settlement_amount, Decimal("1020.00"))   # what the BUYER pays
+        _confirm_and_mint(inv)
+        bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
+        self.assertEqual(bt.amount, Decimal("1000.00"))              # owner gets the FULL value
+
+    def test_installment_charges_down_plus_full_fee_owner_full(self):
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        inv = res["investment"]
+        self.assertEqual(inv.amount_invested, Decimal("1000.00"))     # full token value
+        self.assertEqual(inv.fee_amount, Decimal("20.00"))           # full 2% fee (on the base)
+        self.assertEqual(inv.down_payment_amount, Decimal("300.00")) # 30% of 1000
+        self.assertEqual(inv.charge_amount, Decimal("300.00"))       # owner/credit + release basis
+        self.assertEqual(inv.settlement_amount, Decimal("320.00"))   # buyer pays down + FULL fee
+        _confirm_and_mint(inv)
+        # owner credited the full down-payment token value (no fee carve).
+        bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
+        self.assertEqual(bt.amount, Decimal("300.00"))
+
+    def test_balance_reinvest_debits_value_plus_fee(self):
+        from apps.wallets.services import credit_user_balance
+
+        # A ledger (non-deployed) property so the auto-mint needs no chain mock.
+        ledger = Property(**_valid_property_kwargs(
+            slug="ledger-fee", model="ready", category="ready",
+            total_value=Decimal("10000"), token_price=Decimal("100"), is_published=True,
+        ))
+        ledger.submitted_by = self.owner
+        ledger.save()  # DEFAULT fees 1.5% + 0.5% = 2%; no TokenMetadata → ledger mint
+        credit_user_balance(self.investor, Decimal("2000"), source="deposit", reference="seed-fee")
+
+        res = create_investment(
+            user=self.investor, prop=ledger, token_amount=10, payment_method="balance",
+        )
+        inv = res["investment"]
+        # Buyer pays value + fee (1000 + 20) from balance.
+        debit = BalanceTransaction.objects.get(source="reinvestment", reference=str(inv.id))
+        self.assertEqual(debit.amount, Decimal("1020.00"))
+        # Owner still credited the FULL token value.
+        bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
+        self.assertEqual(bt.amount, Decimal("1000.00"))
+
+
+class InstallmentEarlyPayoffTests(TestCase):
+    """
+    Early payoff: ONE charge settles ALL remaining installments → full unlock + completed.
+    $1000 @ 30% down, 3 monthly, 10 tokens, fees 0. Down → 3 released / 7 locked.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-pay@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-pay@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+        self.prop = _deployed_installment_property("inst-pay", self.owner)
+        res = create_investment(
+            user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        self.inv = res["investment"]
+        _confirm_and_mint(self.inv)
+        self.plan = self.inv.installment_plan
+        self.rows = list(InstallmentPayment.objects.filter(plan=self.plan).order_by("sequence"))
+
+    def _token(self):
+        return OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
+
+    def test_payoff_settles_all_remaining_and_completes(self):
+        from .services import settle_installment_payoff
+
+        res = settle_installment_payoff(self.rows[0].id)  # anchor on first pending
+        self.assertTrue(res["settled"])
+        self.assertEqual(res["rows_settled"], 3)
+        self.assertTrue(res["plan_completed"])
+
+        token = self._token()
+        self.assertEqual(token.locked_amount, 0)          # fully unlocked
+        self.assertEqual(token.available_amount, 10)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.COMPLETED)
+        self.assertEqual(
+            InstallmentPayment.objects.filter(
+                plan=self.plan, status=InstallmentPaymentStatus.PAID
+            ).count(), 3,
+        )
+        # owner credited on down + all 3 installments == the full $1000.
+        credits = BalanceTransaction.objects.filter(balance__user=self.owner, source="primary_sale")
+        self.assertEqual(sum((c.amount for c in credits), Decimal("0")), Decimal("1000.00"))
+
+    def test_payoff_after_one_installment_paid_no_double(self):
+        from .services import settle_installment_payoff
+
+        settle_installment_payment(self.rows[0].id)  # 5 released / 5 locked
+        res = settle_installment_payoff(self.rows[1].id)  # pay off the remaining two
+        self.assertEqual(res["rows_settled"], 2)
+        self.assertTrue(res["plan_completed"])
+        self.assertEqual(self._token().locked_amount, 0)
+        # No double-count: still exactly 4 owner tranches (down + 3), total $1000.
+        credits = BalanceTransaction.objects.filter(balance__user=self.owner, source="primary_sale")
+        self.assertEqual(credits.count(), 4)
+        self.assertEqual(sum((c.amount for c in credits), Decimal("0")), Decimal("1000.00"))
+
+    def test_payoff_via_gated_core_routes_to_payoff_not_single(self):
+        from apps.payments.models import Payment, PaymentState
+        from apps.payments.services import _complete_payment
+
+        total = sum((r.amount for r in self.rows), Decimal("0"))
+        payment = Payment.objects.create(
+            investment=self.inv, provider="stripe", amount=total, currency="usd",
+            installment_payment=self.rows[0], is_installment_payoff=True,
+            stripe_payment_intent_id="pi_payoff_1",
+        )
+        mint_before = WalletTransaction.objects.filter(tx_type="mint").count()
+        out = _complete_payment(payment)
+        self.assertTrue(out["settled"])
+        self.assertFalse(out["minted"])
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentState.SUCCEEDED)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.COMPLETED)
+        self.assertEqual(self._token().locked_amount, 0)      # fully unlocked
+        # NO new mint on payoff (tokens minted on the down-payment).
+        self.assertEqual(WalletTransaction.objects.filter(tx_type="mint").count(), mint_before)
+
+    def test_payoff_replay_is_idempotent(self):
+        from .services import settle_installment_payoff
+
+        settle_installment_payoff(self.rows[0].id)
+        # Replay → every row already PAID → no-op, no extra credits, still complete.
+        res2 = settle_installment_payoff(self.rows[0].id)
+        self.assertEqual(res2["rows_settled"], 0)
+        credits = BalanceTransaction.objects.filter(balance__user=self.owner, source="primary_sale")
+        self.assertEqual(credits.count(), 4)  # down + 3, not doubled
+
+
 class WaveBFullPurchaseUnchangedTests(TestCase):
     """Regression guard: a NORMAL buy still mints FULLY UNLOCKED + credits on full gross."""
 
@@ -602,7 +771,7 @@ class WaveDDefaultForfeitureTests(TestCase):
     def test_default_past_grace_forfeits_locked_keeps_released(self):
         self._backdate(400)  # all installments long overdue (past the 30-day grace)
         before_avail = available_tokens(self.prop)
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
 
         self.plan.refresh_from_db()
         self.assertEqual(self.plan.status, InstallmentPlanStatus.DEFAULTED)
@@ -630,9 +799,27 @@ class WaveDDefaultForfeitureTests(TestCase):
         )
         self.assertEqual(statuses, {InstallmentPaymentStatus.CANCELLED})
 
+    def test_preview_without_yes_never_forfeits(self):
+        # SAFE DEFAULT: no --yes → preview only, writes NOTHING even when far past grace.
+        self._backdate(400)
+        before_avail = available_tokens(self.prop)
+        call_command("check_installment_defaults")               # preview (no flag)
+        call_command("check_installment_defaults", "--dry-run")  # explicit preview
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, InstallmentPlanStatus.ACTIVE)  # NOT defaulted
+        self.assertEqual(self.plan.forfeited_tokens, 0)
+        self.assertEqual(self._token().token_amount, 10)         # nothing forfeited
+        self.assertEqual(available_tokens(self.prop), before_avail)
+        # Preview writes nothing — not even the overdue→missed bookkeeping.
+        self.assertFalse(
+            InstallmentPayment.objects.filter(
+                plan=self.plan, status=InstallmentPaymentStatus.MISSED
+            ).exists()
+        )
+
     def test_within_grace_not_defaulted(self):
         self._backdate(5)  # overdue (missed) but inside the 30-day grace
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
         self.plan.refresh_from_db()
         self.assertEqual(self.plan.status, InstallmentPlanStatus.ACTIVE)
         self.assertEqual(self._token().locked_amount, 7)  # nothing forfeited
@@ -645,13 +832,13 @@ class WaveDDefaultForfeitureTests(TestCase):
 
     def test_idempotent_rerun_no_double_forfeit(self):
         self._backdate(400)
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
         token_after_first = self._token()
         self.assertEqual(token_after_first.token_amount, 3)
         avail_after_first = available_tokens(self.prop)
 
         # Re-run → already defaulted → no-op (no double-forfeit, no extra supply freed).
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
         res = default_plan(self.plan.id)  # direct re-call too
         self.assertTrue(res.get("already"))
         self.plan.refresh_from_db()
@@ -661,7 +848,7 @@ class WaveDDefaultForfeitureTests(TestCase):
 
     def test_on_time_plan_untouched(self):
         # Default schedule due-dates are in the FUTURE → nothing is overdue.
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
         self.plan.refresh_from_db()
         self.assertEqual(self.plan.status, InstallmentPlanStatus.ACTIVE)
         self.assertEqual(self._token().locked_amount, 7)
@@ -680,7 +867,7 @@ class WaveDDefaultForfeitureTests(TestCase):
         InstallmentPayment.objects.filter(plan=self.plan).update(
             due_date=self.today - timedelta(days=400)
         )
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
         self.plan.refresh_from_db()
         self.assertEqual(self.plan.status, InstallmentPlanStatus.COMPLETED)
         self.assertEqual(self._token().token_amount, 10)  # fully owned, nothing forfeited
@@ -690,7 +877,7 @@ class WaveDDefaultForfeitureTests(TestCase):
         from apps.wallets.models import UserBalance
 
         self._backdate(400)
-        call_command("check_installment_defaults")  # kept 3, forfeited 7
+        call_command("check_installment_defaults", "--yes")  # kept 3, forfeited 7
 
         # A normal full holder (7 tokens) of the same property.
         b = User.objects.create_user(email="b-wd@example.com", password="pw12345!")
@@ -735,7 +922,7 @@ class WaveDFullPurchaseUnaffectedTests(TestCase):
         )
         inv = res["investment"]
         _confirm_and_mint(inv)
-        call_command("check_installment_defaults")
+        call_command("check_installment_defaults", "--yes")
         token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
         self.assertEqual(token.token_amount, 10)
         self.assertEqual(token.locked_amount, 0)
