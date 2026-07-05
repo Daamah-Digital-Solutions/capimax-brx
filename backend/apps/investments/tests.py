@@ -120,6 +120,59 @@ class TokenEconomicsTests(TestCase):
         with self.assertRaises(DuplicateInvestmentError):
             create_investment(user=self.user, prop=prop, token_amount=1, payment_method="card")
 
+    def test_stale_inflight_expired_allows_retry(self):
+        """An abandoned card/crypto in-flight past the threshold is expired to FAILED on the
+        next create, so a retry for the same (user, property) succeeds instead of 500ing."""
+        prop = _make_property("pstale", total_value=1_000_000, token_price=100)
+        stale = Investment.objects.create(
+            user=self.user, property=prop, property_name=prop.name,
+            amount_invested=Decimal("100"), token_amount=1, token_symbol="BRXPSTALE",
+            price_per_token=Decimal("100"), ownership_percentage=Decimal("0.002"),
+            payment_method="card", payment_status=PaymentStatus.PENDING,
+        )
+        # Backdate past the 30-minute threshold (created_at is auto_now_add).
+        Investment.objects.filter(pk=stale.pk).update(
+            created_at=timezone.now() - timezone.timedelta(minutes=45)
+        )
+        res = create_investment(user=self.user, prop=prop, token_amount=1, payment_method="card")
+        self.assertEqual(res["investment"].payment_status, PaymentStatus.PENDING)  # the new one
+        stale.refresh_from_db()
+        self.assertEqual(stale.payment_status, PaymentStatus.FAILED)  # abandoned → expired
+
+    def test_sukuk_inflight_is_never_expired(self):
+        """A sukuk (admin-reviewed) PENDING is NEVER expired, even when old — its slot is
+        held on purpose (one active certificate per property) → a retry cleanly 409s."""
+        prop = _make_property("psukukhold", total_value=1_000_000, token_price=100)
+        sk = create_investment(
+            user=self.user, prop=prop, token_amount=1, payment_method="sukuk"
+        )["investment"]
+        Investment.objects.filter(pk=sk.pk).update(
+            created_at=timezone.now() - timezone.timedelta(minutes=90)
+        )
+        with self.assertRaises(DuplicateInvestmentError):
+            create_investment(user=self.user, prop=prop, token_amount=1, payment_method="card")
+        sk.refresh_from_db()
+        self.assertEqual(sk.payment_status, PaymentStatus.PENDING)  # not clobbered
+
+    def test_settle_refuses_failed_investment(self):
+        """Webhook-safety: settle_investment never completes/mints a FAILED (expired) one —
+        a late/duplicate success callback can't resurrect an abandoned attempt."""
+        from .services import settle_investment
+
+        prop = _make_property("pfailedsettle", total_value=1_000_000, token_price=100, deployed=True)
+        inv = create_investment(
+            user=self.user, prop=prop, token_amount=1, payment_method="card"
+        )["investment"]
+        Investment.objects.filter(pk=inv.pk).update(payment_status=PaymentStatus.FAILED)
+        inv.refresh_from_db()
+
+        result = settle_investment(inv)
+        self.assertFalse(result["minted"])
+        self.assertEqual(result["reason"], "failed")
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.FAILED)  # not resurrected
+        self.assertFalse(inv.tokens_minted)
+
     def test_provisional_certificate_uses_real_location_not_hardcoded(self):
         prop = _make_property("pcert", total_value=1_000_000, token_price=100)
         create_investment(user=self.user, prop=prop, token_amount=5, payment_method="card")

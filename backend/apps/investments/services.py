@@ -8,6 +8,7 @@ record a tx that didn't happen on a chain.
 """
 from __future__ import annotations
 
+import logging
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 from django.conf import settings
@@ -25,9 +26,18 @@ from apps.wallets.models import OwnershipToken, UserWallet, WalletTransaction
 
 from .models import Investment, PaymentStatus
 
+log = logging.getLogger(__name__)
+
 # Sanity bound from SPEC §4.1 step 1 (amount $1–$10M). Min is enforced as >= 1 token.
 MAX_AMOUNT_USD = Decimal("10000000")
-DEDUP_WINDOW_SECONDS = 60
+
+# One-active-per-property: the DB has a partial unique index allowing AT MOST ONE in-flight
+# (pending/processing) Investment per (user, property). A genuinely-abandoned webhook-gated
+# (card/crypto) attempt that never confirmed is expired to FAILED on the next create for the
+# same (user, property) — after this many minutes — so a retry isn't blocked. A real payment
+# confirms well within it. Sukuk (admin-reviewed) + balance (auto-settle) are NEVER expired.
+# Override via settings.INVESTMENT_STALE_INFLIGHT_MINUTES.
+DEFAULT_STALE_INFLIGHT_MINUTES = 30
 
 # Methods whose completion + mint are driven by a real PSP webhook (NOT simulated at
 # creation). Phase 5 Wave 1: card (Stripe). Wave 2: crypto (NOW Payments IPN).
@@ -205,13 +215,32 @@ def create_investment(
             )
             down_payment_amount = installment_plan.down_payment_amount
 
-        # Dedup guard (SPEC §4.1): a second pending/processing within 60s.
-        cutoff = timezone.now() - timezone.timedelta(seconds=DEDUP_WINDOW_SECONDS)
-        if Investment.objects.filter(
-            user=user,
-            property=locked_prop,
+        # One-active-per-property. First EXPIRE a genuinely-abandoned webhook-gated
+        # (card/crypto) attempt that never confirmed, so a retry can proceed; sukuk
+        # (admin-reviewed) + balance (auto-settle) are excluded — their PENDING is a real
+        # state we must not clobber. Runs under the per-property lock above → no race.
+        stale_minutes = getattr(
+            settings, "INVESTMENT_STALE_INFLIGHT_MINUTES", DEFAULT_STALE_INFLIGHT_MINUTES
+        )
+        stale_cutoff = timezone.now() - timezone.timedelta(minutes=stale_minutes)
+        expired = Investment.objects.filter(
+            user=user, property=locked_prop,
+            payment_method__in=WEBHOOK_PAID_METHODS,
             payment_status__in=[PaymentStatus.PENDING, PaymentStatus.PROCESSING],
-            created_at__gte=cutoff,
+            created_at__lt=stale_cutoff,
+        ).update(payment_status=PaymentStatus.FAILED, updated_at=timezone.now())
+        if expired:
+            log.info(
+                "Expired %d stale in-flight investment(s) for user %s / property %s",
+                expired, user.pk, locked_prop.slug,
+            )
+
+        # Anything STILL in-flight for this (user, property) is a real, current attempt →
+        # reject cleanly with 409 rather than letting the INSERT violate the partial unique
+        # index (which surfaced as a 500). Under the property lock this check can't race.
+        if Investment.objects.filter(
+            user=user, property=locked_prop,
+            payment_status__in=[PaymentStatus.PENDING, PaymentStatus.PROCESSING],
         ).exists():
             raise DuplicateInvestmentError()
 
@@ -681,6 +710,15 @@ def settle_investment(investment: Investment) -> dict:
     """
     with transaction.atomic():
         inv = Investment.objects.select_for_update().get(pk=investment.pk)
+        # Webhook-safety: never resurrect an investment that is already FAILED — e.g. an
+        # abandoned attempt the stale-inflight sweep expired, or one a PSP marked failed. A
+        # late/duplicate success callback for it is logged for manual reconciliation, not
+        # completed or minted (which could double-issue against a since-retried buy).
+        if inv.payment_status == PaymentStatus.FAILED:
+            log.warning(
+                "Refusing to settle FAILED investment %s (late/duplicate callback)", inv.pk
+            )
+            return {"minted": False, "reason": "failed"}
         if inv.payment_status != PaymentStatus.COMPLETED:
             inv.payment_status = PaymentStatus.COMPLETED
             inv.save(update_fields=["payment_status", "updated_at"])
