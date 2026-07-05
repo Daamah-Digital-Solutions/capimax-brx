@@ -55,6 +55,34 @@ class OverPurchaseError(APIException):
 
 
 # --------------------------------------------------------------------------- #
+# Fees — buyer-borne (Option A). The platform + management fee is charged to the BUYER
+# on top of the token value, from the property's ADMIN-SET rates (Property.fee_platform
+# + fee_management, apps/properties/models.py:186-188, editable in the Django admin).
+# The owner receives the full token value (NO fee carve); the fee is the platform's.
+# --------------------------------------------------------------------------- #
+def fee_amount_for(prop: Property, base_amount) -> Decimal:
+    """
+    The buyer-borne platform + management fee for a token-value `base_amount`.
+
+    Each fee is quantised to cents INDEPENDENTLY (platform, then management) and summed —
+    mirroring the checkout display (src/pages/Checkout.tsx) EXACTLY, so the amount charged
+    equals the amount shown. Reads the per-property admin rates (never hardcoded).
+    """
+    # Coerce via str() — the model's numeric defaults are Python floats on an unsaved
+    # instance, and Decimal * float raises; Decimal(str(x)) is exact for both float + Decimal.
+    base = Decimal(str(base_amount))
+    platform_rate = Decimal(str(prop.fee_platform or "0"))
+    management_rate = Decimal(str(prop.fee_management or "0"))
+    platform = (base * platform_rate / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    management = (base * management_rate / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return platform + management
+
+
+# --------------------------------------------------------------------------- #
 # Availability
 # --------------------------------------------------------------------------- #
 def sold_tokens(prop: Property) -> int:
@@ -134,6 +162,12 @@ def create_investment(
             Decimal("0.000001"), rounding=ROUND_HALF_UP
         )
 
+        # Buyer-borne fee (Option A): platform + management fee on the token value, from
+        # the property's admin rates. Charged to the buyer ON TOP (settlement_amount);
+        # the owner still receives the full token value. Same fee for a normal buy and an
+        # installment (charged once, with the down-payment).
+        fee_amount = fee_amount_for(locked_prop, amount)
+
         # Installments (Wave B): build the plan + resolve the DOWN-PAYMENT. The full
         # `amount` above stays the position value (token_amount × price); the gated
         # charge is the down-payment. Installments are settlement-gated ONLY (the
@@ -190,6 +224,7 @@ def create_investment(
             payment_status=PaymentStatus.PENDING,
             is_installment=is_installment,
             down_payment_amount=down_payment_amount,
+            fee_amount=fee_amount,
             installment_plan=installment_plan,
         )
 
@@ -201,9 +236,13 @@ def create_investment(
         if payment_method == BALANCE_METHOD:
             from apps.wallets.services import InsufficientBalance, debit_user_balance
 
+            # Debit the full settlement (token value + buyer-borne fee) so a reinvestment
+            # is charged the SAME displayed total as a card/crypto buy. Inside this atomic
+            # block: an insufficient balance rolls the whole creation back (nothing moves).
             try:
                 debit_user_balance(
-                    user, amount, source=REINVESTMENT_SOURCE, reference=str(investment.id),
+                    user, investment.settlement_amount, source=REINVESTMENT_SOURCE,
+                    reference=str(investment.id),
                     memo=f"Reinvestment: {token_amount} {symbol} of {locked_prop.slug}",
                 )
             except InsufficientBalance:
@@ -266,13 +305,13 @@ OWNER_PRIMARY_SALE_SOURCE = "primary_sale"
 
 def credit_owner_share(inv: Investment, prop: Property, *, gross, reference, memo=None):
     """
-    Reusable owner-credit core: credit the property owner the NET of one `gross` tranche,
-    exactly once (idempotent on (source="primary_sale", `reference`)).
+    Reusable owner-credit core: credit the property owner for one `gross` tranche of the
+    token value, exactly once (idempotent on (source="primary_sale", `reference`)).
 
-    NET = gross − (Property.fee_platform% + Property.fee_management%) — the per-property,
-    admin-set rates (apps/properties/models.py:185-187), computed server-side (never
-    hardcoded). Returns the net credited, or None when skipped (no linked owner / already
-    credited / non-positive net).
+    Buyer-borne fees (Option A): the platform + management fee is charged to the BUYER at
+    settlement, NOT carved out of the owner — so the owner is credited the FULL `gross`
+    (the token value actually paid at this tranche). Returns the amount credited, or None
+    when skipped (no linked owner / already credited / non-positive).
 
     Two callers share this core, each with a DISTINCT reference so their idempotency keys
     never collide: the down-payment/full-purchase path keys on the investment id; each
@@ -294,12 +333,11 @@ def credit_owner_share(inv: Investment, prop: Property, *, gross, reference, mem
     ).exists():
         return None
 
-    gross = Decimal(gross)
-    fee_percent = (prop.fee_platform or Decimal("0")) + (prop.fee_management or Decimal("0"))
-    fees = (gross * fee_percent / Decimal("100")).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    net = (gross - fees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    # Option A (buyer-borne fees): the platform + management fee is charged to the BUYER
+    # at settlement (Investment.fee_amount), so the owner receives the FULL token value —
+    # no fee is carved out of the owner's proceeds here. The property's fee rates now drive
+    # only the buyer's surcharge (services.fee_amount_for), not an owner deduction.
+    net = Decimal(gross).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if net <= 0:
         return None
 
@@ -574,8 +612,10 @@ def mint_investment(investment: Investment) -> dict:
 
             mark_down_payment_settled(inv.installment_plan)
 
-        # Phase 7 Wave D: a COMPLETED primary sale settled on-chain → credit the
-        # property owner's net proceeds (gross − fees) to their UserBalance, in the
+        # Phase 7 Wave D: a COMPLETED primary sale → credit the property owner the token
+        # value actually paid at this settlement (the full price for a normal buy, the
+        # down-payment for an installment). Buyer-borne fees (Option A): the fee was
+        # charged to the buyer, so the owner receives the FULL token value (no fee carve).
         # SAME atomic block so the credit commits with the mint. Idempotent + null-safe.
         owner_net = _credit_owner_for_primary_sale(inv, prop)
 

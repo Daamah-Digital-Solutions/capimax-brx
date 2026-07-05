@@ -207,8 +207,10 @@ export default function Checkout() {
 
   const investment = useMemo<InvestmentData>(() => {
     const investmentAmount = units * unitPrice;
-    const platformFee = Math.round(investmentAmount * platformRate);
-    const managementFee = Math.round(investmentAmount * managementRate);
+    // Fees are cent-exact (rounded per-fee) to MATCH the server's charge exactly — the
+    // buyer-borne platform + management fee is added ON TOP of the token value (Option A).
+    const platformFee = Math.round(investmentAmount * platformRate * 100) / 100;
+    const managementFee = Math.round(investmentAmount * managementRate * 100) / 100;
     const totalPayable = investmentAmount + platformFee + managementFee;
 
     return {
@@ -228,14 +230,18 @@ export default function Checkout() {
   }, [units, unitPrice, platformRate, managementRate, property, propertyId]);
 
   const pronovaDiscount = selectedMethod === "pronova" ? investment.totalPayable * 0.05 : 0;
+  // The buyer-borne fee (platform + management), added on top of the token value. For an
+  // installment the FULL fee is due once, with the down-payment (matches the server).
+  const feeTotal = investment.platformFee + investment.managementFee;
   // The down-payment for an installment = full position × down% (display; the server is
   // authoritative + cent-exact). The financed remainder is charged later (Wave C).
   const downPaymentAmount = installmentTerms
     ? Math.round(investment.investmentAmount * downPaymentPercent) / 100
     : 0;
-  // The amount CHARGED now: the down-payment for an installment, else the full payable.
+  // The amount CHARGED now: for an installment, the down-payment + the FULL fee; else the
+  // full payable (token value + fees) less any Pronova discount.
   const finalAmount = installmentTerms
-    ? downPaymentAmount
+    ? downPaymentAmount + feeTotal
     : investment.totalPayable - pronovaDiscount;
 
   const handleUnitsChange = (newUnits: number) => {
@@ -458,12 +464,28 @@ export default function Checkout() {
                       down-payment's share released. */}
                   {installmentTerms && (
                     <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">
-                          {isRTL ? "الدفعة المقدمة (تُدفع الآن)" : "Down payment (due now)"}
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">
+                          {isRTL ? "الدفعة المقدمة" : "Down payment"}
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          ${downPaymentAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">
+                          {isRTL ? "رسوم المنصة والإدارة" : "Platform + management fees"}
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          ${feeTotal.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-primary/20">
+                        <span className="text-sm font-medium">
+                          {isRTL ? "المستحق الآن" : "Due now"}
                         </span>
                         <span className="text-lg font-bold text-primary">
-                          ${downPaymentAmount.toLocaleString()}
+                          ${finalAmount.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-xs text-muted-foreground">

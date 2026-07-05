@@ -89,14 +89,15 @@ class CreateStripeIntentView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # Charge the amount due for THIS payment: full price normally, the DOWN-PAYMENT
-        # for an installment purchase (`charge_amount`). Identical for normal buys.
+        # Charge the amount due for THIS payment = the token value + the buyer-borne
+        # platform/management fee (`settlement_amount`), so the charge equals the displayed
+        # total. For an installment this is the down-payment + the full fee (charged once).
         payment = get_or_create_payment(
-            investment, amount=investment.charge_amount, currency="usd"
+            investment, amount=investment.settlement_amount, currency="usd"
         )
         try:
             intent = stripe_service.create_payment_intent(
-                amount=investment.charge_amount,
+                amount=investment.settlement_amount,
                 currency=payment.currency,
                 metadata={"investment_id": str(investment.id), "payment_id": str(payment.id)},
             )
@@ -210,16 +211,17 @@ class CreateNowPaymentsView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # Charge the amount due for THIS payment: full price normally, the DOWN-PAYMENT
-        # for an installment purchase (`charge_amount`). Identical for normal buys.
+        # Charge the amount due for THIS payment = the token value + the buyer-borne
+        # platform/management fee (`settlement_amount`), so the charge equals the displayed
+        # total. For an installment this is the down-payment + the full fee (charged once).
         payment = get_or_create_payment(
-            investment, amount=investment.charge_amount, currency="usd",
+            investment, amount=investment.settlement_amount, currency="usd",
             provider="nowpayments",
         )
         ipn_url = request.build_absolute_uri(reverse("payments:nowpayments-ipn"))
         try:
             created = nowpayments_service.create_payment(
-                price_amount=investment.charge_amount,
+                price_amount=investment.settlement_amount,
                 price_currency="usd",
                 pay_currency=pay_currency,
                 order_id=str(payment.id),

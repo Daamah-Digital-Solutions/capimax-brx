@@ -689,17 +689,18 @@ def _completed_investment(buyer, prop, token_amount):
 
 @mock.patch("apps.investments.services.chain_service.mint", return_value=_FAKE_MINT)
 class OwnerEarningsCreditTests(APITestCase):
-    def test_primary_sale_credits_owner_net_of_fees(self, _m):
+    def test_primary_sale_credits_owner_full_token_value(self, _m):
         owner = _approved_owner("earn-owner@ex.com")
-        prop = _owned_deployed_property(owner)  # fees 1.5% + 0.5% = 2%
+        prop = _owned_deployed_property(owner)  # fees 1.5% + 0.5% = 2% (buyer-borne)
         buyer = User.objects.create_user(email="buyer-e@ex.com", password="pw-12345-strong")
         inv = _completed_investment(buyer, prop, 10)  # gross = 10 * 100 = 1000
         result = mint_investment(inv)
         self.assertTrue(result["minted"])
-        # 1000 − 2% = 980 credited to the owner.
-        self.assertEqual(result["owner_credited"], "980.00")
+        # Buyer-borne fees (Option A): the 2% fee is charged to the BUYER, so the owner
+        # receives the FULL token value ($1000) — no fee carved out of their proceeds.
+        self.assertEqual(result["owner_credited"], "1000.00")
         bal = UserBalance.objects.get(user=owner)
-        self.assertEqual(bal.current_balance, Decimal("980.00"))
+        self.assertEqual(bal.current_balance, Decimal("1000.00"))
         # Exactly one primary_sale ledger entry keyed to this investment.
         entries = BalanceTransaction.objects.filter(source="primary_sale", reference=str(inv.id))
         self.assertEqual(entries.count(), 1)
@@ -715,7 +716,7 @@ class OwnerEarningsCreditTests(APITestCase):
         again = mint_investment(inv)
         self.assertTrue(again.get("already"))
         bal = UserBalance.objects.get(user=owner)
-        self.assertEqual(bal.current_balance, Decimal("980.00"))  # credited once
+        self.assertEqual(bal.current_balance, Decimal("1000.00"))  # full value, credited once
         self.assertEqual(
             BalanceTransaction.objects.filter(source="primary_sale", reference=str(inv.id)).count(), 1
         )
@@ -762,15 +763,16 @@ class OwnerEarningsApiTests(APITestCase):
         # Earnings summary (per property + totals).
         earn = self.client.get("/api/owner/earnings/")
         self.assertEqual(earn.status_code, status.HTTP_200_OK)
-        self.assertEqual(earn.data["total_net_proceeds"], 980.0)
+        # Buyer-borne fees (Option A): owner nets the FULL token value; owner-side fee is 0.
+        self.assertEqual(earn.data["total_net_proceeds"], 1000.0)
         self.assertEqual(earn.data["total_units_sold"], 10)
         self.assertEqual(len(earn.data["properties"]), 1)
-        self.assertEqual(earn.data["properties"][0]["net_proceeds"], 980.0)
-        self.assertEqual(earn.data["properties"][0]["fees"], 20.0)
+        self.assertEqual(earn.data["properties"][0]["net_proceeds"], 1000.0)
+        self.assertEqual(earn.data["properties"][0]["fees"], 0.0)
 
         # Balance via the SHARED wallet endpoint (same as investors/LPs).
         bal = self.client.get("/api/wallets/balance/")
-        self.assertEqual(bal.data["current_balance"], 980.0)
+        self.assertEqual(bal.data["current_balance"], 1000.0)
 
         # Withdraw via the SHARED withdrawal endpoint → debits the balance.
         wd = self.client.post(
@@ -778,7 +780,7 @@ class OwnerEarningsApiTests(APITestCase):
         )
         self.assertEqual(wd.status_code, status.HTTP_201_CREATED)
         bal2 = self.client.get("/api/wallets/balance/")
-        self.assertEqual(bal2.data["current_balance"], 480.0)
+        self.assertEqual(bal2.data["current_balance"], 500.0)  # 1000 − 500 withdrawn
 
     def test_earnings_owner_scoped(self, _m):
         owner = _approved_owner("earn-scoped@ex.com")

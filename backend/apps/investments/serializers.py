@@ -62,6 +62,10 @@ class InvestmentSerializer(serializers.ModelSerializer):
 
     property_id = serializers.CharField(source="property.slug", read_only=True)
     wallet_id = serializers.UUIDField(read_only=True)
+    # What the buyer actually pays at settlement = token value + buyer-borne fee.
+    settlement_amount = serializers.DecimalField(
+        max_digits=16, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = Investment
@@ -83,6 +87,10 @@ class InvestmentSerializer(serializers.ModelSerializer):
             # installment context + the down-payment that was actually charged.
             "is_installment",
             "down_payment_amount",
+            # Fees (buyer-borne, Option A): the platform+management fee charged on top of
+            # the token value, and the resulting total the buyer paid.
+            "fee_amount",
+            "settlement_amount",
             "created_at",
             "updated_at",
         )

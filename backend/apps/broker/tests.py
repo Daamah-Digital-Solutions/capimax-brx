@@ -493,9 +493,9 @@ class BrokerCommissionTests(APITestCase):
         inv_plain = _completed_investment(b_plain, prop_plain, 10)
         r_ref = mint_investment(inv_ref)
         r_plain = mint_investment(inv_plain)
-        # Owner net identical with/without the broker (980 each at 2% fees).
+        # Owner net identical with/without the broker; buyer-borne fees → full $1000 each.
         self.assertEqual(r_ref["owner_credited"], r_plain["owner_credited"])
-        self.assertEqual(r_ref["owner_credited"], "980.00")
+        self.assertEqual(r_ref["owner_credited"], "1000.00")
         # Broker commission is EXTRA (off gross), only on the referred sale.
         self.assertEqual(r_ref["broker_credited"], "50.00")
         self.assertIsNone(r_plain["broker_credited"])

@@ -153,9 +153,10 @@ def owner_earnings(user, *, year=None, period="", **_):
             investors=Count("user", distinct=True),
         )
         gross = Decimal(agg["gross"] or 0)
-        fee_pct = (prop.fee_platform or Decimal("0")) + (prop.fee_management or Decimal("0"))
-        fees = (gross * fee_pct / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        net = (gross - fees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        # Buyer-borne fees (Option A): the fee is charged to the buyer, not carved out of
+        # the owner — so the owner's net proceeds equal the full token value (fees 0).
+        fees = Decimal("0.00")
+        net = gross.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         total_net += net
         rows.append({
             "property": prop.name,

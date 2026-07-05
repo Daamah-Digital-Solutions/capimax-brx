@@ -9,6 +9,7 @@ token_amount / property.token_supply * 100 (NEVER the old hardcoded /1000).
 """
 import builtins
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -68,6 +69,14 @@ class Investment(models.Model):
     down_payment_amount = models.DecimalField(
         max_digits=16, decimal_places=2, null=True, blank=True
     )
+    # Fees (buyer-borne, LOCKED policy). The platform + management fee CHARGED to the
+    # buyer ON TOP of the token value, computed at create time from the property's
+    # admin-set rates (Property.fee_platform + fee_management). `amount_invested` stays
+    # the pure token value (tokens × price) — it drives ownership + the owner credit —
+    # while the buyer actually pays `settlement_amount` (value + fee). The fee is the
+    # platform's; the owner receives the full token value (NO fee carved out). For an
+    # installment the full fee is charged once, with the down-payment.
+    fee_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     installment_plan = models.ForeignKey(
         "installments.InstallmentPlan",
         on_delete=models.SET_NULL,
@@ -93,6 +102,17 @@ class Investment(models.Model):
         if self.is_installment and self.down_payment_amount is not None:
             return self.down_payment_amount
         return self.amount_invested
+
+    @builtins.property
+    def settlement_amount(self):
+        """
+        What the BUYER actually pays at the gated (down-payment / full) settlement:
+        the token-value `charge_amount` PLUS the buyer-borne fee (Option A). Used by the
+        PSP charge (Stripe/NOW) and the balance debit so the amount collected equals the
+        displayed total. A normal buy pays amount_invested + fee; an installment pays the
+        down-payment + the full fee (charged once). Later installments carry no extra fee.
+        """
+        return self.charge_amount + (self.fee_amount or Decimal("0"))
 
     class Meta:
         verbose_name = _("investment")

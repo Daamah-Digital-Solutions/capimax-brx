@@ -374,7 +374,7 @@ class SubmissionDocumentDownloadView(APIView):
 # --------------------------------------------------------------------------- #
 # Owner analytics — Phase 7 Wave D + the OwnerReports realness pass. Owner-scoped,
 # read-side ONLY (no money/mint, no migration). Three surfaces, all period-aware:
-#   * earnings      — primary-sale proceeds (gross − fees) per property + totals.
+#   * earnings      — primary-sale proceeds (the full token value; buyer-borne fees) per property + totals.
 #   * distributions — the owner's properties' rental-yield distribution history/totals
 #                     (aggregated from the distributions domain; the owner does NOT
 #                     receive these — they're the cash their properties paid HOLDERS).
@@ -456,9 +456,12 @@ class OwnerEarningsView(APIView):
             gross = Decimal(agg["gross"] or 0)
             units = int(agg["units"] or 0)
             investors = int(agg["investors"] or 0)
-            fee_percent = (prop.fee_platform or Decimal("0")) + (prop.fee_management or Decimal("0"))
-            fees = (gross * fee_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            net = (gross - fees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            # Buyer-borne fees (Option A): the platform + management fee is charged to the
+            # BUYER at checkout, NOT carved out of the owner — so the owner's net proceeds
+            # equal the FULL token value sold. `fees` is the owner-side deduction (now zero);
+            # the platform collects its fee separately, from the buyer.
+            fees = Decimal("0.00")
+            net = gross.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             total_net += net
             total_units += units
             total_investors += investors

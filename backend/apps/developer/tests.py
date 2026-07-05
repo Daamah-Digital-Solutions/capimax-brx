@@ -696,15 +696,16 @@ def _completed_investment(buyer, prop, token_amount):
 
 @mock.patch("apps.investments.services.chain_service.mint", return_value=_FAKE_MINT)
 class DeveloperEarningsTests(APITestCase):
-    def test_primary_sale_credits_developer_net_of_fees(self, _m):
+    def test_primary_sale_credits_developer_full_token_value(self, _m):
         dev = _approved_developer("earn-dev@example.com")
-        prop = _developer_owned_deployed_property(dev)  # fees 1.5% + 0.5% = 2%
+        prop = _developer_owned_deployed_property(dev)  # fees 1.5% + 0.5% = 2% (buyer-borne)
         buyer = User.objects.create_user(email="buyer-d@example.com", password="pw-12345-strong")
         inv = _completed_investment(buyer, prop, 10)  # gross = 10 * 100 = 1000
         result = mint_investment(inv)
         self.assertTrue(result["minted"])
-        self.assertEqual(result["owner_credited"], "980.00")  # 1000 − 2% = 980 → DEVELOPER
-        self.assertEqual(UserBalance.objects.get(user=dev).current_balance, Decimal("980.00"))
+        # Buyer-borne fees (Option A): fee charged to the buyer → DEVELOPER gets full $1000.
+        self.assertEqual(result["owner_credited"], "1000.00")
+        self.assertEqual(UserBalance.objects.get(user=dev).current_balance, Decimal("1000.00"))
         entries = BalanceTransaction.objects.filter(source="primary_sale", reference=str(inv.id))
         self.assertEqual(entries.count(), 1)
         self.assertEqual(entries.first().entry_type, "credit")
@@ -717,7 +718,7 @@ class DeveloperEarningsTests(APITestCase):
         mint_investment(inv)
         again = mint_investment(inv)  # replay → short-circuits
         self.assertTrue(again.get("already"))
-        self.assertEqual(UserBalance.objects.get(user=dev).current_balance, Decimal("980.00"))
+        self.assertEqual(UserBalance.objects.get(user=dev).current_balance, Decimal("1000.00"))
         self.assertEqual(
             BalanceTransaction.objects.filter(source="primary_sale", reference=str(inv.id)).count(), 1
         )
@@ -732,17 +733,17 @@ class DeveloperEarningsTests(APITestCase):
         # Earnings summary (the owner endpoint reads submitted_by generically).
         earn = self.client.get("/api/owner/earnings/")
         self.assertEqual(earn.status_code, status.HTTP_200_OK)
-        self.assertEqual(earn.data["total_net_proceeds"], 980.0)
+        self.assertEqual(earn.data["total_net_proceeds"], 1000.0)  # full value (buyer-borne fee)
         self.assertEqual(earn.data["total_units_sold"], 10)
         self.assertEqual(len(earn.data["properties"]), 1)
-        self.assertEqual(earn.data["properties"][0]["net_proceeds"], 980.0)
+        self.assertEqual(earn.data["properties"][0]["net_proceeds"], 1000.0)
         # Balance + withdraw via the SHARED wallet stack (same as owner/investor/LP).
-        self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 980.0)
+        self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 1000.0)
         wd = self.client.post(
             "/api/wallets/withdrawals/", {"amount": "500", "method": "bank"}, format="json"
         )
         self.assertEqual(wd.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 480.0)
+        self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 500.0)
 
     def test_earnings_developer_scoped(self, _m):
         dev = _approved_developer("earn-dev4@example.com")
