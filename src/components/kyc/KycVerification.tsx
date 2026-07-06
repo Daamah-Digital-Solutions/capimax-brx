@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -34,6 +35,7 @@ interface KycVerificationProps {
 export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerificationProps) {
   const { language } = useLanguage();
   const isArabic = language === "ar";
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [devNotice, setDevNotice] = useState(false);
   const [sdkMounted, setSdkMounted] = useState(false);
@@ -50,6 +52,17 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
       // unmounts this whole card (and the SDK container) — so it must run only AFTER
       // the widget is open, and only when the user actually submits their documents.
       const access = await kycApi.accessToken();
+      if (access.unauthorized) {
+        // Session expired: a 401 must NOT be silently treated as "provider unconfigured".
+        // Prompt a re-login instead of failing into the dev path or a blank widget.
+        toast.error(
+          isArabic
+            ? "انتهت جلستك. يرجى تسجيل الدخول مجددًا."
+            : "Your session has expired. Please sign in again.",
+        );
+        navigate("/auth");
+        return;
+      }
       if (access.configured && access.token && containerRef.current) {
         // Launch into the live container element (always rendered below), so the selector
         // always resolves and the widget opens and stays open. We do NOT flip the backend
@@ -148,33 +161,34 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
             : "Your identity is verified. Your wallet is ready and you can invest."}
         </p>
       ) : status === "submitted" ? (
-        sdkMounted ? (
+        // ALWAYS keep both actions available in the under-review state so a failed or blank
+        // widget never traps the user — "Continue verification" relaunches Sumsub into the
+        // container below (resuming the applicant); "Refresh status" re-polls the backend.
+        <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {isArabic ? "أكمل خطوات التحقق أدناه." : "Complete the verification steps below."}
+            {sdkMounted
+              ? isArabic
+                ? "أكمل خطوات التحقق أدناه، أو تابع التحقق إذا لم تُفتح النافذة."
+                : "Complete the verification steps below — or continue verification if the widget didn't open."
+              : isArabic
+                ? "طلبك قيد المراجعة. ستتم الموافقة تلقائيًا بعد اكتمال التحقق. إذا خرجت قبل إتمام الخطوات، تابع التحقق."
+                : "Your verification is under review. Approval is automatic once complete. If you exited before finishing, continue verification."}
           </p>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {isArabic
-                ? "طلبك قيد المراجعة. ستتم الموافقة تلقائيًا بعد اكتمال التحقق. إذا خرجت قبل إتمام الخطوات، يمكنك متابعة التحقق."
-                : "Your verification is under review. Approval is automatic once complete. If you exited before finishing, you can continue verification."}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={startVerification} disabled={busy}>
-                {busy ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Shield className="h-4 w-4 mr-2" />
-                )}
-                {isArabic ? "متابعة التحقق" : "Continue verification"}
-              </Button>
-              <Button variant="outline" size="sm" onClick={refresh} disabled={busy}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {isArabic ? "تحديث الحالة" : "Refresh status"}
-              </Button>
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={startVerification} disabled={busy}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Shield className="h-4 w-4 mr-2" />
+              )}
+              {isArabic ? "متابعة التحقق" : "Continue verification"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={refresh} disabled={busy}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {isArabic ? "تحديث الحالة" : "Refresh status"}
+            </Button>
           </div>
-        )
+        </div>
       ) : sdkMounted ? (
         <p className="text-sm text-muted-foreground">
           {isArabic

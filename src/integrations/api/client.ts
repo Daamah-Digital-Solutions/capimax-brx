@@ -682,6 +682,9 @@ export interface KycAccessToken {
   configured: boolean;
   token?: string;
   code?: string;
+  /** True when the access-token request failed with 401 — the session is dead (re-login),
+   * NOT that the provider is unconfigured. Lets the UI prompt sign-in instead of the dev path. */
+  unauthorized?: boolean;
 }
 
 export const kycApi = {
@@ -702,6 +705,12 @@ export const kycApi = {
         auth: true,
       })) as KycAccessToken;
     } catch (err) {
+      // A 401 means the SESSION is dead (the access token was rejected and the refresh
+      // failed) — NOT that the provider is unconfigured. Surface it distinctly so the UI
+      // prompts a re-login instead of silently taking the "unconfigured (dev)" path.
+      if ((err as ApiError).status === 401) {
+        return { configured: false, unauthorized: true };
+      }
       const data = ((err as ApiError).data ?? {}) as { configured?: boolean; code?: string };
       return { configured: false, code: data.code || "kyc_provider_unconfigured" };
     }
