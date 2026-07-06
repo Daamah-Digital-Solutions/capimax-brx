@@ -58,7 +58,7 @@ export function PaymentResultModal({
             ? isArabic ? "تم الدفع بنجاح" : "Payment Successful"
             : isArabic ? "فشل الدفع" : "Payment Failed"}
         </DialogTitle>
-        <div className="flex flex-col items-center text-center py-6">
+        <div className="flex flex-col items-center text-center py-6 overflow-hidden">
           {/* Status Icon */}
           <div
             className={cn(
@@ -93,8 +93,8 @@ export function PaymentResultModal({
           {isSuccess && (
             <div className="w-full mb-4">
               {tokensMinted ? (
-                <div className="flex items-center justify-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <Coins className="w-5 h-5 text-green-500" />
+                <div className="flex flex-wrap items-center justify-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <Coins className="w-5 h-5 text-green-500 shrink-0" />
                   <span className="text-sm font-medium text-green-500">
                     {isArabic ? "تم إصدار رموز الملكية!" : "Ownership tokens minted!"}
                   </span>
@@ -103,8 +103,8 @@ export function PaymentResultModal({
                   </Badge>
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <Wallet className="w-5 h-5 text-yellow-500" />
+                <div className="flex flex-wrap items-center justify-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <Wallet className="w-5 h-5 text-yellow-500 shrink-0" />
                   <span className="text-sm text-yellow-500">
                     {isArabic
                       ? "إصدار الرموز قيد المعالجة — تابع الحالة في محفظتك"
@@ -117,34 +117,34 @@ export function PaymentResultModal({
 
           {/* Details */}
           {isSuccess && (
-            <div className="w-full p-4 bg-muted rounded-xl mb-6 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">
+            <div className="w-full p-4 bg-muted rounded-xl mb-6 space-y-3 overflow-hidden">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground shrink-0">
                   {isArabic ? "العقار" : "Property"}
                 </span>
-                <span className="font-medium text-foreground">
+                <span className="font-medium text-foreground text-right min-w-0 break-words">
                   {isArabic ? investment.propertyNameAr : investment.propertyName}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground shrink-0">
                   {isArabic ? "طريقة الدفع" : "Payment Method"}
                 </span>
-                <span className="font-medium text-foreground">
+                <span className="font-medium text-foreground text-right min-w-0 break-words">
                   {selectedMethod && (isArabic ? methodNames[selectedMethod].ar : methodNames[selectedMethod].en)}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground shrink-0">
                   {isArabic ? "المبلغ المدفوع" : "Amount Paid"}
                 </span>
-                <span className="font-bold text-primary">${finalAmount.toLocaleString()}</span>
+                <span className="font-bold text-primary text-right min-w-0 break-words">${finalAmount.toLocaleString()}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground shrink-0">
                   {isArabic ? "الوحدات المُشتراة" : "Units Purchased"}
                 </span>
-                <span className="font-medium text-foreground">
+                <span className="font-medium text-foreground text-right min-w-0 break-words">
                   {investment.units} {isArabic ? "وحدات" : "units"}
                 </span>
               </div>
@@ -153,11 +153,11 @@ export function PaymentResultModal({
 
           {/* Transaction ID for success */}
           {isSuccess && (
-            <div className="w-full p-3 bg-success/10 border border-success/30 rounded-lg mb-6">
+            <div className="w-full p-3 bg-success/10 border border-success/30 rounded-lg mb-6 overflow-hidden">
               <p className="text-xs text-muted-foreground mb-1">
                 {isArabic ? "رقم المعاملة" : "Transaction ID"}
               </p>
-              <p className="font-mono text-sm text-foreground">TXN-{Date.now()}</p>
+              <p className="font-mono text-sm text-foreground break-all">TXN-{Date.now()}</p>
             </div>
           )}
         </div>
