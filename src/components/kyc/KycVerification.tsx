@@ -51,17 +51,25 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
       // the widget is open, and only when the user actually submits their documents.
       const access = await kycApi.accessToken();
       if (access.configured && access.token && containerRef.current) {
-        // Persist any personal info (optional) — WITHOUT triggering a UI refresh/unmount.
-        await kycApi.submit(personalInfo ?? {});
-        // Launch into the live container element (always rendered below), so the
-        // selector always resolves and the widget opens and stays open.
+        // Launch into the live container element (always rendered below), so the selector
+        // always resolves and the widget opens and stays open. We do NOT flip the backend
+        // status here: opening + abandoning the widget must leave status `pending` so the
+        // user can restart — never stranded in "Under Review".
         await mountSumsubWebSdk({
           container: containerRef.current,
           accessToken: access.token,
           lang: isArabic ? "ar" : "en",
-          // Move to "under review" only after the user submits docs (or the SDK
-          // completes) — never on intermediate status changes.
-          onSubmitted: () => onUpdated?.(),
+          // Flip to "under review" ONLY on the REAL submission event: persist personal info
+          // + advance the backend to `submitted`, THEN refresh the parent. An early exit
+          // before this never marks submitted.
+          onSubmitted: async () => {
+            try {
+              await kycApi.submit(personalInfo ?? {});
+            } catch {
+              /* non-fatal: docs are submitted on Sumsub's side; a refresh reconciles */
+            }
+            onUpdated?.();
+          },
           onComplete: () => onUpdated?.(),
         });
         setSdkMounted(true);
@@ -140,17 +148,33 @@ export function KycVerification({ kycStatus, personalInfo, onUpdated }: KycVerif
             : "Your identity is verified. Your wallet is ready and you can invest."}
         </p>
       ) : status === "submitted" ? (
-        <div className="space-y-3">
+        sdkMounted ? (
           <p className="text-sm text-muted-foreground">
-            {isArabic
-              ? "طلبك قيد المراجعة. ستتم الموافقة تلقائيًا بعد اكتمال التحقق."
-              : "Your verification is under review. Approval is automatic once complete."}
+            {isArabic ? "أكمل خطوات التحقق أدناه." : "Complete the verification steps below."}
           </p>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={busy}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            {isArabic ? "تحديث الحالة" : "Refresh status"}
-          </Button>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {isArabic
+                ? "طلبك قيد المراجعة. ستتم الموافقة تلقائيًا بعد اكتمال التحقق. إذا خرجت قبل إتمام الخطوات، يمكنك متابعة التحقق."
+                : "Your verification is under review. Approval is automatic once complete. If you exited before finishing, you can continue verification."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={startVerification} disabled={busy}>
+                {busy ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Shield className="h-4 w-4 mr-2" />
+                )}
+                {isArabic ? "متابعة التحقق" : "Continue verification"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={refresh} disabled={busy}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {isArabic ? "تحديث الحالة" : "Refresh status"}
+              </Button>
+            </div>
+          </div>
+        )
       ) : sdkMounted ? (
         <p className="text-sm text-muted-foreground">
           {isArabic

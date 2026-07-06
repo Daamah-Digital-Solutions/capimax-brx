@@ -313,6 +313,24 @@ class KYCEndpointTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(resp.data["code"], "kyc_provider_unconfigured")
 
+    def test_access_token_configured_does_not_mark_submitted(self):
+        """Opening the widget (minting the applicant + issuing a token) must NOT flip status to
+        `submitted` — the user hasn't submitted anything yet, so an early exit can't strand them
+        in "Under Review". Status advances to `submitted` only on the real onApplicantSubmitted
+        (the frontend then POSTs /kyc/submit/)."""
+        user = _mk_user("tok-ok@example.com")
+        self.client.force_authenticate(user)
+        with mock.patch("apps.kyc.sumsub.is_configured", return_value=True), \
+             mock.patch("apps.kyc.sumsub.create_applicant", return_value="app-xyz"), \
+             mock.patch("apps.kyc.sumsub.issue_access_token", return_value="tok-abc"):
+            resp = self.client.post("/api/kyc/access-token/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["token"], "tok-abc")
+        kyc = get_or_create_kyc(user)
+        self.assertEqual(kyc.sumsub_applicant_id, "app-xyz")   # applicant linked...
+        self.assertEqual(kyc.status, KYCStatus.PENDING)         # ...but NOT submitted
+        self.assertIsNone(kyc.submitted_at)
+
 
 # --------------------------------------------------------------------------- #
 # Holdings + transactions endpoint shapes (frontend repoint targets)

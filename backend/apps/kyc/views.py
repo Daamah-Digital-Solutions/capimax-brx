@@ -69,13 +69,17 @@ class KYCAccessTokenView(APIView):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        # Ensure the user has an applicant linked, then mint a short-lived token.
+        # Ensure the user has an applicant linked, then mint a short-lived token. Creating the
+        # applicant (so the webhook can resolve this record by applicantId) does NOT change the
+        # status: requesting a token == opening the widget, and the user hasn't submitted anything
+        # yet. Status advances to `submitted` ONLY on the real onApplicantSubmitted event (the
+        # frontend then calls POST /kyc/submit/). This keeps an early widget-exit from stranding
+        # the user in "Under Review" with no way back.
         kyc = get_or_create_kyc(request.user)
         try:
             if not kyc.sumsub_applicant_id:
                 kyc.sumsub_applicant_id = sumsub.create_applicant(request.user.pk)
-                kyc.mark_submitted()
-                kyc.save()
+                kyc.save(update_fields=["sumsub_applicant_id", "updated_at"])
             token = sumsub.issue_access_token(request.user.pk)
         except sumsub.SumsubError:
             log.warning("Sumsub access-token issue failed for user %s", request.user.pk)
