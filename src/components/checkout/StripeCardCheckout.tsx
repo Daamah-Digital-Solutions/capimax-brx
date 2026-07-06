@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -26,6 +26,8 @@ export interface StripeCardCheckoutProps {
   finalAmount: number;
   /** True only when the terms/risk gating in the parent is satisfied. */
   ready: boolean;
+  /** Terms & risk declarations, rendered inline directly ABOVE the Pay button. */
+  declarations?: ReactNode;
   /** Installments (Wave B): when set, the server charges only the down-payment. */
   installment?: {
     down_payment_percent: number;
@@ -151,6 +153,8 @@ function CardForm(props: StripeCardCheckoutProps) {
           }}
         />
       </div>
+
+      {props.declarations}
 
       <Button
         variant="hero"

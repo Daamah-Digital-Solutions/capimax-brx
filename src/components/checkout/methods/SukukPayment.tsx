@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Upload, Loader2, X, ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,8 @@ export interface SukukPaymentProps {
   finalAmount: number;
   /** True only when the terms/risk gating in the parent is satisfied. */
   ready: boolean;
+  /** Terms & risk declarations, rendered inline directly ABOVE the submit button. */
+  declarations?: ReactNode;
   onRouteToKyc: () => void;
   onProcessing: () => void;
 }
@@ -205,6 +207,8 @@ export function SukukPayment(props: SukukPaymentProps) {
           </button>
         )}
       </div>
+
+      {props.declarations}
 
       {/* Submit */}
       <Button

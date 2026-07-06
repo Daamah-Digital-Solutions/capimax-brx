@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,8 @@ export interface NowCryptoCheckoutProps {
   propertyId: string;
   tokenAmount: number;
   ready: boolean;
+  /** Terms & risk declarations, rendered inline directly ABOVE the Pay button. */
+  declarations?: ReactNode;
   /** Installments (Wave B): when set, the server charges only the down-payment. */
   installment?: {
     down_payment_percent: number;
@@ -259,6 +261,8 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
           </div>
         )}
       </div>
+
+      {props.declarations}
 
       <Button variant="hero" size="xl" className="w-full" disabled={!props.ready || busy} onClick={handleGenerate}>
         {busy ? (

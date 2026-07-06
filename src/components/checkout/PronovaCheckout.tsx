@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -32,6 +32,8 @@ export interface PronovaCheckoutProps {
   discount: number;
   /** True only when the terms/risk gating in the parent is satisfied. */
   ready: boolean;
+  /** Terms & risk declarations, rendered inline directly ABOVE the Pay button. */
+  declarations?: ReactNode;
   onRouteToKyc: () => void;
   onProcessing: () => void;
   onResult: (r: { status: "success" | "failed"; tokensMinted: boolean }) => void;
@@ -184,6 +186,8 @@ function PronovaForm(props: PronovaCheckoutProps) {
 
       {/* Mandatory Pledge / Mortgage Disclosure (shown at the point of payment) */}
       <NovaFinancePledgeNotice variant="compact" />
+
+      {props.declarations}
 
       <Button
         variant="hero"

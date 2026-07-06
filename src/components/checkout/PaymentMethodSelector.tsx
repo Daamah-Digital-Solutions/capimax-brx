@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { 
+import { useState, type ReactNode } from "react";
+import {
   CreditCard, 
   Smartphone, 
   Wallet, 
@@ -14,31 +14,26 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentMethod } from "@/pages/Checkout";
 import { cn } from "@/lib/utils";
-import { CardPaymentForm } from "./methods/CardPaymentForm";
-import { ApplePayButton } from "./methods/ApplePayButton";
-import { GooglePayButton } from "./methods/GooglePayButton";
-import { CryptoPayment } from "./methods/CryptoPayment";
-import { PronovaPayment } from "./methods/PronovaPayment";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PaymentMethodSelectorProps {
   selectedMethod: PaymentMethod | null;
   onSelectMethod: (method: PaymentMethod) => void;
-  totalAmount: number;
-  pronovaDiscount: number;
   // Reinvestment: the caller's internal balance + what a balance buy would debit (units ×
   // price). When provided, a "Pay from balance" method is offered (disabled if insufficient).
   availableBalance?: number | null;
   balanceChargeAmount?: number;
+  // The SELECTED method's real payment panel (input + terms + pay), rendered inline in its
+  // own expanded container. Computed by Checkout; the selector only places it here.
+  selectedPanel?: ReactNode;
 }
 
 export function PaymentMethodSelector({
   selectedMethod,
   onSelectMethod,
-  totalAmount,
-  pronovaDiscount,
   availableBalance,
   balanceChargeAmount = 0,
+  selectedPanel,
 }: PaymentMethodSelectorProps) {
   const { t, language, isRTL } = useLanguage();
   const [expandedMethod, setExpandedMethod] = useState<PaymentMethod | null>(null);
@@ -114,57 +109,6 @@ export function PaymentMethodSelector({
     if (disabled) return;
     onSelectMethod(methodId);
     setExpandedMethod(methodId);
-  };
-
-  const renderMethodContent = (methodId: PaymentMethod) => {
-    switch (methodId) {
-      case "balance":
-        return (
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">
-                {language === "ar" ? "ستدفع من رصيدك" : "You'll pay from your balance"}
-              </span>
-              <span className="font-semibold text-foreground">
-                ${balanceChargeAmount.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">
-                {language === "ar" ? "الرصيد المتاح" : "Available balance"}
-              </span>
-              <span className="font-semibold text-foreground">
-                ${(availableBalance ?? 0).toLocaleString()}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground pt-1 border-t border-border">
-              {language === "ar"
-                ? "إعادة استثمار عوائدك المتراكمة بنفس السعر والرسوم — تُصدر الرموز فورًا. (لا توجد مكافآت إضافية حاليًا.)"
-                : "Reinvest your accrued returns at the same price/fees — tokens mint instantly. (No extra bonuses yet.)"}
-            </p>
-          </div>
-        );
-      case "card":
-        return <CardPaymentForm />;
-      case "apple_pay":
-        return <ApplePayButton />;
-      case "google_pay":
-        return <GooglePayButton />;
-      case "crypto":
-        return <CryptoPayment totalAmount={totalAmount} />;
-      case "pronova":
-        return <PronovaPayment totalAmount={totalAmount} discount={pronovaDiscount} />;
-      case "sukuk":
-        return (
-          <p className="text-sm text-muted-foreground">
-            {language === "ar"
-              ? "ارفع شهادة نوفا (صكوك) بصيغة PDF أدناه لإتمام الاستثمار — يراجعها فريقنا يدويًا وتُصدر رموزك بعد الموافقة."
-              : "Upload your Nova certificate (Sukuk) PDF below to complete — our team reviews it manually and your tokens are issued once approved."}
-          </p>
-        );
-      default:
-        return null;
-    }
   };
 
   return (
@@ -269,7 +213,7 @@ export function PaymentMethodSelector({
               {/* Expanded Content */}
               {isSelected && isExpanded && (
                 <div className="px-4 pb-4 pt-0 border-t border-border mt-2">
-                  <div className="pt-4">{renderMethodContent(method.id)}</div>
+                  <div className="pt-4">{selectedPanel}</div>
                 </div>
               )}
             </div>

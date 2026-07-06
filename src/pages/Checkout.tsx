@@ -354,6 +354,184 @@ export default function Checkout() {
 
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
+  // The Terms & Risk declarations, rendered INLINE inside the selected method's panel,
+  // directly ABOVE its Pay button (flow: pick method → enter payment → agree → pay). State
+  // stays here; each payment component just renders this node above its action button.
+  const declarations = (
+    <div className="p-4 bg-muted/40 rounded-xl border border-border space-y-4">
+      <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+        <Shield className="w-4 h-4 text-primary" />
+        {t("checkout.requiredDeclarations")}
+      </h3>
+      <div className="space-y-3">
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <Checkbox
+            checked={termsAccepted}
+            onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
+            className="mt-0.5"
+          />
+          <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+            {t("checkout.termsAgree")}
+          </span>
+        </label>
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <Checkbox
+            checked={riskAccepted}
+            onCheckedChange={(checked) => setRiskAccepted(checked as boolean)}
+            className="mt-0.5"
+          />
+          <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+            {t("checkout.riskAgree")}
+          </span>
+        </label>
+      </div>
+      <div className="pt-3 border-t border-border">
+        <p className="text-xs text-muted-foreground">{t("checkout.complianceNote")}</p>
+      </div>
+    </div>
+  );
+
+  // The SELECTED method's completion panel — rendered INLINE under its own row in the
+  // selector (PaymentMethodSelector `selectedPanel`). Same branches / components / props /
+  // gating as before; the only change is PLACEMENT + the injected `declarations` above each
+  // Pay button. No method selected → the expand slot isn't shown, so this node isn't rendered.
+  const selectedMethodPanel =
+    (selectedMethod === "card" || selectedMethod === "crypto") && user && kycApproved !== false ? (
+      <div className="space-y-4">
+        {selectedMethod === "card" ? (
+          <StripeCardCheckout
+            propertyId={propertyId}
+            tokenAmount={units}
+            finalAmount={finalAmount}
+            ready={termsAccepted && riskAccepted && !!property}
+            installment={installmentTerms}
+            declarations={declarations}
+            onRouteToKyc={routeToKyc}
+            onProcessing={() => setPaymentStatus("processing")}
+            onResult={handlePspResult}
+          />
+        ) : (
+          <NowCryptoCheckout
+            propertyId={propertyId}
+            tokenAmount={units}
+            ready={termsAccepted && riskAccepted && !!property}
+            installment={installmentTerms}
+            declarations={declarations}
+            onRouteToKyc={routeToKyc}
+            onProcessing={() => setPaymentStatus("processing")}
+            onResult={handlePspResult}
+          />
+        )}
+        <Button
+          variant="outline"
+          size="xl"
+          className="w-full"
+          onClick={() => navigate(-1)}
+          disabled={paymentStatus === "processing"}
+        >
+          {t("checkout.cancelPayment")}
+        </Button>
+      </div>
+    ) : selectedMethod === "sukuk" && !isInstallment && user && kycApproved !== false ? (
+      <div className="space-y-4">
+        <SukukPayment
+          propertyId={propertyId}
+          tokenAmount={units}
+          finalAmount={finalAmount}
+          ready={termsAccepted && riskAccepted && !!property}
+          declarations={declarations}
+          onRouteToKyc={routeToKyc}
+          onProcessing={() => setPaymentStatus("processing")}
+        />
+        <Button
+          variant="outline"
+          size="xl"
+          className="w-full"
+          onClick={() => navigate(-1)}
+          disabled={paymentStatus === "processing"}
+        >
+          {t("checkout.cancelPayment")}
+        </Button>
+      </div>
+    ) : selectedMethod === "pronova" && !isInstallment && user && kycApproved !== false ? (
+      <div className="space-y-4">
+        <PronovaCheckout
+          propertyId={propertyId}
+          tokenAmount={units}
+          finalAmount={finalAmount}
+          discount={pronovaDiscount}
+          ready={termsAccepted && riskAccepted && !!property}
+          declarations={declarations}
+          onRouteToKyc={routeToKyc}
+          onProcessing={() => setPaymentStatus("processing")}
+          onResult={handlePspResult}
+        />
+        <Button
+          variant="outline"
+          size="xl"
+          className="w-full"
+          onClick={() => navigate(-1)}
+          disabled={paymentStatus === "processing"}
+        >
+          {t("checkout.cancelPayment")}
+        </Button>
+      </div>
+    ) : isInstallment ? (
+      <div className="flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
+        <Lock className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-foreground">
+            {isRTL ? "اختر البطاقة أو العملة الرقمية" : "Choose card or crypto"}
+          </p>
+          <p className="text-muted-foreground">
+            {isRTL
+              ? "تتم خطط الأقساط عبر دفعة مقدمة آمنة بالبطاقة أو العملة الرقمية."
+              : "Installment plans are paid via a secure down-payment by card or crypto."}
+          </p>
+        </div>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        {declarations}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Button
+            variant="hero"
+            size="xl"
+            className="flex-1"
+            disabled={!canProceed || paymentStatus === "processing"}
+            onClick={() => {
+              if (user && kycApproved === false) return routeToKyc();
+              if (selectedMethod && UNWIRED_METHODS.includes(selectedMethod)) {
+                toast.info(isRTL ? UNWIRED_MESSAGE.ar : UNWIRED_MESSAGE.en);
+                return;
+              }
+              setShowConfirmation(true);
+            }}
+          >
+            {paymentStatus === "processing" ? (
+              <>
+                <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                {t("checkout.processing")}
+              </>
+            ) : (
+              <>
+                <Lock className="w-5 h-5" />
+                {t("checkout.confirmPay")} ${finalAmount.toLocaleString()}
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="xl"
+            onClick={() => navigate(-1)}
+            disabled={paymentStatus === "processing"}
+          >
+            {t("checkout.cancelPayment")}
+          </Button>
+        </div>
+      </div>
+    );
+
   // Loading / not-found guards (the page was previously synchronous over inline data).
   if (loadError) {
     return (
@@ -540,50 +718,10 @@ export default function Checkout() {
               <PaymentMethodSelector
                 selectedMethod={selectedMethod}
                 onSelectMethod={setSelectedMethod}
-                totalAmount={investment.totalPayable}
-                pronovaDiscount={pronovaDiscount}
                 availableBalance={availableBalance}
                 balanceChargeAmount={investment.investmentAmount}
+                selectedPanel={selectedMethodPanel}
               />
-
-              {/* Terms & Risk Disclosure */}
-              <div className="p-6 bg-card rounded-2xl border border-border space-y-4">
-                <h3 className="font-semibold text-foreground flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  {t("checkout.requiredDeclarations")}
-                </h3>
-
-                <div className="space-y-4">
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <Checkbox
-                      checked={termsAccepted}
-                      onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
-                      className="mt-0.5"
-                    />
-                    <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                      {t("checkout.termsAgree")}
-                    </span>
-                  </label>
-
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <Checkbox
-                      checked={riskAccepted}
-                      onCheckedChange={(checked) => setRiskAccepted(checked as boolean)}
-                      className="mt-0.5"
-                    />
-                    <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                      {t("checkout.riskAgree")}
-                    </span>
-                  </label>
-                </div>
-
-                {/* Compliance Note */}
-                <div className="pt-4 border-t border-border">
-                  <p className="text-xs text-muted-foreground">
-                    {t("checkout.complianceNote")}
-                  </p>
-                </div>
-              </div>
 
               {/* KYC-before-invest notice (Phase 4 #1). Shown when the logged-in
                   user isn't approved; pressing invest routes them to the KYC flow. */}
@@ -602,150 +740,6 @@ export default function Checkout() {
                   </div>
                   <Button variant="outline" size="sm" onClick={routeToKyc}>
                     {isRTL ? "إكمال التحقق" : "Complete KYC"}
-                  </Button>
-                </div>
-              )}
-
-              {/* Action Buttons.
-                  Phase 5: real-PSP methods drive a webhook/IPN-gated flow in place
-                  of the generic confirm button — CARD via Stripe Elements (Wave 1),
-                  CRYPTO via NOW Payments (Wave 2). All OTHER methods keep their
-                  existing simulated flow. */}
-              {(selectedMethod === "card" || selectedMethod === "crypto") &&
-              user &&
-              kycApproved !== false ? (
-                <div className="space-y-4">
-                  {selectedMethod === "card" ? (
-                    <StripeCardCheckout
-                      propertyId={propertyId}
-                      tokenAmount={units}
-                      finalAmount={finalAmount}
-                      ready={termsAccepted && riskAccepted && !!property}
-                      installment={installmentTerms}
-                      onRouteToKyc={routeToKyc}
-                      onProcessing={() => setPaymentStatus("processing")}
-                      onResult={handlePspResult}
-                    />
-                  ) : (
-                    <NowCryptoCheckout
-                      propertyId={propertyId}
-                      tokenAmount={units}
-                      ready={termsAccepted && riskAccepted && !!property}
-                      installment={installmentTerms}
-                      onRouteToKyc={routeToKyc}
-                      onProcessing={() => setPaymentStatus("processing")}
-                      onResult={handlePspResult}
-                    />
-                  )}
-                  <Button
-                    variant="outline"
-                    size="xl"
-                    className="w-full"
-                    onClick={() => navigate(-1)}
-                    disabled={paymentStatus === "processing"}
-                  >
-                    {t("checkout.cancelPayment")}
-                  </Button>
-                </div>
-              ) : selectedMethod === "sukuk" && !isInstallment && user && kycApproved !== false ? (
-                /* Nova certificate (Sukuk): upload a PDF → PENDING investment awaiting admin
-                   review. No charge + no mint here; settlement is on admin approval. */
-                <div className="space-y-4">
-                  <SukukPayment
-                    propertyId={propertyId}
-                    tokenAmount={units}
-                    finalAmount={finalAmount}
-                    ready={termsAccepted && riskAccepted && !!property}
-                    onRouteToKyc={routeToKyc}
-                    onProcessing={() => setPaymentStatus("processing")}
-                  />
-                  <Button
-                    variant="outline"
-                    size="xl"
-                    className="w-full"
-                    onClick={() => navigate(-1)}
-                    disabled={paymentStatus === "processing"}
-                  >
-                    {t("checkout.cancelPayment")}
-                  </Button>
-                </div>
-              ) : selectedMethod === "pronova" && !isInstallment && user && kycApproved !== false ? (
-                /* Pronova: branded, admin-discounted method settling the DISCOUNTED total over
-                   Stripe. Distinct from card so a later on-chain PRN swap touches only
-                   PronovaCheckout. No mint here; the Stripe webhook settles + mints. */
-                <div className="space-y-4">
-                  <PronovaCheckout
-                    propertyId={propertyId}
-                    tokenAmount={units}
-                    finalAmount={finalAmount}
-                    discount={pronovaDiscount}
-                    ready={termsAccepted && riskAccepted && !!property}
-                    onRouteToKyc={routeToKyc}
-                    onProcessing={() => setPaymentStatus("processing")}
-                    onResult={handlePspResult}
-                  />
-                  <Button
-                    variant="outline"
-                    size="xl"
-                    className="w-full"
-                    onClick={() => navigate(-1)}
-                    disabled={paymentStatus === "processing"}
-                  >
-                    {t("checkout.cancelPayment")}
-                  </Button>
-                </div>
-              ) : isInstallment ? (
-                /* Installments are settlement-gated → require a real PSP (card or crypto).
-                   We never route an installment down the simulated generic-confirm path. */
-                <div className="flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
-                  <Lock className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-foreground">
-                      {isRTL ? "اختر البطاقة أو العملة الرقمية" : "Choose card or crypto"}
-                    </p>
-                    <p className="text-muted-foreground">
-                      {isRTL
-                        ? "تتم خطط الأقساط عبر دفعة مقدمة آمنة بالبطاقة أو العملة الرقمية."
-                        : "Installment plans are paid via a secure down-payment by card or crypto."}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button
-                    variant="hero"
-                    size="xl"
-                    className="flex-1"
-                    disabled={!canProceed || paymentStatus === "processing"}
-                    onClick={() => {
-                      if (user && kycApproved === false) return routeToKyc();
-                      if (selectedMethod && UNWIRED_METHODS.includes(selectedMethod)) {
-                        toast.info(isRTL ? UNWIRED_MESSAGE.ar : UNWIRED_MESSAGE.en);
-                        return;
-                      }
-                      setShowConfirmation(true);
-                    }}
-                  >
-                    {paymentStatus === "processing" ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                        {t("checkout.processing")}
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="w-5 h-5" />
-                        {t("checkout.confirmPay")} ${finalAmount.toLocaleString()}
-                      </>
-                    )}
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="xl"
-                    onClick={() => navigate(-1)}
-                    disabled={paymentStatus === "processing"}
-                  >
-                    {t("checkout.cancelPayment")}
                   </Button>
                 </div>
               )}
