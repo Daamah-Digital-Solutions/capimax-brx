@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,13 +9,11 @@ import {
   XCircle,
   ShieldCheck,
   RefreshCw,
-  AlertTriangle,
   Loader2,
   HardHat,
 } from "lucide-react";
 import { developerApi } from "@/integrations/api/client";
 import { KybDocumentVault } from "@/components/kyb/KybDocumentVault";
-import { mountSumsubWebSdk } from "@/lib/sumsub";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useDeveloperProfile } from "@/hooks/useDeveloperProfile";
@@ -41,9 +39,6 @@ export function DeveloperVerificationCard() {
   const { developerProfile, loading, applyAsDeveloper, submitKYB, refresh } = useDeveloperProfile();
 
   const [busy, setBusy] = useState(false);
-  const [devNotice, setDevNotice] = useState(false);
-  const [sdkMounted, setSdkMounted] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const [biz, setBiz] = useState({
     business_type: "",
@@ -70,26 +65,12 @@ export function DeveloperVerificationCard() {
 
   const startVerification = async () => {
     setBusy(true);
-    setDevNotice(false);
     try {
-      // 1) Persist business info + advance KYB to under_review (idempotent server-side).
+      // KYB is MANUAL ADMIN REVIEW (form + uploaded documents → an admin approves or
+      // rejects) — there is NO Sumsub widget here. Persist the business info + advance KYB
+      // to under_review; submitKYB updates the profile in place, so the card re-renders to
+      // the "under review" state.
       await submitKYB(biz);
-      // 2) Try to mount the provider SDK. Inert when keys are deferred.
-      const access = await developerApi.kybAccessToken();
-      if (access.configured && access.token && containerRef.current) {
-        await mountSumsubWebSdk({
-          container: containerRef.current,
-          accessToken: access.token,
-          lang: isArabic ? "ar" : "en",
-          // Refresh only after a real submission / completion — not on intermediate
-          // status changes (which would disrupt the open widget mid-flow).
-          onSubmitted: () => refresh(),
-          onComplete: () => refresh(),
-        });
-        setSdkMounted(true);
-      } else if (!access.configured) {
-        setDevNotice(true);
-      }
     } finally {
       setBusy(false);
     }
@@ -113,7 +94,7 @@ export function DeveloperVerificationCard() {
         </Badge>
       );
     }
-    if (kyb === "under_review" || kyb === "documents_pending") {
+    if (kyb === "under_review") {
       return (
         <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 gap-1">
           <Clock className="h-3 w-3" />
@@ -175,12 +156,12 @@ export function DeveloperVerificationCard() {
             {isArabic ? "التقديم كمطوّر" : "Apply as Developer"}
           </Button>
         </div>
-      ) : kyb === "under_review" || kyb === "documents_pending" ? (
+      ) : kyb === "under_review" ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             {isArabic
-              ? "طلب التوثيق قيد المراجعة. ستتم الموافقة تلقائيًا بعد اكتمال التحقق."
-              : "Your verification is under review. Approval is automatic once complete."}
+              ? "طلبك قيد المراجعة من قبل فريقنا. سنخطرك بمجرد الموافقة عليه."
+              : "Your application is under review by our team. You'll be notified once it's approved."}
           </p>
           <Button variant="outline" size="sm" onClick={refreshStatus} disabled={busy}>
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -247,33 +228,6 @@ export function DeveloperVerificationCard() {
         />
       )}
 
-      {/* Sumsub WebSDK mounts here when the provider is configured. */}
-      <div ref={containerRef} className={sdkMounted ? "min-h-[480px]" : ""} />
-
-      {devNotice && (
-        <div className="flex items-start gap-3 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
-          <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-foreground mb-1">
-              {isArabic
-                ? "مزوّد التحقق غير مُفعّل بعد (وضع التطوير)"
-                : "Verification provider not configured yet (development)"}
-            </p>
-            <p className="text-muted-foreground">
-              {isArabic
-                ? "تم حفظ طلبك. في بيئة التطوير، يوافق المشرف عبر:"
-                : "Your request was saved. In development, approve via:"}
-            </p>
-            <code className="mt-2 block rounded bg-muted px-2 py-1 text-xs font-mono">
-              python manage.py dev_grant_developer_kyb --email &lt;your-email&gt;
-            </code>
-            <Button variant="outline" size="sm" onClick={refreshStatus} disabled={busy} className="mt-3">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              {isArabic ? "تحديث الحالة" : "Refresh status"}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
