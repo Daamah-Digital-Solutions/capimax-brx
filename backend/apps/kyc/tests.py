@@ -331,6 +331,26 @@ class KYCEndpointTests(APITestCase):
         self.assertEqual(kyc.status, KYCStatus.PENDING)         # ...but NOT submitted
         self.assertIsNone(kyc.submitted_at)
 
+    def test_access_token_survives_create_applicant_failure(self):
+        """A create_applicant failure (e.g. the applicant already EXISTS on Sumsub after a
+        reset_kyc cleared only our local id) must NOT 502 — issue_access_token creates/reuses
+        the applicant and the webhook resolves by externalUserId, so the token still issues."""
+        from apps.kyc.sumsub import SumsubError
+
+        user = _mk_user("recreate@example.com")
+        self.client.force_authenticate(user)
+        with mock.patch("apps.kyc.sumsub.is_configured", return_value=True), \
+             mock.patch("apps.kyc.sumsub.create_applicant",
+                        side_effect=SumsubError("Sumsub returned HTTP 409.")), \
+             mock.patch("apps.kyc.sumsub.issue_access_token", return_value="tok-live"):
+            resp = self.client.post("/api/kyc/access-token/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)   # NOT a 502
+        self.assertEqual(resp.data["token"], "tok-live")
+        # The applicant id wasn't stored (create failed), but the flow works regardless.
+        kyc = get_or_create_kyc(user)
+        self.assertEqual(kyc.sumsub_applicant_id, "")
+        self.assertEqual(kyc.status, KYCStatus.PENDING)          # still not marked submitted
+
 
 # --------------------------------------------------------------------------- #
 # Holdings + transactions endpoint shapes (frontend repoint targets)

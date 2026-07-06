@@ -69,20 +69,31 @@ class KYCAccessTokenView(APIView):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        # Ensure the user has an applicant linked, then mint a short-lived token. Creating the
-        # applicant (so the webhook can resolve this record by applicantId) does NOT change the
-        # status: requesting a token == opening the widget, and the user hasn't submitted anything
-        # yet. Status advances to `submitted` ONLY on the real onApplicantSubmitted event (the
-        # frontend then calls POST /kyc/submit/). This keeps an early widget-exit from stranding
-        # the user in "Under Review" with no way back.
+        # Mint a short-lived WebSDK token. `issue_access_token` (below) creates/reuses the Sumsub
+        # applicant for our externalUserId on its own, and the webhook resolves by externalUserId
+        # — so pre-creating an applicant here is only a BEST-EFFORT convenience to store the
+        # applicantId. It must NOT be fatal: Sumsub returns an error when an applicant already
+        # exists for this externalUserId (e.g. after `reset_kyc` cleared our LOCAL id while Sumsub
+        # kept the applicant), which previously 502'd the whole flow. Creating the applicant does
+        # NOT change the status — status advances to `submitted` only on the real
+        # onApplicantSubmitted event — so an early widget-exit never strands the user.
         kyc = get_or_create_kyc(request.user)
-        try:
-            if not kyc.sumsub_applicant_id:
+        if not kyc.sumsub_applicant_id:
+            try:
                 kyc.sumsub_applicant_id = sumsub.create_applicant(request.user.pk)
                 kyc.save(update_fields=["sumsub_applicant_id", "updated_at"])
+            except sumsub.SumsubError as exc:
+                # Already-exists / transient: the token call reuses the applicant and the webhook
+                # resolves by externalUserId. Log the real Sumsub status; do NOT fail the request.
+                log.info(
+                    "create_applicant best-effort skip for user %s: %s", request.user.pk, exc
+                )
+        try:
             token = sumsub.issue_access_token(request.user.pk)
-        except sumsub.SumsubError:
-            log.warning("Sumsub access-token issue failed for user %s", request.user.pk)
+        except sumsub.SumsubError as exc:
+            # A real provider failure (bad keys/level/signature/network). Log the status so the
+            # journal shows WHY (previously only a generic warning, with no Sumsub detail).
+            log.warning("Sumsub access-token issue failed for user %s: %s", request.user.pk, exc)
             return Response(
                 {"configured": True, "code": "kyc_provider_error",
                  "detail": "Could not start verification. Please try again."},
