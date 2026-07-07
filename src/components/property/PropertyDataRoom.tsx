@@ -66,6 +66,8 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Property } from "@/data/properties";
 import { DynamicInstallmentPlanner } from "@/components/property/DynamicInstallmentPlanner";
+import type { InstallmentPreview } from "@/integrations/api/client";
+import type { InstallmentTerms } from "@/hooks/useInstallmentPreview";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -730,28 +732,83 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // ─────────────────────────────────────────────────────────────
 // 7. Installment payment schedule
 // ─────────────────────────────────────────────────────────────
-function InstallmentScheduleSection({ p, isAr }: { p: Property; isAr: boolean }) {
-  if (p.model !== "installment" || !p.installment) return null;
+function InstallmentScheduleSection({
+  p,
+  isAr,
+  preview,
+}: {
+  p: Property;
+  isAr: boolean;
+  preview?: InstallmentPreview | null;
+}) {
   const inst = p.installment;
-  const rows = Array.from({ length: inst.totalInstallments }).map((_, i) => {
-    const num = i + 1;
-    const paid = num <= inst.paidInstallments;
-    const ownership = ((num / inst.totalInstallments) * 100).toFixed(1);
-    const remaining = (inst.totalInstallments - num) * inst.monthlyAmount;
-    return { num, paid, ownership, remaining };
-  });
+  // Prefer the investor's LIVE plan (engine preview, real per-investor rows); fall back to the
+  // property's advertised EXAMPLE schedule (clearly labelled) until terms are chosen. Render
+  // nothing if neither is available.
+  const usingPreview = !!preview;
+  if (!usingPreview && (p.model !== "installment" || !inst)) return null;
+
+  const money = (n: number) =>
+    new Intl.NumberFormat(isAr ? "ar-EG" : "en-US", { maximumFractionDigits: 0 }).format(
+      Math.round(n),
+    );
+
+  // Unified rows from whichever source is active.
+  const rows = usingPreview
+    ? preview!.rows.map((r) => ({
+        num: r.sequence,
+        paid: false,
+        ownership: r.ownershipPercent.toFixed(1),
+        amount: r.amount,
+        remaining: r.balance,
+        date: r.dueDate,
+      }))
+    : Array.from({ length: inst!.totalInstallments }).map((_, i) => {
+        const num = i + 1;
+        const paid = num <= inst!.paidInstallments;
+        const ownership = ((num / inst!.totalInstallments) * 100).toFixed(1);
+        const remaining = (inst!.totalInstallments - num) * inst!.monthlyAmount;
+        const due = new Date(inst!.nextPaymentDate);
+        due.setMonth(due.getMonth() + (num - inst!.paidInstallments - 1));
+        return {
+          num,
+          paid,
+          ownership,
+          amount: inst!.monthlyAmount,
+          remaining,
+          date: due.toISOString().split("T")[0],
+        };
+      });
+
+  // Unified summary tiles.
+  const summary = usingPreview
+    ? {
+        headlineAmount: preview!.installmentAmount,
+        freqLabel:
+          preview!.frequency === "quarterly"
+            ? isAr ? "ربع سنوي" : "Quarterly"
+            : isAr ? "شهري" : "Monthly",
+        paidInstallments: 0,
+        totalInstallments: preview!.numberOfInstallments,
+        nextPaymentDate: preview!.rows[0]?.dueDate ?? "—",
+        activationDate: inst?.activationDate ?? "—",
+      }
+    : {
+        headlineAmount: inst!.monthlyAmount,
+        freqLabel: isAr ? "شهري" : "Monthly",
+        paidInstallments: inst!.paidInstallments,
+        totalInstallments: inst!.totalInstallments,
+        nextPaymentDate: inst!.nextPaymentDate,
+        activationDate: inst!.activationDate,
+      };
 
   const handleDownload = (format: "csv" | "print") => {
     const headers = isAr
       ? ["#", "تاريخ الاستحقاق", "الحالة", "المبلغ (USD)", "الملكية %", "المتبقي (USD)"]
       : ["#", "Due Date", "Status", "Amount (USD)", "Ownership %", "Remaining (USD)"];
-    const start = new Date(inst.nextPaymentDate);
     const dataRows = rows.map((r) => {
-      const due = new Date(start);
-      due.setMonth(due.getMonth() + (r.num - inst.paidInstallments - 1));
-      const dueStr = due.toISOString().split("T")[0];
-      const status = r.paid ? (isAr ? "مدفوع" : "Paid") : (isAr ? "قادم" : "Upcoming");
-      return [r.num, dueStr, status, inst.monthlyAmount, `${r.ownership}%`, r.remaining];
+      const statusStr = r.paid ? (isAr ? "مدفوع" : "Paid") : (isAr ? "قادم" : "Upcoming");
+      return [r.num, r.date, statusStr, Math.round(r.amount), `${r.ownership}%`, Math.round(r.remaining)];
     });
 
     if (format === "csv") {
@@ -776,10 +833,10 @@ function InstallmentScheduleSection({ p, isAr }: { p: Property; isAr: boolean })
         .summary p{margin:0;font-size:11px;color:#666}.summary strong{font-size:14px}</style></head><body>
         <h1>${title}</h1><h2>${isAr ? p.locationAr : p.location}</h2>
         <div class="summary">
-          <div><p>${isAr ? "قسط شهري" : "Monthly"}</p><strong>$${inst.monthlyAmount}</strong></div>
-          <div><p>${isAr ? "مدفوعة" : "Paid"}</p><strong>${inst.paidInstallments}/${inst.totalInstallments}</strong></div>
-          <div><p>${isAr ? "الدفعة القادمة" : "Next Due"}</p><strong>${inst.nextPaymentDate}</strong></div>
-          <div><p>${isAr ? "تاريخ التفعيل" : "Activation"}</p><strong>${inst.activationDate}</strong></div>
+          <div><p>${summary.freqLabel}</p><strong>$${money(summary.headlineAmount)}</strong></div>
+          <div><p>${isAr ? "مدفوعة" : "Paid"}</p><strong>${summary.paidInstallments}/${summary.totalInstallments}</strong></div>
+          <div><p>${isAr ? "الدفعة القادمة" : "Next Due"}</p><strong>${summary.nextPaymentDate}</strong></div>
+          <div><p>${isAr ? "تاريخ التفعيل" : "Activation"}</p><strong>${summary.activationDate}</strong></div>
         </div>
         <table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
         <tbody>${dataRows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>
@@ -795,6 +852,9 @@ function InstallmentScheduleSection({ p, isAr }: { p: Property; isAr: boolean })
         <CardTitle className="flex items-center gap-2 text-lg">
           <Calendar className="w-5 h-5 text-primary" />
           {isAr ? "جدول الأقساط" : "Installment Schedule"}
+          <Badge variant="outline" className="text-[10px]">
+            {usingPreview ? (isAr ? "خطتك" : "Your plan") : isAr ? "مثال" : "Example"}
+          </Badge>
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => handleDownload("csv")}>
@@ -810,20 +870,20 @@ function InstallmentScheduleSection({ p, isAr }: { p: Property; isAr: boolean })
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-            <p className="text-xs text-muted-foreground">{isAr ? "قسط شهري" : "Monthly"}</p>
-            <p className="text-lg font-bold">${inst.monthlyAmount}</p>
+            <p className="text-xs text-muted-foreground">{summary.freqLabel}</p>
+            <p className="text-lg font-bold">${money(summary.headlineAmount)}</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">{isAr ? "مدفوعة" : "Paid"}</p>
-            <p className="text-lg font-bold">{inst.paidInstallments}/{inst.totalInstallments}</p>
+            <p className="text-lg font-bold">{summary.paidInstallments}/{summary.totalInstallments}</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">{isAr ? "الدفعة القادمة" : "Next Due"}</p>
-            <p className="text-sm font-bold">{inst.nextPaymentDate}</p>
+            <p className="text-sm font-bold">{summary.nextPaymentDate}</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">{isAr ? "تاريخ التفعيل" : "Activation"}</p>
-            <p className="text-sm font-bold">{inst.activationDate}</p>
+            <p className="text-sm font-bold">{summary.activationDate}</p>
           </div>
         </div>
 
@@ -851,9 +911,9 @@ function InstallmentScheduleSection({ p, isAr }: { p: Property; isAr: boolean })
                       <Badge variant="outline" className="text-[10px]">{isAr ? "قادم" : "Upcoming"}</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs">${inst.monthlyAmount}</TableCell>
+                  <TableCell className="text-xs">${money(r.amount)}</TableCell>
                   <TableCell className="text-xs">{r.ownership}%</TableCell>
-                  <TableCell className="text-xs">${r.remaining}</TableCell>
+                  <TableCell className="text-xs">${money(r.remaining)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1036,17 +1096,37 @@ function FaqSection({ isAr }: { isAr: boolean }) {
 // ─────────────────────────────────────────────────────────────
 // 7b. Post-construction payment plan (separate, after handover)
 // ─────────────────────────────────────────────────────────────
-function PostConstructionPaymentPlan({ p, isAr }: { p: Property; isAr: boolean }) {
+function PostConstructionPaymentPlan({
+  p,
+  isAr,
+  preview,
+}: {
+  p: Property;
+  isAr: boolean;
+  preview?: InstallmentPreview | null;
+}) {
   if (p.status !== "construction") return null;
 
-  const totalValue = p.totalValue ?? 1000000;
-  const handoverPct = 30;
-  const postPct = 70;
-  const postYears = 3;
-  const handoverAmount = Math.round((totalValue * handoverPct) / 100);
-  const postAmount = totalValue - handoverAmount;
-  const monthlyPost = Math.round(postAmount / (postYears * 12));
-  const handoverDate = (p as unknown as { expectedCompletion?: string }).expectedCompletion ?? "Q4 2026";
+  // Route (b): reflect the REAL per-investor installment plan — the DOWN-PAYMENT is the
+  // handover-phase commitment; the N installments ARE the post-construction schedule. Until
+  // terms are chosen (no preview) fall back to an illustrative split of the property value.
+  const usingPreview = !!preview;
+  const totalValue = usingPreview ? preview!.total : p.totalValue ?? 1000000;
+  const handoverAmount = usingPreview ? preview!.downPayment : Math.round(totalValue * 0.3);
+  const postAmount = Math.max(0, totalValue - handoverAmount);
+  const handoverPct = totalValue > 0 ? Math.round((handoverAmount / totalValue) * 100) : 30;
+  const postPct = 100 - handoverPct;
+  const postCount = usingPreview ? preview!.numberOfInstallments : 36;
+  const monthlyPost = usingPreview ? preview!.installmentAmount : Math.round(postAmount / 36);
+  const isQuarterly = usingPreview && preview!.frequency === "quarterly";
+  const freqLabel = isQuarterly
+    ? isAr ? "ربع سنوي" : "Quarterly"
+    : isAr ? "شهري" : "Monthly";
+  const handoverDate =
+    (usingPreview ? preview!.rows[0]?.dueDate : undefined) ??
+    (p as unknown as { expectedCompletion?: string }).expectedCompletion ??
+    p.installment?.activationDate ??
+    "Q4 2026";
 
   const phases = [
     {
@@ -1062,7 +1142,9 @@ function PostConstructionPaymentPlan({ p, isAr }: { p: Property; isAr: boolean }
       ar: "أقساط ما بعد التسليم",
       pct: postPct,
       amount: postAmount,
-      when: isAr ? `${postYears * 12} قسط شهري` : `${postYears * 12} monthly installments`,
+      when: isAr
+        ? `${postCount} قسط (${freqLabel})`
+        : `${postCount} ${isQuarterly ? "quarterly" : "monthly"} installments`,
       tone: "success" as const,
     },
   ];
@@ -1082,13 +1164,13 @@ function PostConstructionPaymentPlan({ p, isAr }: { p: Property; isAr: boolean }
           {isAr ? "خطة السداد بعد التسليم" : "Payment Plan — After Construction"}
           <Badge variant="outline" className="ms-2 gap-1">
             <Sparkles className="w-3 h-3" />
-            {isAr ? "خطة منفصلة" : "Separate Plan"}
+            {usingPreview ? (isAr ? "خطتك" : "Your plan") : isAr ? "توضيحي" : "Illustrative"}
           </Badge>
         </CardTitle>
         <p className="text-sm text-muted-foreground mt-1">
           {isAr
-            ? "خطة دفع مستقلة تبدأ بعد اكتمال البناء وتسليم العقار، مصممة لتسهيل تملّك المستثمر بعد بدء توليد الدخل."
-            : "An independent payment schedule starting after construction is completed and the property is handed over — designed to ease ownership once income generation begins."}
+            ? "نفس خطة الأقساط معروضة على مرحلتين: الدفعة المقدمة كالتزام عند التسليم، والأقساط تكمل بعد اكتمال البناء وبدء توليد الدخل."
+            : "The same installment plan shown in two phases: the down-payment as the handover-stage commitment, and the installments completing after construction is done and income generation begins."}
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -1104,9 +1186,13 @@ function PostConstructionPaymentPlan({ p, isAr }: { p: Property; isAr: boolean }
             <p className="text-[11px] text-muted-foreground">{handoverPct}%</p>
           </div>
           <div className="p-4 rounded-xl border bg-success/5 border-success/30">
-            <p className="text-xs text-muted-foreground">{isAr ? "قسط شهري" : "Monthly Installment"}</p>
+            <p className="text-xs text-muted-foreground">
+              {isQuarterly ? (isAr ? "قسط ربع سنوي" : "Quarterly Installment") : isAr ? "قسط شهري" : "Monthly Installment"}
+            </p>
             <p className="text-lg font-bold text-success">{fmtMoney(monthlyPost)}</p>
-            <p className="text-[11px] text-muted-foreground">{postYears * 12} {isAr ? "شهر" : "months"}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {postCount} {isAr ? "قسط" : "installments"}
+            </p>
           </div>
           <div className="p-4 rounded-xl border bg-muted/30">
             <p className="text-xs text-muted-foreground">{isAr ? "تاريخ بدء الخطة" : "Plan Start Date"}</p>
@@ -1168,7 +1254,19 @@ function PostConstructionPaymentPlan({ p, isAr }: { p: Property; isAr: boolean }
   );
 }
 
-export function PropertyDataRoom({ property }: { property: Property }) {
+export function PropertyDataRoom({
+  property,
+  installmentTerms,
+  onInstallmentTermsChange,
+  installmentPreview,
+}: {
+  property: Property;
+  // Shared installment terms + engine preview (property page only) — forwarded to the
+  // Construction tab's calculators/schedule so every block reflects the same per-investor plan.
+  installmentTerms?: InstallmentTerms;
+  onInstallmentTermsChange?: (t: InstallmentTerms) => void;
+  installmentPreview?: InstallmentPreview | null;
+}) {
   const { language } = useLanguage();
   const isAr = language === "ar";
 
@@ -1216,9 +1314,15 @@ export function PropertyDataRoom({ property }: { property: Property }) {
         {property.status === "construction" && (
           <TabsContent value="construction" className="mt-4 space-y-4">
             <ConstructionSection p={property} isAr={isAr} />
-            <DynamicInstallmentPlanner property={property} isAr={isAr} />
-            <InstallmentScheduleSection p={property} isAr={isAr} />
-            <PostConstructionPaymentPlan p={property} isAr={isAr} />
+            <DynamicInstallmentPlanner
+              property={property}
+              isAr={isAr}
+              terms={installmentTerms}
+              onTermsChange={onInstallmentTermsChange}
+              preview={installmentPreview}
+            />
+            <InstallmentScheduleSection p={property} isAr={isAr} preview={installmentPreview} />
+            <PostConstructionPaymentPlan p={property} isAr={isAr} preview={installmentPreview} />
           </TabsContent>
         )}
         <TabsContent value="market" className="mt-4">

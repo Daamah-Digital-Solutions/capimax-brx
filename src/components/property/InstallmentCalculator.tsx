@@ -23,6 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { InstallmentPreview } from "@/integrations/api/client";
+import {
+  type InstallmentTerms,
+  installmentCheckoutQuery,
+} from "@/hooks/useInstallmentPreview";
 
 interface InstallmentCalculatorProps {
   propertyId: string;
@@ -33,6 +38,14 @@ interface InstallmentCalculatorProps {
   expectedGrowth: number;
   constructionProgress: number;
   expectedCompletion: string;
+  /**
+   * Controlled mode (property page): the SHARED installment terms + the engine preview, so
+   * this calculator, the Dynamic Planner, the schedule + the handover plan all show ONE plan.
+   * Omitted → the component self-manages its terms and falls back to a client-side estimate.
+   */
+  terms?: InstallmentTerms;
+  onTermsChange?: (t: InstallmentTerms) => void;
+  preview?: InstallmentPreview | null;
 }
 
 export function InstallmentCalculator({
@@ -44,85 +57,122 @@ export function InstallmentCalculator({
   expectedGrowth,
   constructionProgress,
   expectedCompletion,
+  terms,
+  onTermsChange,
+  preview,
 }: InstallmentCalculatorProps) {
   const { t, language, isRTL } = useLanguage();
   const navigate = useNavigate();
-  
-  const [units, setUnits] = useState(1);
-  const [selectedDuration, setSelectedDuration] = useState(installmentDurations[0]?.months || 12);
+
+  const controlled = !!terms && !!onTermsChange;
+
+  // Internal (uncontrolled) fallback state — used only when the parent doesn't pass shared
+  // terms. In controlled mode the parent's terms drive every input so all calculators agree.
+  const [internalUnits, setInternalUnits] = useState(1);
+  const [internalDuration, setInternalDuration] = useState(installmentDurations[0]?.months || 12);
+  const [internalDownPct, setInternalDownPct] = useState<number>(downPaymentPercent);
   const [showSchedule, setShowSchedule] = useState(false);
+
+  const units = terms?.units ?? internalUnits;
+  const selectedDuration = terms?.months ?? internalDuration;
+  const downPct = terms?.downPct ?? internalDownPct;
+  const frequency = terms?.frequency ?? "monthly";
+
+  const setUnits = (u: number) =>
+    controlled ? onTermsChange!({ ...terms!, units: u }) : setInternalUnits(u);
+  const setSelectedDuration = (m: number) =>
+    controlled ? onTermsChange!({ ...terms!, months: m }) : setInternalDuration(m);
+  const setDownPct = (v: number) =>
+    controlled ? onTermsChange!({ ...terms!, downPct: v }) : setInternalDownPct(v);
+
   // Down-payment % is investor-chosen (the plan is per-investor). Seed the options with the
   // property's advertised default so it's always offered, plus the standard tiers.
   const downOptions = Array.from(new Set([downPaymentPercent, 20, 30, 40]))
     .filter((n) => n > 0 && n < 100)
     .sort((a, b) => a - b);
-  const [downPct, setDownPct] = useState<number>(downPaymentPercent);
 
-  const calculation = useMemo(() => {
+  // Client-side FALLBACK estimate — used only until/unless the engine preview resolves. The
+  // preview (from POST /installments/preview/) is authoritative + cent-exact; this keeps the
+  // UI alive (and the legacy property page working) when no preview is available.
+  const fallback = useMemo(() => {
     const totalInvestment = units * unitPrice;
     const downPayment = Math.round(totalInvestment * (downPct / 100));
     const remainingBalance = totalInvestment - downPayment;
     const installmentAmount = Math.round(remainingBalance / selectedDuration);
     const platformFee = Math.round(totalInvestment * 0.015);
-    const totalWithFees = totalInvestment + platformFee;
-    const downPaymentWithFee = Math.round(downPayment + (platformFee * (downPct / 100)));
-    
-    // Generate payment schedule
-    const schedule = [];
-    const today = new Date();
-    
-    // Down payment
-    schedule.push({
-      id: 0,
-      type: "down_payment",
-      amount: downPaymentWithFee,
-      date: today.toISOString().split('T')[0],
-      status: "pending"
-    });
-    
-    // Installments
-    for (let i = 1; i <= selectedDuration; i++) {
-      const installmentDate = new Date(today);
-      installmentDate.setMonth(installmentDate.getMonth() + i);
-      schedule.push({
-        id: i,
-        type: "installment",
-        amount: installmentAmount,
-        date: installmentDate.toISOString().split('T')[0],
-        status: "upcoming"
-      });
-    }
-
-    return {
-      totalInvestment,
-      downPayment,
-      downPaymentWithFee,
-      remainingBalance,
-      installmentAmount,
-      platformFee,
-      totalWithFees,
-      schedule,
-      numberOfInstallments: selectedDuration
-    };
+    return { totalInvestment, downPayment, remainingBalance, installmentAmount, platformFee };
   }, [units, unitPrice, downPct, selectedDuration]);
 
+  // Normalised view: prefer the real engine numbers; fall back to the client estimate.
+  const view = preview
+    ? {
+        totalInvestment: preview.total,
+        downPayment: preview.downPayment,
+        remainingBalance: preview.total - preview.downPayment,
+        installmentAmount: preview.installmentAmount,
+        platformFee: preview.fee,
+        numberOfInstallments: preview.numberOfInstallments,
+      }
+    : {
+        totalInvestment: fallback.totalInvestment,
+        downPayment: fallback.downPayment,
+        remainingBalance: fallback.remainingBalance,
+        installmentAmount: fallback.installmentAmount,
+        platformFee: fallback.platformFee,
+        numberOfInstallments: selectedDuration,
+      };
+
+  // Payment-schedule rows for the toggle: prefer the engine rows (real dates + cent-exact
+  // amounts), else derive a simple monthly series from the fallback estimate.
+  const today = new Date();
+  const schedule = preview
+    ? [
+        {
+          id: 0,
+          type: "down_payment",
+          amount: preview.downPayment,
+          date: today.toISOString().split("T")[0],
+        },
+        ...preview.rows.map((r) => ({
+          id: r.sequence,
+          type: "installment",
+          amount: r.amount,
+          date: r.dueDate,
+        })),
+      ]
+    : [
+        {
+          id: 0,
+          type: "down_payment",
+          amount: fallback.downPayment,
+          date: today.toISOString().split("T")[0],
+        },
+        ...Array.from({ length: selectedDuration }, (_, i) => {
+          const d = new Date(today);
+          d.setMonth(d.getMonth() + i + 1);
+          return {
+            id: i + 1,
+            type: "installment",
+            amount: fallback.installmentAmount,
+            date: d.toISOString().split("T")[0],
+          };
+        }),
+      ];
+
   const handleUnitsChange = (delta: number) => {
-    const newUnits = Math.max(1, Math.min(100, units + delta));
-    setUnits(newUnits);
+    setUnits(Math.max(1, Math.min(100, units + delta)));
   };
 
   const handleInvest = () => {
-    // Wave B: carry the full installment terms so Checkout charges the DOWN-PAYMENT + the
-    // buyer-borne fee (down% + n installments + frequency). This calculator's plan is monthly.
-    const params = new URLSearchParams({
-      property: propertyId,
-      units: String(units),
-      type: "installment",
-      down: String(downPct),
-      duration: String(selectedDuration),
-      frequency: "monthly",
-    });
-    navigate(`/checkout?${params.toString()}`);
+    // Carry the SHARED installment terms so Checkout charges the DOWN-PAYMENT + the buyer-borne
+    // fee (down% + n installments + frequency) — identical to the Dynamic Planner's CTA.
+    const effectiveTerms: InstallmentTerms = terms ?? {
+      units,
+      downPct,
+      months: selectedDuration,
+      frequency,
+    };
+    navigate(`/checkout?${installmentCheckoutQuery(propertyId, effectiveTerms)}`);
   };
 
   const durationLabel = (months: number) => {
@@ -258,7 +308,7 @@ export function InstallmentCalculator({
       <div className="space-y-3 mb-6">
         <div className="flex items-center justify-between py-2 border-b border-border">
           <span className="text-muted-foreground">{t("installmentCalc.totalInvestment")}</span>
-          <span className="font-semibold">${calculation.totalInvestment.toLocaleString()}</span>
+          <span className="font-semibold">${view.totalInvestment.toLocaleString()}</span>
         </div>
         
         <div className="flex items-center justify-between py-2 border-b border-border">
@@ -266,12 +316,12 @@ export function InstallmentCalculator({
             {t("installmentCalc.downPayment")} ({downPct}%)
             <Info className="w-3 h-3" />
           </span>
-          <span className="font-bold text-primary">${calculation.downPayment.toLocaleString()}</span>
+          <span className="font-bold text-primary">${view.downPayment.toLocaleString()}</span>
         </div>
 
         <div className="flex items-center justify-between py-2 border-b border-border">
           <span className="text-muted-foreground">{t("installmentCalc.remainingBalance")}</span>
-          <span className="font-semibold">${calculation.remainingBalance.toLocaleString()}</span>
+          <span className="font-semibold">${view.remainingBalance.toLocaleString()}</span>
         </div>
 
         <div className="flex items-center justify-between py-2 border-b border-border">
@@ -281,12 +331,14 @@ export function InstallmentCalculator({
 
         <div className="flex items-center justify-between py-2 border-b border-border">
           <span className="text-muted-foreground">{t("installmentCalc.monthlyInstallment")}</span>
-          <span className="font-bold text-foreground">${calculation.installmentAmount.toLocaleString()}</span>
+          <span className="font-bold text-foreground">${view.installmentAmount.toLocaleString()}</span>
         </div>
 
         <div className="flex items-center justify-between py-2 border-b border-border">
-          <span className="text-muted-foreground">{t("checkout.platformFee")} (1.5%)</span>
-          <span className="text-sm">${calculation.platformFee.toLocaleString()}</span>
+          <span className="text-muted-foreground">
+            {language === "ar" ? "رسوم المنصة والإدارة" : "Platform & management fee"}
+          </span>
+          <span className="text-sm">${view.platformFee.toLocaleString()}</span>
         </div>
       </div>
 
@@ -297,7 +349,7 @@ export function InstallmentCalculator({
           <span className="font-medium text-foreground">{t("installmentCalc.payAtCheckout")}</span>
         </div>
         <div className="text-2xl font-bold text-gradient-gold">
-          ${calculation.downPayment.toLocaleString()}
+          ${view.downPayment.toLocaleString()}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           {language === "ar"
@@ -326,7 +378,7 @@ export function InstallmentCalculator({
       {showSchedule && (
         <div className="mb-6 p-4 bg-muted/50 rounded-xl max-h-64 overflow-y-auto">
           <div className="space-y-2">
-            {calculation.schedule.slice(0, 7).map((payment, index) => (
+            {schedule.slice(0, 7).map((payment, index) => (
               <div
                 key={payment.id}
                 className={cn(
@@ -351,9 +403,9 @@ export function InstallmentCalculator({
                 </div>
               </div>
             ))}
-            {calculation.schedule.length > 7 && (
+            {schedule.length > 7 && (
               <div className="text-center text-xs text-muted-foreground py-2">
-                +{calculation.schedule.length - 7} {t("installmentCalc.morePayments")}
+                +{schedule.length - 7} {t("installmentCalc.morePayments")}
               </div>
             )}
           </div>

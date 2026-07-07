@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import {
 import {
   Calculator,
   Download,
+  DollarSign,
   Eye,
   CalendarDays,
   CircleDollarSign,
@@ -24,6 +26,11 @@ import {
   Layers,
   Sparkles,
 } from "lucide-react";
+import type { InstallmentPreview } from "@/integrations/api/client";
+import {
+  type InstallmentTerms,
+  installmentCheckoutQuery,
+} from "@/hooks/useInstallmentPreview";
 
 type Property = {
   id: string;
@@ -42,6 +49,14 @@ interface Props {
   isAr: boolean;
   defaultValue?: number; // total amount investor wants to allocate; falls back to totalValue
   pronova?: boolean;
+  /**
+   * Controlled mode (property page): the SHARED installment terms + the engine preview, so this
+   * planner shows the SAME per-investor plan as the InstallmentCalculator + schedule. When
+   * omitted the planner self-manages its terms and computes a client-side estimate.
+   */
+  terms?: InstallmentTerms;
+  onTermsChange?: (t: InstallmentTerms) => void;
+  preview?: InstallmentPreview | null;
 }
 
 const fmt = (n: number, isAr: boolean) =>
@@ -56,14 +71,47 @@ export function DynamicInstallmentPlanner({
   isAr,
   defaultValue,
   pronova = false,
+  terms,
+  onTermsChange,
+  preview,
 }: Props) {
-  const total = defaultValue ?? property.totalValue ?? 1_000_000;
+  const navigate = useNavigate();
+  const controlled = !!terms && !!onTermsChange;
+  const unitPrice = property.tokenPrice ?? 0;
 
-  const [downPct, setDownPct] = useState<20 | 30 | 40>(30);
-  const [years, setYears] = useState<1 | 2 | 3>(2);
-  const [freq, setFreq] = useState<Frequency>("monthly");
+  // Internal (uncontrolled) fallback state — used only when the parent doesn't pass shared terms.
+  const [internalUnits, setInternalUnits] = useState(1);
+  const [internalDownPct, setInternalDownPct] = useState<number>(30);
+  const [internalYears, setInternalYears] = useState<1 | 2 | 3>(2);
+  const [internalFreq, setInternalFreq] = useState<Frequency>("monthly");
 
-  const plan = useMemo(() => {
+  // Effective terms (shared when controlled). Duration is stored in months on the shared terms;
+  // this planner exposes it as year chips (12→1, 24→2, 36→3).
+  const units = terms?.units ?? internalUnits;
+  const downPct = terms?.downPct ?? internalDownPct;
+  const years = ((terms ? Math.round(terms.months / 12) : internalYears) || 1) as 1 | 2 | 3;
+  const freq: Frequency = terms?.frequency ?? internalFreq;
+
+  const setUnits = (u: number) => {
+    const v = Math.max(1, u);
+    controlled ? onTermsChange!({ ...terms!, units: v }) : setInternalUnits(v);
+  };
+  const setDownPct = (v: number) =>
+    controlled ? onTermsChange!({ ...terms!, downPct: v }) : setInternalDownPct(v);
+  const setYears = (y: 1 | 2 | 3) =>
+    controlled ? onTermsChange!({ ...terms!, months: y * 12 }) : setInternalYears(y);
+  const setFreq = (f: Frequency) =>
+    controlled ? onTermsChange!({ ...terms!, frequency: f }) : setInternalFreq(f);
+
+  // Per-investor position (units × token price) — the real basis, NOT the full property value.
+  // Falls back to defaultValue/totalValue only when there's no unit price to price on.
+  const localTotal =
+    unitPrice > 0 ? units * unitPrice : defaultValue ?? property.totalValue ?? 1_000_000;
+
+  // Client-side estimate — used only until/unless the engine preview resolves (or in uncontrolled
+  // use). The preview (POST /installments/preview/) is authoritative + cent-exact.
+  const localPlan = useMemo(() => {
+    const total = localTotal;
     const down = (total * downPct) / 100;
     const remaining = total - down;
     const periods = freq === "monthly" ? years * 12 : years * 4;
@@ -85,8 +133,38 @@ export function DynamicInstallmentPlanner({
         ownership,
       };
     });
-    return { down, remaining, periods, installment, schedule };
-  }, [total, downPct, years, freq]);
+    return { total, down, remaining, periods, installment, schedule };
+  }, [localTotal, downPct, years, freq]);
+
+  // Prefer the real engine preview; fall back to the client estimate. Same shape either way.
+  const total = preview ? preview.total : localPlan.total;
+  const plan = preview
+    ? {
+        down: preview.downPayment,
+        remaining: preview.total - preview.downPayment,
+        periods: preview.numberOfInstallments,
+        installment: preview.installmentAmount,
+        schedule: preview.rows.map((r) => ({
+          n: r.sequence,
+          date: r.dueDate,
+          amount: r.amount,
+          cumulative: r.cumulative,
+          balance: r.balance,
+          ownership: r.ownershipPercent,
+        })),
+      }
+    : localPlan;
+
+  const handleInvest = () => {
+    // Same shared type=installment checkout URL the InstallmentCalculator's CTA builds.
+    const effectiveTerms: InstallmentTerms = terms ?? {
+      units,
+      downPct,
+      months: years * 12,
+      frequency: freq,
+    };
+    navigate(`/checkout?${installmentCheckoutQuery(property.id, effectiveTerms)}`);
+  };
 
   const chip = (active: boolean) =>
     `px-3 py-2 text-sm rounded-md border transition-all ${
@@ -166,6 +244,34 @@ export function DynamicInstallmentPlanner({
       </CardHeader>
 
       <CardContent className="space-y-6">
+        {/* Position: units × token price — the REAL per-investor basis (not the full property
+            value). Drives the whole plan; the value shown equals what checkout charges. */}
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2">
+            {isAr ? "عدد الوحدات" : "Units"}
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <button
+                className={chip(false)}
+                onClick={() => setUnits(units - 1)}
+                disabled={units <= 1}
+              >
+                −
+              </button>
+              <span className="min-w-[2.5rem] text-center font-semibold">{units}</span>
+              <button className={chip(false)} onClick={() => setUnits(units + 1)}>
+                +
+              </button>
+            </div>
+            <span className="text-sm text-muted-foreground">
+              × {fmt(preview?.unitPrice ?? unitPrice, isAr)} ={" "}
+              <span className="font-semibold text-foreground">{fmt(total, isAr)}</span>{" "}
+              {isAr ? "قيمة المركز" : "position value"}
+            </span>
+          </div>
+        </div>
+
         {/* Controls */}
         <div className="grid md:grid-cols-3 gap-4">
           <div>
@@ -297,9 +403,15 @@ export function DynamicInstallmentPlanner({
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-2">
+          {/* Primary: carry these exact terms to the real type=installment checkout (charges the
+              down-payment + buyer-borne fee) — the same CTA as the InstallmentCalculator. */}
+          <Button variant="hero" className="gap-2" onClick={handleInvest}>
+            <DollarSign className="h-4 w-4" />
+            {isAr ? "الاستثمار بالتقسيط" : "Invest with installments"}
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button variant="outline" className="gap-2">
                 <Eye className="h-4 w-4" />
                 {isAr ? "عرض تفاصيل الخطة" : "View Full Plan Details"}
               </Button>

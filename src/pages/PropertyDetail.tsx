@@ -44,6 +44,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { InstallmentCalculator } from "@/components/property/InstallmentCalculator";
 import { PropertyModelSection } from "@/components/property/PropertyModelSection";
 import { PropertyDataRoom } from "@/components/property/PropertyDataRoom";
+import {
+  useInstallmentPreview,
+  DEFAULT_INSTALLMENT_TERMS,
+  type InstallmentTerms,
+} from "@/hooks/useInstallmentPreview";
 import { InsuranceValuationSection } from "@/components/property/InsuranceValuationSection";
 import { NovaFinancePledgeNotice } from "@/components/legal/NovaFinancePledgeNotice";
 // Phase 2: the model-rich catalogue property comes from the Django API now
@@ -235,6 +240,20 @@ export default function PropertyDetail() {
     };
   }, [id]);
 
+  // Shared installment terms + the live engine preview — the SINGLE source of truth every
+  // installment block on the page renders from, so they all show ONE identical plan. Enabled
+  // only for installment-model catalogue properties; the preview is null otherwise (each block
+  // falls back to a clearly-labelled example). Declared before any early return (hook rules).
+  const [installmentTerms, setInstallmentTerms] =
+    useState<InstallmentTerms>(DEFAULT_INSTALLMENT_TERMS);
+  const { preview: installmentPreview } = useInstallmentPreview(
+    // Catalogue properties are keyed by slug, exposed as `id` on the API object (no `slug`
+    // field); the backend preview looks up Property by slug, so pass the id.
+    catalogueProperty?.id,
+    installmentTerms,
+    catalogueProperty?.model === "installment",
+  );
+
   // Get property data based on ID from URL
   const legacyProperty = propertyDatabase[id || ""];
   const currentProperty = legacyProperty || propertyDatabase["1"];
@@ -341,11 +360,21 @@ export default function PropertyDetail() {
                   cp.installment?.activationDate ??
                   (language === "ar" ? cp.durationAr ?? "" : cp.duration ?? "")
                 }
+                terms={installmentTerms}
+                onTermsChange={setInstallmentTerms}
+                preview={installmentPreview}
               />
             )}
 
-            {/* Institutional Data Room — full digital investment center */}
-            <PropertyDataRoom property={cp} />
+            {/* Institutional Data Room — full digital investment center. The installment terms
+                + engine preview flow through to the Construction tab's calculators/schedule so
+                every block on the page reflects the same per-investor plan. */}
+            <PropertyDataRoom
+              property={cp}
+              installmentTerms={installmentTerms}
+              onInstallmentTermsChange={setInstallmentTerms}
+              installmentPreview={installmentPreview}
+            />
 
             {/* Insurance & Independent Valuation */}
             <InsuranceValuationSection currentValuation={cp.totalValue ?? 5000000} />

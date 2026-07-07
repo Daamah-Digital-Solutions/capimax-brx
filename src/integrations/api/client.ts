@@ -1383,7 +1383,58 @@ export interface PayNextNowResult {
 }
 export type PayNextResult = PayNextStripeResult | PayNextNowResult;
 
+/** One installment row in a live preview (enriched with the running cumulative/ownership). */
+export interface InstallmentPreviewRow {
+  sequence: number;
+  dueDate: string;                  // ISO date
+  amount: number;
+  cumulative: number;               // down-payment + installments paid through this row
+  balance: number;                  // total − cumulative
+  ownershipPercent: number;         // cumulative / total × 100
+}
+
+/**
+ * A live, cent-exact plan preview from the engine (POST /installments/preview/) — the SINGLE
+ * source of truth every property-page calculator renders from, so they all agree. Priced on
+ * the per-investor position (units × unitPrice), never the full property value; `fee` is the
+ * real buyer-borne fee and `amountDueNow` (down + fee) is exactly what checkout charges.
+ */
+export interface InstallmentPreview {
+  property: string;                 // slug
+  units: number;
+  unitPrice: number;
+  total: number;                    // position value = units × unitPrice
+  fee: number;                      // buyer-borne platform + management fee
+  downPayment: number;
+  downPaymentPercent: number;
+  installmentAmount: number;        // headline per-installment (final row may differ by a cent)
+  numberOfInstallments: number;
+  durationMonths: number;
+  frequency: "monthly" | "quarterly";
+  amountDueNow: number;             // downPayment + fee (the installment charge at checkout)
+  rows: InstallmentPreviewRow[];
+}
+
+export interface InstallmentPreviewParams {
+  property: string;                 // Property.slug
+  units: number;
+  down_payment_percent: number;
+  n_installments: number;
+  frequency: "monthly" | "quarterly";
+}
+
 export const installmentsApi = {
+  /**
+   * Live plan preview — PUBLIC, writes nothing. Delegates to the same engine
+   * (compute_schedule + fee_amount_for) that checkout persists, so what the calculators
+   * show equals what is later charged. Backs InstallmentCalculator, DynamicInstallmentPlanner,
+   * InstallmentScheduleSection + PostConstructionPaymentPlan (one identical plan across all).
+   */
+  preview: (params: InstallmentPreviewParams) =>
+    rawRequest("/installments/preview/", {
+      method: "POST",
+      body: params,
+    }) as Promise<InstallmentPreview>,
   /** The caller's own installment plans + schedules. */
   plans: () =>
     rawRequest("/installments/plans/", { auth: true }) as Promise<InstallmentsResponse>,
