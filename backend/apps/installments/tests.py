@@ -927,3 +927,137 @@ class WaveDFullPurchaseUnaffectedTests(TestCase):
         self.assertEqual(token.token_amount, 10)
         self.assertEqual(token.locked_amount, 0)
         self.assertEqual(InstallmentPlan.objects.count(), 0)
+
+
+# =====================================================================
+# LIVE PREVIEW — the single source of truth backing every property-page calculator
+# =====================================================================
+class PreviewEndpointTests(APITestCase):
+    """
+    POST /api/installments/preview/ delegates to compute_schedule + fee_amount_for and
+    writes nothing. It must match build_installment_plan to the cent (same engine) on a
+    per-investor position (units × token_price), and reject non-installment properties.
+    """
+
+    def setUp(self):
+        # token_price 100 → 10 units = a 1,000 position (matches ScheduleMathTests fixtures).
+        self.prop = _make_property("inst-preview", token_price="100")
+        self.user = User.objects.create_user(email="prev@example.com", password="pw12345!")
+
+    def _preview(self, **body):
+        return self.client.post("/api/installments/preview/", body, format="json")
+
+    def test_preview_is_public_no_auth_required(self):
+        resp = self._preview(
+            property="inst-preview", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_preview_matches_build_installment_plan_to_the_cent(self):
+        # Preview a 10-unit (×$100 = $1,000) position, 30% down, 3 monthly.
+        resp = self._preview(
+            property="inst-preview", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.data
+
+        # The SAME engine, persisted, must agree cent-for-cent.
+        plan = build_installment_plan(
+            self.user, self.prop, total_amount="1000",
+            down_payment_percent=30, n_installments=3,
+        )
+        plan_rows = list(plan.payments.order_by("sequence"))
+
+        self.assertEqual(Decimal(str(data["total"])), Decimal("1000.00"))
+        self.assertEqual(Decimal(str(data["downPayment"])), plan.down_payment_amount)
+        self.assertEqual(
+            Decimal(str(data["installmentAmount"])), plan.installment_amount
+        )
+        self.assertEqual(len(data["rows"]), len(plan_rows))
+        for prow, drow in zip(data["rows"], plan_rows):
+            self.assertEqual(Decimal(str(prow["amount"])), drow.amount)
+            self.assertEqual(prow["dueDate"], drow.due_date.isoformat())
+        # down + Σ rows == total, to the cent (the invariant, surfaced through the API).
+        row_sum = sum(Decimal(str(r["amount"])) for r in data["rows"])
+        self.assertEqual(Decimal(str(data["downPayment"])) + row_sum, Decimal("1000.00"))
+
+    def test_preview_uses_per_investor_position_not_full_property_value(self):
+        # Property total_value is millions; the preview must price on units × token_price.
+        resp = self._preview(
+            property="inst-preview", units=3, down_payment_percent=20,
+            n_installments=12, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(str(resp.data["total"])), Decimal("300.00"))  # 3 × 100
+        self.assertEqual(resp.data["unitPrice"], 100.0)
+        self.assertEqual(resp.data["units"], 3)
+
+    def test_preview_includes_real_buyer_borne_fee_and_amount_due_now(self):
+        from apps.investments.services import fee_amount_for
+
+        resp = self._preview(
+            property="inst-preview", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        expected_fee = fee_amount_for(self.prop, Decimal("1000.00"))
+        self.assertEqual(Decimal(str(resp.data["fee"])), expected_fee)
+        # amountDueNow = down + full fee (the installment charge at checkout).
+        self.assertEqual(
+            Decimal(str(resp.data["amountDueNow"])),
+            Decimal(str(resp.data["downPayment"])) + expected_fee,
+        )
+
+    def test_preview_rows_carry_cumulative_balance_ownership(self):
+        resp = self._preview(
+            property="inst-preview", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        rows = resp.data["rows"]
+        # Ownership starts above the down% and reaches 100% on the final row; balance → 0.
+        self.assertGreater(rows[0]["ownershipPercent"], 30.0)
+        self.assertEqual(rows[-1]["ownershipPercent"], 100.0)
+        self.assertEqual(Decimal(str(rows[-1]["balance"])), Decimal("0.00"))
+
+    def test_preview_quarterly_frequency(self):
+        resp = self._preview(
+            property="inst-preview", units=12, down_payment_percent=40,
+            n_installments=4, frequency="quarterly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["frequency"], "quarterly")
+        self.assertEqual(resp.data["durationMonths"], 12)  # 4 × 3
+
+    def test_preview_rejects_non_installment_model(self):
+        _make_property("ready-prop", model="ready", category="ready")
+        resp = self._preview(
+            property="ready-prop", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_preview_unknown_property_404(self):
+        resp = self._preview(
+            property="does-not-exist", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_preview_rejects_bad_terms(self):
+        # down% out of range is rejected by compute_schedule (surfaced as 400).
+        resp = self._preview(
+            property="inst-preview", units=10, down_payment_percent=0,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_preview_writes_nothing(self):
+        before = InstallmentPlan.objects.count()
+        self._preview(
+            property="inst-preview", units=10, down_payment_percent=30,
+            n_installments=3, frequency="monthly",
+        )
+        self.assertEqual(InstallmentPlan.objects.count(), before)
+        self.assertEqual(InstallmentPayment.objects.count(), 0)

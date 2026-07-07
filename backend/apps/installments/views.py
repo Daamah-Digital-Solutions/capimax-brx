@@ -14,19 +14,20 @@ Plans are built by `services.build_installment_plan` (the Checkout wave), never 
 write. Paying an installment reuses the EXISTING Stripe/NOW machinery; we never mint on a
 frontend response.
 """
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.urls import reverse
 
 from apps.core.permissions import KYCApprovedPermission
+from apps.investments.services import fee_amount_for
 from apps.payments import nowpayments_service, stripe_service
 from apps.payments.services import get_or_create_payment
-from apps.properties.models import Property
+from apps.properties.models import Property, PropertyModelType
 from apps.wallets.models import OwnershipToken
 
 from .models import (
@@ -35,6 +36,7 @@ from .models import (
     InstallmentPaymentStatus,
     InstallmentPlanStatus,
 )
+from .services import compute_schedule
 
 
 class InstallmentPlansView(APIView):
@@ -397,3 +399,119 @@ class PayoffInstallmentView(PayNextInstallmentView):
         if provider == "stripe":
             return self._start_stripe(inv, anchor, total, is_payoff=True)
         return self._start_nowpayments(request, inv, anchor, total, is_payoff=True)
+
+
+class InstallmentPreviewView(APIView):
+    """
+    LIVE PLAN PREVIEW — the single source of truth for every installment calculator on the
+    property page (InstallmentCalculator, DynamicInstallmentPlanner, InstallmentScheduleSection,
+    PostConstructionPaymentPlan). Given a property + the investor's chosen terms it returns the
+    SAME cent-exact schedule `build_installment_plan` would persist at checkout, plus the real
+    buyer-borne fee — so the preview shown equals the amount later charged.
+
+      POST /api/installments/preview/
+      body: { "property": "<slug>", "units": <int>, "down_payment_percent": <num>,
+              "n_installments": <int>, "frequency": "monthly"|"quarterly" }
+
+    PURE PREVIEW: delegates to `compute_schedule` (the pure engine math) + `fee_amount_for`
+    (the real admin-set fee). Writes NOTHING — no plan, no payment, no money, no mint. PUBLIC:
+    it is math over public property values and carries no user data. The per-investor position
+    is `units × token_price` (the SAME basis Checkout uses), never the full property value.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data or {}
+
+        slug = (data.get("property") or "").strip()
+        if not slug:
+            return Response(
+                {"detail": "property (slug) is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            prop = Property.objects.get(slug=slug)
+        except Property.DoesNotExist:
+            return Response(
+                {"detail": "Property not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Only installment-model properties can be previewed (mirrors build_installment_plan).
+        if prop.model != PropertyModelType.INSTALLMENT.value:
+            return Response(
+                {"property": "This property is not an installment-model property."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            units = int(data.get("units") or 1)
+        except (TypeError, ValueError):
+            return Response(
+                {"units": "units must be a whole number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if units < 1:
+            return Response(
+                {"units": "At least one unit is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Per-investor position = units × token_price (the Checkout basis), NOT the full
+        # property value. This is the plan total the schedule is computed against.
+        position = (Decimal(units) * Decimal(str(prop.token_price))).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+        # compute_schedule raises a 400 ValidationError for bad down%/n/frequency — let DRF
+        # surface it (same validation build_installment_plan applies at checkout).
+        sched = compute_schedule(
+            total_amount=position,
+            down_payment_percent=data.get("down_payment_percent"),
+            n_installments=data.get("n_installments"),
+            frequency=(data.get("frequency") or "monthly"),
+        )
+
+        # The real buyer-borne fee (platform + management) on the position — identical to what
+        # Checkout charges with the down-payment (fee_amount_for, apps/investments/services.py).
+        fee = fee_amount_for(prop, position)
+        down = sched["down_payment"]
+        total = sched["total"]
+
+        # Enrich each installment row with the running cumulative/balance/ownership the charts
+        # + tables need. cumulative INCLUDES the down-payment (ownership starts at down%).
+        rows = []
+        cumulative = down
+        for r in sched["rows"]:
+            cumulative = cumulative + r["amount"]
+            ownership = (cumulative / total * Decimal("100")) if total else Decimal("0")
+            rows.append(
+                {
+                    "sequence": r["sequence"],
+                    "dueDate": r["due_date"].isoformat(),
+                    "amount": float(r["amount"]),
+                    "cumulative": float(cumulative),
+                    "balance": float(max(Decimal("0"), total - cumulative)),
+                    "ownershipPercent": round(float(ownership), 2),
+                }
+            )
+
+        return Response(
+            {
+                "property": prop.slug,
+                "units": units,
+                "unitPrice": float(prop.token_price),
+                "total": float(total),
+                "fee": float(fee),
+                "downPayment": float(down),
+                "downPaymentPercent": float(sched["down_payment_percent"]),
+                "installmentAmount": float(sched["installment_amount"]),
+                "numberOfInstallments": len(rows),
+                "durationMonths": sched["duration_months"],
+                "frequency": sched["frequency"],
+                # The amount charged NOW at checkout for an installment buy = down + full fee
+                # (matches Checkout.tsx finalAmount for installmentTerms).
+                "amountDueNow": float(down + fee),
+                "rows": rows,
+            }
+        )

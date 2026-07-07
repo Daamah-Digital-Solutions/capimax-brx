@@ -3,6 +3,7 @@ from django.urls import path
 
 from .views import (
     InstallmentPlansView,
+    InstallmentPreviewView,
     PayNextInstallmentView,
     PayoffInstallmentView,
 )
@@ -10,6 +11,9 @@ from .views import (
 app_name = "installments"
 
 urlpatterns = [
+    # Public live plan preview (pure engine math; writes nothing) — the single source of
+    # truth for every installment calculator on the property page.
+    path("preview/", InstallmentPreviewView.as_view(), name="installment-preview"),
     # Self-scoped: the caller's own installment plans + schedules (read).
     path("plans/", InstallmentPlansView.as_view(), name="installment-plans"),
     # Wave C: gated charge for the next due installment (Stripe/NOW) → progressive release.
