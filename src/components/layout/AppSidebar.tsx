@@ -44,6 +44,7 @@ import {
   Users2,
   HardHat,
   ArrowRightLeft,
+  ArrowDownToLine,
   Newspaper,
   Sparkles,
 } from "lucide-react";
@@ -178,6 +179,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
       { titleKey: "nav.lpOperations", icon: TrendingUp, href: "/liquidity-provider#operations" },
       { titleKey: "nav.lpReports", icon: BarChart3, href: "/liquidity-provider#reports" },
+      { titleKey: "nav.lpDeposit", icon: ArrowDownToLine, href: "/liquidity-provider#deposits" },
       { titleKey: "nav.lpWithdrawals", icon: Wallet, href: "/liquidity-provider#withdrawals" },
     ],
   },

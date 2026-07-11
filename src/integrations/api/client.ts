@@ -416,11 +416,11 @@ export const paymentsApi = {
    * (no investment, no mint). Returns the client_secret to confirm with Elements. The
    * balance is credited only on the confirmed webhook. 503 ⇒ Stripe not configured.
    */
-  createDepositStripe: (amount: number) =>
+  createDepositStripe: (amount: number, target: "wallet" | "lp" = "wallet") =>
     rawRequest("/payments/deposit/stripe/", {
       method: "POST",
       auth: true,
-      body: { amount },
+      body: { amount, target },
     }) as Promise<{
       client_secret: string;
       publishable_key: string;
@@ -432,11 +432,11 @@ export const paymentsApi = {
    * returns the REAL deposit address + amount. Credited only on the confirmed IPN.
    * 503 ⇒ NOW not configured.
    */
-  createDepositNow: (amount: number, payCurrency: string) =>
+  createDepositNow: (amount: number, payCurrency: string, target: "wallet" | "lp" = "wallet") =>
     rawRequest("/payments/deposit/nowpayments/", {
       method: "POST",
       auth: true,
-      body: { amount, pay_currency: payCurrency },
+      body: { amount, pay_currency: payCurrency, target },
     }) as Promise<{
       payment_id: string;
       pay_address: string;

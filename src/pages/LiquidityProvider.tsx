@@ -12,6 +12,7 @@ import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
 import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
 import { LPDocuments } from "@/components/liquidity/LPDocuments";
 import { LPAccountManager } from "@/components/liquidity/LPAccountManager";
+import { LPDepositPanel } from "@/components/liquidity/LPDepositPanel";
 import { LPAnalyticsCharts } from "@/components/liquidity/LPAnalyticsCharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   RefreshCw,
   Shield,
   Building2,
+  ArrowDownToLine,
 } from "lucide-react";
 
 export default function LiquidityProvider() {
@@ -60,7 +62,7 @@ export default function LiquidityProvider() {
   // #withdrawals — see AppSidebar). The tabs are useState-driven, so without this the
   // hash was ignored and every link opened Overview. Sync hash → activeTab on mount and
   // on hashchange; an empty/invalid hash falls back to overview.
-  const LP_TABS = ["overview", "operations", "reports", "withdrawals", "analytics", "documents"];
+  const LP_TABS = ["overview", "operations", "reports", "deposits", "withdrawals", "analytics", "documents"];
   useEffect(() => {
     const applyHash = () => {
       const h = window.location.hash.replace("#", "");
@@ -331,6 +333,10 @@ export default function LiquidityProvider() {
                 <FileText className="w-4 h-4" />
                 {isRTL ? "التقارير" : "Reports"}
               </TabsTrigger>
+              <TabsTrigger value="deposits" className="flex items-center gap-2">
+                <ArrowDownToLine className="w-4 h-4" />
+                {isRTL ? "إيداع" : "Deposit"}
+              </TabsTrigger>
               <TabsTrigger value="withdrawals" className="flex items-center gap-2">
                 <Wallet className="w-4 h-4" />
                 {isRTL ? "السحوبات" : "Withdrawals"}
@@ -375,6 +381,10 @@ export default function LiquidityProvider() {
                 transactions={transactions}
                 isRTL={isRTL}
               />
+            </TabsContent>
+
+            <TabsContent value="deposits" className="mt-6">
+              <LPDepositPanel lpProfile={lpProfile} isRTL={isRTL} onDeposited={refresh} />
             </TabsContent>
 
             <TabsContent value="withdrawals" className="mt-6 space-y-6">

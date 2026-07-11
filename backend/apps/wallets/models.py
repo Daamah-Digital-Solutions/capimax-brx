@@ -306,12 +306,24 @@ class Deposit(models.Model):
         COMPLETED = "completed", _("Completed")
         FAILED = "failed", _("Failed")
 
+    class Target(models.TextChoices):
+        # Which balance a confirmed top-up credits. WALLET is the ordinary internal
+        # UserBalance (default, unchanged behaviour). LP funds the caller's Liquidity
+        # Provider operating balance (LiquidityProvider.current_balance) so an LP can
+        # add funds before buying on the LP market — routed in _credit_deposit.
+        WALLET = "wallet", _("Wallet balance")
+        LP = "lp", _("Liquidity Provider balance")
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="deposits"
     )
     amount = models.DecimalField(max_digits=16, decimal_places=2)  # USD
     payment_method = models.CharField(max_length=16, default="card")  # card | crypto
+    # Credit routing (see Target): default wallet keeps every existing deposit identical.
+    target = models.CharField(
+        max_length=8, choices=Target.choices, default=Target.WALLET, db_index=True
+    )
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
     )

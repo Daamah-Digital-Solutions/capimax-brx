@@ -144,11 +144,43 @@ def _complete_payment(payment: Payment) -> dict:
     return {"processed": not already, "minted": minted, "reason": reason}
 
 
+def _try_credit_lp_deposit(deposit) -> bool:
+    """
+    Credit a confirmed LP-targeted deposit to the caller's LP operating balance
+    (LiquidityProvider.current_balance + total_deposited) and record an LP ledger row so
+    the deposit shows in the LP's transactions. Returns True when it credited an LP wallet,
+    False when the user has no LP profile (the caller then falls back to the ordinary
+    UserBalance credit, so funds are never lost). Runs inside _credit_deposit's atomic block.
+    """
+    from django.utils import timezone
+
+    from apps.lp.models import LiquidityProvider, LPTransaction
+
+    lp = LiquidityProvider.objects.select_for_update().filter(user=deposit.user).first()
+    if lp is None:
+        return False
+    lp.current_balance = lp.current_balance + deposit.amount
+    lp.total_deposited = lp.total_deposited + deposit.amount
+    lp.save(update_fields=["current_balance", "total_deposited", "updated_at"])
+    LPTransaction.objects.create(
+        lp=lp,
+        tx_type="deposit",
+        amount=deposit.amount,
+        currency="USD",
+        status=LPTransaction.TxStatus.COMPLETED,
+        processed_at=timezone.now(),
+        notes="Wallet top-up",
+    )
+    return True
+
+
 def _credit_deposit(deposit_id) -> bool:
     """
-    Credit a confirmed DEPOSIT to the user's internal balance, exactly once. Returns True
-    if it credited now, False if it was already credited (replayed webhook → no double
-    credit). Settlement-gated: only ever reached from `_complete_payment`.
+    Credit a confirmed DEPOSIT to its target balance, exactly once. Returns True if it
+    credited now, False if it was already credited (replayed webhook → no double credit).
+    The deposit's `target` routes the credit: LP → the LiquidityProvider operating balance
+    (so an LP can fund market ops), otherwise the user's internal UserBalance (default,
+    unchanged). Settlement-gated: only ever reached from `_complete_payment`.
     """
     from django.utils import timezone
 
@@ -159,10 +191,14 @@ def _credit_deposit(deposit_id) -> bool:
         deposit = Deposit.objects.select_for_update().get(pk=deposit_id)
         if deposit.credited:
             return False  # idempotent: already credited on an earlier delivery
-        credit_user_balance(
-            deposit.user, deposit.amount, source="deposit",
-            reference=str(deposit.id), memo="Wallet top-up",
+        credited_lp = (
+            deposit.target == Deposit.Target.LP and _try_credit_lp_deposit(deposit)
         )
+        if not credited_lp:
+            credit_user_balance(
+                deposit.user, deposit.amount, source="deposit",
+                reference=str(deposit.id), memo="Wallet top-up",
+            )
         deposit.credited = True
         deposit.status = Deposit.Status.COMPLETED
         deposit.credited_at = timezone.now()

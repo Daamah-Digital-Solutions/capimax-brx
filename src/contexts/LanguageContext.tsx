@@ -52,6 +52,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.lpOperations": "العمليات",
     "nav.lpReports": "تقارير السيولة",
     "nav.lpWithdrawals": "السحوبات",
+    "nav.lpDeposit": "إيداع",
     "nav.lpMarket": "سوق مزودي السيولة",
     
     // Sections
@@ -1492,6 +1493,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.lpOperations": "Operations",
     "nav.lpReports": "LP Reports",
     "nav.lpWithdrawals": "Withdrawals",
+    "nav.lpDeposit": "Deposit",
     "nav.lpMarket": "LP Market",
     
     // Sections

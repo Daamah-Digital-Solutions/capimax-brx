@@ -44,6 +44,17 @@ interface DepositPayStepProps {
   amount: number;
   /** Called once the deposit is confirmed credited (the wallet refetches + dialog closes). */
   onPaid: () => void;
+  /**
+   * Which balance the top-up funds. "wallet" (default) credits the internal UserBalance;
+   * "lp" funds the caller's Liquidity Provider operating balance (LiquidityProvider.
+   * current_balance) so an LP can add funds before buying on the LP market.
+   */
+  target?: "wallet" | "lp";
+  /**
+   * Reads the CURRENT target balance (to detect the credit landing). Defaults to the
+   * wallet balance; the LP deposit passes a reader over the LP profile's current_balance.
+   */
+  pollBalance?: () => Promise<number>;
 }
 
 const CRYPTO_OPTIONS = [
@@ -56,12 +67,17 @@ const CRYPTO_OPTIONS = [
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_TRIES = 20; // ~60s for the webhook/IPN to confirm + credit
 
-/** Poll the balance until it rises above `startBalance` (the credit landed). */
-async function pollUntilCredited(startBalance: number): Promise<boolean> {
+type BalanceReader = () => Promise<number>;
+
+/** Default balance reader — the caller's internal wallet UserBalance. */
+const walletBalanceReader: BalanceReader = async () =>
+  Number((await walletsApi.balance()).current_balance) || 0;
+
+/** Poll the target balance until it rises above `startBalance` (the credit landed). */
+async function pollUntilCredited(startBalance: number, readBalance: BalanceReader): Promise<boolean> {
   for (let i = 0; i < POLL_MAX_TRIES; i++) {
     try {
-      const bal = await walletsApi.balance();
-      if (Number(bal.current_balance) > startBalance) return true;
+      if ((await readBalance()) > startBalance) return true;
     } catch {
       /* transient — keep polling */
     }
@@ -71,21 +87,22 @@ async function pollUntilCredited(startBalance: number): Promise<boolean> {
 }
 
 // --- Card (Stripe Elements) --------------------------------------------------- //
-function DepositCardForm({ amount, onPaid }: DepositPayStepProps) {
+function DepositCardForm({ amount, onPaid, target = "wallet", pollBalance }: DepositPayStepProps) {
   const { language, isRTL } = useLanguage();
   const isArabic = language === "ar";
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<"idle" | "confirming" | "settling">("idle");
+  const readBalance = pollBalance ?? walletBalanceReader;
 
   const handlePay = async () => {
     if (!stripe || !elements || busy) return;
     setBusy(true);
     try {
-      const start = Number((await walletsApi.balance().catch(() => ({ current_balance: 0 }))).current_balance) || 0;
+      const start = await readBalance().catch(() => 0);
       // 1) Start the gated deposit charge (credits balance on the confirmed webhook).
-      const res = await paymentsApi.createDepositStripe(amount);
+      const res = await paymentsApi.createDepositStripe(amount, target);
       // 2) Confirm the card DIRECTLY with Stripe (card data never hits our server).
       const card = elements.getElement(CardElement);
       if (!card) return;
@@ -99,7 +116,7 @@ function DepositCardForm({ amount, onPaid }: DepositPayStepProps) {
       }
       // 3) The webhook now credits the balance. Poll until it rises.
       setPhase("settling");
-      const ok = await pollUntilCredited(start);
+      const ok = await pollUntilCredited(start, readBalance);
       toast[ok ? "success" : "info"](
         ok
           ? isArabic ? "تم إيداع الرصيد" : "Deposit credited"
@@ -216,7 +233,7 @@ function DepositCardTab(props: DepositPayStepProps) {
 }
 
 // --- Crypto (NOW Payments) ---------------------------------------------------- //
-function DepositCryptoTab({ amount, onPaid }: DepositPayStepProps) {
+function DepositCryptoTab({ amount, onPaid, target = "wallet", pollBalance }: DepositPayStepProps) {
   const { language, isRTL } = useLanguage();
   const isArabic = language === "ar";
   const [selected, setSelected] = useState("usdt");
@@ -225,16 +242,17 @@ function DepositCryptoTab({ amount, onPaid }: DepositPayStepProps) {
   const [notConfigured, setNotConfigured] = useState(false);
   const [pay, setPay] = useState<{ pay_address: string; pay_amount: string | null; pay_currency: string } | null>(null);
   const option = CRYPTO_OPTIONS.find((c) => c.id === selected);
+  const readBalance = pollBalance ?? walletBalanceReader;
 
   const handleGenerate = async () => {
     if (busy || !option) return;
     setBusy(true);
     setNotConfigured(false);
     try {
-      const start = Number((await walletsApi.balance().catch(() => ({ current_balance: 0 }))).current_balance) || 0;
-      const res = await paymentsApi.createDepositNow(amount, option.code);
+      const start = await readBalance().catch(() => 0);
+      const res = await paymentsApi.createDepositNow(amount, option.code, target);
       setPay(res);
-      const ok = await pollUntilCredited(start);
+      const ok = await pollUntilCredited(start, readBalance);
       if (ok) {
         toast.success(isArabic ? "تم إيداع الرصيد" : "Deposit credited");
         onPaid();
@@ -255,7 +273,7 @@ function DepositCryptoTab({ amount, onPaid }: DepositPayStepProps) {
     setBusy(true);
     try {
       const start = -1; // any positive balance counts as credited for the recheck
-      const ok = await pollUntilCredited(start);
+      const ok = await pollUntilCredited(start, readBalance);
       if (ok) {
         toast.success(isArabic ? "تم إيداع الرصيد" : "Deposit credited");
         onPaid();

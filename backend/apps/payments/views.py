@@ -290,6 +290,30 @@ def _parse_deposit_amount(raw):
     return amount, None
 
 
+def _resolve_deposit_target(request):
+    """
+    Where a confirmed top-up credits: ("wallet" | "lp", None) or (None, error Response).
+    "lp" (fund the caller's Liquidity Provider operating balance) requires an APPROVED LP
+    profile; anything unknown falls back to the ordinary wallet balance.
+    """
+    target = (request.data.get("target") or "wallet").strip().lower()
+    if target not in ("wallet", "lp"):
+        target = "wallet"
+    if target == "lp":
+        from apps.lp.models import LiquidityProvider, LPStatus
+
+        is_lp = LiquidityProvider.objects.filter(
+            user=request.user, status=LPStatus.APPROVED
+        ).exists()
+        if not is_lp:
+            return None, Response(
+                {"detail": "An approved Liquidity Provider profile is required to deposit "
+                           "to the LP balance."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    return target, None
+
+
 class CreateDepositStripeIntentView(APIView):
     """
     Start a Stripe card payment to TOP UP the caller's balance. KYC-gated (matches the
@@ -303,6 +327,9 @@ class CreateDepositStripeIntentView(APIView):
         amount, err = _parse_deposit_amount(request.data.get("amount"))
         if err:
             return err
+        target, terr = _resolve_deposit_target(request)
+        if terr:
+            return terr
         if not stripe_service.is_configured():
             return Response(
                 {"configured": False, "code": "stripe_unconfigured",
@@ -311,7 +338,7 @@ class CreateDepositStripeIntentView(APIView):
             )
 
         deposit = Deposit.objects.create(
-            user=request.user, amount=amount, payment_method="card"
+            user=request.user, amount=amount, payment_method="card", target=target
         )
         payment = Payment.objects.create(
             deposit=deposit, provider="stripe", amount=amount, currency="usd"
@@ -359,6 +386,9 @@ class CreateDepositNowPaymentsView(APIView):
                 {"detail": "pay_currency is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        target, terr = _resolve_deposit_target(request)
+        if terr:
+            return terr
         if not nowpayments_service.is_configured():
             return Response(
                 {"configured": False, "code": "nowpayments_unconfigured",
@@ -367,7 +397,7 @@ class CreateDepositNowPaymentsView(APIView):
             )
 
         deposit = Deposit.objects.create(
-            user=request.user, amount=amount, payment_method="crypto"
+            user=request.user, amount=amount, payment_method="crypto", target=target
         )
         payment = Payment.objects.create(
             deposit=deposit, provider="nowpayments", amount=amount, currency="usd"

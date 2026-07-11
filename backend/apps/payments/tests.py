@@ -498,6 +498,51 @@ class DepositTests(APITestCase):
         deposit.refresh_from_db()
         self.assertEqual(deposit.status, self.Deposit.Status.FAILED)
 
+    # --- LP-targeted deposit credits the LP operating balance, NOT the wallet ---- #
+    def test_lp_targeted_deposit_credits_lp_balance_not_wallet(self):
+        from apps.lp.models import LiquidityProvider, LPStatus, LPTransaction
+
+        lp = LiquidityProvider.objects.create(
+            user=self.user, contact_name="LP One", email="dep@example.com",
+            status=LPStatus.APPROVED, current_balance=Decimal("0"),
+            total_deposited=Decimal("0"),
+        )
+        deposit = self.Deposit.objects.create(
+            user=self.user, amount=Decimal("2500.00"), payment_method="card",
+            target=self.Deposit.Target.LP,
+        )
+        Payment.objects.create(
+            deposit=deposit, provider="stripe", amount=Decimal("2500.00"),
+            currency="usd", stripe_payment_intent_id="pi_dep_lp_1",
+        )
+        res = process_successful_payment("pi_dep_lp_1")
+
+        self.assertTrue(res["credited"])
+        # LP operating balance + total_deposited rose by the deposit amount.
+        lp.refresh_from_db()
+        self.assertEqual(lp.current_balance, Decimal("2500.00"))
+        self.assertEqual(lp.total_deposited, Decimal("2500.00"))
+        # An LP ledger row records the deposit (visible in the LP transactions view).
+        self.assertTrue(
+            LPTransaction.objects.filter(
+                lp=lp, tx_type="deposit", amount=Decimal("2500.00")
+            ).exists()
+        )
+        # The ordinary wallet balance is a SEPARATE ledger and was NOT touched.
+        self.assertEqual(self._balance(self.user), Decimal("0"))
+        deposit.refresh_from_db()
+        self.assertTrue(deposit.credited)
+
+    # --- LP deposit endpoint rejects a user with no approved LP profile --------- #
+    def test_lp_deposit_endpoint_requires_approved_lp(self):
+        # self.user is KYC-approved but is NOT a Liquidity Provider → 400 (before any PSP).
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            "/api/payments/deposit/stripe/",
+            {"amount": "100", "target": "lp"}, format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     # --- endpoint: KYC-gated, honest 503 when keys deferred (no silent success) - #
     def test_create_endpoint_requires_kyc(self):
         nokyc = User.objects.create_user(email="depnokyc@example.com", password="pw-12345-strong")
