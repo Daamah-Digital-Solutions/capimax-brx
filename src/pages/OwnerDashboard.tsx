@@ -167,9 +167,11 @@ export default function OwnerDashboard() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="font-display text-2xl font-bold text-foreground">
-                  لوحة تحكم المالك / Owner Dashboard
+                  {isAr ? "لوحة تحكم المالك" : "Owner Dashboard"}
                 </h1>
-                <p className="text-muted-foreground">إدارة أصولك ومتابعة الأداء</p>
+                <p className="text-muted-foreground">
+                  {isAr ? "إدارة أصولك ومتابعة الأداء" : "Manage your assets and track performance"}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <Button
@@ -179,12 +181,12 @@ export default function OwnerDashboard() {
                   onClick={() => runExport("owner", () => reportsApi.export("owner-earnings", "pdf"))}
                 >
                   <Download className="w-4 h-4" />
-                  تقرير شامل
+                  {isAr ? "تقرير شامل" : "Full Report"}
                 </Button>
                 <Link to="/submit-property">
                   <Button variant="hero" className="gap-2">
                     <Plus className="w-4 h-4" />
-                    تقديم عقار جديد
+                    {isAr ? "تقديم عقار جديد" : "Submit New Property"}
                   </Button>
                 </Link>
               </div>
@@ -259,10 +261,10 @@ export default function OwnerDashboard() {
               <Tabs defaultValue="all" className="space-y-6">
                 <div className="flex items-center justify-between">
                   <TabsList className="bg-muted/50">
-                    <TabsTrigger value="all">الكل</TabsTrigger>
-                    <TabsTrigger value="active">نشط</TabsTrigger>
-                    <TabsTrigger value="construction">تحت الإنشاء</TabsTrigger>
-                    <TabsTrigger value="pending">قيد المراجعة</TabsTrigger>
+                    <TabsTrigger value="all">{isAr ? "الكل" : "All"}</TabsTrigger>
+                    <TabsTrigger value="active">{isAr ? "نشط" : "Active"}</TabsTrigger>
+                    <TabsTrigger value="construction">{isAr ? "تحت الإنشاء" : "Under Construction"}</TabsTrigger>
+                    <TabsTrigger value="pending">{isAr ? "قيد المراجعة" : "In Review"}</TabsTrigger>
                   </TabsList>
                 </div>
 

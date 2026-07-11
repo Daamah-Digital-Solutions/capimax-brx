@@ -165,18 +165,20 @@ export default function Reports() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="font-display text-2xl font-bold text-foreground">
-                  التقارير والتحليلات / Reports & Analytics
+                  {isAr ? "التقارير والتحليلات" : "Reports & Analytics"}
                 </h1>
-                <p className="text-muted-foreground">تحليل شامل لمحفظتك الاستثمارية</p>
+                <p className="text-muted-foreground">
+                  {isAr ? "تحليل شامل لمحفظتك" : "A complete analysis of your portfolio"}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <Button variant="outline" className="gap-2" onClick={refreshAll}>
                   <RefreshCw className="w-4 h-4" />
-                  تحديث
+                  {isAr ? "تحديث" : "Refresh"}
                 </Button>
                 <Button variant="hero" className="gap-2" onClick={exportFull} disabled={exporting !== null}>
                   <Download className="w-4 h-4" />
-                  تصدير شامل
+                  {isAr ? "تصدير شامل" : "Export All"}
                 </Button>
               </div>
             </div>
@@ -188,7 +190,7 @@ export default function Reports() {
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
             <div className="col-span-2 p-6 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl border border-primary/30 animate-fade-in">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">إجمالي قيمة المحفظة</span>
+                <span className="text-sm text-muted-foreground">{isAr ? "إجمالي قيمة المحفظة" : "Total Portfolio Value"}</span>
                 {/* Period-over-period change needs a value-snapshot history (none yet) → "—". */}
                 <Badge variant="outline" className="gap-1 text-muted-foreground">—</Badge>
               </div>
@@ -199,22 +201,22 @@ export default function Reports() {
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.05s" }}>
-              <div className="text-sm text-muted-foreground mb-1">العقارات</div>
+              <div className="text-sm text-muted-foreground mb-1">{isAr ? "العقارات" : "Properties"}</div>
               <div className="text-2xl font-bold text-foreground">{propertiesCount}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <div className="text-sm text-muted-foreground mb-1">متوسط العائد</div>
+              <div className="text-sm text-muted-foreground mb-1">{isAr ? "متوسط العائد" : "Avg. Yield"}</div>
               <div className="text-2xl font-bold text-foreground">{avgYield == null ? "—" : `${avgYield.toFixed(1)}%`}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.15s" }}>
-              <div className="text-sm text-muted-foreground mb-1">التوزيعات</div>
+              <div className="text-sm text-muted-foreground mb-1">{isAr ? "التوزيعات" : "Distributions"}</div>
               <div className="text-2xl font-bold text-success">${distributionStats.totalReceived.toLocaleString()}</div>
             </div>
 
             <div className="p-6 bg-card rounded-2xl border border-border animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              <div className="text-sm text-muted-foreground mb-1">عائد المحفظة</div>
+              <div className="text-sm text-muted-foreground mb-1">{isAr ? "عائد المحفظة" : "Portfolio Return"}</div>
               <div className="text-2xl font-bold text-success">{fmtPct(returnPercent)}</div>
             </div>
           </div>
@@ -222,31 +224,31 @@ export default function Reports() {
           <Tabs defaultValue="analytics" className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <TabsList className="bg-muted/50">
-                <TabsTrigger value="analytics">التحليلات</TabsTrigger>
-                <TabsTrigger value="reports">التقارير</TabsTrigger>
-                <TabsTrigger value="performance">أداء العقارات</TabsTrigger>
+                <TabsTrigger value="analytics">{isAr ? "التحليلات" : "Analytics"}</TabsTrigger>
+                <TabsTrigger value="reports">{isAr ? "التقارير" : "Reports"}</TabsTrigger>
+                <TabsTrigger value="performance">{isAr ? "أداء العقارات" : "Property Performance"}</TabsTrigger>
               </TabsList>
 
               <div className="flex items-center gap-3">
                 <Select value={period} onValueChange={setPeriod}>
                   <SelectTrigger className="w-36">
                     <Calendar className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="الفترة" />
+                    <SelectValue placeholder={isAr ? "الفترة" : "Period"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">كل الفترات</SelectItem>
-                    <SelectItem value="month">هذا الشهر</SelectItem>
-                    <SelectItem value="quarter">هذا الربع</SelectItem>
-                    <SelectItem value="year">هذا العام</SelectItem>
+                    <SelectItem value="all">{isAr ? "كل الفترات" : "All periods"}</SelectItem>
+                    <SelectItem value="month">{isAr ? "هذا الشهر" : "This month"}</SelectItem>
+                    <SelectItem value="quarter">{isAr ? "هذا الربع" : "This quarter"}</SelectItem>
+                    <SelectItem value="year">{isAr ? "هذا العام" : "This year"}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={property} onValueChange={setProperty}>
                   <SelectTrigger className="w-48">
                     <Building2 className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="العقار" />
+                    <SelectValue placeholder={isAr ? "العقار" : "Property"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع العقارات</SelectItem>
+                    <SelectItem value="all">{isAr ? "جميع العقارات" : "All properties"}</SelectItem>
                     {perfRows.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
@@ -261,7 +263,7 @@ export default function Reports() {
                 {/* Portfolio Value Chart — needs value-snapshot history (deferred) → honest empty. */}
                 <div className="bg-card rounded-2xl border border-border p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-display text-lg font-semibold text-foreground">قيمة المحفظة</h3>
+                    <h3 className="font-display text-lg font-semibold text-foreground">{isAr ? "قيمة المحفظة" : "Portfolio Value"}</h3>
                     <Badge variant="outline" className="text-xs text-muted-foreground">
                       {isAr ? "قريباً" : "Coming soon"}
                     </Badge>
@@ -279,7 +281,7 @@ export default function Reports() {
 
                 {/* Allocation Chart — real split by asset type (value-weighted). */}
                 <div className="bg-card rounded-2xl border border-border p-6">
-                  <h3 className="font-display text-lg font-semibold text-foreground mb-6">توزيع المحفظة</h3>
+                  <h3 className="font-display text-lg font-semibold text-foreground mb-6">{isAr ? "توزيع المحفظة" : "Portfolio Allocation"}</h3>
                   {allocation.entries.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-48 text-center">
                       <PieChart className="w-10 h-10 text-muted-foreground/50 mb-3" />
@@ -312,7 +314,7 @@ export default function Reports() {
                           </svg>
                           <div className="absolute inset-0 flex items-center justify-center flex-col">
                             <div className="text-2xl font-bold text-foreground">{propertiesCount}</div>
-                            <div className="text-sm text-muted-foreground">عقارات</div>
+                            <div className="text-sm text-muted-foreground">{isAr ? "عقارات" : "Properties"}</div>
                           </div>
                         </div>
                       </div>
@@ -335,7 +337,7 @@ export default function Reports() {
 
                 {/* Distributions Chart — real monthly totals from distribution history. */}
                 <div className="bg-card rounded-2xl border border-border p-6">
-                  <h3 className="font-display text-lg font-semibold text-foreground mb-6">التوزيعات الشهرية</h3>
+                  <h3 className="font-display text-lg font-semibold text-foreground mb-6">{isAr ? "التوزيعات الشهرية" : "Monthly Distributions"}</h3>
                   {monthly.length === 0 || monthlyMax <= 0 ? (
                     <div className="h-48 bg-muted/30 rounded-xl flex items-center justify-center text-muted-foreground">
                       —
@@ -359,7 +361,7 @@ export default function Reports() {
 
                 {/* Returns Chart — real per-property return% (cost basis); "—" when none. */}
                 <div className="bg-card rounded-2xl border border-border p-6">
-                  <h3 className="font-display text-lg font-semibold text-foreground mb-6">العوائد حسب العقار</h3>
+                  <h3 className="font-display text-lg font-semibold text-foreground mb-6">{isAr ? "العوائد حسب العقار" : "Returns by Property"}</h3>
                   {filteredPerf.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">—</div>
                   ) : (
@@ -417,7 +419,7 @@ export default function Reports() {
                 <div className="lg:col-span-3">
                   <div className="bg-card rounded-2xl border border-border overflow-hidden">
                     <div className="p-6 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-                      <h3 className="font-display text-lg font-semibold text-foreground">أحدث التقارير</h3>
+                      <h3 className="font-display text-lg font-semibold text-foreground">{isAr ? "أحدث التقارير" : "Latest Reports"}</h3>
                       <div className="flex items-center gap-2 flex-wrap">
                         <Button variant="outline" size="sm" className="gap-2" disabled={exporting !== null}
                           onClick={() => run("dist", () => reportsApi.export("distributions", "pdf"))}>
@@ -454,17 +456,17 @@ export default function Reports() {
             <TabsContent value="performance">
               <div className="bg-card rounded-2xl border border-border overflow-hidden">
                 <div className="p-6 border-b border-border">
-                  <h3 className="font-display text-lg font-semibold text-foreground">أداء العقارات</h3>
+                  <h3 className="font-display text-lg font-semibold text-foreground">{isAr ? "أداء العقارات" : "Property Performance"}</h3>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">العقار</th>
-                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">القيمة الحالية</th>
-                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">التغير</th>
-                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">العائد السنوي</th>
-                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">الإجراءات</th>
+                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">{isAr ? "العقار" : "Property"}</th>
+                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">{isAr ? "القيمة الحالية" : "Current Value"}</th>
+                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">{isAr ? "التغير" : "Change"}</th>
+                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">{isAr ? "العائد السنوي" : "Annual Yield"}</th>
+                        <th className="text-right px-6 py-4 text-xs font-medium text-muted-foreground uppercase">{isAr ? "الإجراءات" : "Actions"}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">

@@ -1,7 +1,10 @@
 import { Smartphone, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function ApplePayButton() {
+  const { language } = useLanguage();
+  const isAr = language === "ar";
   // Check if Apple Pay is available (simplified check)
   const isAppleDevice = /iPhone|iPad|Mac/i.test(navigator.userAgent);
 
@@ -27,19 +30,25 @@ export function ApplePayButton() {
         {isAppleDevice ? (
           <>
             <Smartphone className="w-5 h-5 text-success" />
-            <span className="text-sm text-success">جهازك متوافق مع Apple Pay</span>
+            <span className="text-sm text-success">
+              {isAr ? "جهازك متوافق مع Apple Pay" : "Your device supports Apple Pay"}
+            </span>
           </>
         ) : (
           <>
             <AlertCircle className="w-5 h-5 text-warning" />
-            <span className="text-sm text-warning">Apple Pay متاح فقط على أجهزة Apple</span>
+            <span className="text-sm text-warning">
+              {isAr ? "Apple Pay متاح فقط على أجهزة Apple" : "Apple Pay is only available on Apple devices"}
+            </span>
           </>
         )}
       </div>
 
       {/* Info Note */}
       <p className="text-xs text-muted-foreground text-center">
-        عند النقر سيتم توجيهك لإتمام الدفع عبر Apple Pay
+        {isAr
+          ? "عند النقر سيتم توجيهك لإتمام الدفع عبر Apple Pay"
+          : "You'll be redirected to complete payment with Apple Pay."}
       </p>
     </div>
   );

@@ -1,7 +1,10 @@
 import { Wallet, AlertCircle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function GooglePayButton() {
+  const { language } = useLanguage();
+  const isAr = language === "ar";
   // Simplified check for Google Pay compatibility
   const isAndroid = /Android/i.test(navigator.userAgent);
   const isChrome = /Chrome/i.test(navigator.userAgent);
@@ -44,19 +47,25 @@ export function GooglePayButton() {
         {isCompatible ? (
           <>
             <Check className="w-5 h-5 text-success" />
-            <span className="text-sm text-success">جهازك متوافق مع Google Pay</span>
+            <span className="text-sm text-success">
+              {isAr ? "جهازك متوافق مع Google Pay" : "Your device supports Google Pay"}
+            </span>
           </>
         ) : (
           <>
             <AlertCircle className="w-5 h-5 text-warning" />
-            <span className="text-sm text-warning">Google Pay غير متاح على هذا الجهاز</span>
+            <span className="text-sm text-warning">
+              {isAr ? "Google Pay غير متاح على هذا الجهاز" : "Google Pay isn't available on this device"}
+            </span>
           </>
         )}
       </div>
 
       {/* Info Note */}
       <p className="text-xs text-muted-foreground text-center">
-        عند النقر سيتم توجيهك لإتمام الدفع عبر Google Pay
+        {isAr
+          ? "عند النقر سيتم توجيهك لإتمام الدفع عبر Google Pay"
+          : "You'll be redirected to complete payment with Google Pay."}
       </p>
     </div>
   );
