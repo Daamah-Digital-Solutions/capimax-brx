@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import FundedProperties from "./pages/FundedProperties";
@@ -77,6 +78,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <PWAInstallPrompt />
+        <ChatWidget />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/marketplace" element={<Marketplace />} />
