@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Download, Smartphone } from "lucide-react";
+import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { useOptionalLanguage } from "@/contexts/LanguageContext";
@@ -21,6 +21,7 @@ export function PWAInstallPrompt() {
       return fallback[key] ?? key;
     });
   const isRTL = language?.isRTL ?? false;
+  const isArabic = language?.language === "ar";
 
   useEffect(() => {
     // Check if user has dismissed the prompt before
@@ -66,16 +67,20 @@ export function PWAInstallPrompt() {
     >
       <div className="bg-card border border-border rounded-xl p-4 shadow-elevated">
         <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Smartphone className="w-6 h-6 text-primary" />
-          </div>
-          
+          <img
+            src="/pwa-icon.svg"
+            alt="CapiMax BRX"
+            className="flex-shrink-0 w-12 h-12 rounded-lg"
+          />
+
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-foreground text-sm">
-              {t("pwa.installTitle")}
+              {isArabic ? "ثبّت تطبيق CapiMax BRX" : "Install CapiMax BRX"}
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              {t("pwa.installDescription")}
+              {isArabic
+                ? "أضِف CapiMax BRX إلى شاشتك الرئيسية للوصول الأسرع."
+                : "Add CapiMax BRX to your home screen for faster access."}
             </p>
             
             <div className="flex items-center gap-2 mt-3">

@@ -15,22 +15,23 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png"],
+      includeAssets: ["favicon.ico", "apple-touch-icon.png", "pwa-512x512.png", "pwa-icon.svg"],
       manifest: {
-        name: "Capimax RT",
-        short_name: "Capimax",
-        description: "Real Estate Tokenization Platform",
-        theme_color: "#1a365d",
-        background_color: "#0a0f1a",
+        name: "CapiMax BRX",
+        short_name: "CapiMax BRX",
+        description: "Real Estate Tokenization Ecosystem",
+        theme_color: "#0A2928",
+        background_color: "#0A2928",
         display: "standalone",
         orientation: "portrait",
         scope: "/",
         start_url: "/",
         icons: [
           {
-            src: "pwa-192x192.png",
-            sizes: "192x192",
-            type: "image/png"
+            src: "pwa-icon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any"
           },
           {
             src: "pwa-512x512.png",
