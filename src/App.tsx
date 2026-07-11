@@ -41,6 +41,7 @@ import SubmitProperty from "./pages/SubmitProperty";
 import StrategicPartners from "./pages/StrategicPartners";
 import Listings from "./pages/Listings";
 import BrokerReports from "./pages/BrokerReports";
+import BrokerWallet from "./pages/BrokerWallet";
 import Referrals from "./pages/Referrals";
 import Commissions from "./pages/Commissions";
 import PublicReports from "./pages/PublicReports";
@@ -125,6 +126,8 @@ const App = () => (
           <Route path="/commissions" element={<Commissions />} />
           {/* Broker-only nav item — real commission/per-property reports (was a broken link). */}
           <Route path="/broker-reports" element={<BrokerReports />} />
+          {/* Broker wallet — standalone Wallet page (client note 18); Commissions page kept. */}
+          <Route path="/broker-wallet" element={<BrokerWallet />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/about" element={<About />} />
           <Route path="/fees" element={<Fees />} />

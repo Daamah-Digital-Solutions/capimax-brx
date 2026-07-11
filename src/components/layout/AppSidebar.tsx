@@ -165,6 +165,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.listings", icon: Building2, href: "/listings" },
       { titleKey: "nav.referrals", icon: Users, href: "/referrals" },
       { titleKey: "nav.commissions", icon: Award, href: "/commissions" },
+      { titleKey: "nav.wallet", icon: Wallet, href: "/broker-wallet" },
       { titleKey: "nav.brokerReports", icon: BarChart3, href: "/broker-reports" },
     ],
   },
@@ -240,7 +241,7 @@ interface AppSidebarProps {
 const detectRoleFromPath = (pathname: string): UserRole | null => {
   const investorPaths = ['/dashboard', '/portfolio', '/family-investment', '/installments', '/distributions', '/reports', '/wallet', '/documents', '/notifications', '/support'];
   const ownerPaths = ['/my-assets', '/submit-property', '/asset-validation', '/owner-wallet', '/owner-reports', '/owner-documents', '/messages'];
-  const brokerPaths = ['/listings', '/referrals', '/commissions', '/broker-reports'];
+  const brokerPaths = ['/listings', '/referrals', '/commissions', '/broker-reports', '/broker-wallet'];
   // /partners is the PUBLIC directory (visible to all) — only the partner WORK PORTAL
   // identifies the partner role.
   const partnerPaths = ['/strategic-partners'];
