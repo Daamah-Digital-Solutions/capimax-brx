@@ -146,7 +146,7 @@ export default function Marketplace() {
 
         {/* Header */}
         <div className="border-b border-border bg-card/50 sticky top-16 z-20 backdrop-blur-lg">
-          <div className="container py-4 space-y-4">
+          <div className="container py-3 md:py-4 space-y-3 md:space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div>
@@ -241,8 +241,8 @@ export default function Marketplace() {
               </div>
             </div>
 
-            {/* Category Tabs */}
-            <div className="flex flex-wrap gap-2">
+            {/* Category Tabs — horizontal scroll on mobile, wrap on desktop */}
+            <div className="flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
               {categories.map((c) => {
                 const Icon = c.icon;
                 const isActive = activeCategory === c.id;
@@ -251,7 +251,7 @@ export default function Marketplace() {
                     key={c.id}
                     onClick={() => setCategory(c.id)}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all",
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all shrink-0 whitespace-nowrap",
                       isActive
                         ? "bg-gradient-gold text-primary-foreground border-transparent shadow-gold"
                         : "bg-card border-border hover:border-primary/40 text-foreground"
@@ -269,14 +269,14 @@ export default function Marketplace() {
 
             {/* Sub-model chips for Under Construction */}
             {activeCategory === "construction" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground me-1">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+                <span className="text-xs text-muted-foreground me-1 shrink-0">
                   {language === "ar" ? "نموذج:" : "Model:"}
                 </span>
                 <button
                   onClick={() => setModel(null)}
                   className={cn(
-                    "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                    "px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 whitespace-nowrap",
                     !activeModel ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"
                   )}
                 >
@@ -287,7 +287,7 @@ export default function Marketplace() {
                     key={m.id}
                     onClick={() => setModel(m.id)}
                     className={cn(
-                      "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                      "px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 whitespace-nowrap",
                       activeModel === m.id ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"
                     )}
                   >

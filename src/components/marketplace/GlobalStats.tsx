@@ -54,29 +54,31 @@ export function GlobalStats() {
   }, []);
 
   return (
-    <section className="bg-card border-b border-border py-8">
+    <section className="bg-card border-b border-border py-4 md:py-8">
       <div className="container">
-        <div className="mb-6">
+        <div className="mb-3 md:mb-6">
           <Badge variant="gold" className="mb-2">
             {language === "ar" ? "إحصائيات المنصة / Global Statistics" : "Global Statistics / إحصائيات المنصة"}
           </Badge>
-          <h2 className="font-display text-xl font-bold text-foreground">{t("stats.marketOverview")}</h2>
+          <h2 className="font-display text-lg md:text-xl font-bold text-foreground">{t("stats.marketOverview")}</h2>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        {/* Mobile: a compact one-row horizontal scroll so the stats no longer bury the
+            property cards (client note 4). md+ keeps the full responsive grid, unchanged. */}
+        <div className="flex gap-3 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:pb-0 lg:grid-cols-7">
           {TILES.map((tile) => (
             <div
               key={tile.key}
-              className="group relative p-4 bg-background rounded-xl border border-border hover:border-primary/50 transition-all duration-300"
+              className="group relative shrink-0 w-32 md:w-auto p-3 md:p-4 bg-background rounded-xl border border-border hover:border-primary/50 transition-all duration-300"
             >
               {/* Icon */}
-              <div className="w-14 h-14 mx-auto mb-3 flex items-center justify-center">
-                <tile.icon className="w-6 h-6 text-primary" />
+              <div className="w-10 h-10 md:w-14 md:h-14 mx-auto mb-2 md:mb-3 flex items-center justify-center">
+                <tile.icon className="w-5 h-5 md:w-6 md:h-6 text-primary" />
               </div>
 
               {/* Value — real, loading skeleton, or honest dash on error. Never a fake constant. */}
               <div className="text-center">
-                <div className="text-2xl font-bold text-foreground group-hover:text-gradient-gold transition-colors">
+                <div className="text-lg md:text-2xl font-bold text-foreground group-hover:text-gradient-gold transition-colors">
                   {error ? (
                     "—"
                   ) : stats ? (
