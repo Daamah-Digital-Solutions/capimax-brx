@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { paymentMethodsApi } from "@/integrations/api/client";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { BackendPendingNotice } from "@/components/wallet/BackendPendingNotice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +12,8 @@ interface AuditEntry {
   id: string;
   action: string;
   method_type: string;
-  ip_address: string | null;
-  user_agent: string | null;
-  details: any;
+  method_id: string | null;
+  details: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -26,13 +25,14 @@ export default function AuditLog() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("payment_method_audit_log")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      setEntries((data as AuditEntry[]) || []);
-      setLoading(false);
+      try {
+        const data = await paymentMethodsApi.auditLog();
+        setEntries((data as AuditEntry[]) || []);
+      } catch {
+        setEntries([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -97,7 +97,11 @@ export default function AuditLog() {
                           {e.method_type}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {e.ip_address || "—"} · {(e.user_agent || "").slice(0, 60)}
+                          {e.details && Object.keys(e.details).length
+                            ? Object.entries(e.details).map(([k, v]) => `${k}: ${v}`).join(" · ")
+                            : e.method_id
+                              ? `#${e.method_id.slice(0, 8)}`
+                              : "—"}
                         </p>
                       </div>
                     </div>

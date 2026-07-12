@@ -340,3 +340,122 @@ class Deposit(models.Model):
 
     def __str__(self):
         return f"deposit {self.amount} [{self.status}] ({self.user_id})"
+
+
+# --------------------------------------------------------------------------- #
+# Payout / payment instruments (client-feedback note 11). These replace the DEAD
+# Supabase tables the frontend managers used to write to (the app now authenticates
+# with Django JWT, so the old `supabase.auth` calls returned null and every "add"
+# silently failed). Real, self-scoped Django models now back them.
+#
+# SAFETY (real money): these store ONLY masked / non-sensitive references. A full
+# bank account number / IBAN is masked SERVER-SIDE (apps/wallets/services.py) and the
+# raw value is NEVER persisted; saved cards store only brand + last four + expiry +
+# holder name — NO PAN, ever (the frontend never sends one). Crypto addresses are
+# public by nature. Mirrors the KYC/withdrawal "no sensitive data at rest" posture.
+# --------------------------------------------------------------------------- #
+class InvestorBankAccount(models.Model):
+    """A user's saved bank account for payouts (frontend `InvestorBankAccount`)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bank_accounts"
+    )
+    bank_name = models.CharField(max_length=255)
+    bank_code = models.CharField(max_length=64, blank=True, null=True)
+    account_holder_name = models.CharField(max_length=255)
+    account_number_masked = models.CharField(max_length=64)
+    iban_masked = models.CharField(max_length=64, blank=True, null=True)
+    swift_code = models.CharField(max_length=64, blank=True, null=True)
+    country = models.CharField(max_length=120)
+    currency = models.CharField(max_length=8)
+    is_verified = models.BooleanField(default=False)
+    is_default = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("investor bank account")
+        verbose_name_plural = _("investor bank accounts")
+        ordering = ("-is_default", "-created_at")
+
+    def __str__(self):
+        return f"{self.bank_name} {self.account_number_masked} ({self.user_id})"
+
+
+class InvestorCryptoWallet(models.Model):
+    """A user's saved crypto wallet for payouts (frontend `InvestorCryptoWallet`)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="crypto_wallets"
+    )
+    wallet_address = models.CharField(max_length=255)
+    wallet_label = models.CharField(max_length=120, blank=True, null=True)
+    network = models.CharField(max_length=64)
+    is_verified = models.BooleanField(default=False)
+    is_default = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("investor crypto wallet")
+        verbose_name_plural = _("investor crypto wallets")
+        ordering = ("-is_default", "-created_at")
+
+    def __str__(self):
+        return f"{self.network}:{self.wallet_address[:10]}… ({self.user_id})"
+
+
+class SavedCard(models.Model):
+    """
+    A user's saved Visa/Mastercard for checkout (frontend `SavedCard`). Stores ONLY
+    the non-sensitive card reference — brand, last four, expiry, holder name. The raw
+    card number (PAN) is NEVER sent to or stored on this server (Stripe Elements
+    tokenises the real card in the browser at charge time).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_cards"
+    )
+    card_brand = models.CharField(max_length=32)
+    card_last_four = models.CharField(max_length=4)
+    card_expiry_month = models.PositiveSmallIntegerField()
+    card_expiry_year = models.PositiveSmallIntegerField()
+    cardholder_name = models.CharField(max_length=255)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("saved card")
+        verbose_name_plural = _("saved cards")
+        ordering = ("-is_default", "-created_at")
+
+    def __str__(self):
+        return f"{self.card_brand} ****{self.card_last_four} ({self.user_id})"
+
+
+class PaymentMethodAuditLog(models.Model):
+    """Append-only trail of add/edit/delete on a user's payout methods (frontend audit view)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payment_method_audit"
+    )
+    action = models.CharField(max_length=16)  # add | edit | delete
+    method_type = models.CharField(max_length=16)  # bank | crypto | card
+    method_id = models.UUIDField(null=True, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("payment method audit log")
+        verbose_name_plural = _("payment method audit log")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.action} {self.method_type} ({self.user_id})"

@@ -447,6 +447,48 @@ export const paymentsApi = {
 };
 
 // --------------------------------------------------------------------------- //
+// Payout / payment instruments (client note 11) — real Django endpoints that
+// REPLACE the dead Supabase managers (bank accounts, crypto wallets, saved cards).
+// Self-scoped (JWT); the backend masks bank/IBAN numbers and stores no PAN.
+// --------------------------------------------------------------------------- //
+export const paymentMethodsApi = {
+  // Bank accounts (send RAW account_number/iban — the server masks + never persists raw).
+  listBankAccounts: () =>
+    rawRequest("/wallets/payment-methods/bank-accounts/", { auth: true }) as Promise<any[]>,
+  addBankAccount: (body: Record<string, unknown>) =>
+    rawRequest("/wallets/payment-methods/bank-accounts/", { method: "POST", auth: true, body }) as Promise<any>,
+  updateBankAccount: (id: string, body: Record<string, unknown>) =>
+    rawRequest(`/wallets/payment-methods/bank-accounts/${id}/`, { method: "PATCH", auth: true, body }) as Promise<any>,
+  deleteBankAccount: (id: string) =>
+    rawRequest(`/wallets/payment-methods/bank-accounts/${id}/`, { method: "DELETE", auth: true }) as Promise<void>,
+  setDefaultBankAccount: (id: string) =>
+    rawRequest(`/wallets/payment-methods/bank-accounts/${id}/set-default/`, { method: "POST", auth: true }) as Promise<any>,
+  // Crypto wallets
+  listCryptoWallets: () =>
+    rawRequest("/wallets/payment-methods/crypto-wallets/", { auth: true }) as Promise<any[]>,
+  addCryptoWallet: (body: Record<string, unknown>) =>
+    rawRequest("/wallets/payment-methods/crypto-wallets/", { method: "POST", auth: true, body }) as Promise<any>,
+  updateCryptoWallet: (id: string, body: Record<string, unknown>) =>
+    rawRequest(`/wallets/payment-methods/crypto-wallets/${id}/`, { method: "PATCH", auth: true, body }) as Promise<any>,
+  deleteCryptoWallet: (id: string) =>
+    rawRequest(`/wallets/payment-methods/crypto-wallets/${id}/`, { method: "DELETE", auth: true }) as Promise<void>,
+  setDefaultCryptoWallet: (id: string) =>
+    rawRequest(`/wallets/payment-methods/crypto-wallets/${id}/set-default/`, { method: "POST", auth: true }) as Promise<any>,
+  // Saved cards (brand/last4/expiry/holder only — never a PAN)
+  listCards: () =>
+    rawRequest("/wallets/payment-methods/cards/", { auth: true }) as Promise<any[]>,
+  addCard: (body: Record<string, unknown>) =>
+    rawRequest("/wallets/payment-methods/cards/", { method: "POST", auth: true, body }) as Promise<any>,
+  deleteCard: (id: string) =>
+    rawRequest(`/wallets/payment-methods/cards/${id}/`, { method: "DELETE", auth: true }) as Promise<void>,
+  setDefaultCard: (id: string) =>
+    rawRequest(`/wallets/payment-methods/cards/${id}/set-default/`, { method: "POST", auth: true }) as Promise<any>,
+  // Audit trail (read-only, self-scoped)
+  auditLog: () =>
+    rawRequest("/wallets/payment-methods/audit-log/", { auth: true }) as Promise<any[]>,
+};
+
+// --------------------------------------------------------------------------- //
 // Reinvestments — spend accrued internal balance (distribution/sale yield) to buy more
 // tokens via the normal invest+mint path (payment_method="balance"; no PSP). The buy is
 // the existing investmentsApi.create with payment_method:"balance"; this api only reads
