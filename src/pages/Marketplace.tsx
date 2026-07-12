@@ -144,8 +144,9 @@ export default function Marketplace() {
       <div className="min-h-screen bg-background">
         <GlobalStats />
 
-        {/* Header */}
-        <div className="border-b border-border bg-card/50 sticky top-16 z-20 backdrop-blur-lg">
+        {/* Header — sticky only on desktop (there's room). On mobile it scrolls away with the
+            page instead of staying fixed and eating a big chunk of the small viewport. */}
+        <div className="border-b border-border bg-card/50 lg:sticky lg:top-16 lg:z-20 lg:backdrop-blur-lg">
           <div className="container py-3 md:py-4 space-y-3 md:space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="flex items-center gap-4">
