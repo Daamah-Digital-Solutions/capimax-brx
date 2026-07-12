@@ -6,6 +6,8 @@ Certificate API — Phase 3 Wave 3 (SPEC §4.1 / §4.2 / §2.3).
   GET  /api/certificates/{id}/pdf/     Owner-only PDF download.
   GET  /api/certificates/verify/{code}/  PUBLIC curated verification projection.
 """
+import logging
+
 from django.http import FileResponse, Http404
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -17,6 +19,8 @@ from apps.investments.models import Investment
 from .models import Certificate
 from .serializers import CertificatePublicSerializer, CertificateSerializer
 from .services import generate_certificate
+
+log = logging.getLogger(__name__)
 
 
 class CertificateGenerateView(APIView):
@@ -67,8 +71,17 @@ class CertificatePdfView(APIView):
             cert = Certificate.objects.get(pk=pk, user=request.user)
         except Certificate.DoesNotExist:
             raise Http404
+        # Generate the PDF on first download (idempotent) so the button always works —
+        # certificates are created provisionally and the PDF is rendered lazily. This
+        # fixes the client-reported "download does nothing" (the file simply wasn't
+        # rendered until someone opened it).
+        if not cert.pdf_file and cert.investment_id:
+            try:
+                cert = generate_certificate(cert.investment)
+            except Exception:  # noqa: BLE001 — surface as 404, never a 500
+                log.exception("lazy certificate PDF generation failed (cert=%s)", cert.pk)
         if not cert.pdf_file:
-            raise Http404("PDF not generated yet.")
+            raise Http404("PDF could not be generated.")
         return FileResponse(
             cert.pdf_file.open("rb"),
             as_attachment=True,

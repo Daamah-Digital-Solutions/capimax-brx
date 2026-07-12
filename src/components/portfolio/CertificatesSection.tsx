@@ -210,7 +210,7 @@ export function CertificatesSection() {
                         variant="default"
                         size="sm"
                         onClick={() => handleDownload(cert)}
-                        disabled={downloading === cert.id || !cert.pdf_path}
+                        disabled={downloading === cert.id}
                       >
                         {downloading === cert.id ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />

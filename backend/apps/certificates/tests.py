@@ -137,6 +137,21 @@ class CertificateApiTests(APITestCase):
         denied = self.client.get(f"/api/certificates/{cert.id}/pdf/")
         self.assertEqual(denied.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_pdf_download_generates_lazily_when_not_yet_rendered(self):
+        # Client note 12: a provisional certificate exists but its PDF was never rendered
+        # (pdf_file empty) → the old download 404'd and the button was disabled. It now
+        # generates on demand and serves a real PDF.
+        from .services import create_provisional_certificate
+
+        cert = create_provisional_certificate(self.investment)
+        self.assertFalse(cert.pdf_file)  # nothing rendered yet
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(f"/api/certificates/{cert.id}/pdf/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        cert.refresh_from_db()
+        self.assertTrue(cert.pdf_file)
+
 
 @override_settings(MEDIA_ROOT=_TMP_MEDIA)
 class CertificateVerifyPublicTests(APITestCase):
