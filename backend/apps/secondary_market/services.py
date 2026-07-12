@@ -184,11 +184,25 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         if seller_pos is None or seller_pos.token_amount < listing.token_amount:
             raise ListingUnavailableError(detail="Seller no longer holds these tokens.")
 
-        contract_address = _deployed_contract(listing.property_id)
+        # Settle on-chain when the property's token contract is deployed; otherwise fall
+        # back to an OFF-CHAIN custodial settlement (client note 14). Non-deployed / demo /
+        # pre-launch inventory has no contract, so the OwnershipToken positions ARE the
+        # ledger of record — we move them + settle balances instead of hard-blocking the
+        # trade with "contract not deployed" (the client-reported dead end). This mirrors
+        # how PRIMARY settlement records non-deployed holdings. No fake tx is ever emitted:
+        # off-chain rows carry an explicit "offchain:" marker, never a fabricated hash.
+        # When the property later deploys, holdings reconcile on-chain.
+        try:
+            contract_address = _deployed_contract(listing.property_id)
+            on_chain = True
+        except NotDeployedError:
+            contract_address = None
+            on_chain = False
+
         buyer_wallet, _created = get_or_create_custodial_wallet(buyer_user)
 
         # Debit the buyer's internal balance FIRST (rolls back the whole tx on a
-        # shortfall → no on-chain transfer happens).
+        # shortfall → no transfer happens).
         try:
             debit_user_balance(
                 buyer_user, total, source="secondary_market_purchase",
@@ -198,22 +212,29 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         except InsufficientBalance:
             raise InsufficientBalanceError()
 
-        # ---- REAL on-chain transfer, signed with the SELLER's custodial key ---- #
-        signer = load_custodial_signer(seller_wallet)
-        try:
-            result = chain_service.transfer(
-                contract_address, signer, buyer_wallet.wallet_address,
-                int(listing.token_amount),
-            )
-        except ChainError:
-            log.exception("Peer-market on-chain transfer failed for listing %s", listing.pk)
-            raise
-        finally:
-            del signer
-
-        tx_hash = result["tx_hash"]
-        block = result.get("block_number")
-        chain_id = result.get("chain_id")
+        if on_chain:
+            # ---- REAL on-chain transfer, signed with the SELLER's custodial key ---- #
+            signer = load_custodial_signer(seller_wallet)
+            try:
+                result = chain_service.transfer(
+                    contract_address, signer, buyer_wallet.wallet_address,
+                    int(listing.token_amount),
+                )
+            except ChainError:
+                log.exception("Peer-market on-chain transfer failed for listing %s", listing.pk)
+                raise
+            finally:
+                del signer
+            tx_hash = result["tx_hash"]
+            block = result.get("block_number")
+            chain_id = result.get("chain_id")
+            explorer_tx = result.get("explorer_tx")
+        else:
+            # ---- OFF-CHAIN custodial settlement — no signer, no gas, no fabricated tx --- #
+            tx_hash = f"offchain:{listing.pk}"
+            block = None
+            chain_id = None
+            explorer_tx = None
 
         # Credit the seller's net proceeds.
         credit_user_balance(
@@ -301,7 +322,8 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         "completed": True,
         "tx_hash": tx_hash,
         "block_number": block,
-        "explorer_tx": result.get("explorer_tx"),
+        "explorer_tx": explorer_tx,
+        "on_chain": on_chain,
     }
 
 

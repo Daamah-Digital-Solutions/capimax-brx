@@ -43,6 +43,14 @@ def _deployed_property(slug="1"):
     return p
 
 
+def _undeployed_property(slug="2"):
+    """A property with NO on-chain contract → _deployed_contract raises NotDeployedError."""
+    p = Property(**_valid_property_kwargs(slug=slug, total_value=Decimal("5000000")))
+    p.save()
+    TokenMetadata.objects.get_or_create(property=p)  # exists, but no deployed address
+    return p
+
+
 def _approved_user(email):
     user = User.objects.create_user(email=email, password="pw-12345-strong")
     kyc = get_or_create_kyc(user)
@@ -258,6 +266,48 @@ class PeerPurchaseTests(APITestCase):
         self.assertEqual(total_amt, Decimal("1120"))
         self.assertEqual(total_tok, 10)
         self.assertEqual(total_amt / total_tok, Decimal("112"))
+
+
+@mock.patch("apps.secondary_market.services.chain_service.transfer", return_value=_FAKE_TRANSFER)
+class PeerPurchaseOffChainTests(APITestCase):
+    """
+    Client note 14: a listing for a property whose token contract is NOT deployed settles
+    OFF-CHAIN (custodial ledger) instead of failing with 'contract not deployed'. No
+    on-chain transfer is attempted and no fake tx hash is emitted.
+    """
+
+    def setUp(self):
+        self.prop = _undeployed_property(slug="2")
+        self.seller, self.seller_wallet = _seller_with_tokens("psoff@ex.com", self.prop, 10)
+        self.client.force_authenticate(self.seller)
+        listing = self.client.post(
+            "/api/secondary-market/",
+            {"property_id": self.prop.slug, "token_amount": 4, "unit_price": "100"},
+            format="json",
+        )
+        self.listing_id = listing.data["id"]
+
+    def test_offchain_settlement_when_contract_not_deployed(self, m_transfer):
+        buyer = _approved_user("pboff@ex.com")
+        credit_user_balance(buyer, Decimal("1000"), source="test")
+        self.client.force_authenticate(buyer)
+        resp = self.client.post(f"/api/secondary-market/{self.listing_id}/purchase/")
+        # Settles (no 'contract not deployed' error) — OFF-CHAIN.
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        m_transfer.assert_not_called()
+        self.assertFalse(resp.data.get("on_chain"))
+        self.assertTrue(str(resp.data.get("tx_hash")).startswith("offchain:"))
+        # Balances settle exactly like the on-chain path (buyer −400, seller +398 net).
+        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("600.00"))
+        self.assertEqual(UserBalance.objects.get(user=self.seller).current_balance, Decimal("398.00"))
+        # Ledger positions move (seller 10−4=6, buyer 4).
+        sp = OwnershipToken.objects.get(wallet=self.seller_wallet, property_id=self.prop.slug)
+        self.assertEqual(sp.token_amount, 6)
+        bp = OwnershipToken.objects.get(wallet=buyer.wallet, property_id=self.prop.slug)
+        self.assertEqual(bp.token_amount, 4)
+        listing = SecondaryMarketListing.objects.get(pk=self.listing_id)
+        self.assertEqual(listing.status, "completed")
+        self.assertTrue(listing.settlement_tx_hash.startswith("offchain:"))
 
 
 class InvestorWithdrawalTests(APITestCase):
