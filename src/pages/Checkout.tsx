@@ -9,6 +9,7 @@ import { StripeCardCheckout } from "@/components/checkout/StripeCardCheckout";
 import { NowCryptoCheckout } from "@/components/checkout/NowCryptoCheckout";
 import { SukukPayment } from "@/components/checkout/methods/SukukPayment";
 import { PronovaCheckout } from "@/components/checkout/PronovaCheckout";
+import { WalletPayCheckout } from "@/components/checkout/WalletPayCheckout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -24,10 +25,12 @@ export type PaymentStatus = "idle" | "processing" | "success" | "failed";
 
 // Methods that are displayed but NOT wired to a real settlement yet. They must never
 // complete a purchase (the backend also rejects them); selecting one and trying to pay
-// shows an honest "use another method" message instead of charging. ("sukuk" is the admin-
-// reviewed Nova-certificate flow; "pronova" settles the discounted total over Stripe;
-// "balance" spends internal balance — all wired.)
-const UNWIRED_METHODS: PaymentMethod[] = ["apple_pay", "google_pay"];
+// shows an honest "use another method" message instead of charging. Every method is now
+// wired: card/crypto (PSP), "pronova" (discounted Stripe total), "sukuk" (admin-reviewed
+// Nova certificate), "balance" (internal balance), and "apple_pay"/"google_pay" (Stripe
+// Payment Request — real button when the device supports it, honest fallback otherwise).
+// Kept as a backstop hook for any future method added before its rail lands.
+const UNWIRED_METHODS: PaymentMethod[] = [];
 const UNWIRED_MESSAGE = {
   en: "This payment method isn't available yet — please use Card, Crypto, or Pay from Balance.",
   ar: "طريقة الدفع هذه غير متاحة بعد — يرجى استخدام البطاقة أو العملة الرقمية أو الدفع من الرصيد.",
@@ -460,6 +463,36 @@ export default function Checkout() {
           tokenAmount={units}
           finalAmount={finalAmount}
           discount={pronovaDiscount}
+          ready={termsAccepted && riskAccepted && !!property}
+          declarations={declarations}
+          onRouteToKyc={routeToKyc}
+          onProcessing={() => setPaymentStatus("processing")}
+          onResult={handlePspResult}
+        />
+        <Button
+          variant="outline"
+          size="xl"
+          className="w-full"
+          onClick={() => navigate(-1)}
+          disabled={paymentStatus === "processing"}
+        >
+          {t("checkout.cancelPayment")}
+        </Button>
+      </div>
+    ) : (selectedMethod === "apple_pay" || selectedMethod === "google_pay") &&
+      !isInstallment &&
+      user &&
+      kycApproved !== false ? (
+      <div className="space-y-4">
+        {/* Apple Pay / Google Pay — real Stripe Payment Request button (same PaymentIntent as
+            card). Shows the native wallet button when the device supports it, an honest
+            "not available on this device" otherwise, and "not configured" if Stripe keys are
+            deferred. Terms/risk gate the button exactly like the card flow. */}
+        <WalletPayCheckout
+          wallet={selectedMethod === "apple_pay" ? "apple" : "google"}
+          propertyId={propertyId}
+          tokenAmount={units}
+          finalAmount={finalAmount}
           ready={termsAccepted && riskAccepted && !!property}
           declarations={declarations}
           onRouteToKyc={routeToKyc}

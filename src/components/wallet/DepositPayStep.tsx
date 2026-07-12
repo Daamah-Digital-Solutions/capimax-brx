@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -7,6 +7,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { QRCodeSVG } from "qrcode.react";
+import { StripeWalletPay } from "@/components/checkout/StripeWalletPay";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -40,7 +41,7 @@ import { toast } from "sonner";
 // silent success). Bilingual EN/AR.
 
 interface DepositPayStepProps {
-  method: "card" | "crypto";
+  method: "card" | "crypto" | "apple" | "google";
   amount: number;
   /** Called once the deposit is confirmed credited (the wallet refetches + dialog closes). */
   onPaid: () => void;
@@ -373,6 +374,54 @@ function DepositCryptoTab({ amount, onPaid, target = "wallet", pollBalance }: De
   );
 }
 
+// --- Apple Pay / Google Pay (Stripe Payment Request) -------------------------- //
+// Rides the SAME gated deposit charge as the card tab (paymentsApi.createDepositStripe →
+// credited on the confirmed webhook), but the card lives in the wallet so it's one tap. The
+// Stripe mechanics + honest "not available on this device" / "not configured" fallbacks live
+// in <StripeWalletPay/>; here we only supply how to start the charge and how to detect the credit.
+function DepositWalletTab({
+  wallet,
+  amount,
+  onPaid,
+  target = "wallet",
+  pollBalance,
+}: DepositPayStepProps & { wallet: "apple" | "google" }) {
+  const { language } = useLanguage();
+  const isArabic = language === "ar";
+  const readBalance = pollBalance ?? walletBalanceReader;
+  const startRef = useRef(0);
+
+  const createIntent = async (): Promise<string | null> => {
+    startRef.current = await readBalance().catch(() => 0);
+    const res = await paymentsApi.createDepositStripe(amount, target);
+    return res.client_secret;
+  };
+
+  const onConfirmed = async () => {
+    const ok = await pollUntilCredited(startRef.current, readBalance);
+    toast[ok ? "success" : "info"](
+      ok
+        ? isArabic ? "تم إيداع الرصيد" : "Deposit credited"
+        : isArabic ? "تم استلام الدفع — يُحدَّث الرصيد قريباً." : "Payment received — your balance will update shortly.",
+    );
+    onPaid();
+  };
+
+  return (
+    <StripeWalletPay
+      wallet={wallet}
+      amountUSD={amount}
+      label={isArabic ? "إيداع كابيماكس BRX" : "CapiMax BRX Deposit"}
+      createIntent={createIntent}
+      onConfirmed={onConfirmed}
+      onFailed={(m) => m && toast.error(m)}
+    />
+  );
+}
+
 export function DepositPayStep(props: DepositPayStepProps) {
-  return props.method === "crypto" ? <DepositCryptoTab {...props} /> : <DepositCardTab {...props} />;
+  if (props.method === "crypto") return <DepositCryptoTab {...props} />;
+  if (props.method === "apple" || props.method === "google")
+    return <DepositWalletTab {...props} wallet={props.method} />;
+  return <DepositCardTab {...props} />;
 }

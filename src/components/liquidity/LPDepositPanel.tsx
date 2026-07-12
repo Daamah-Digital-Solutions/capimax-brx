@@ -28,8 +28,8 @@ const METHODS = [
   { id: "card", nameEn: "Credit/Debit Card", nameAr: "بطاقة ائتمان/خصم", icon: CreditCard, available: true },
   { id: "crypto", nameEn: "Cryptocurrency", nameAr: "عملات رقمية", icon: Bitcoin, available: true },
   { id: "bank", nameEn: "Bank Transfer", nameAr: "تحويل بنكي", icon: Building2, available: false },
-  { id: "apple", nameEn: "Apple Pay", nameAr: "Apple Pay", icon: Smartphone, available: false },
-  { id: "google", nameEn: "Google Pay", nameAr: "Google Pay", icon: Smartphone, available: false },
+  { id: "apple", nameEn: "Apple Pay", nameAr: "Apple Pay", icon: Smartphone, available: true },
+  { id: "google", nameEn: "Google Pay", nameAr: "Google Pay", icon: Smartphone, available: true },
   { id: "pronova", nameEn: "Pronova Token", nameAr: "توكن Pronova", icon: Coins, available: false },
   { id: "sukuk", nameEn: "Nova Sukuk", nameAr: "Nova Sukuk", icon: FileText, available: false },
 ];
@@ -190,7 +190,15 @@ export function LPDepositPanel({ lpProfile, isRTL, onDeposited }: LPDepositPanel
                   the LP profile until it rises. With no provider keys this shows an honest
                   "not configured" panel — never a silent success. */}
               <DepositPayStep
-                method={method === "crypto" ? "crypto" : "card"}
+                method={
+                  method === "crypto"
+                    ? "crypto"
+                    : method === "apple"
+                      ? "apple"
+                      : method === "google"
+                        ? "google"
+                        : "card"
+                }
                 amount={parseFloat(amount || "0")}
                 target="lp"
                 pollBalance={readLpBalance}

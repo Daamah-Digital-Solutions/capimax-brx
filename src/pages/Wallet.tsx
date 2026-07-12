@@ -73,8 +73,8 @@ const paymentMethods = [
   { id: "card", nameAr: "بطاقة ائتمان/خصم", nameEn: "Credit/Debit Card", icon: CreditCard, available: true },
   { id: "crypto", nameAr: "عملات رقمية", nameEn: "Cryptocurrency", icon: Bitcoin, available: true },
   { id: "bank", nameAr: "تحويل بنكي", nameEn: "Bank Transfer", icon: Building2, available: false },
-  { id: "apple", nameAr: "Apple Pay", nameEn: "Apple Pay", icon: Smartphone, available: false },
-  { id: "google", nameAr: "Google Pay", nameEn: "Google Pay", icon: Smartphone, available: false },
+  { id: "apple", nameAr: "Apple Pay", nameEn: "Apple Pay", icon: Smartphone, available: true },
+  { id: "google", nameAr: "Google Pay", nameEn: "Google Pay", icon: Smartphone, available: true },
   { id: "pronova", nameAr: "توكن Pronova", nameEn: "Pronova Token", icon: Coins, available: false },
   { id: "sukuk", nameAr: "Nova Sukuk", nameEn: "Nova Sukuk", icon: FileText, available: false },
 ];
@@ -485,7 +485,15 @@ export default function Wallet() {
                     With no provider keys this shows an honest "not configured" panel
                     (replaces the old silent resetDepositFlow() no-op). */}
                 <DepositPayStep
-                  method={selectedMethod === "crypto" ? "crypto" : "card"}
+                  method={
+                    selectedMethod === "crypto"
+                      ? "crypto"
+                      : selectedMethod === "apple"
+                        ? "apple"
+                        : selectedMethod === "google"
+                          ? "google"
+                          : "card"
+                  }
                   amount={parseFloat(amount || "0")}
                   onPaid={() => {
                     resetDepositFlow();
