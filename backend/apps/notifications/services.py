@@ -73,7 +73,7 @@ def notify(user, notif_type, *, params: dict | None = None, action_url: str = ""
         return None
     try:
         with transaction.atomic():
-            return Notification.objects.create(
+            notif = Notification.objects.create(
                 user=user,
                 type=notif_type,
                 params=params or {},
@@ -84,3 +84,28 @@ def notify(user, notif_type, *, params: dict | None = None, action_url: str = ""
             "notify failed (type=%s user=%s)", notif_type, getattr(user, "pk", None)
         )
         return None
+    # Fire the branded email for this event — but only AFTER the host transaction
+    # COMMITS (via on_commit), so a rollback sends nothing and a slow SMTP never blocks
+    # the event. This single chokepoint makes every notifying event also email the user
+    # (client notes 5 & 21); a type with no email copy simply sends nothing.
+    _schedule_event_email(user, notif_type, params)
+    return notif
+
+
+def _schedule_event_email(user, notif_type, params: dict | None) -> None:
+    """Queue the event email to send once the surrounding transaction commits."""
+    def _send():
+        try:
+            from apps.core.event_emails import send_event_email
+
+            send_event_email(user, notif_type, params or {})
+        except Exception:  # noqa: BLE001 — email is informational; never surface
+            log.exception(
+                "event email dispatch failed (type=%s user=%s)",
+                notif_type, getattr(user, "pk", None),
+            )
+
+    try:
+        transaction.on_commit(_send)
+    except Exception:  # noqa: BLE001 — scheduling must never break notify()
+        log.exception("event email on_commit scheduling failed (type=%s)", notif_type)

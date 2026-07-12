@@ -26,8 +26,8 @@ def send_verification_email(user) -> str:
         preheader="Confirm your email to activate your Capimax BRX account.",
         heading="Verify your email",
         intro=(
-            "Welcome to Capimax BRX. Confirm your email address to activate your "
-            "account and start investing in fractional real estate."
+            "Welcome to CapiMax BRX. Confirm your email address to activate your "
+            "account and explore the CapiMax BRX real-estate tokenization ecosystem."
         ),
         cta_label="Verify email",
         cta_url=link,

@@ -176,8 +176,9 @@ class BrandedEmailTests(APITestCase):
         self.assertEqual(len(msg.alternatives), 1)
         html, mime = msg.alternatives[0]
         self.assertEqual(mime, "text/html")
-        # Branding + CTA + the real link land in the HTML.
-        self.assertIn("CAPIMAX", html)
+        # Branding + CTA + the real link land in the HTML. The wordmark now renders as a
+        # coloured "C" + "APIMAX" + "BRX" badge (brand redesign), so assert on "APIMAX".
+        self.assertIn("APIMAX", html)
         self.assertIn(cta_label, html)
         self.assertIn(path_fragment, html)
         # The plain-text fallback carries the same link (no-HTML clients).
