@@ -47,6 +47,8 @@ import { PropertyDataRoom } from "@/components/property/PropertyDataRoom";
 import {
   useInstallmentPreview,
   DEFAULT_INSTALLMENT_TERMS,
+  installmentCheckoutQuery,
+  termInstallmentCount,
   type InstallmentTerms,
 } from "@/hooks/useInstallmentPreview";
 import { InsuranceValuationSection } from "@/components/property/InsuranceValuationSection";
@@ -277,6 +279,18 @@ export default function PropertyDetail() {
     const cpName = language === "ar" ? cp.nameAr : cp.name;
     const cpLoc = language === "ar" ? cp.locationAr : cp.location;
     const cpDesc = language === "ar" ? cp.descriptionAr : cp.description;
+    // Installment (under-construction) properties are bought via a DOWN-PAYMENT plan, not an
+    // outright "Own Now". Surface the down-payment + installment count in the sidebar and route
+    // its CTA to the installment checkout (the SHARED terms the calculator on this page drives).
+    const cpIsInstallment = cp.model === "installment";
+    const cpDownPayment = installmentPreview
+      ? installmentPreview.downPayment
+      : Math.round(
+          Number(cp.tokenPrice) * installmentTerms.units * (installmentTerms.downPct / 100),
+        );
+    const cpInstallmentCount = installmentPreview
+      ? installmentPreview.numberOfInstallments
+      : termInstallmentCount(installmentTerms);
     return (
       <MainLayout>
         <div className="min-h-screen bg-background">
@@ -343,27 +357,29 @@ export default function PropertyDetail() {
             {/* Installment purchase entry — real per-investor plan builder → Checkout charges
                 the down-payment + buyer-borne fee, mints-then-locks the full position. Only
                 for the installment model (the CTA carries type=installment + the terms). */}
-            {cp.model === "installment" && (
-              <InstallmentCalculator
-                propertyId={id || cp.id}
-                totalPropertyPrice={Number(cp.totalValue ?? 0)}
-                downPaymentPercent={20}
-                installmentDurations={[
-                  { months: 12, label: "12 Months", labelAr: "12 شهر" },
-                  { months: 24, label: "24 Months", labelAr: "24 شهر" },
-                  { months: 36, label: "36 Months", labelAr: "36 شهر" },
-                ]}
-                unitPrice={Number(cp.tokenPrice)}
-                expectedGrowth={Number(cp.expectedGrowth ?? 0)}
-                constructionProgress={Number(cp.constructionProgress ?? 0)}
-                expectedCompletion={
-                  cp.installment?.activationDate ??
-                  (language === "ar" ? cp.durationAr ?? "" : cp.duration ?? "")
-                }
-                terms={installmentTerms}
-                onTermsChange={setInstallmentTerms}
-                preview={installmentPreview}
-              />
+            {cpIsInstallment && (
+              <div id="installment-plan">
+                <InstallmentCalculator
+                  propertyId={id || cp.id}
+                  totalPropertyPrice={Number(cp.totalValue ?? 0)}
+                  downPaymentPercent={20}
+                  installmentDurations={[
+                    { months: 12, label: "12 Months", labelAr: "12 شهر" },
+                    { months: 24, label: "24 Months", labelAr: "24 شهر" },
+                    { months: 36, label: "36 Months", labelAr: "36 شهر" },
+                  ]}
+                  unitPrice={Number(cp.tokenPrice)}
+                  expectedGrowth={Number(cp.expectedGrowth ?? 0)}
+                  constructionProgress={Number(cp.constructionProgress ?? 0)}
+                  expectedCompletion={
+                    cp.installment?.activationDate ??
+                    (language === "ar" ? cp.durationAr ?? "" : cp.duration ?? "")
+                  }
+                  terms={installmentTerms}
+                  onTermsChange={setInstallmentTerms}
+                  preview={installmentPreview}
+                />
+              </div>
             )}
 
             {/* Institutional Data Room — full digital investment center. The installment terms
@@ -427,8 +443,23 @@ export default function PropertyDetail() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <Button variant="hero" size="lg" className="flex-1" onClick={() => navigate(`/checkout?property=${id}&units=${units}`)}>
-                  {t("property.investNow")}
+                <Button
+                  variant="hero"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() =>
+                    navigate(
+                      cpIsInstallment
+                        ? `/checkout?${installmentCheckoutQuery(id || cp.id, installmentTerms)}`
+                        : `/checkout?property=${id}&units=${units}`,
+                    )
+                  }
+                >
+                  {cpIsInstallment
+                    ? language === "ar"
+                      ? "التملّك بالتقسيط"
+                      : "Own via installments"
+                    : t("property.investNow")}
                 </Button>
                 <Button variant="outline" size="lg" asChild>
                   <Link to="/marketplace">{language === "ar" ? "العودة إلى السوق" : "Back to Marketplace"}</Link>
@@ -475,51 +506,107 @@ export default function PropertyDetail() {
                     </div>
                   </div>
 
-                  {/* Number of units — working stepper with live total */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-foreground mb-2">{t("propertyDetail.numberOfUnits")}</label>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        aria-label="decrease units"
-                        onClick={() => setUnits((u) => Math.max(1, u - 1))}
-                        className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        value={units}
-                        onChange={(e) => setUnits(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="flex-1 h-10 bg-muted rounded-lg text-center font-semibold outline-none focus:ring-2 focus:ring-primary"
-                      />
-                      <button
-                        type="button"
-                        aria-label="increase units"
-                        onClick={() => setUnits((u) => u + 1)}
-                        className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <div className="text-center mt-2 text-sm text-muted-foreground">
-                      {t("propertyDetail.total")}: <span className="font-semibold text-foreground">${(units * Number(cp.tokenPrice)).toLocaleString()}</span>
-                    </div>
-                  </div>
+                  {cpIsInstallment ? (
+                    <>
+                      {/* Installment (under-construction) purchase — the DOWN-PAYMENT is what's
+                          charged now, NOT the full price. Routes to the installment checkout using
+                          the SHARED terms the plan builder below drives — never the ready-property
+                          "Own Now" full-buy. */}
+                      <div className="mb-4 p-4 rounded-xl border border-primary/20 bg-gradient-gold/10">
+                        <div className="flex items-center gap-2 mb-2">
+                          <HardHat className="w-4 h-4 text-primary" />
+                          <span className="text-sm font-medium text-foreground">
+                            {language === "ar" ? "خطة تقسيط" : "Installment plan"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {language === "ar" ? "المستحق الآن (دفعة مقدمة)" : "Due now (down payment)"}
+                        </div>
+                        <div className="text-3xl font-bold text-gradient-gold">
+                          ${cpDownPayment.toLocaleString()}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {language === "ar"
+                            ? `ثم ${cpInstallmentCount} قسط · تُضاف رسوم المنصة عند الدفع`
+                            : `then ${cpInstallmentCount} installments · platform fee added at checkout`}
+                        </p>
+                      </div>
 
-                  {/* CTA — Own Now → real Checkout with the chosen quantity */}
-                  <Button
-                    variant="hero"
-                    size="lg"
-                    className="w-full mb-4"
-                    onClick={() => navigate(`/checkout?property=${id}&units=${units}`)}
-                  >
-                    {t("property.investNow")}
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    {t("propertyDetail.addToFavorites")}
-                  </Button>
+                      <Button
+                        variant="hero"
+                        size="lg"
+                        className="w-full mb-3 gap-2"
+                        onClick={() =>
+                          navigate(`/checkout?${installmentCheckoutQuery(id || cp.id, installmentTerms)}`)
+                        }
+                      >
+                        <DollarSign className="w-5 h-5" />
+                        {language === "ar" ? "التملّك بالتقسيط" : "Own via installments"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full mb-4"
+                        onClick={() =>
+                          document
+                            .getElementById("installment-plan")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        }
+                      >
+                        {language === "ar" ? "خصّص خطتك" : "Customize your plan"}
+                      </Button>
+                      <Button variant="outline" className="w-full">
+                        {t("propertyDetail.addToFavorites")}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Number of units — working stepper with live total */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-foreground mb-2">{t("propertyDetail.numberOfUnits")}</label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label="decrease units"
+                            onClick={() => setUnits((u) => Math.max(1, u - 1))}
+                            className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            value={units}
+                            onChange={(e) => setUnits(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                            className="flex-1 h-10 bg-muted rounded-lg text-center font-semibold outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <button
+                            type="button"
+                            aria-label="increase units"
+                            onClick={() => setUnits((u) => u + 1)}
+                            className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center hover:bg-muted/80 text-xl font-medium"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="text-center mt-2 text-sm text-muted-foreground">
+                          {t("propertyDetail.total")}: <span className="font-semibold text-foreground">${(units * Number(cp.tokenPrice)).toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* CTA — Own Now → real Checkout with the chosen quantity */}
+                      <Button
+                        variant="hero"
+                        size="lg"
+                        className="w-full mb-4"
+                        onClick={() => navigate(`/checkout?property=${id}&units=${units}`)}
+                      >
+                        {t("property.investNow")}
+                      </Button>
+                      <Button variant="outline" className="w-full">
+                        {t("propertyDetail.addToFavorites")}
+                      </Button>
+                    </>
+                  )}
 
                   {/* Trust badges */}
                   <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-border">
