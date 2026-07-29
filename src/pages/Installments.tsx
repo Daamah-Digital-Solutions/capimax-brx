@@ -11,6 +11,8 @@ import {
   Loader2,
   Lock,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -44,9 +46,48 @@ export default function Installments() {
   const [filter, setFilter] = useState("all");
   const [payPlan, setPayPlan] = useState<InstallmentPlanRow | null>(null);
   const [payMode, setPayMode] = useState<"next" | "payoff">("next");
+  // Which plan's full schedule table is expanded (client note: view the schedule per property).
+  const [openSchedule, setOpenSchedule] = useState<string | null>(null);
 
   const stats = data?.stats;
   const plans = data?.plans ?? [];
+
+  const scheduleStatusLabel = (s: "pending" | "paid" | "missed") =>
+    s === "paid"
+      ? language === "ar" ? "مدفوع" : "Paid"
+      : s === "missed"
+        ? language === "ar" ? "متأخر" : "Missed"
+        : language === "ar" ? "قادم" : "Upcoming";
+
+  const rowLabel = (p: InstallmentPlanRow["payments"][number]) =>
+    p.type === "down_payment"
+      ? language === "ar" ? "دفعة مقدمة" : "Down payment"
+      : `${language === "ar" ? "قسط" : "Installment"} ${p.sequence}`;
+
+  // Download THIS plan's schedule (dates + amounts + status) as a CSV — no backend round-trip.
+  // A UTF-8 BOM keeps Arabic property names intact when opened in Excel.
+  const downloadSchedule = (plan: InstallmentPlanRow) => {
+    const head = ["#", "Type", "Date", "Amount (USD)", "Status"];
+    const rows = plan.payments.map((p) => [
+      p.type === "down_payment" ? "" : String(p.sequence),
+      p.type === "down_payment" ? "Down payment" : `Installment ${p.sequence}`,
+      p.date,
+      String(p.amount),
+      p.status,
+    ]);
+    const esc = (c: string) => `"${c.replace(/"/g, '""')}"`;
+    const csv = [head, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
+    const slug = (plan.propertyEn || "installment").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-installment-schedule.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const filteredPlans = plans.filter((p) => {
     if (filter === "all") return true;
@@ -318,6 +359,86 @@ export default function Installments() {
                                 />
                               ))}
                             </div>
+                          </div>
+
+                          {/* Full schedule — view + download per property (client note 4). Dates,
+                              amounts and status per installment come straight from plan.payments. */}
+                          <div className="mb-6">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <button
+                                type="button"
+                                onClick={() => setOpenSchedule(openSchedule === plan.id ? null : plan.id)}
+                                className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                              >
+                                <Calendar className="w-4 h-4" />
+                                {language === "ar" ? "جدول الأقساط" : "Installment schedule"}
+                                {openSchedule === plan.id ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 shrink-0"
+                                onClick={() => downloadSchedule(plan)}
+                              >
+                                <Download className="w-4 h-4" />
+                                {language === "ar" ? "تحميل الجدول" : "Download"}
+                              </Button>
+                            </div>
+                            {openSchedule === plan.id && (
+                              <div className="rounded-xl border border-border overflow-x-auto">
+                                <table className="w-full text-sm min-w-[420px]">
+                                  <thead className="bg-muted/60 text-muted-foreground">
+                                    <tr>
+                                      <th className="text-start font-medium px-4 py-2 w-10">#</th>
+                                      <th className="text-start font-medium px-4 py-2">
+                                        {language === "ar" ? "النوع" : "Type"}
+                                      </th>
+                                      <th className="text-start font-medium px-4 py-2">
+                                        {language === "ar" ? "التاريخ" : "Date"}
+                                      </th>
+                                      <th className="text-end font-medium px-4 py-2">
+                                        {language === "ar" ? "المبلغ" : "Amount"}
+                                      </th>
+                                      <th className="text-end font-medium px-4 py-2">
+                                        {language === "ar" ? "الحالة" : "Status"}
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {plan.payments.map((p) => (
+                                      <tr key={p.sequence} className="border-t border-border">
+                                        <td className="px-4 py-2 text-muted-foreground">
+                                          {p.type === "down_payment" ? "—" : p.sequence}
+                                        </td>
+                                        <td className="px-4 py-2 text-foreground">{rowLabel(p)}</td>
+                                        <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">{p.date}</td>
+                                        <td className="px-4 py-2 text-end font-medium text-foreground whitespace-nowrap">
+                                          ${p.amount.toLocaleString()}
+                                        </td>
+                                        <td className="px-4 py-2 text-end">
+                                          <span
+                                            className={cn(
+                                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                              p.status === "paid"
+                                                ? "bg-success/10 text-success"
+                                                : p.status === "missed"
+                                                  ? "bg-destructive/10 text-destructive"
+                                                  : "bg-muted text-muted-foreground",
+                                            )}
+                                          >
+                                            {scheduleStatusLabel(p.status)}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </div>
 
                           {/* Next Payment — Pay Now disabled this wave */}
