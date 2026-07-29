@@ -276,6 +276,18 @@ class Withdrawal(models.Model):
     )
     reference = models.CharField(max_length=64, blank=True, default="")
     notes = models.CharField(max_length=500, blank=True, null=True)
+    # Where the payout goes — the saved bank account / crypto wallet the user chose. SET_NULL
+    # keeps the withdrawal record if the method is later deleted; `destination_label` is a
+    # masked snapshot so the operator still knows where to send even then.
+    bank_account = models.ForeignKey(
+        "InvestorBankAccount", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="withdrawals",
+    )
+    crypto_wallet = models.ForeignKey(
+        "InvestorCryptoWallet", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="withdrawals",
+    )
+    destination_label = models.CharField(max_length=255, blank=True, default="")
     processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -257,3 +257,70 @@ class BalanceTransactionHistoryTests(APITestCase):
             self.client.get("/api/wallets/balance/transactions/").status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+
+class WithdrawalDestinationTests(APITestCase):
+    """Client note 6: a withdrawal is routed to one of the caller's OWN saved payout methods —
+    the destination is required, self-scoped, and snapshotted (masked) onto the request so an
+    operator always knows where to send even if the method is later deleted."""
+
+    def setUp(self):
+        from decimal import Decimal
+
+        from .models import InvestorBankAccount, InvestorCryptoWallet, Withdrawal
+
+        self.Withdrawal = Withdrawal
+        self.InvestorBankAccount = InvestorBankAccount
+        self.InvestorCryptoWallet = InvestorCryptoWallet
+        self.user = User.objects.create_user(email="wd-ep@example.com", password="pw12345!")
+        self.other = User.objects.create_user(email="wd-ep2@example.com", password="pw12345!")
+        credit_user_balance(self.user, Decimal("1000.00"), source="test")
+        self.bank = InvestorBankAccount.objects.create(
+            user=self.user, bank_name="CIB", account_holder_name="A B",
+            account_number_masked="****4321", country="EG", currency="USD",
+        )
+        self.client.force_authenticate(self.user)
+
+    def _post(self, payload):
+        return self.client.post("/api/wallets/withdrawals/", payload, format="json")
+
+    def test_destination_is_required(self):
+        resp = self._post({"amount": "100", "method": "bank"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.json().get("code"), "destination_required")
+        self.assertEqual(self.Withdrawal.objects.filter(user=self.user).count(), 0)
+
+    def test_bank_withdrawal_links_and_snapshots(self):
+        resp = self._post(
+            {"amount": "100", "method": "bank", "bank_account_id": str(self.bank.id)}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        wd = self.Withdrawal.objects.get(user=self.user)
+        self.assertEqual(wd.bank_account_id, self.bank.id)
+        self.assertIn("CIB", wd.destination_label)
+        self.assertIn("****4321", wd.destination_label)
+        self.assertEqual(resp.json()["destination_label"], wd.destination_label)
+
+    def test_cannot_target_another_users_method(self):
+        others = self.InvestorBankAccount.objects.create(
+            user=self.other, bank_name="Other", account_holder_name="X",
+            account_number_masked="****9999", country="EG", currency="USD",
+        )
+        resp = self._post(
+            {"amount": "100", "method": "bank", "bank_account_id": str(others.id)}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.Withdrawal.objects.filter(user=self.user).count(), 0)
+
+    def test_crypto_withdrawal_requires_saved_wallet(self):
+        self.assertEqual(self._post({"amount": "50", "method": "crypto"}).status_code, 400)
+        wallet = self.InvestorCryptoWallet.objects.create(
+            user=self.user, wallet_address="0x1234567890abcdef1234", network="Ethereum",
+        )
+        ok = self._post(
+            {"amount": "50", "method": "crypto", "crypto_wallet_id": str(wallet.id)}
+        )
+        self.assertEqual(ok.status_code, status.HTTP_201_CREATED)
+        wd = self.Withdrawal.objects.get(user=self.user, method="crypto")
+        self.assertEqual(wd.crypto_wallet_id, wallet.id)
+        self.assertIn("Ethereum", wd.destination_label)

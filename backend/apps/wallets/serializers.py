@@ -106,19 +106,24 @@ class WithdrawalSerializer(serializers.ModelSerializer):
         model = Withdrawal
         fields = (
             "id", "amount", "currency", "method", "status", "reference",
-            "notes", "processed_at", "created_at",
+            "notes", "destination_label", "bank_account", "crypto_wallet",
+            "processed_at", "created_at",
         )
         read_only_fields = fields
 
 
 class WithdrawalCreateSerializer(serializers.Serializer):
-    """Request a withdrawal of internal balance (mirrors the LP withdrawal form)."""
+    """Request a withdrawal of internal balance (mirrors the LP withdrawal form). The
+    optional destination id points at one of the caller's OWN saved payout methods; the
+    view validates ownership + that it matches the chosen method type."""
 
     amount = serializers.DecimalField(
         max_digits=18, decimal_places=2, min_value=Decimal("0.01")
     )
     method = serializers.ChoiceField(choices=["bank", "crypto"])
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    bank_account_id = serializers.UUIDField(required=False, allow_null=True)
+    crypto_wallet_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class BalanceTransactionSerializer(serializers.ModelSerializer):

@@ -24,6 +24,8 @@ from apps.core.permissions import KYCApprovedPermission
 
 from .models import (
     BalanceTransaction,
+    InvestorBankAccount,
+    InvestorCryptoWallet,
     OwnershipToken,
     UserBalance,
     UserWallet,
@@ -211,12 +213,44 @@ class WithdrawalsView(APIView):
     def post(self, request):
         serializer = WithdrawalCreateSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
+        method = serializer.validated_data["method"]
+
+        # Resolve the chosen payout destination to one of the caller's OWN saved methods
+        # (self-scoped) and require it to match the method type — so a payout is never
+        # recorded without a real, owned destination the operator can send to.
+        bank_account = None
+        crypto_wallet = None
+        if method == "bank":
+            ba_id = serializer.validated_data.get("bank_account_id")
+            bank_account = InvestorBankAccount.objects.filter(
+                id=ba_id, user=request.user
+            ).first() if ba_id else None
+            if bank_account is None:
+                return Response(
+                    {"detail": "Select a saved bank account to withdraw to.",
+                     "code": "destination_required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:  # crypto
+            cw_id = serializer.validated_data.get("crypto_wallet_id")
+            crypto_wallet = InvestorCryptoWallet.objects.filter(
+                id=cw_id, user=request.user
+            ).first() if cw_id else None
+            if crypto_wallet is None:
+                return Response(
+                    {"detail": "Select a saved crypto wallet to withdraw to.",
+                     "code": "destination_required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             withdrawal = request_withdrawal(
                 request.user,
                 serializer.validated_data["amount"],
-                method=serializer.validated_data["method"],
+                method=method,
                 notes=serializer.validated_data.get("notes") or "",
+                bank_account=bank_account,
+                crypto_wallet=crypto_wallet,
             )
         except InsufficientBalance:
             return Response(

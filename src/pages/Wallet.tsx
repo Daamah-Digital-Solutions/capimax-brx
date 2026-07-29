@@ -44,7 +44,6 @@ import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard"
 import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
 import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
 import { SavedCardsManager } from "@/components/wallet/SavedCardsManager";
-import { BackendPendingNotice } from "@/components/wallet/BackendPendingNotice";
 // Phase 12 finishing: the investor wallet now uses the REAL Django flow + the shared
 // Django withdrawal dialog (replaces the legacy Supabase-OTP WithdrawalDialog).
 import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
@@ -363,8 +362,6 @@ export default function Wallet() {
                     </h2>
                   </div>
                 </div>
-
-                <BackendPendingNotice />
 
                 <BankAccountsManager />
 

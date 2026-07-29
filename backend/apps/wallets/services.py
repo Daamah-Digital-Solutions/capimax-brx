@@ -134,12 +134,30 @@ class InsufficientBalance(Exception):
     """A debit was attempted against a UserBalance that is too low."""
 
 
-def request_withdrawal(user, amount, *, method: str, notes: str = ""):
+def _withdrawal_destination_label(method, bank_account, crypto_wallet) -> str:
+    """A masked, human-readable snapshot of where a payout goes — retained on the withdrawal
+    even if the saved method is later deleted, so an operator always knows the destination."""
+    if method == "bank" and bank_account is not None:
+        parts = [bank_account.bank_name, bank_account.account_number_masked]
+        if bank_account.iban_masked:
+            parts.append(bank_account.iban_masked)
+        return " · ".join(p for p in parts if p)[:255]
+    if method == "crypto" and crypto_wallet is not None:
+        addr = crypto_wallet.wallet_address or ""
+        masked = f"{addr[:6]}…{addr[-4:]}" if len(addr) > 12 else addr
+        return f"{crypto_wallet.network} · {crypto_wallet.wallet_label or masked}"[:255]
+    return ""
+
+
+def request_withdrawal(
+    user, amount, *, method: str, notes: str = "", bank_account=None, crypto_wallet=None
+):
     """
     Investor withdrawal — Phase 6 Wave 3. Debits the internal balance and records a
     pending Withdrawal (an operator advances it / runs the off-platform payout),
     mirroring the LP withdrawal. Atomic: a shortfall raises InsufficientBalance and
-    nothing is recorded. Returns the Withdrawal.
+    nothing is recorded. When a saved bank account / crypto wallet is supplied it is
+    linked + snapshotted so the payout has a real destination. Returns the Withdrawal.
     """
     import uuid as _uuid
 
@@ -156,6 +174,9 @@ def request_withdrawal(user, amount, *, method: str, notes: str = ""):
             amount=amount,
             method=method,
             notes=notes or None,
+            bank_account=bank_account,
+            crypto_wallet=crypto_wallet,
+            destination_label=_withdrawal_destination_label(method, bank_account, crypto_wallet),
             reference="WD-" + _uuid.uuid4().hex[:10].upper(),
             status=Withdrawal.Status.PENDING,
         )

@@ -799,9 +799,15 @@ export const walletsApi = {
     rawRequest("/wallets/balance/transactions/", { auth: true }) as Promise<BalanceTransactionRow[]>,
   /** The caller's withdrawal history. */
   withdrawals: () => rawRequest("/wallets/withdrawals/", { auth: true }) as Promise<any[]>,
-  /** Request a withdrawal of internal balance (debits it + records a pending request). */
-  requestWithdrawal: (payload: { amount: number; method: string; notes?: string }) =>
-    rawRequest("/wallets/withdrawals/", { method: "POST", auth: true, body: payload }),
+  /** Request a withdrawal of internal balance (debits it + records a pending request). The
+   *  destination id points at one of the caller's saved payout methods (required server-side). */
+  requestWithdrawal: (payload: {
+    amount: number;
+    method: string;
+    notes?: string;
+    bank_account_id?: string;
+    crypto_wallet_id?: string;
+  }) => rawRequest("/wallets/withdrawals/", { method: "POST", auth: true, body: payload }),
 };
 
 // --------------------------------------------------------------------------- //
