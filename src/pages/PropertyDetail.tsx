@@ -309,13 +309,15 @@ export default function PropertyDetail() {
           <div className="container py-8">
             <div className="grid lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
-            {/* Hero */}
-            <div className="relative h-72 md:h-96 rounded-2xl overflow-hidden">
-              <img src={cp.image} alt={cpName} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">{cpName}</h1>
-                <div className="flex items-center gap-4 text-muted-foreground text-sm flex-wrap">
+            {/* Hero — on mobile the box is near-square, so a stronger bottom scrim keeps the
+                (smaller) title readable over the cropped photo instead of it climbing into a
+                bright area. Padding + title scale down on phones. */}
+            <div className="relative h-56 sm:h-72 md:h-96 rounded-2xl overflow-hidden">
+              <img src={cp.image} alt={cpName} className="w-full h-full object-cover object-center" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/75 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6">
+                <h1 className="font-display text-2xl md:text-4xl font-bold text-foreground mb-2">{cpName}</h1>
+                <div className="flex items-center gap-x-4 gap-y-1 text-muted-foreground text-sm flex-wrap">
                   <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{cpLoc}</span>
                   <Badge variant="outline" className="capitalize">{cp.assetType}</Badge>
                   <Badge variant={cp.status === "ready" ? "ready" : "construction"}>
@@ -679,13 +681,13 @@ export default function PropertyDetail() {
             <div className="lg:col-span-2 space-y-8">
               {/* Gallery */}
               <div className="space-y-4 animate-fade-in">
-                <div className="relative h-96 rounded-2xl overflow-hidden">
+                <div className="relative h-56 sm:h-72 md:h-96 rounded-2xl overflow-hidden">
                   <img
                     src={currentProperty.images[selectedImage]}
                     alt={propertyName}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover object-center"
                   />
-                  <div className="absolute top-4 end-4 flex gap-2">
+                  <div className="absolute top-4 end-4 flex flex-wrap justify-end gap-2 max-w-[70%]">
                     {isUnderConstruction ? (
                       <>
                         <Badge variant="construction" className="gap-1">
@@ -704,13 +706,13 @@ export default function PropertyDetail() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 overflow-x-auto pb-1">
                   {currentProperty.images.map((img, index) => (
                     <button
                       key={index}
                       onClick={() => setSelectedImage(index)}
                       className={cn(
-                        "w-24 h-16 rounded-lg overflow-hidden border-2 transition-colors",
+                        "w-24 h-16 shrink-0 rounded-lg overflow-hidden border-2 transition-colors",
                         selectedImage === index ? "border-primary" : "border-transparent opacity-70 hover:opacity-100"
                       )}
                     >
