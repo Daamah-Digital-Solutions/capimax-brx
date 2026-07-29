@@ -28,6 +28,13 @@ export interface SukukPaymentProps {
   ready: boolean;
   /** Terms & risk declarations, rendered inline directly ABOVE the submit button. */
   declarations?: ReactNode;
+  /** Installments (Wave B): when set, the certificate covers the DOWN-PAYMENT (not the full
+   *  price); on admin approval the plan activates and the position mints-then-locks. */
+  installment?: {
+    down_payment_percent: number;
+    n_installments: number;
+    frequency: "monthly" | "quarterly";
+  };
   onRouteToKyc: () => void;
   onProcessing: () => void;
 }
@@ -71,6 +78,14 @@ export function SukukPayment(props: SukukPaymentProps) {
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
         payment_method: "sukuk",
+        ...(props.installment
+          ? {
+              is_installment: true,
+              down_payment_percent: props.installment.down_payment_percent,
+              n_installments: props.installment.n_installments,
+              frequency: props.installment.frequency,
+            }
+          : {}),
       });
       if (!created.success || !created.investment_id) {
         if (created.code === "kyc_required") {

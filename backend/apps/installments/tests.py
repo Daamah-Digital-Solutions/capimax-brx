@@ -380,6 +380,86 @@ class FeesBuyerBorneTests(TestCase):
         self.assertEqual(bt.amount, Decimal("1000.00"))
 
 
+class AllMethodsInstallmentTests(TestCase):
+    """Client 2nd round: EVERY charge-capable method can fund an installment DOWN-PAYMENT, not
+    just card/crypto. Balance settles INLINE (no webhook); Pronova/sukuk DEFER; the Pronova
+    discount applies to the down-payment, not the full price. All route through the same
+    installment-aware mint (FULL-MINT-THEN-LOCK + plan activation)."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(email="owner-allm@example.com", password="pw12345!")
+        self.investor = User.objects.create_user(email="inv-allm@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.investor)
+
+    def _ledger_installment(self, slug, *, pronova=0):
+        # Ledger (non-deployed) installment property → an inline mint needs no chain mock.
+        p = Property(**_valid_property_kwargs(
+            slug=slug, model="installment", category="construction",
+            total_value=Decimal("10000"), token_price=Decimal("100"), is_published=True,
+        ))
+        p.submitted_by = self.owner
+        if pronova:
+            p.fee_pronova_discount = Decimal(str(pronova))
+        p.save()  # DEFAULT fees 1.5% + 0.5% = 2%
+        return p
+
+    def test_balance_installment_settles_inline_locks_and_activates_plan(self):
+        from apps.wallets.services import credit_user_balance
+
+        prop = self._ledger_installment("bal-inst")
+        credit_user_balance(self.investor, Decimal("2000"), source="deposit", reference="seed-bal")
+        res = create_investment(
+            user=self.investor, prop=prop, token_amount=10, payment_method="balance",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        inv = res["investment"]
+        inv.refresh_from_db()
+        # Balance has NO webhook → it must settle INLINE: completed + minted, never left PENDING.
+        self.assertEqual(inv.payment_status, PaymentStatus.COMPLETED)
+        self.assertTrue(inv.tokens_minted)
+        # Charged only the DOWN-PAYMENT (30% of 1000 = 300) + the FULL fee (20) = 320 from balance.
+        debit = BalanceTransaction.objects.get(source="reinvestment", reference=str(inv.id))
+        self.assertEqual(debit.amount, Decimal("320.00"))
+        # FULL position minted (10); only the down-payment's share released (3), the rest LOCKED (7).
+        token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=prop.slug)
+        self.assertEqual(token.token_amount, 10)
+        self.assertEqual(token.locked_amount, 7)
+        # The plan is ACTIVE with the down-payment settled — exactly like the webhook path.
+        inv.installment_plan.refresh_from_db()
+        self.assertEqual(inv.installment_plan.status, "active")
+        self.assertIsNotNone(inv.installment_plan.down_paid_at)
+
+    def test_pronova_installment_defers_and_discounts_the_down_payment(self):
+        prop = self._ledger_installment("pron-inst", pronova=5)  # 5% Pronova discount
+        res = create_investment(
+            user=self.investor, prop=prop, token_amount=10, payment_method="pronova",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        inv = res["investment"]
+        # PSP-gated → stays PENDING (a real Stripe charge + webhook completes it); nothing minted.
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
+        self.assertFalse(inv.tokens_minted)
+        self.assertEqual(inv.down_payment_amount, Decimal("300.00"))
+        # The 5% discount is on the DOWN-PAYMENT basis (300 + 20 fee = 320 → 16.00), NOT the full
+        # price (which would be ~51) — the buyer pays down + fee LESS this discount.
+        self.assertEqual(inv.discount_amount, Decimal("16.00"))
+        self.assertEqual(inv.settlement_amount, Decimal("304.00"))  # 300 + 20 − 16
+
+    def test_sukuk_installment_defers_for_admin_approval(self):
+        prop = self._ledger_installment("suk-inst")
+        res = create_investment(
+            user=self.investor, prop=prop, token_amount=10, payment_method="sukuk",
+            is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
+        )
+        inv = res["investment"]
+        # Admin-gated → PENDING (settles on approve_certificate → settle_investment); no mint yet.
+        self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
+        self.assertFalse(inv.tokens_minted)
+        self.assertEqual(inv.charge_amount, Decimal("300.00"))  # the cert covers the down-payment
+        # Plan built but still DRAFT until the certificate is approved.
+        self.assertEqual(inv.installment_plan.status, "draft")
+
+
 class InstallmentEarlyPayoffTests(TestCase):
     """
     Early payoff: ONE charge settles ALL remaining installments → full unlock + completed.

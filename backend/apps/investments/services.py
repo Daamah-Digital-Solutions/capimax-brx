@@ -69,6 +69,14 @@ REINVESTMENT_SOURCE = "reinvestment"
 # like a card/crypto buy, then settled by approve_certificate → settle_investment.
 SUKUK_METHOD = "sukuk"
 
+# Methods that can fund an installment plan's DOWN-PAYMENT. Widened from the old card/crypto-
+# only gate: every charge-capable method works because the down-payment settles through the
+# SAME installment-aware mint (mint_investment: FULL-MINT-THEN-LOCK + plan activation). card /
+# crypto / Pronova — plus Apple/Google Pay, which reach the server as payment_method "card" —
+# settle on the confirmed PSP webhook; balance settles INLINE (debited synchronously, there is
+# no webhook); sukuk settles on ADMIN approval of the uploaded certificate.
+INSTALLMENT_METHODS = {"card", "crypto", BALANCE_METHOD, PRONOVA_METHOD, SUKUK_METHOD}
+
 
 class DuplicateInvestmentError(APIException):
     status_code = 409
@@ -214,26 +222,19 @@ def create_investment(
         # installment (charged once, with the down-payment).
         fee_amount = fee_amount_for(locked_prop, amount)
 
-        # Pronova (temporary rail): a PLATFORM-ABSORBED discount off the settlement subtotal
-        # (token value + buyer-borne fee), from the property's admin rate. Reduces ONLY
-        # settlement_amount (what the buyer pays via Stripe); the owner still receives the FULL
-        # token value. Pronova is full-buy (the installment gate below rejects it), so the
-        # basis is amount + fee_amount. Non-Pronova → 0.
-        discount_amount = Decimal("0")
-        if payment_method == PRONOVA_METHOD:
-            discount_amount = pronova_discount_for(locked_prop, amount + fee_amount)
-
         # Installments (Wave B): build the plan + resolve the DOWN-PAYMENT. The full
         # `amount` above stays the position value (token_amount × price); the gated
-        # charge is the down-payment. Installments are settlement-gated ONLY (the
-        # FULL-MINT-THEN-LOCK happens on the confirmed webhook), so they require a
-        # real PSP method — never the simulated branch.
+        # charge is the down-payment. Any charge-capable method may fund it (INSTALLMENT_METHODS)
+        # — the down-payment settles through the SAME installment-aware mint (FULL-MINT-THEN-LOCK
+        # + plan activation), whether via a PSP webhook (card/crypto/Pronova, and Apple/Google as
+        # "card"), an inline balance debit, or an admin-approved sukuk certificate. Computed
+        # BEFORE the Pronova discount so the discount can use the down-payment as its basis.
         installment_plan = None
         down_payment_amount = None
         if is_installment:
-            if payment_method not in WEBHOOK_PAID_METHODS:
+            if payment_method not in INSTALLMENT_METHODS:
                 raise ValidationError(
-                    {"payment_method": "Installments require a card or crypto payment."}
+                    {"payment_method": "This payment method can't fund an installment plan."}
                 )
             if locked_prop.model != "installment":
                 raise ValidationError(
@@ -253,6 +254,17 @@ def create_investment(
                 frequency=frequency,
             )
             down_payment_amount = installment_plan.down_payment_amount
+
+        # Pronova (temporary rail): a PLATFORM-ABSORBED discount off the settlement subtotal
+        # (the buyer pays less via Stripe; the owner still receives the FULL token value). The
+        # basis is what's actually charged NOW + the buyer-borne fee — the full price for a
+        # normal Pronova buy, the DOWN-PAYMENT for a Pronova installment. Non-Pronova → 0.
+        discount_amount = Decimal("0")
+        if payment_method == PRONOVA_METHOD:
+            charged_basis = (
+                down_payment_amount if is_installment and down_payment_amount is not None else amount
+            )
+            discount_amount = pronova_discount_for(locked_prop, charged_basis + fee_amount)
 
         # One-active-per-property. First EXPIRE a genuinely-abandoned webhook-gated
         # (card/crypto/Pronova) attempt that never confirmed, so a retry can proceed; sukuk
@@ -343,6 +355,12 @@ def create_investment(
             or is_installment
             or payment_method == SUKUK_METHOD
         )
+        # Balance is real money debited synchronously above — there is NO webhook to complete
+        # it, so it must settle INLINE even for an installment down-payment (the completion +
+        # the installment-aware mint-then-LOCK + plan activation happen right here via
+        # mint_investment, exactly as the webhook does for a card/crypto down-payment).
+        if payment_method == BALANCE_METHOD:
+            defer_payment = False
         if not defer_payment:
             investment.payment_status = PaymentStatus.COMPLETED
             investment.save(update_fields=["payment_status", "updated_at"])

@@ -238,17 +238,6 @@ export default function Checkout() {
     };
   }, [units, unitPrice, platformRate, managementRate, property, propertyId]);
 
-  // Pronova: the ADMIN-set discount rate (property.fees.pronovaDiscount), mirrored client-side
-  // so the displayed total equals the server's charge. Applied to the subtotal (value + fees)
-  // and rounded to cents — exactly like the server's pronova_discount_for.
-  const pronovaRate =
-    property?.fees && property.fees.pronovaDiscount != null
-      ? Number(property.fees.pronovaDiscount) / 100
-      : DEFAULT_PRONOVA_DISCOUNT_RATE;
-  const pronovaDiscount =
-    selectedMethod === "pronova"
-      ? Math.round(investment.totalPayable * pronovaRate * 100) / 100
-      : 0;
   // The buyer-borne fee (platform + management), added on top of the token value. For an
   // installment the FULL fee is due once, with the down-payment (matches the server).
   const feeTotal = investment.platformFee + investment.managementFee;
@@ -257,23 +246,36 @@ export default function Checkout() {
   const downPaymentAmount = installmentTerms
     ? Math.round(investment.investmentAmount * downPaymentPercent) / 100
     : 0;
-  // The amount CHARGED now: for an installment, the down-payment + the FULL fee; else the
-  // full payable (token value + fees) less any Pronova discount.
-  const finalAmount = installmentTerms
-    ? downPaymentAmount + feeTotal
-    : investment.totalPayable - pronovaDiscount;
+  // The subtotal CHARGED now (before any Pronova discount): the down-payment + the full fee for
+  // an installment, else the full payable (token value + fees). Any payment method may fund it.
+  const chargedSubtotal = installmentTerms ? downPaymentAmount + feeTotal : investment.totalPayable;
+  // Pronova: the ADMIN-set discount rate (property.fees.pronovaDiscount), mirrored client-side so
+  // the displayed total equals the server's charge. The discount basis is what's actually charged
+  // NOW (`chargedSubtotal`) — the down-payment + fee for a Pronova installment, else value + fees
+  // — exactly like the server's pronova_discount_for. Rounded to cents.
+  const pronovaRate =
+    property?.fees && property.fees.pronovaDiscount != null
+      ? Number(property.fees.pronovaDiscount) / 100
+      : DEFAULT_PRONOVA_DISCOUNT_RATE;
+  const pronovaDiscount =
+    selectedMethod === "pronova"
+      ? Math.round(chargedSubtotal * pronovaRate * 100) / 100
+      : 0;
+  // The amount CHARGED now = the charged subtotal LESS any Pronova discount (installment or full).
+  const finalAmount = chargedSubtotal - pronovaDiscount;
 
   const handleUnitsChange = (newUnits: number) => {
     const clamped = Math.min(maxUnits, Math.max(MIN_UNITS, newUnits));
     setUnits(clamped);
   };
 
-  // Balance-funded buys are gated on sufficient balance (the backend debits the
-  // investment amount = units × price; an insufficient balance is rejected server-side).
+  // Balance-funded buys are gated on sufficient balance (the backend debits `chargedSubtotal` —
+  // value + fee for a full buy, the DOWN-PAYMENT + fee for an installment; an insufficient
+  // balance is rejected server-side). An installment only needs the down-payment covered.
   const balanceInsufficient =
     selectedMethod === "balance" &&
     availableBalance !== null &&
-    availableBalance < investment.investmentAmount;
+    availableBalance < chargedSubtotal;
   const canProceed =
     selectedMethod && termsAccepted && riskAccepted && !!property && !balanceInsufficient;
 
@@ -306,11 +308,21 @@ export default function Checkout() {
 
     try {
       // The server computes amount, price, ownership (from the real token_supply) and
-      // the token symbol — the client only sends which property + how many tokens.
+      // the token symbol — the client only sends which property + how many tokens. For an
+      // installment (e.g. a balance-funded down-payment) carry the plan terms so the server
+      // charges only the down-payment + fee and mints-then-locks the full position.
       const result = await processInvestment({
         property_id: propertyId,
         token_amount: units,
         payment_method: selectedMethod || "card",
+        ...(installmentTerms
+          ? {
+              is_installment: true,
+              down_payment_percent: installmentTerms.down_payment_percent,
+              n_installments: installmentTerms.n_installments,
+              frequency: installmentTerms.frequency,
+            }
+          : {}),
       });
 
       if (result.success) {
@@ -435,7 +447,7 @@ export default function Checkout() {
           {t("checkout.cancelPayment")}
         </Button>
       </div>
-    ) : selectedMethod === "sukuk" && !isInstallment && user && kycApproved !== false ? (
+    ) : selectedMethod === "sukuk" && user && kycApproved !== false ? (
       <div className="space-y-4">
         <SukukPayment
           propertyId={propertyId}
@@ -443,6 +455,7 @@ export default function Checkout() {
           finalAmount={finalAmount}
           ready={termsAccepted && riskAccepted && !!property}
           declarations={declarations}
+          installment={installmentTerms}
           onRouteToKyc={routeToKyc}
           onProcessing={() => setPaymentStatus("processing")}
         />
@@ -456,7 +469,7 @@ export default function Checkout() {
           {t("checkout.cancelPayment")}
         </Button>
       </div>
-    ) : selectedMethod === "pronova" && !isInstallment && user && kycApproved !== false ? (
+    ) : selectedMethod === "pronova" && user && kycApproved !== false ? (
       <div className="space-y-4">
         <PronovaCheckout
           propertyId={propertyId}
@@ -465,6 +478,7 @@ export default function Checkout() {
           discount={pronovaDiscount}
           ready={termsAccepted && riskAccepted && !!property}
           declarations={declarations}
+          installment={installmentTerms}
           onRouteToKyc={routeToKyc}
           onProcessing={() => setPaymentStatus("processing")}
           onResult={handlePspResult}
@@ -480,14 +494,13 @@ export default function Checkout() {
         </Button>
       </div>
     ) : (selectedMethod === "apple_pay" || selectedMethod === "google_pay") &&
-      !isInstallment &&
       user &&
       kycApproved !== false ? (
       <div className="space-y-4">
         {/* Apple Pay / Google Pay — real Stripe Payment Request button (same PaymentIntent as
-            card). Shows the native wallet button when the device supports it, an honest
-            "not available on this device" otherwise, and "not configured" if Stripe keys are
-            deferred. Terms/risk gate the button exactly like the card flow. */}
+            card, so it funds an installment down-payment too). Shows the native wallet button
+            when the device supports it, an honest "not available on this device" otherwise, and
+            "not configured" if Stripe keys are deferred. Terms/risk gate it like the card flow. */}
         <WalletPayCheckout
           wallet={selectedMethod === "apple_pay" ? "apple" : "google"}
           propertyId={propertyId}
@@ -495,6 +508,7 @@ export default function Checkout() {
           finalAmount={finalAmount}
           ready={termsAccepted && riskAccepted && !!property}
           declarations={declarations}
+          installment={installmentTerms}
           onRouteToKyc={routeToKyc}
           onProcessing={() => setPaymentStatus("processing")}
           onResult={handlePspResult}
@@ -508,20 +522,6 @@ export default function Checkout() {
         >
           {t("checkout.cancelPayment")}
         </Button>
-      </div>
-    ) : isInstallment ? (
-      <div className="flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
-        <Lock className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-        <div className="text-sm">
-          <p className="font-medium text-foreground">
-            {isRTL ? "اختر البطاقة أو العملة الرقمية" : "Choose card or crypto"}
-          </p>
-          <p className="text-muted-foreground">
-            {isRTL
-              ? "تتم خطط الأقساط عبر دفعة مقدمة آمنة بالبطاقة أو العملة الرقمية."
-              : "Installment plans are paid via a secure down-payment by card or crypto."}
-          </p>
-        </div>
       </div>
     ) : (
       <div className="space-y-4">
@@ -752,7 +752,7 @@ export default function Checkout() {
                 selectedMethod={selectedMethod}
                 onSelectMethod={setSelectedMethod}
                 availableBalance={availableBalance}
-                balanceChargeAmount={investment.investmentAmount}
+                balanceChargeAmount={chargedSubtotal}
                 selectedPanel={selectedMethodPanel}
               />
 

@@ -34,6 +34,12 @@ export interface PronovaCheckoutProps {
   ready: boolean;
   /** Terms & risk declarations, rendered inline directly ABOVE the Pay button. */
   declarations?: ReactNode;
+  /** Installments (Wave B): when set, the server charges only the DISCOUNTED down-payment. */
+  installment?: {
+    down_payment_percent: number;
+    n_installments: number;
+    frequency: "monthly" | "quarterly";
+  };
   onRouteToKyc: () => void;
   onProcessing: () => void;
   onResult: (r: { status: "success" | "failed"; tokensMinted: boolean }) => void;
@@ -78,6 +84,14 @@ function PronovaForm(props: PronovaCheckoutProps) {
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
         payment_method: "pronova",
+        ...(props.installment
+          ? {
+              is_installment: true,
+              down_payment_percent: props.installment.down_payment_percent,
+              n_installments: props.installment.n_installments,
+              frequency: props.installment.frequency,
+            }
+          : {}),
       });
       if (!created.success || !created.investment_id) {
         if (created.code === "kyc_required") {
