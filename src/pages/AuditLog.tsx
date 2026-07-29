@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { paymentMethodsApi } from "@/integrations/api/client";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { BackendPendingNotice } from "@/components/wallet/BackendPendingNotice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, Activity, AlertCircle } from "lucide-react";
@@ -45,7 +44,6 @@ export default function AuditLog() {
   return (
     <MainLayout>
       <div className="container mx-auto p-4 md:p-6 space-y-6" dir={isAr ? "rtl" : "ltr"}>
-        <BackendPendingNotice />
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-primary/10">
             <ShieldCheck className="h-6 w-6 text-primary" />

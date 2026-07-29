@@ -10,7 +10,6 @@ import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
 import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
 import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
 import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
-import { BackendPendingNotice } from "@/components/wallet/BackendPendingNotice";
 import { walletsApi } from "@/integrations/api/client";
 import { useBrokerCommissions } from "@/hooks/useBrokerCommissions";
 import { Wallet, ArrowDownToLine, Award, Clock, Building, Coins } from "lucide-react";
@@ -138,8 +137,6 @@ export default function BrokerWallet() {
               </CardContent>
             </Card>
           </div>
-
-          <BackendPendingNotice />
 
           {/* Payout methods */}
           <Tabs defaultValue="bank" className="space-y-6">

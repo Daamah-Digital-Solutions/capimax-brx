@@ -10,7 +10,6 @@ import { BankAccountsManager } from "@/components/wallet/BankAccountsManager";
 import { CryptoWalletsManager } from "@/components/wallet/CryptoWalletsManager";
 import { VisaCardsSection } from "@/components/wallet/VisaCardsSection";
 import { CreateVirtualCardButton } from "@/components/wallet/CreateVirtualCardButton";
-import { BackendPendingNotice } from "@/components/wallet/BackendPendingNotice";
 import { walletsApi, ownerApi } from "@/integrations/api/client";
 import {
   Wallet,
@@ -150,8 +149,6 @@ export default function OwnerWallet() {
               </CardContent>
             </Card>
           </div>
-
-          <BackendPendingNotice />
 
           {/* Payment Methods Tabs */}
           <Tabs defaultValue="bank" className="space-y-6">
