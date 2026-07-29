@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
 import { MobileBottomNav } from "./MobileBottomNav";
-import { TestingNotice } from "./TestingNotice";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -29,7 +28,6 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <TestingNotice />
       <AppSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <div className={cn(
         "flex flex-col min-h-screen transition-all duration-300",

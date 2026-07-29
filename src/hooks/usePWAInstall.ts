@@ -59,10 +59,11 @@ export function usePWAInstall() {
     }
   }, [deferredPrompt]);
 
-  const canShowPrompt = !isLoading && 
-    pwaSettings?.install_prompt_enabled && 
-    isInstallable && 
-    !isInstalled;
+  // Default the first-visit prompt ON unless an admin EXPLICITLY disabled it — a missing or
+  // unreachable settings row must not silently suppress the prompt (the client reported it
+  // never appearing on first visit).
+  const promptEnabled = pwaSettings?.install_prompt_enabled ?? true;
+  const canShowPrompt = !isLoading && promptEnabled && isInstallable && !isInstalled;
 
   return {
     isInstallable,

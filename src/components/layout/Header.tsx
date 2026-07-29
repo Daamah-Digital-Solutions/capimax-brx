@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -100,6 +101,9 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
         {/* Right Section */}
         <div className="flex items-center gap-2">
+          {/* Install app — persistent, available any time (self-hides once installed) */}
+          <InstallAppButton variant="gold-outline" />
+
           {/* Theme Toggle */}
           <Button 
             variant="ghost" 

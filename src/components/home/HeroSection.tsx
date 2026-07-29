@@ -27,6 +27,18 @@ export function HeroSection() {
 
       <div className="container relative z-10 py-16 lg:py-24">
         <div className="max-w-4xl mx-auto text-center">
+          {/* Brand logo — navy wordmark on the light theme, white on the dark theme */}
+          <img
+            src="/capimax-brx-logo-dark.svg"
+            alt="CapiMax BRX"
+            className="h-12 md:h-16 w-auto mx-auto mb-8 dark:hidden animate-fade-in"
+          />
+          <img
+            src="/capimax-brx-logo-light.svg"
+            alt="CapiMax BRX"
+            className="h-12 md:h-16 w-auto mx-auto mb-8 hidden dark:block animate-fade-in"
+          />
+
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-full mb-8 animate-fade-in">
             <Coins className="w-4 h-4 text-primary" />

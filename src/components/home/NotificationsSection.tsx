@@ -18,7 +18,7 @@ export function NotificationsSection() {
         ? "منصة الاستثمار العقاري الرقمي الجزئي التي تعمل عبر تقنية البلوكتشين. استثمر في العقارات بسهولة وأمان."
         : "The digital fractional real estate investment platform operating via blockchain. Invest in real estate easily and securely.",
       linkType: "external",
-      link: "https://capimaxpropshare.shop",
+      link: "https://capimaxpropshare.com",
       buttonText: isRTL ? "زيارة المنصة" : "Visit Platform",
       gradient: "from-blue-500/20 to-cyan-500/20",
       iconBg: "bg-blue-500",
