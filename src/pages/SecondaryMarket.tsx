@@ -12,8 +12,11 @@ import {
   Loader2,
   Wallet,
   ArrowDownToLine,
+  CreditCard,
+  Smartphone,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { DepositPayStep } from "@/components/wallet/DepositPayStep";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -56,6 +59,12 @@ export default function SecondaryMarket() {
   const [showSell, setShowSell] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
 
+  // "Add funds & buy" — when the proceeds balance can't cover a listing, fund the shortfall by
+  // card / crypto / Apple / Google Pay (the same gated deposit rail), then complete the buy
+  // (which still settles from the now-topped-up internal balance). Fixes the balance-only gap.
+  const [fundingListing, setFundingListing] = useState<typeof listings[0] | null>(null);
+  const [fundMethod, setFundMethod] = useState<"card" | "crypto" | "apple" | "google">("card");
+
   // Sell-modal state
   const [selectedToken, setSelectedToken] = useState<typeof tokens[0] | null>(null);
   const [sellUnits, setSellUnits] = useState(1);
@@ -83,12 +92,33 @@ export default function SecondaryMarket() {
     setShowSell(true);
   };
 
-  const handleBuy = async (listingId: string) => {
+  const handleBuy = async (listing: typeof listings[0]) => {
     if (!user) return requireLogin();
-    setBuyingId(listingId);
-    await buyListing(listingId);
+    // Enough proceeds balance → settle straight from balance (unchanged path).
+    if (balance >= listing.total_value) {
+      setBuyingId(listing.id);
+      await buyListing(listing.id);
+      setBuyingId(null);
+      return;
+    }
+    // Otherwise fund the shortfall first (card/crypto/wallet), then complete the buy.
+    setFundMethod("card");
+    setFundingListing(listing);
+  };
+
+  // Run once the top-up is confirmed credited: settle the buy from the now-topped-up balance.
+  const completeFundedBuy = async () => {
+    const listing = fundingListing;
+    if (!listing) return;
+    setFundingListing(null);
+    setBuyingId(listing.id);
+    await buyListing(listing.id);
     setBuyingId(null);
   };
+
+  const fundShortfall = fundingListing
+    ? Math.max(0.01, Math.ceil((fundingListing.total_value - balance) * 100) / 100)
+    : 0;
 
   const submitSell = async () => {
     if (!selectedToken) return;
@@ -233,10 +263,18 @@ export default function SecondaryMarket() {
                       <Button
                         variant="hero" className="w-full gap-2"
                         disabled={buyingId === l.id}
-                        onClick={() => handleBuy(l.id)}
+                        onClick={() => handleBuy(l)}
                       >
-                        {buyingId === l.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
-                        {t("secondaryMarket.buyNow")}
+                        {buyingId === l.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : balance >= l.total_value ? (
+                          <Coins className="w-4 h-4" />
+                        ) : (
+                          <CreditCard className="w-4 h-4" />
+                        )}
+                        {balance >= l.total_value
+                          ? t("secondaryMarket.buyNow")
+                          : isAr ? "اشحن واشترِ" : "Add funds & buy"}
                       </Button>
                     </div>
                   ))}
@@ -510,6 +548,90 @@ export default function SecondaryMarket() {
               {isAr ? "طلب السحب" : "Request Withdrawal"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add funds & buy — fund the shortfall via card/crypto/Apple/Google, then settle the buy */}
+      <Dialog open={!!fundingListing} onOpenChange={(o) => !o && setFundingListing(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary" />
+              {isAr ? "اشحن واشترِ" : "Add funds & buy"}
+            </DialogTitle>
+            <DialogDescription>
+              {isAr
+                ? "رصيدك لا يكفي لهذه الصفقة. اشحن الفرق بأي وسيلة وسنكمل الشراء تلقائياً."
+                : "Your balance can't cover this purchase. Top up the difference and we'll complete the buy automatically."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {fundingListing && (
+            <div className="space-y-4 py-2">
+              <div className="p-4 bg-muted rounded-xl space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{fundingListing.property_name}</span>
+                  <span className="font-medium" dir="ltr">
+                    {fundingListing.token_amount} {t("secondaryMarket.units")}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{isAr ? "إجمالي الصفقة" : "Purchase total"}</span>
+                  <span className="font-semibold" dir="ltr">${fundingListing.total_value.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{isAr ? "رصيدك" : "Your balance"}</span>
+                  <span dir="ltr">
+                    ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <span className="font-medium">{isAr ? "المطلوب شحنه الآن" : "To fund now"}</span>
+                  <span className="font-bold text-primary" dir="ltr">
+                    ${fundShortfall.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment method for the top-up */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { id: "card", label: isAr ? "بطاقة" : "Card", icon: CreditCard },
+                  { id: "crypto", label: isAr ? "كريبتو" : "Crypto", icon: Coins },
+                  { id: "apple", label: "Apple Pay", icon: Smartphone },
+                  { id: "google", label: "Google Pay", icon: Smartphone },
+                ] as const).map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setFundMethod(m.id)}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border transition-colors",
+                      fundMethod === m.id
+                        ? "border-primary bg-primary/5 text-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/40",
+                    )}
+                  >
+                    <m.icon className="w-4 h-4" />
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Gated deposit for the shortfall; on the confirmed credit we complete the buy. */}
+              <DepositPayStep
+                key={fundMethod}
+                method={fundMethod}
+                amount={fundShortfall}
+                onPaid={completeFundedBuy}
+              />
+
+              <p className="text-xs text-muted-foreground text-center">
+                {isAr
+                  ? "أثناء تأكيد الدفع البطيء (مثل العملات الرقمية) قد يشتري مستخدم آخر هذه الوحدة."
+                  : "During a slow confirmation (e.g. crypto) another buyer could take this listing."}
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </MainLayout>
