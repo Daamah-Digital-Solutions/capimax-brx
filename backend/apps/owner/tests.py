@@ -652,7 +652,7 @@ from apps.investments.models import Investment, PaymentStatus
 from apps.investments.services import mint_investment
 from apps.properties.models import Property, TokenMetadata
 from apps.properties.tests import _valid_property_kwargs
-from apps.wallets.models import BalanceTransaction, UserBalance
+from apps.wallets.models import BalanceTransaction, InvestorBankAccount, UserBalance
 from apps.wallets.services import get_or_create_custodial_wallet
 
 _FAKE_MINT = {"tx_hash": "0x" + "cd" * 32, "block_number": 555, "chain_id": 97}
@@ -774,9 +774,15 @@ class OwnerEarningsApiTests(APITestCase):
         bal = self.client.get("/api/wallets/balance/")
         self.assertEqual(bal.data["current_balance"], 1000.0)
 
-        # Withdraw via the SHARED withdrawal endpoint → debits the balance.
+        # Withdraw via the SHARED withdrawal endpoint → debits the balance. A payout now
+        # requires a saved, owned destination.
+        ba = InvestorBankAccount.objects.create(
+            user=owner, bank_name="Test Bank", account_holder_name="Owner",
+            account_number_masked="****1234", country="US", currency="USD",
+        )
         wd = self.client.post(
-            "/api/wallets/withdrawals/", {"amount": "500", "method": "bank"}, format="json"
+            "/api/wallets/withdrawals/",
+            {"amount": "500", "method": "bank", "bank_account_id": str(ba.id)}, format="json",
         )
         self.assertEqual(wd.status_code, status.HTTP_201_CREATED)
         bal2 = self.client.get("/api/wallets/balance/")

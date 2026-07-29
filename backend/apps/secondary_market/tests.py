@@ -17,6 +17,7 @@ from apps.properties.models import Property, TokenMetadata
 from apps.properties.tests import _valid_property_kwargs
 from apps.wallets.models import (
     BalanceTransaction,
+    InvestorBankAccount,
     OwnershipToken,
     UserBalance,
     WalletTransaction,
@@ -319,11 +320,19 @@ class InvestorWithdrawalTests(APITestCase):
         resp = self.client.get("/api/wallets/balance/")
         self.assertEqual(resp.data["current_balance"], 0.0)
 
+    def _bank_account(self):
+        # Withdrawals now require a saved, owned payout destination.
+        return InvestorBankAccount.objects.create(
+            user=self.user, bank_name="Test Bank", account_holder_name="WD User",
+            account_number_masked="****1234", country="US", currency="USD",
+        )
+
     def test_withdraw_debits_balance_and_records(self):
         credit_user_balance(self.user, Decimal("500"), source="test")
+        ba = self._bank_account()
         resp = self.client.post(
             "/api/wallets/withdrawals/",
-            {"amount": "200", "method": "bank"}, format="json",
+            {"amount": "200", "method": "bank", "bank_account_id": str(ba.id)}, format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["status"], "pending")
@@ -338,9 +347,10 @@ class InvestorWithdrawalTests(APITestCase):
 
     def test_withdraw_insufficient_rejected(self):
         credit_user_balance(self.user, Decimal("50"), source="test")
+        ba = self._bank_account()
         resp = self.client.post(
             "/api/wallets/withdrawals/",
-            {"amount": "200", "method": "bank"}, format="json",
+            {"amount": "200", "method": "bank", "bank_account_id": str(ba.id)}, format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "insufficient_balance")

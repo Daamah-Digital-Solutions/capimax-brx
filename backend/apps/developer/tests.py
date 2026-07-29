@@ -600,7 +600,7 @@ from apps.investments.services import mint_investment
 from apps.owner.services import publish_submission, reject_submission
 from apps.properties.models import InstallmentSchedule, TokenMetadata
 from apps.properties.tests import _valid_property_kwargs
-from apps.wallets.models import BalanceTransaction, UserBalance
+from apps.wallets.models import BalanceTransaction, InvestorBankAccount, UserBalance
 from apps.wallets.services import get_or_create_custodial_wallet
 
 _FAKE_MINT = {"tx_hash": "0x" + "ef" * 32, "block_number": 777, "chain_id": 97}
@@ -737,10 +737,16 @@ class DeveloperEarningsTests(APITestCase):
         self.assertEqual(earn.data["total_units_sold"], 10)
         self.assertEqual(len(earn.data["properties"]), 1)
         self.assertEqual(earn.data["properties"][0]["net_proceeds"], 1000.0)
-        # Balance + withdraw via the SHARED wallet stack (same as owner/investor/LP).
+        # Balance + withdraw via the SHARED wallet stack (same as owner/investor/LP). A payout
+        # now requires a saved, owned destination.
         self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 1000.0)
+        ba = InvestorBankAccount.objects.create(
+            user=dev, bank_name="Test Bank", account_holder_name="Dev",
+            account_number_masked="****1234", country="US", currency="USD",
+        )
         wd = self.client.post(
-            "/api/wallets/withdrawals/", {"amount": "500", "method": "bank"}, format="json"
+            "/api/wallets/withdrawals/",
+            {"amount": "500", "method": "bank", "bank_account_id": str(ba.id)}, format="json",
         )
         self.assertEqual(wd.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 500.0)
