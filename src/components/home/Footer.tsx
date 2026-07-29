@@ -109,9 +109,9 @@ export function Footer() {
                 </div>
               </div>
 
-              <a href="mailto:info@capimaxrt.com" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors pt-2 border-t border-border/60">
+              <a href="mailto:info@capimaxbrx.com" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors pt-2 border-t border-border/60">
                 <Mail className="w-4 h-4" />
-                info@capimaxrt.com
+                info@capimaxbrx.com
               </a>
             </div>
           </div>
