@@ -88,7 +88,9 @@ def create_payment(
     except requests.RequestException as exc:  # pragma: no cover - network failure
         raise NowPaymentsError("NOW Payments request failed.") from exc
     if resp.status_code >= 300:
-        raise NowPaymentsError(f"NOW Payments returned HTTP {resp.status_code}.")
+        # Keep NOW's reason in the exception so the caller can log it (the view still
+        # returns a safe, generic message to the client).
+        raise NowPaymentsError(f"NOW Payments returned HTTP {resp.status_code}: {resp.text[:200]}")
     data = resp.json()
     payment_id = str(data.get("payment_id") or "")
     if not payment_id:
@@ -100,6 +102,38 @@ def create_payment(
         "pay_currency": data.get("pay_currency") or pay_currency,
         "payment_status": data.get("payment_status") or "waiting",
     }
+
+
+def get_min_amount(pay_currency: str, *, price_currency: str = "usd") -> float | None:
+    """
+    The minimum payable amount (expressed in `price_currency`, e.g. USD) for `pay_currency`,
+    from NOW Payments' /min-amount. NOW enforces a per-currency floor (network fees make
+    BTC/ETH higher than a stablecoin), and a below-minimum /payment create is rejected — so we
+    check this UP FRONT to give the buyer the exact figure instead of a generic failure.
+
+    Returns None when the minimum is unknown (keys deferred, network error, or an unexpected
+    body). Callers MUST treat None as "unknown" and NOT block the payment on it — the create
+    call stays the real gate.
+    """
+    if not is_configured():
+        return None
+    import requests  # lazy — importing this module must not require the dep/network
+
+    url = settings.NOWPAYMENTS_BASE_URL.rstrip("/") + "/min-amount"
+    try:
+        resp = requests.get(
+            url,
+            params={"currency_from": (price_currency or "usd").lower(),
+                    "currency_to": pay_currency.lower()},
+            headers={"x-api-key": settings.NOWPAYMENTS_API_KEY},
+            timeout=_REQUEST_TIMEOUT,
+        )
+        if resp.status_code >= 300:
+            return None
+        val = resp.json().get("min_amount")
+        return float(val) if val is not None else None
+    except (requests.RequestException, ValueError, TypeError):
+        return None
 
 
 # --------------------------------------------------------------------------- #

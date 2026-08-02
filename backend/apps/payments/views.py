@@ -179,6 +179,35 @@ class StripeWebhookView(APIView):
 # --------------------------------------------------------------------------- #
 # NOW Payments (Phase 5 Wave 2 — crypto). Same architecture as Stripe above.
 # --------------------------------------------------------------------------- #
+def _crypto_min_amount_block(amount, pay_currency):
+    """
+    Guard a crypto create against NOW's per-currency minimum. When NOW's minimum for
+    `pay_currency` exceeds `amount` (USD), return a 400 Response carrying a localizable
+    `amount_below_minimum` code + the whole-dollar minimum, so the client can tell the buyer
+    the exact figure instead of the generic "couldn't start" error. Returns None when the
+    payment may proceed — above the minimum, or the minimum is unknown (never block on a
+    lookup failure; the create call remains the real gate).
+    """
+    import math
+
+    min_usd = nowpayments_service.get_min_amount(pay_currency)
+    if min_usd is not None and float(amount) < float(min_usd):
+        min_display = math.ceil(float(min_usd))  # round UP to a whole dollar — safe + clean
+        return Response(
+            {
+                "code": "amount_below_minimum",
+                "detail": (
+                    f"The minimum crypto payment for {pay_currency.upper()} is about "
+                    f"${min_display}. Increase the amount or choose another currency."
+                ),
+                "min_amount": min_display,
+                "currency": pay_currency,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
 class CreateNowPaymentsView(APIView):
     """
     Start a crypto payment for one of the caller's investments via NOW Payments.
@@ -219,6 +248,12 @@ class CreateNowPaymentsView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        # Below NOW's per-currency minimum → tell the buyer the exact floor up front (before
+        # creating a Payment row) instead of the generic "couldn't start" on the doomed create.
+        below_min = _crypto_min_amount_block(investment.settlement_amount, pay_currency)
+        if below_min is not None:
+            return below_min
+
         # Charge the amount due for THIS payment = the token value + the buyer-borne
         # platform/management fee (`settlement_amount`), so the charge equals the displayed
         # total. For an installment this is the down-payment + the full fee (charged once).
@@ -235,8 +270,8 @@ class CreateNowPaymentsView(APIView):
                 order_id=str(payment.id),
                 ipn_callback_url=ipn_url,
             )
-        except nowpayments_service.NowPaymentsError:
-            log.warning("NOW Payments create failed for investment %s", investment.id)
+        except nowpayments_service.NowPaymentsError as exc:
+            log.warning("NOW Payments create failed for investment %s: %s", investment.id, exc)
             return Response(
                 {"detail": "Could not start the crypto payment. Please try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
@@ -397,6 +432,11 @@ class CreateDepositNowPaymentsView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        # Below NOW's per-currency minimum → surface the exact floor before creating any rows.
+        below_min = _crypto_min_amount_block(amount, pay_currency)
+        if below_min is not None:
+            return below_min
+
         deposit = Deposit.objects.create(
             user=request.user, amount=amount, payment_method="crypto", target=target
         )
@@ -409,8 +449,8 @@ class CreateDepositNowPaymentsView(APIView):
                 price_amount=amount, price_currency="usd", pay_currency=pay_currency,
                 order_id=str(payment.id), ipn_callback_url=ipn_url,
             )
-        except nowpayments_service.NowPaymentsError:
-            log.warning("NOW deposit create failed for user %s", request.user.id)
+        except nowpayments_service.NowPaymentsError as exc:
+            log.warning("NOW deposit create failed for user %s: %s", request.user.id, exc)
             return Response(
                 {"detail": "Could not start the crypto deposit. Please try again."},
                 status=status.HTTP_502_BAD_GATEWAY,

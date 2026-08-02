@@ -328,7 +328,9 @@ class CreateNowPaymentsTests(APITestCase):
         fake = {"payment_id": "np_123", "pay_address": "bc1qtestaddr",
                 "pay_amount": "0.00042000", "pay_currency": "btc",
                 "payment_status": "waiting"}
-        with mock.patch("apps.payments.nowpayments_service.create_payment", return_value=fake):
+        # get_min_amount is stubbed low so the min-amount guard passes without a network call.
+        with mock.patch("apps.payments.nowpayments_service.create_payment", return_value=fake), \
+             mock.patch("apps.payments.nowpayments_service.get_min_amount", return_value=1.0):
             resp = self.client.post("/api/payments/nowpayments/create/",
                                     {"investment_id": str(inv.id), "pay_currency": "btc"},
                                     format="json")
@@ -340,6 +342,25 @@ class CreateNowPaymentsTests(APITestCase):
         pay = Payment.objects.get(investment=inv, provider="nowpayments")
         self.assertEqual(pay.nowpayments_payment_id, "np_123")
         self.assertEqual(pay.pay_address, "bc1qtestaddr")
+
+    @override_settings(NOWPAYMENTS_API_KEY="np_test_key")
+    def test_below_minimum_returns_400(self):
+        # A charge under NOW's per-currency minimum is rejected UP FRONT with the exact floor,
+        # and never reaches create_payment or writes a Payment row.
+        user = _approved_user("nomin@example.com")
+        inv = self._crypto_investment(user)
+        self.client.force_authenticate(user)
+        with mock.patch("apps.payments.nowpayments_service.get_min_amount", return_value=999_999.0), \
+             mock.patch("apps.payments.nowpayments_service.create_payment") as create:
+            resp = self.client.post("/api/payments/nowpayments/create/",
+                                    {"investment_id": str(inv.id), "pay_currency": "btc"},
+                                    format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "amount_below_minimum")
+        self.assertEqual(resp.data["min_amount"], 999_999)  # ceil, whole dollars
+        self.assertEqual(resp.data["currency"], "btc")
+        create.assert_not_called()
+        self.assertFalse(Payment.objects.filter(investment=inv, provider="nowpayments").exists())
 
 
 @override_settings(NOWPAYMENTS_IPN_SECRET=_IPN_SECRET)

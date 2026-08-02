@@ -64,6 +64,9 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [notConfigured, setNotConfigured] = useState(false);
+  // NOW enforces a per-currency minimum (network fees make BTC/ETH higher than a stablecoin).
+  // When the charge is below it the server returns `amount_below_minimum` + the floor.
+  const [belowMin, setBelowMin] = useState<{ min: number; currency: string } | null>(null);
   const [pay, setPay] = useState<{
     pay_address: string;
     pay_amount: string | null;
@@ -91,6 +94,7 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
     if (busy || !option) return;
     setBusy(true);
     setNotConfigured(false);
+    setBelowMin(null);
     props.onProcessing();
     try {
       // 1) Create the investment (PENDING for crypto — no mint yet). For an installment
@@ -132,10 +136,18 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
       if (minted === null) return; // still awaiting — manual check button remains
       props.onResult({ status: "success", tokensMinted: minted });
     } catch (err) {
-      const code = ((err as ApiError)?.data as { code?: string } | undefined)?.code;
-      if (code === "nowpayments_unconfigured") {
+      const data = (err as ApiError)?.data as
+        | { code?: string; min_amount?: number; currency?: string }
+        | undefined;
+      if (data?.code === "nowpayments_unconfigured") {
         setNotConfigured(true);
         return; // degrade — don't show a failure modal
+      }
+      if (data?.code === "amount_below_minimum") {
+        // Below NOW's per-currency floor → show the exact minimum, not a generic failure.
+        setBelowMin({ min: Number(data.min_amount) || 0, currency: data.currency || option.code });
+        props.onResult({ status: "failed", tokensMinted: false });
+        return;
       }
       toast.error((err as ApiError)?.message || (isArabic ? "تعذّرت معالجة الدفع" : "Could not process the payment"));
       props.onResult({ status: "failed", tokensMinted: false });
@@ -182,6 +194,32 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
               : "They activate once NOW Payments keys are added. Please use another method for now."}
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Below NOW's per-currency minimum → tell the buyer the exact floor + let them pick again.
+  if (belowMin) {
+    return (
+      <div className="space-y-3" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex items-start gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5">
+          <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-foreground">
+              {isArabic
+                ? `الحد الأدنى للدفع بـ ${belowMin.currency.toUpperCase()} هو حوالي $${belowMin.min.toLocaleString()}`
+                : `The minimum crypto payment for ${belowMin.currency.toUpperCase()} is about $${belowMin.min.toLocaleString()}`}
+            </p>
+            <p className="text-muted-foreground">
+              {isArabic
+                ? "زوّد المبلغ أو اختر عملة رقمية أخرى (العملات المستقرة مثل USDT حدّها الأدنى أقل)."
+                : "Increase the amount or choose another coin (stablecoins like USDT have a lower minimum)."}
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" className="w-full" onClick={() => setBelowMin(null)}>
+          {isArabic ? "اختيار عملة أخرى" : "Choose another cryptocurrency"}
+        </Button>
       </div>
     );
   }
