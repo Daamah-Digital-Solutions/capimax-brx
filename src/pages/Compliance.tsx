@@ -19,6 +19,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { printDocument } from "@/lib/printDocument";
 import { Link } from "react-router-dom";
 
 export default function Compliance() {
@@ -295,7 +296,20 @@ COOPERATION
               ? "كيف تضمن المنصة الامتثال المستمر للمتطلبات التنظيمية والسياسات الداخلية"
               : "How the Platform ensures ongoing compliance with regulatory requirements and internal policies"}
           </p>
-          <Button variant="outline" className="mt-4">
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() =>
+              printDocument(
+                language === "ar" ? "الامتثال" : "Compliance",
+                sections.map((s) => ({
+                  title: language === "ar" ? s.titleAr : s.titleEn,
+                  content: language === "ar" ? s.contentAr : s.contentEn,
+                })),
+                { isRTL },
+              )
+            }
+          >
             <Download className="h-4 w-4 mr-2" />
             {language === "ar" ? "تحميل PDF" : "Download PDF"}
           </Button>

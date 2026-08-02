@@ -19,6 +19,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { printDocument } from "@/lib/printDocument";
 
 export default function Regulation() {
   const { language, isRTL } = useLanguage();
@@ -266,7 +267,20 @@ RECORD KEEPING
               ? "فهم الإطار التنظيمي الذي تعمل بموجبه المنصة"
               : "Understanding the regulatory framework under which the Platform operates"}
           </p>
-          <Button variant="outline" className="mt-4">
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() =>
+              printDocument(
+                language === "ar" ? "اللوائح التنظيمية" : "Regulation",
+                sections.map((s) => ({
+                  title: language === "ar" ? s.titleAr : s.titleEn,
+                  content: language === "ar" ? s.contentAr : s.contentEn,
+                })),
+                { isRTL },
+              )
+            }
+          >
             <Download className="h-4 w-4 mr-2" />
             {language === "ar" ? "تحميل PDF" : "Download PDF"}
           </Button>

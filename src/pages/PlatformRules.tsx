@@ -1,5 +1,6 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { printDocument } from '@/lib/printDocument';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, Users, Coins, ArrowRightLeft, Clock, Shield, AlertTriangle } from 'lucide-react';
@@ -307,7 +308,20 @@ All enforcement actions are logged for audit purposes.`,
           <p className="text-muted-foreground">
             {language === 'ar' ? 'آخر تحديث: يناير 2026' : 'Last Updated: January 2026'}
           </p>
-          <Button variant="outline" className="mt-4">
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() =>
+              printDocument(
+                language === 'ar' ? 'قواعد المنصة' : 'Platform Rules',
+                sections.map((s) => ({
+                  title: language === 'ar' ? s.titleAr : s.titleEn,
+                  content: language === 'ar' ? s.contentAr : s.contentEn,
+                })),
+                { isRTL },
+              )
+            }
+          >
             <Download className="h-4 w-4 mr-2" />
             {language === 'ar' ? 'تحميل PDF' : 'Download PDF'}
           </Button>
