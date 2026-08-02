@@ -444,6 +444,37 @@ export const paymentsApi = {
       pay_currency: string;
       deposit_id: string;
     }>,
+  /**
+   * DEPOSIT / top-up (manual bank transfer) — the platform's receiving-account details the
+   * user wires funds to. `configured` is false (details omitted) until the operator sets them.
+   */
+  bankDepositDetails: () =>
+    rawRequest("/payments/deposit/bank/details/", { auth: true }) as Promise<{
+      configured: boolean;
+      bank_name?: string;
+      account_name?: string;
+      account_number?: string;
+      iban?: string;
+      swift?: string;
+      address?: string;
+    }>,
+  /**
+   * DEPOSIT / top-up (manual bank transfer) — create a PENDING deposit with the uploaded
+   * payment proof (multipart). Credits NOTHING now; an admin reviews the proof and approves
+   * later → the balance is credited. Returns the reference to quote in the transfer. 503 ⇒
+   * bank transfers not configured.
+   */
+  createBankDeposit: (amount: number, file: File, target: "wallet" | "lp" = "wallet") => {
+    const form = new FormData();
+    form.append("amount", String(amount));
+    form.append("target", target);
+    form.append("file", file);
+    return rawUpload("/payments/deposit/bank/", form) as Promise<{
+      deposit_id: string;
+      reference: string;
+      status: string;
+    }>;
+  },
 };
 
 // --------------------------------------------------------------------------- //

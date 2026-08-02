@@ -331,11 +331,17 @@ class Deposit(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="deposits"
     )
     amount = models.DecimalField(max_digits=16, decimal_places=2)  # USD
-    payment_method = models.CharField(max_length=16, default="card")  # card | crypto
+    payment_method = models.CharField(max_length=16, default="card")  # card | crypto | bank
     # Credit routing (see Target): default wallet keeps every existing deposit identical.
     target = models.CharField(
         max_length=8, choices=Target.choices, default=Target.WALLET, db_index=True
     )
+    # Manual BANK-transfer deposits (payment_method="bank"): the user wires the funds to the
+    # platform account, quotes `reference` in the transfer, and uploads `proof_file`. An admin
+    # reviews the proof and approves → the balance is credited via the SAME `_credit_deposit`
+    # path the Stripe/NOW webhook uses (settlement-gated, idempotent). Blank/null for card/crypto.
+    reference = models.CharField(max_length=32, blank=True, default="")
+    proof_file = models.FileField(upload_to="deposit_proofs/", null=True, blank=True)
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
     )

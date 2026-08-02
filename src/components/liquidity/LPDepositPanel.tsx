@@ -27,11 +27,9 @@ import type { LiquidityProvider } from "@/hooks/useLiquidityProvider";
 const METHODS = [
   { id: "card", nameEn: "Credit/Debit Card", nameAr: "بطاقة ائتمان/خصم", icon: CreditCard, available: true },
   { id: "crypto", nameEn: "Cryptocurrency", nameAr: "عملات رقمية", icon: Bitcoin, available: true },
-  { id: "bank", nameEn: "Bank Transfer", nameAr: "تحويل بنكي", icon: Building2, available: false },
+  { id: "bank", nameEn: "Bank Transfer", nameAr: "تحويل بنكي", icon: Building2, available: true },
   { id: "apple", nameEn: "Apple Pay", nameAr: "Apple Pay", icon: Smartphone, available: true },
   { id: "google", nameEn: "Google Pay", nameAr: "Google Pay", icon: Smartphone, available: true },
-  { id: "pronova", nameEn: "Pronova Token", nameAr: "توكن Pronova", icon: Coins, available: false },
-  { id: "sukuk", nameEn: "Nova Sukuk", nameAr: "Nova Sukuk", icon: FileText, available: false },
 ];
 
 const PRESETS = [1000, 5000, 25000, 100000];
@@ -197,7 +195,9 @@ export function LPDepositPanel({ lpProfile, isRTL, onDeposited }: LPDepositPanel
                       ? "apple"
                       : method === "google"
                         ? "google"
-                        : "card"
+                        : method === "bank"
+                          ? "bank"
+                          : "card"
                 }
                 amount={parseFloat(amount || "0")}
                 target="lp"

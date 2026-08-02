@@ -2,6 +2,8 @@
 from django.urls import path
 
 from .views import (
+    BankDepositDetailsView,
+    CreateBankDepositView,
     CreateDepositNowPaymentsView,
     CreateDepositStripeIntentView,
     CreateNowPaymentsView,
@@ -28,6 +30,9 @@ urlpatterns = [
     # Deposit / top-up — reuses the gated Stripe/NOW path; credits balance (no mint).
     path("deposit/stripe/", CreateDepositStripeIntentView.as_view(), name="deposit-stripe"),
     path("deposit/nowpayments/", CreateDepositNowPaymentsView.as_view(), name="deposit-nowpayments"),
+    # Manual bank transfer — reference + proof upload; admin-approved credit (no PSP).
+    path("deposit/bank/details/", BankDepositDetailsView.as_view(), name="deposit-bank-details"),
+    path("deposit/bank/", CreateBankDepositView.as_view(), name="deposit-bank"),
     # Nova certificate (sukuk) — upload the caller's own cert; private staff/owner download.
     # Settlement is admin-gated (Django admin), never here.
     path(

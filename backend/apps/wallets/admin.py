@@ -5,7 +5,7 @@ SAFETY: the admin shows wallet ADDRESSES (public) and key-material METADATA only
 It never displays the encrypted private key (let alone plaintext). Everything is
 read-only: wallets are created by the generation service, never hand-edited.
 """
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from .models import (
     BalanceTransaction,
@@ -123,11 +123,45 @@ class WithdrawalAdmin(admin.ModelAdmin):
 
 @admin.register(Deposit)
 class DepositAdmin(admin.ModelAdmin):
-    # Read-only: the credit is settlement-gated (webhook), never an admin action.
-    list_display = ("user", "amount", "payment_method", "status", "credited", "created_at")
-    list_filter = ("status", "payment_method", "credited")
-    search_fields = ("user__email", "id")
-    readonly_fields = (
-        "id", "user", "amount", "payment_method", "status", "credited",
-        "credited_at", "created_at", "updated_at",
+    # Card/crypto credits are settlement-gated (PSP webhook) — never an admin action. A MANUAL
+    # bank deposit has no webhook, so an admin reviews the uploaded proof and approves HERE →
+    # the balance is credited through the SAME idempotent core the webhook uses (never twice).
+    list_display = (
+        "reference", "user", "amount", "payment_method", "target", "status", "credited", "created_at",
     )
+    list_filter = ("status", "payment_method", "credited", "target")
+    search_fields = ("user__email", "id", "reference")
+    readonly_fields = (
+        "id", "user", "amount", "payment_method", "target", "reference", "proof_file",
+        "status", "credited", "credited_at", "created_at", "updated_at",
+    )
+    actions = ("approve_bank_deposits", "reject_bank_deposits")
+
+    @admin.action(description="Approve selected BANK deposits (verify proof → credit balance)")
+    def approve_bank_deposits(self, request, queryset):
+        from apps.payments.services import approve_bank_deposit
+
+        credited = 0
+        for dep in queryset.filter(payment_method="bank", credited=False):
+            try:
+                if approve_bank_deposit(dep):
+                    credited += 1
+            except Exception as exc:  # noqa: BLE001 — surface, don't 500 the admin
+                self.message_user(
+                    request, f"{dep.reference or dep.id}: {exc}", level=messages.ERROR
+                )
+        self.message_user(
+            request, f"Credited {credited} bank deposit(s).", level=messages.SUCCESS
+        )
+
+    @admin.action(description="Reject selected PENDING bank deposits (bad/missing proof)")
+    def reject_bank_deposits(self, request, queryset):
+        from apps.payments.services import reject_bank_deposit
+
+        rejected = 0
+        for dep in queryset.filter(payment_method="bank", credited=False, status="pending"):
+            reject_bank_deposit(dep)
+            rejected += 1
+        self.message_user(
+            request, f"Rejected {rejected} bank deposit(s).", level=messages.WARNING
+        )

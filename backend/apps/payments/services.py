@@ -206,6 +206,29 @@ def _credit_deposit(deposit_id) -> bool:
     return True
 
 
+def approve_bank_deposit(deposit) -> bool:
+    """
+    ADMIN-approve a manual BANK-transfer deposit after verifying the uploaded proof → credit
+    the target balance through the SAME gated, idempotent core the Stripe/NOW webhook uses
+    (`_credit_deposit`). Returns True if it credited now, False if it was already credited (a
+    second approve is a harmless no-op). Never credits a non-bank deposit.
+    """
+    if deposit.payment_method != "bank":
+        raise ValueError("Not a bank-transfer deposit.")
+    return _credit_deposit(deposit.id)
+
+
+def reject_bank_deposit(deposit) -> None:
+    """ADMIN-reject a PENDING bank deposit (bad / missing proof) → mark it failed. Never
+    touches an already-credited deposit."""
+    from apps.wallets.models import Deposit
+
+    if deposit.credited:
+        return  # already credited — cannot un-credit via a reject
+    deposit.status = Deposit.Status.FAILED
+    deposit.save(update_fields=["status", "updated_at"])
+
+
 def _fail_payment(payment: Payment, *, reason: str = "") -> None:
     """Mark a Payment failed (no mint/credit). Idempotent; never downgrades a paid one."""
     with transaction.atomic():

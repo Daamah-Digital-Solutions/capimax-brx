@@ -28,7 +28,9 @@ from apps.properties.models import Property, TokenMetadata
 from apps.properties.tests import _valid_property_kwargs
 from apps.wallets.models import (
     BalanceTransaction,
+    Deposit,
     OwnershipToken,
+    UserBalance,
     UserWallet,
     WalletTransaction,
 )
@@ -772,3 +774,102 @@ class SukukCertificateFlowTests(APITestCase):
         approve_certificate(cert, admin)  # settles → a real holding, not a review row
         self.client.force_authenticate(self.investor)
         self.assertEqual(self.client.get("/api/investments/sukuk/").data, [])
+
+
+# --------------------------------------------------------------------------- #
+# Manual BANK-transfer deposit — admin-reviewed (no PSP webhook). Create (proof upload) →
+# PENDING (no credit) → admin approve → balance credited exactly once via _credit_deposit.
+# --------------------------------------------------------------------------- #
+@override_settings(
+    MEDIA_ROOT=tempfile.mkdtemp(prefix="bank-deposit-media-"),
+    BANK_DEPOSIT_BANK_NAME="Test Bank",
+    BANK_DEPOSIT_ACCOUNT_NAME="CapiMax BRX LLC",
+    BANK_DEPOSIT_IBAN="AE070331234567890123456",
+)
+class BankDepositTests(APITestCase):
+    def setUp(self):
+        self.user = _approved_user("bankdep@example.com")
+        self.client.force_authenticate(self.user)
+
+    def _proof(self):
+        return SimpleUploadedFile("receipt.pdf", b"%PDF-1.4 proof", content_type="application/pdf")
+
+    def _create(self, amount="500"):
+        return self.client.post(
+            "/api/payments/deposit/bank/",
+            {"amount": amount, "file": self._proof()}, format="multipart",
+        )
+
+    def test_details_returned_when_configured(self):
+        resp = self.client.get("/api/payments/deposit/bank/details/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["configured"])
+        self.assertEqual(resp.data["bank_name"], "Test Bank")
+        self.assertEqual(resp.data["iban"], "AE070331234567890123456")
+
+    def test_create_is_pending_with_proof_and_reference_no_credit(self):
+        resp = self._create()
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(resp.data["reference"].startswith("DEP-"))
+        dep = Deposit.objects.get(id=resp.data["deposit_id"])
+        self.assertEqual(dep.payment_method, "bank")
+        self.assertEqual(dep.status, "pending")
+        self.assertFalse(dep.credited)
+        self.assertTrue(dep.proof_file)  # the receipt was stored
+        self.assertFalse(UserBalance.objects.filter(user=self.user, current_balance__gt=0).exists())
+
+    def test_admin_approve_credits_once(self):
+        from apps.payments.services import approve_bank_deposit
+
+        dep = Deposit.objects.get(id=self._create("750").data["deposit_id"])
+        self.assertTrue(approve_bank_deposit(dep))  # first approve credits
+        dep.refresh_from_db()
+        self.assertTrue(dep.credited)
+        self.assertEqual(dep.status, "completed")
+        self.assertEqual(UserBalance.objects.get(user=self.user).current_balance, Decimal("750.00"))
+        # Idempotent: a replayed approve credits nothing more.
+        self.assertFalse(approve_bank_deposit(dep))
+        self.assertEqual(UserBalance.objects.get(user=self.user).current_balance, Decimal("750.00"))
+
+    def test_reject_marks_failed_no_credit(self):
+        from apps.payments.services import reject_bank_deposit
+
+        dep = Deposit.objects.get(id=self._create().data["deposit_id"])
+        reject_bank_deposit(dep)
+        dep.refresh_from_db()
+        self.assertEqual(dep.status, "failed")
+        self.assertFalse(dep.credited)
+        self.assertFalse(UserBalance.objects.filter(user=self.user, current_balance__gt=0).exists())
+
+    def test_proof_file_required(self):
+        resp = self.client.post("/api/payments/deposit/bank/", {"amount": "500"}, format="multipart")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+@override_settings(BANK_DEPOSIT_IBAN="", BANK_DEPOSIT_ACCOUNT_NUMBER="")
+class BankDepositUnconfiguredTests(APITestCase):
+    def setUp(self):
+        self.user = _approved_user("bankun@example.com")
+        self.client.force_authenticate(self.user)
+
+    def test_details_reports_unconfigured(self):
+        resp = self.client.get("/api/payments/deposit/bank/details/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["configured"])
+        self.assertNotIn("iban", resp.data)  # details withheld until configured
+
+    def test_create_returns_503_when_unconfigured(self):
+        resp = self.client.post(
+            "/api/payments/deposit/bank/",
+            {"amount": "500", "file": SimpleUploadedFile("r.pdf", b"x", content_type="application/pdf")},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(resp.data["code"], "bank_unconfigured")
+
+    def test_details_requires_auth(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(
+            self.client.get("/api/payments/deposit/bank/details/").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )

@@ -25,6 +25,10 @@ import {
   Check,
   Coins,
   RefreshCw,
+  Building2,
+  Upload,
+  FileText,
+  X,
 } from "lucide-react";
 import {
   paymentsApi,
@@ -41,7 +45,7 @@ import { toast } from "sonner";
 // silent success). Bilingual EN/AR.
 
 interface DepositPayStepProps {
-  method: "card" | "crypto" | "apple" | "google";
+  method: "card" | "crypto" | "apple" | "google" | "bank";
   amount: number;
   /** Called once the deposit is confirmed credited (the wallet refetches + dialog closes). */
   onPaid: () => void;
@@ -419,9 +423,209 @@ function DepositWalletTab({
   );
 }
 
+// --- Bank transfer (manual, admin-reviewed) ----------------------------------- //
+// No automated pay-in rail exists for a bank transfer, so this mirrors the Nova-certificate
+// flow: show the platform's receiving account, take a payment proof, and create a PENDING
+// deposit an admin reviews + approves (→ balance credited via the SAME gated core). Honest
+// "not configured yet" until the operator sets the bank details in the server env.
+type BankDetails = Awaited<ReturnType<typeof paymentsApi.bankDepositDetails>>;
+
+function DetailRow({ label, value }: { label: string; value?: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm font-medium text-foreground truncate" dir="ltr">{value}</span>
+        <Button
+          variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+          onClick={async () => { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DepositBankTab({ amount, onPaid, target = "wallet" }: DepositPayStepProps) {
+  const { language, isRTL } = useLanguage();
+  const isArabic = language === "ar";
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [details, setDetails] = useState<BankDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [reference, setReference] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    paymentsApi
+      .bankDepositDetails()
+      .then((d) => active && setDetails(d))
+      .catch(() => active && setDetails({ configured: false }))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const pickFile = (f: File | null) => {
+    if (!f) return;
+    const ok = /\.(pdf|png|jpe?g|webp)$/i.test(f.name) || f.type === "application/pdf" || f.type.startsWith("image/");
+    if (!ok) return toast.error(isArabic ? "ارفع PDF أو صورة." : "Upload a PDF or an image.");
+    if (f.size > 10 * 1024 * 1024) return toast.error(isArabic ? "الملف كبير جدًا (10 ميغابايت)." : "File too large (10 MB).");
+    setFile(f);
+  };
+
+  const submit = async () => {
+    if (!file || busy) return;
+    setBusy(true);
+    try {
+      const res = await paymentsApi.createBankDeposit(amount, file, target);
+      setReference(res.reference);
+      toast.success(isArabic ? "تم إرسال طلب الإيداع للمراجعة" : "Deposit submitted for review");
+    } catch (err) {
+      const code = ((err as ApiError)?.data as { code?: string } | undefined)?.code;
+      toast.error(
+        code === "bank_unconfigured"
+          ? isArabic ? "التحويل البنكي غير مُفعّل بعد." : "Bank transfers are not configured yet."
+          : (err as ApiError)?.message || (isArabic ? "تعذّر الإرسال" : "Could not submit the deposit"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-6 text-muted-foreground">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!details?.configured) {
+    return (
+      <div className="flex items-start gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5">
+        <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-foreground">
+            {isArabic ? "التحويل البنكي غير مُفعّل بعد" : "Bank transfers are not configured yet"}
+          </p>
+          <p className="text-muted-foreground">
+            {isArabic ? "جرّب البطاقة أو العملة الرقمية مؤقتًا." : "Please use a card or crypto for now."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Submitted → awaiting admin review (no credit yet).
+  if (reference) {
+    return (
+      <div className="space-y-4 text-center" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col items-center p-6 rounded-2xl border border-warning/30 bg-warning/5">
+          <div className="w-14 h-14 rounded-full bg-warning/20 flex items-center justify-center mb-3">
+            <FileText className="w-7 h-7 text-warning" />
+          </div>
+          <h3 className="font-display text-lg font-bold text-foreground mb-1">
+            {isArabic ? "الإيداع قيد المراجعة" : "Deposit under review"}
+          </h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            {isArabic
+              ? "استلمنا إثبات التحويل. سيراجعه فريقنا ويُضاف الرصيد بعد الموافقة."
+              : "We received your transfer proof. Our team will review it and credit your balance once approved."}
+          </p>
+          <div className="text-xs text-muted-foreground">{isArabic ? "رقم المرجع" : "Reference"}</div>
+          <div className="text-base font-bold text-foreground" dir="ltr">{reference}</div>
+        </div>
+        <Button variant="hero" size="xl" className="w-full" onClick={onPaid}>
+          {isArabic ? "تمام" : "Done"}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      {/* Amount */}
+      <div className="p-4 bg-muted rounded-xl flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">{isArabic ? "مبلغ الإيداع" : "Deposit amount"}</span>
+        <span className="text-lg font-bold text-primary" dir="ltr">${amount.toLocaleString()}</span>
+      </div>
+
+      {/* Platform bank account */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-2 mb-2">
+          <Building2 className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">
+            {isArabic ? "حوّل إلى حساب المنصة" : "Transfer to the platform account"}
+          </span>
+        </div>
+        <DetailRow label={isArabic ? "البنك" : "Bank"} value={details.bank_name} />
+        <DetailRow label={isArabic ? "اسم الحساب" : "Account name"} value={details.account_name} />
+        <DetailRow label={isArabic ? "رقم الحساب" : "Account no."} value={details.account_number} />
+        <DetailRow label="IBAN" value={details.iban} />
+        <DetailRow label="SWIFT" value={details.swift} />
+        <DetailRow label={isArabic ? "العنوان" : "Address"} value={details.address} />
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {isArabic
+          ? "حوّل المبلغ ثم ارفع صورة/PDF الإيصال. سيراجعه فريقنا ويُضاف الرصيد بعد الموافقة."
+          : "Send the transfer, then upload the receipt (image/PDF). Our team reviews it and credits your balance once approved."}
+      </p>
+
+      {/* Proof upload */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp"
+        className="hidden"
+        onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+      />
+      {file ? (
+        <div className="flex items-center gap-3 p-3 bg-success/10 border border-success/30 rounded-lg">
+          <FileText className="w-5 h-5 text-success" />
+          <span className="flex-1 text-sm font-medium text-foreground truncate">{file.name}</span>
+          <Button
+            variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+            onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="w-full p-6 border-2 border-dashed border-border rounded-xl hover:border-primary/50 transition-colors"
+        >
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+            <Upload className="w-7 h-7" />
+            <span className="text-sm font-medium">{isArabic ? "ارفع إثبات التحويل" : "Upload transfer proof"}</span>
+            <span className="text-xs">{isArabic ? "PDF أو صورة · حتى 10 ميغابايت" : "PDF or image · up to 10 MB"}</span>
+          </div>
+        </button>
+      )}
+
+      <Button variant="hero" size="xl" className="w-full" disabled={!file || busy} onClick={submit}>
+        {busy ? (
+          <><Loader2 className="w-5 h-5 animate-spin" />{isArabic ? "جارٍ الإرسال..." : "Submitting..."}</>
+        ) : (
+          <><FileText className="w-5 h-5" />{isArabic ? "إرسال للمراجعة" : "Submit for review"}</>
+        )}
+      </Button>
+    </div>
+  );
+}
+
 export function DepositPayStep(props: DepositPayStepProps) {
   if (props.method === "crypto") return <DepositCryptoTab {...props} />;
   if (props.method === "apple" || props.method === "google")
     return <DepositWalletTab {...props} wallet={props.method} />;
+  if (props.method === "bank") return <DepositBankTab {...props} />;
   return <DepositCardTab {...props} />;
 }

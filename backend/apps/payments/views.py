@@ -15,6 +15,7 @@ never reaches this server (Stripe Elements tokenises it in the browser).
 import logging
 import os
 
+from django.conf import settings
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -430,6 +431,101 @@ class CreateDepositNowPaymentsView(APIView):
             "pay_currency": created["pay_currency"],
             "deposit_id": str(deposit.id),
         })
+
+
+# --------------------------------------------------------------------------- #
+# Manual BANK-transfer deposit. No automated pay-in rail exists for bank transfers (unlike
+# Stripe/NOW), so this is admin-reviewed like the Nova certificate: the user wires funds to the
+# platform account, quotes the returned reference, and uploads a proof; an admin verifies it and
+# approves → the balance is credited via the SAME gated, idempotent `_credit_deposit` core.
+# --------------------------------------------------------------------------- #
+_PROOF_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+_PROOF_ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+
+
+def _bank_details():
+    """The platform's receiving-account details (server env; blank until Yahia sets them)."""
+    return {
+        "bank_name": getattr(settings, "BANK_DEPOSIT_BANK_NAME", "") or "",
+        "account_name": getattr(settings, "BANK_DEPOSIT_ACCOUNT_NAME", "") or "",
+        "account_number": getattr(settings, "BANK_DEPOSIT_ACCOUNT_NUMBER", "") or "",
+        "iban": getattr(settings, "BANK_DEPOSIT_IBAN", "") or "",
+        "swift": getattr(settings, "BANK_DEPOSIT_SWIFT", "") or "",
+        "address": getattr(settings, "BANK_DEPOSIT_ADDRESS", "") or "",
+    }
+
+
+def _bank_configured(d=None):
+    d = d or _bank_details()
+    return bool(d["iban"] or d["account_number"])
+
+
+class BankDepositDetailsView(APIView):
+    """Return the platform's bank-transfer details the user wires funds to. `configured` is
+    false (and details omitted) until the platform account is set in the server env."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        d = _bank_details()
+        if not _bank_configured(d):
+            return Response({"configured": False})
+        return Response({"configured": True, **d})
+
+
+def _validate_proof(upload):
+    """Return an error string if the proof is missing / oversize / a disallowed type, else None."""
+    if upload is None:
+        return "A payment-proof file is required."
+    if upload.size and upload.size > _PROOF_MAX_BYTES:
+        return f"File too large (max {_PROOF_MAX_BYTES // (1024 * 1024)} MB)."
+    ext = os.path.splitext(upload.name or "")[1].lower()
+    if ext not in _PROOF_ALLOWED_EXT:
+        return f"Disallowed file type '{ext or 'unknown'}'. Upload a PDF or an image."
+    return None
+
+
+class CreateBankDepositView(APIView):
+    """
+    Create a PENDING manual bank-transfer deposit with the uploaded proof (KYC-gated). Credits
+    NOTHING now — an admin reviews the proof and approves later (→ `approve_bank_deposit` →
+    `_credit_deposit`). Returns the reference the user must quote in their transfer.
+
+      POST /api/payments/deposit/bank/   multipart: amount, [target], file
+    """
+
+    permission_classes = [IsAuthenticated, KYCApprovedPermission]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        amount, err = _parse_deposit_amount(request.data.get("amount"))
+        if err:
+            return err
+        target, terr = _resolve_deposit_target(request)
+        if terr:
+            return terr
+        if not _bank_configured():
+            return Response(
+                {"configured": False, "code": "bank_unconfigured",
+                 "detail": "Bank transfers are not configured yet."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        upload = request.FILES.get("file")
+        verror = _validate_proof(upload)
+        if verror:
+            return Response({"detail": verror}, status=status.HTTP_400_BAD_REQUEST)
+
+        deposit = Deposit.objects.create(
+            user=request.user, amount=amount, payment_method="bank", target=target,
+            proof_file=upload,
+        )
+        # Human reference the user quotes in the transfer so the admin can match it.
+        deposit.reference = f"DEP-{str(deposit.id).split('-')[0].upper()}"
+        deposit.save(update_fields=["reference", "updated_at"])
+        return Response(
+            {"deposit_id": str(deposit.id), "reference": deposit.reference, "status": deposit.status},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class NowPaymentsIpnView(APIView):

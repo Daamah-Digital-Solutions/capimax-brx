@@ -71,11 +71,9 @@ const SOURCE_LABEL: Record<string, { en: string; ar: string }> = {
 const paymentMethods = [
   { id: "card", nameAr: "بطاقة ائتمان/خصم", nameEn: "Credit/Debit Card", icon: CreditCard, available: true },
   { id: "crypto", nameAr: "عملات رقمية", nameEn: "Cryptocurrency", icon: Bitcoin, available: true },
-  { id: "bank", nameAr: "تحويل بنكي", nameEn: "Bank Transfer", icon: Building2, available: false },
+  { id: "bank", nameAr: "تحويل بنكي", nameEn: "Bank Transfer", icon: Building2, available: true },
   { id: "apple", nameAr: "Apple Pay", nameEn: "Apple Pay", icon: Smartphone, available: true },
   { id: "google", nameAr: "Google Pay", nameEn: "Google Pay", icon: Smartphone, available: true },
-  { id: "pronova", nameAr: "توكن Pronova", nameEn: "Pronova Token", icon: Coins, available: false },
-  { id: "sukuk", nameAr: "Nova Sukuk", nameEn: "Nova Sukuk", icon: FileText, available: false },
 ];
 
 export default function Wallet() {
@@ -489,7 +487,9 @@ export default function Wallet() {
                         ? "apple"
                         : selectedMethod === "google"
                           ? "google"
-                          : "card"
+                          : selectedMethod === "bank"
+                            ? "bank"
+                            : "card"
                   }
                   amount={parseFloat(amount || "0")}
                   onPaid={() => {

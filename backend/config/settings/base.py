@@ -371,6 +371,19 @@ NOWPAYMENTS_BASE_URL = env("NOWPAYMENTS_BASE_URL", default="https://api.nowpayme
 NOWPAYMENTS_PRICE_CURRENCY = env("NOWPAYMENTS_PRICE_CURRENCY", default="usd")
 
 # --------------------------------------------------------------------------- #
+# Manual BANK-transfer deposit — the platform's PUBLIC receiving-account details shown to a
+# user so they can wire a top-up (there is no automated bank pay-in rail). NOT secret, but
+# blank by default so the feature stays inert (503) until the operator fills them in. The
+# deposit is then admin-reviewed (proof upload → approve → credit); no funds move via the app.
+# --------------------------------------------------------------------------- #
+BANK_DEPOSIT_BANK_NAME = env("BANK_DEPOSIT_BANK_NAME", default="")
+BANK_DEPOSIT_ACCOUNT_NAME = env("BANK_DEPOSIT_ACCOUNT_NAME", default="")
+BANK_DEPOSIT_ACCOUNT_NUMBER = env("BANK_DEPOSIT_ACCOUNT_NUMBER", default="")
+BANK_DEPOSIT_IBAN = env("BANK_DEPOSIT_IBAN", default="")
+BANK_DEPOSIT_SWIFT = env("BANK_DEPOSIT_SWIFT", default="")
+BANK_DEPOSIT_ADDRESS = env("BANK_DEPOSIT_ADDRESS", default="")
+
+# --------------------------------------------------------------------------- #
 # I18N / static / misc
 # --------------------------------------------------------------------------- #
 LANGUAGE_CODE = "en-us"
