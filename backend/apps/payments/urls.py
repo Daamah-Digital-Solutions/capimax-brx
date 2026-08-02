@@ -6,6 +6,7 @@ from .views import (
     CreateBankDepositView,
     CreateDepositNowPaymentsView,
     CreateDepositStripeIntentView,
+    CreateNowInvoiceView,
     CreateNowPaymentsView,
     CreateStripeIntentView,
     NowPaymentsIpnView,
@@ -25,6 +26,8 @@ urlpatterns = [
     path("stripe/webhook/", StripeWebhookView.as_view(), name="stripe-webhook"),
     # Wave 2 — NOW Payments (crypto).
     path("nowpayments/create/", CreateNowPaymentsView.as_view(), name="nowpayments-create"),
+    # Hosted invoice — returns a NOW-hosted invoice_url the buyer completes on NOW's page.
+    path("nowpayments/invoice/", CreateNowInvoiceView.as_view(), name="nowpayments-invoice"),
     # PUBLIC, signature-verified IPN callback (the automation hinge).
     path("nowpayments/ipn/", NowPaymentsIpnView.as_view(), name="nowpayments-ipn"),
     # Deposit / top-up — reuses the gated Stripe/NOW path; credits balance (no mint).

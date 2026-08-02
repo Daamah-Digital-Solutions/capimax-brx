@@ -362,6 +362,25 @@ class CreateNowPaymentsTests(APITestCase):
         create.assert_not_called()
         self.assertFalse(Payment.objects.filter(investment=inv, provider="nowpayments").exists())
 
+    @override_settings(NOWPAYMENTS_API_KEY="np_test_key")
+    def test_creates_hosted_invoice(self):
+        # The hosted-invoice endpoint returns NOW's invoice_url and leaves the Payment's
+        # nowpayments_payment_id unset (the IPN backfills it, matched by order_id).
+        user = _approved_user("inv@example.com")
+        inv = self._crypto_investment(user)
+        self.client.force_authenticate(user)
+        fake = {"invoice_id": "inv_123", "invoice_url": "https://nowpayments.io/invoice/abc"}
+        with mock.patch("apps.payments.nowpayments_service.create_invoice", return_value=fake), \
+             mock.patch("apps.payments.nowpayments_service.get_min_amount", return_value=1.0):
+            resp = self.client.post("/api/payments/nowpayments/invoice/",
+                                    {"investment_id": str(inv.id)}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["invoice_url"], "https://nowpayments.io/invoice/abc")
+        inv.refresh_from_db()
+        self.assertEqual(inv.payment_status, PaymentStatus.PROCESSING)
+        pay = Payment.objects.get(investment=inv, provider="nowpayments")
+        self.assertFalse(pay.nowpayments_payment_id)  # set later by the IPN
+
 
 @override_settings(NOWPAYMENTS_IPN_SECRET=_IPN_SECRET)
 class NowPaymentsIpnTests(APITestCase):
@@ -410,6 +429,24 @@ class NowPaymentsIpnTests(APITestCase):
         tok = OwnershipToken.objects.get(wallet__user=self.user)
         self.assertEqual(tok.token_amount, 3)
         self.assertEqual(WalletTransaction.objects.filter(wallet__user=self.user).count(), 1)
+
+    def test_hosted_invoice_matches_by_order_id(self):
+        # Hosted-invoice flow: the Payment has NO nowpayments_payment_id yet; the IPN carries a
+        # fresh payment_id + our order_id → match by order_id, backfill the id, complete + mint.
+        self.payment.nowpayments_payment_id = ""
+        self.payment.save(update_fields=["nowpayments_payment_id"])
+        payload = {"payment_id": "np_from_invoice", "payment_status": "finished",
+                   "order_id": str(self.payment.id), "actually_paid": 1}
+        raw = json.dumps(payload).encode()
+        sig = nowpayments_service.sign_ipn(payload)
+        with mock.patch("apps.chain.service.mint", side_effect=_fake_mint):
+            resp = self.client.post(self.url, data=raw, content_type="application/json",
+                                    HTTP_X_NOWPAYMENTS_SIG=sig)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.payment.refresh_from_db(); self.inv.refresh_from_db()
+        self.assertEqual(self.payment.nowpayments_payment_id, "np_from_invoice")  # backfilled
+        self.assertEqual(self.inv.payment_status, PaymentStatus.COMPLETED)
+        self.assertTrue(self.inv.tokens_minted)
 
     def test_partially_paid_does_not_mint(self):
         with mock.patch("apps.chain.service.mint", side_effect=_fake_mint) as m:

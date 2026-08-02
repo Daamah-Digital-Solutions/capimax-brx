@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.investments.models import Investment, PaymentStatus
@@ -281,19 +282,37 @@ def process_successful_payment(payment_intent_id: str) -> dict:
 # Idempotent across the waiting→confirming→confirmed→finished IPN sequence: only a
 # terminal-success call completes+mints, and the core no-ops on re-delivery.
 # --------------------------------------------------------------------------- #
-def process_successful_nowpayments(nowpayments_payment_id: str) -> dict:
-    payment = Payment.objects.filter(
-        nowpayments_payment_id=nowpayments_payment_id
-    ).first()
+def _resolve_now_payment(nowpayments_payment_id: str, order_id: str = ""):
+    """
+    Find the Payment for a NOW IPN. The `create_payment` (bare-address) flow pre-sets
+    `nowpayments_payment_id`, so match on that first. The `create_invoice` (hosted) flow does
+    NOT know the underlying payment id until the customer picks a coin, so fall back to the
+    `order_id` we stamped on the invoice (= Payment.id) and backfill the real payment id.
+    Returns the Payment or None.
+    """
+    payment = Payment.objects.filter(nowpayments_payment_id=nowpayments_payment_id).first()
+    if payment is None and order_id:
+        try:
+            payment = Payment.objects.filter(id=order_id).first()
+        except (ValueError, ValidationError):
+            payment = None  # order_id wasn't one of our Payment UUIDs
+        if payment is not None and not payment.nowpayments_payment_id:
+            payment.nowpayments_payment_id = nowpayments_payment_id
+            payment.save(update_fields=["nowpayments_payment_id", "updated_at"])
+    return payment
+
+
+def process_successful_nowpayments(nowpayments_payment_id: str, order_id: str = "") -> dict:
+    payment = _resolve_now_payment(nowpayments_payment_id, order_id)
     if payment is None:
         raise PaymentNotFound(nowpayments_payment_id)
     return _complete_payment(payment)
 
 
-def mark_nowpayments_failed(nowpayments_payment_id: str, *, reason: str = "") -> None:
-    payment = Payment.objects.filter(
-        nowpayments_payment_id=nowpayments_payment_id
-    ).first()
+def mark_nowpayments_failed(
+    nowpayments_payment_id: str, *, order_id: str = "", reason: str = ""
+) -> None:
+    payment = _resolve_now_payment(nowpayments_payment_id, order_id)
     if payment is None:
         return
     _fail_payment(payment, reason=reason)

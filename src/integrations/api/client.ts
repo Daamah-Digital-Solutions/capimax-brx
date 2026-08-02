@@ -412,6 +412,22 @@ export const paymentsApi = {
       investment_id: string;
     }>,
   /**
+   * Start a crypto payment (Wave 2, NOW Payments) for a (pending) investment via a HOSTED
+   * INVOICE → returns a NOW-hosted `invoice_url` the buyer opens to pick the coin + pay on
+   * NOW's branded page (address/QR + timer + status). Minting is gated on the NOW IPN, matched
+   * back by order_id. 503 ⇒ NOW not configured; 400 `amount_below_minimum` ⇒ under NOW's floor.
+   */
+  createNowInvoice: (investmentId: string) =>
+    rawRequest("/payments/nowpayments/invoice/", {
+      method: "POST",
+      auth: true,
+      body: { investment_id: investmentId },
+    }) as Promise<{
+      invoice_url: string;
+      invoice_id: string;
+      investment_id: string;
+    }>,
+  /**
    * DEPOSIT / top-up (card) — start a Stripe charge that CREDITS the caller's balance
    * (no investment, no mint). Returns the client_secret to confirm with Elements. The
    * balance is credited only on the confirmed webhook. 503 ⇒ Stripe not configured.

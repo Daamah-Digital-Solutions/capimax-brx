@@ -136,6 +136,53 @@ def get_min_amount(pay_currency: str, *, price_currency: str = "usd") -> float |
         return None
 
 
+def create_invoice(
+    *, price_amount, price_currency: str, order_id: str,
+    ipn_callback_url: str = "", success_url: str = "", cancel_url: str = "",
+    order_description: str = "",
+) -> dict:
+    """
+    Create a NOW Payments HOSTED INVOICE for `price_amount` (USD). Returns
+    {invoice_id, invoice_url}. Unlike `create_payment` (which returns a bare address we render
+    ourselves), the customer opens `invoice_url` — NOW's branded page — picks the coin, sees
+    the address/QR + countdown + live status, and completes there. NOW then fires the IPN
+    carrying our `order_id`, which the receiver matches back to the Payment.
+    """
+    if not is_configured():
+        raise NowPaymentsNotConfigured("NOW Payments API key is not configured.")
+    import requests  # lazy — importing this module must not require the dep/network
+
+    url = settings.NOWPAYMENTS_BASE_URL.rstrip("/") + "/invoice"
+    body = {
+        "price_amount": float(price_amount),
+        "price_currency": (price_currency or settings.NOWPAYMENTS_PRICE_CURRENCY).lower(),
+        "order_id": str(order_id),
+        "order_description": order_description or f"Capimax BRX {order_id}",
+    }
+    if ipn_callback_url:
+        body["ipn_callback_url"] = ipn_callback_url
+    if success_url:
+        body["success_url"] = success_url
+    if cancel_url:
+        body["cancel_url"] = cancel_url
+    try:
+        resp = requests.post(
+            url, json=body,
+            headers={"x-api-key": settings.NOWPAYMENTS_API_KEY,
+                     "Content-Type": "application/json"},
+            timeout=_REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:  # pragma: no cover - network failure
+        raise NowPaymentsError("NOW Payments request failed.") from exc
+    if resp.status_code >= 300:
+        raise NowPaymentsError(f"NOW Payments returned HTTP {resp.status_code}: {resp.text[:200]}")
+    data = resp.json()
+    invoice_url = data.get("invoice_url") or ""
+    if not invoice_url:
+        raise NowPaymentsError("NOW Payments response missing invoice_url.")
+    return {"invoice_id": str(data.get("id") or ""), "invoice_url": invoice_url}
+
+
 # --------------------------------------------------------------------------- #
 # IPN verification (the automation hinge) — manual, dependency-free.
 # --------------------------------------------------------------------------- #

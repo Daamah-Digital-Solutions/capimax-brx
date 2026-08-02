@@ -403,6 +403,84 @@ class CreateDepositStripeIntentView(APIView):
         )
 
 
+class CreateNowInvoiceView(APIView):
+    """
+    Start a crypto payment for an investment via a NOW Payments HOSTED INVOICE. Returns a
+    NOW-hosted `invoice_url` — the customer opens it, picks the coin, and pays on NOW's branded
+    page (address/QR + countdown + live status), instead of our own bare-address screen.
+    Settlement stays gated on the signature-verified IPN, matched back here by order_id.
+    KYC-gated; 503 when NOW keys are deferred.
+    """
+
+    permission_classes = [IsAuthenticated, KYCApprovedPermission]
+
+    def post(self, request):
+        investment_id = request.data.get("investment_id")
+        if not investment_id:
+            return Response(
+                {"detail": "investment_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            investment = Investment.objects.get(id=investment_id, user=request.user)
+        except (Investment.DoesNotExist, ValueError, Exception):
+            return Response(
+                {"detail": "Investment not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        if investment.payment_method != "crypto":
+            return Response(
+                {"detail": "This investment is not a crypto payment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if investment.payment_status not in (PaymentStatus.PENDING, PaymentStatus.PROCESSING):
+            return Response(
+                {"detail": "This investment is not awaiting payment."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if not nowpayments_service.is_configured():
+            return Response(
+                {"configured": False, "code": "nowpayments_unconfigured",
+                 "detail": "Crypto payments are not configured yet."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Below NOW's (flat, ~USD) minimum → the hosted page would offer no payable coin, so
+        # stop up front with the exact floor (checked against a representative stablecoin).
+        below_min = _crypto_min_amount_block(investment.settlement_amount, "usdttrc20")
+        if below_min is not None:
+            return below_min
+
+        payment = get_or_create_payment(
+            investment, amount=investment.settlement_amount, currency="usd",
+            provider="nowpayments",
+        )
+        ipn_url = request.build_absolute_uri(reverse("payments:nowpayments-ipn"))
+        base = settings.FRONTEND_URL.rstrip("/")
+        try:
+            created = nowpayments_service.create_invoice(
+                price_amount=investment.settlement_amount,
+                price_currency="usd",
+                order_id=str(payment.id),
+                ipn_callback_url=ipn_url,
+                success_url=f"{base}/portfolio",
+                cancel_url=f"{base}/marketplace",
+            )
+        except nowpayments_service.NowPaymentsError as exc:
+            log.warning("NOW invoice create failed for investment %s: %s", investment.id, exc)
+            return Response(
+                {"detail": "Could not start the crypto payment. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        investment.payment_status = PaymentStatus.PROCESSING
+        investment.save(update_fields=["payment_status", "updated_at"])
+        return Response({
+            "invoice_url": created["invoice_url"],
+            "invoice_id": created["invoice_id"],
+            "investment_id": str(investment.id),
+        })
+
+
 class CreateDepositNowPaymentsView(APIView):
     """
     Start a crypto payment (NOW Payments) to TOP UP the caller's balance. KYC-gated.
@@ -603,14 +681,17 @@ class NowPaymentsIpnView(APIView):
         if not pid:
             return Response({"ok": True, "handled": False})
 
+        order_id = info.get("order_id", "")
         if state in nowpayments_service.SUCCESS_STATES:
             try:
-                process_successful_nowpayments(pid)
+                # order_id lets the hosted-invoice flow match back to its Payment (the bare
+                # payment id isn't known until the customer picks a coin on NOW's page).
+                process_successful_nowpayments(pid, order_id=order_id)
             except Exception:  # noqa: BLE001 - ack so NOW stops retrying; logged
                 log.exception("Error processing NOW payment %s", pid)
                 return Response({"ok": True, "handled": False})
         elif state in nowpayments_service.FAILURE_STATES:
-            mark_nowpayments_failed(pid, reason=f"NOW status: {state}")
+            mark_nowpayments_failed(pid, order_id=order_id, reason=f"NOW status: {state}")
         # waiting / confirming / sending / partially_paid → no mint, just acknowledge.
 
         return Response({"ok": True})
