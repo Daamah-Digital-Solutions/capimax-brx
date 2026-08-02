@@ -179,7 +179,7 @@ class StripeWebhookView(APIView):
 # --------------------------------------------------------------------------- #
 # NOW Payments (Phase 5 Wave 2 — crypto). Same architecture as Stripe above.
 # --------------------------------------------------------------------------- #
-def _crypto_min_amount_block(amount, pay_currency):
+def crypto_min_amount_block(amount, pay_currency):
     """
     Guard a crypto create against NOW's per-currency minimum. When NOW's minimum for
     `pay_currency` exceeds `amount` (USD), return a 400 Response carrying a localizable
@@ -250,7 +250,7 @@ class CreateNowPaymentsView(APIView):
 
         # Below NOW's per-currency minimum → tell the buyer the exact floor up front (before
         # creating a Payment row) instead of the generic "couldn't start" on the doomed create.
-        below_min = _crypto_min_amount_block(investment.settlement_amount, pay_currency)
+        below_min = crypto_min_amount_block(investment.settlement_amount, pay_currency)
         if below_min is not None:
             return below_min
 
@@ -446,7 +446,7 @@ class CreateNowInvoiceView(APIView):
 
         # Below NOW's (flat, ~USD) minimum → the hosted page would offer no payable coin, so
         # stop up front with the exact floor (checked against a representative stablecoin).
-        below_min = _crypto_min_amount_block(investment.settlement_amount, "usdttrc20")
+        below_min = crypto_min_amount_block(investment.settlement_amount, "usdttrc20")
         if below_min is not None:
             return below_min
 
@@ -511,7 +511,7 @@ class CreateDepositNowPaymentsView(APIView):
             )
 
         # Below NOW's per-currency minimum → surface the exact floor before creating any rows.
-        below_min = _crypto_min_amount_block(amount, pay_currency)
+        below_min = crypto_min_amount_block(amount, pay_currency)
         if below_min is not None:
             return below_min
 
@@ -547,6 +547,61 @@ class CreateDepositNowPaymentsView(APIView):
             "pay_address": created["pay_address"],
             "pay_amount": str(created["pay_amount"]) if created["pay_amount"] is not None else None,
             "pay_currency": created["pay_currency"],
+            "deposit_id": str(deposit.id),
+        })
+
+
+class CreateDepositNowInvoiceView(APIView):
+    """
+    TOP-UP the caller's balance via a NOW Payments HOSTED INVOICE — returns a NOW-hosted
+    `invoice_url` the caller completes on NOW's branded page (pick coin + pay). The balance is
+    credited only on the confirmed IPN, matched back by order_id. KYC-gated; 503 when deferred.
+    """
+
+    permission_classes = [IsAuthenticated, KYCApprovedPermission]
+
+    def post(self, request):
+        amount, err = _parse_deposit_amount(request.data.get("amount"))
+        if err:
+            return err
+        target, terr = _resolve_deposit_target(request)
+        if terr:
+            return terr
+        if not nowpayments_service.is_configured():
+            return Response(
+                {"configured": False, "code": "nowpayments_unconfigured",
+                 "detail": "Crypto payments are not configured yet."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        below_min = crypto_min_amount_block(amount, "usdttrc20")
+        if below_min is not None:
+            return below_min
+
+        deposit = Deposit.objects.create(
+            user=request.user, amount=amount, payment_method="crypto", target=target
+        )
+        payment = Payment.objects.create(
+            deposit=deposit, provider="nowpayments", amount=amount, currency="usd"
+        )
+        ipn_url = request.build_absolute_uri(reverse("payments:nowpayments-ipn"))
+        base = settings.FRONTEND_URL.rstrip("/")
+        try:
+            created = nowpayments_service.create_invoice(
+                price_amount=amount, price_currency="usd", order_id=str(payment.id),
+                ipn_callback_url=ipn_url,
+                success_url=f"{base}/portfolio", cancel_url=f"{base}/portfolio",
+            )
+        except nowpayments_service.NowPaymentsError as exc:
+            log.warning("NOW deposit invoice failed for user %s: %s", request.user.id, exc)
+            return Response(
+                {"detail": "Could not start the crypto deposit. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({
+            "invoice_url": created["invoice_url"],
+            "invoice_id": created["invoice_id"],
             "deposit_id": str(deposit.id),
         })
 

@@ -6,7 +6,6 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { QRCodeSVG } from "qrcode.react";
 import {
   Dialog,
   DialogContent,
@@ -16,30 +15,21 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Lock,
   Loader2,
   AlertTriangle,
-  Copy,
-  Check,
   Coins,
   RefreshCw,
   CheckCircle2,
+  ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import {
   installmentsApi,
   paymentsApi,
   type ApiError,
   type InstallmentPlanRow,
-  type PayNextNowResult,
 } from "@/integrations/api/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
@@ -59,13 +49,6 @@ export interface InstallmentPayDialogProps {
   /** "next" (default) charges the next due installment; "payoff" clears ALL remaining. */
   mode?: "next" | "payoff";
 }
-
-const CRYPTO_OPTIONS = [
-  { id: "btc", label: "BTC — Bitcoin", code: "btc", network: "Bitcoin" },
-  { id: "eth", label: "ETH — Ethereum", code: "eth", network: "Ethereum" },
-  { id: "usdt", label: "USDT — Tether", code: "usdttrc20", network: "Tron (TRC20)" },
-  { id: "usdc", label: "USDC — USD Coin", code: "usdcerc20", network: "Ethereum (ERC20)" },
-];
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_TRIES = 20; // ~60s for the webhook/IPN to confirm + settle
@@ -253,28 +236,34 @@ function CardTab(props: InstallmentPayDialogProps & { amount: number }) {
   );
 }
 
-// --- Crypto (NOW Payments) ---------------------------------------------------- //
+// --- Crypto (NOW Payments hosted invoice) ------------------------------------- //
 function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
   const { language, isRTL } = useLanguage();
   const isArabic = language === "ar";
-  const [selected, setSelected] = useState("usdt");
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [notConfigured, setNotConfigured] = useState(false);
-  const [pay, setPay] = useState<PayNextNowResult | null>(null);
-  const option = CRYPTO_OPTIONS.find((c) => c.id === selected);
+  const [belowMin, setBelowMin] = useState<number | null>(null);
+  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
 
   const handleGenerate = async () => {
-    if (busy || !option) return;
+    if (busy) return;
+    // Open a tab synchronously (in the gesture) so popup blockers don't eat it; navigate it to
+    // the NOW invoice once created. The on-screen button is the reliable fallback.
+    const nowTab = typeof window !== "undefined" ? window.open("", "_blank") : null;
     setBusy(true);
     setNotConfigured(false);
+    setBelowMin(null);
     try {
       const startPaid = props.plan.paidInstallments;
       const res = await (props.mode === "payoff"
-        ? installmentsApi.payoff(props.plan.id, "nowpayments", option.code)
-        : installmentsApi.payNext(props.plan.id, "nowpayments", option.code));
-      if (res.provider !== "nowpayments") return;
-      setPay(res);
+        ? installmentsApi.payoff(props.plan.id, "nowpayments")
+        : installmentsApi.payNext(props.plan.id, "nowpayments"));
+      if (res.provider !== "nowpayments") {
+        nowTab?.close();
+        return;
+      }
+      if (nowTab) nowTab.location.href = res.invoice_url;
+      setInvoiceUrl(res.invoice_url);
       const ok = await pollUntilPaid(props.plan.id, startPaid);
       if (ok) {
         toast.success(isArabic ? "تم سداد القسط" : "Installment paid");
@@ -282,9 +271,14 @@ function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
         props.onOpenChange(false);
       }
     } catch (err) {
-      const code = ((err as ApiError)?.data as { code?: string } | undefined)?.code;
-      if (code === "nowpayments_unconfigured") {
+      nowTab?.close();
+      const data = (err as ApiError)?.data as { code?: string; min_amount?: number } | undefined;
+      if (data?.code === "nowpayments_unconfigured") {
         setNotConfigured(true);
+        return;
+      }
+      if (data?.code === "amount_below_minimum") {
+        setBelowMin(Number(data.min_amount) || 0);
         return;
       }
       toast.error((err as ApiError)?.message || (isArabic ? "تعذّرت معالجة الدفع" : "Could not process the payment"));
@@ -308,13 +302,6 @@ function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
     }
   };
 
-  const copyAddress = async () => {
-    if (!pay) return;
-    await navigator.clipboard.writeText(pay.pay_address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   if (notConfigured) {
     return (
       <div className="flex items-start gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5">
@@ -331,32 +318,53 @@ function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
     );
   }
 
-  if (pay) {
+  if (belowMin !== null) {
     return (
-      <div className="space-y-4">
-        <div className="p-4 bg-muted rounded-xl">
-          <div className="text-sm text-muted-foreground mb-1">{isArabic ? "أرسل بالضبط" : "Send exactly"}:</div>
-          <div className="text-2xl font-bold text-foreground" dir="ltr">
-            {pay.pay_amount ?? "—"} {pay.pay_currency.toUpperCase()}
-          </div>
+      <div className="flex items-start gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5">
+        <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-foreground">
+            {isArabic
+              ? `الحد الأدنى للدفع بالعملات الرقمية حوالي $${belowMin.toLocaleString()}`
+              : `The minimum crypto payment is about $${belowMin.toLocaleString()}`}
+          </p>
+          <p className="text-muted-foreground">
+            {isArabic
+              ? "جرّب سداد كامل المتبقي دفعة واحدة، أو ادفع بالبطاقة."
+              : "Try paying off all remaining at once, or use a card."}
+          </p>
         </div>
-        <div className="flex flex-col items-center gap-3">
-          <div className="bg-white p-3 rounded-xl">
-            <QRCodeSVG value={pay.pay_address} size={176} />
-          </div>
-          <div className="w-full space-y-2">
-            <label className="text-sm font-medium text-foreground">{isArabic ? "عنوان الإيداع" : "Deposit address"}</label>
-            <div className="flex gap-2">
-              <div className="flex-1 p-3 bg-muted rounded-lg font-mono text-xs break-all" dir="ltr">{pay.pay_address}</div>
-              <Button variant="outline" size="icon" onClick={copyAddress} className="shrink-0">
-                {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
-              </Button>
+      </div>
+    );
+  }
+
+  if (invoiceUrl) {
+    return (
+      <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="p-4 rounded-xl border border-primary/30 bg-primary/5">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground">
+                {isArabic ? "أكمل الدفع على صفحة NOW Payments" : "Complete your payment on NOW Payments"}
+              </p>
+              <p className="text-muted-foreground">
+                {isArabic
+                  ? "افتح الصفحة، اختر العملة وأرسل المبلغ. يُحدَّث القسط تلقائيًا بعد تأكيد الدفع."
+                  : "Open the page, pick your coin and pay. The installment updates automatically once the payment confirms."}
+              </p>
             </div>
           </div>
         </div>
+        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer" className="block">
+          <Button variant="hero" size="xl" className="w-full gap-2">
+            <ExternalLink className="w-5 h-5" />
+            {isArabic ? "فتح صفحة الدفع (NOW Payments)" : "Open payment page (NOW Payments)"}
+          </Button>
+        </a>
         <div className="flex items-center justify-center gap-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-400">
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          {isArabic ? "في انتظار تأكيد الدفع على الشبكة..." : "Waiting for your payment to confirm on-chain..."}
+          <Loader2 className="w-4 h-4 animate-spin" />
+          {isArabic ? "في انتظار تأكيد الدفع..." : "Waiting for your payment to confirm..."}
         </div>
         <Button variant="outline" className="w-full" onClick={recheck} disabled={busy}>
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -368,30 +376,18 @@ function CryptoTab(props: InstallmentPayDialogProps & { amount: number }) {
 
   return (
     <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">{isArabic ? "اختر العملة الرقمية" : "Select cryptocurrency"}</label>
-        <Select value={selected} onValueChange={setSelected}>
-          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {CRYPTO_OPTIONS.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {option && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{isArabic ? "الشبكة" : "Network"}:</span>
-            <Badge variant="secondary">{option.network}</Badge>
-          </div>
-        )}
-      </div>
       <Button variant="hero" size="xl" className="w-full" disabled={busy} onClick={handleGenerate}>
         {busy ? (
-          <><Loader2 className="w-5 h-5 animate-spin" />{isArabic ? "جارٍ إنشاء عنوان الدفع..." : "Generating payment address..."}</>
+          <><Loader2 className="w-5 h-5 animate-spin" />{isArabic ? "جارٍ تجهيز صفحة الدفع..." : "Preparing the payment page..."}</>
         ) : (
           <><Coins className="w-5 h-5" />{isArabic ? "الدفع بالعملات الرقمية" : "Pay with crypto"} ${props.amount.toLocaleString()}</>
         )}
       </Button>
+      <p className="text-xs text-muted-foreground">
+        {isArabic
+          ? "ستُفتح صفحة NOW Payments لاختيار العملة وإتمام الدفع."
+          : "The NOW Payments page opens for you to pick a coin and pay."}
+      </p>
     </div>
   );
 }

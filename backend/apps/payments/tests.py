@@ -381,6 +381,20 @@ class CreateNowPaymentsTests(APITestCase):
         pay = Payment.objects.get(investment=inv, provider="nowpayments")
         self.assertFalse(pay.nowpayments_payment_id)  # set later by the IPN
 
+    @override_settings(NOWPAYMENTS_API_KEY="np_test_key")
+    def test_creates_deposit_hosted_invoice(self):
+        # Balance top-up via a NOW hosted invoice → returns invoice_url + a pending Deposit.
+        user = _approved_user("depinv@example.com")
+        self.client.force_authenticate(user)
+        fake = {"invoice_id": "dep_inv_1", "invoice_url": "https://nowpayments.io/invoice/dep"}
+        with mock.patch("apps.payments.nowpayments_service.create_invoice", return_value=fake), \
+             mock.patch("apps.payments.nowpayments_service.get_min_amount", return_value=1.0):
+            resp = self.client.post("/api/payments/deposit/nowpayments/invoice/",
+                                    {"amount": "100", "target": "wallet"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["invoice_url"], "https://nowpayments.io/invoice/dep")
+        self.assertTrue(resp.data["deposit_id"])
+
 
 @override_settings(NOWPAYMENTS_IPN_SECRET=_IPN_SECRET)
 class NowPaymentsIpnTests(APITestCase):

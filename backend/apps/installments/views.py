@@ -14,6 +14,7 @@ Plans are built by `services.build_installment_plan` (the Checkout wave), never 
 write. Paying an installment reuses the EXISTING Stripe/NOW machinery; we never mint on a
 frontend response.
 """
+import logging
 from decimal import ROUND_HALF_UP, Decimal
 
 from rest_framework import status
@@ -21,12 +22,16 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.conf import settings
 from django.urls import reverse
 
 from apps.core.permissions import KYCApprovedPermission
 from apps.investments.services import fee_amount_for
 from apps.payments import nowpayments_service, stripe_service
 from apps.payments.services import get_or_create_payment
+from apps.payments.views import crypto_min_amount_block
+
+log = logging.getLogger(__name__)
 from apps.properties.models import Property, PropertyModelType
 from apps.wallets.models import OwnershipToken
 
@@ -290,50 +295,46 @@ class PayNextInstallmentView(APIView):
         })
 
     def _start_nowpayments(self, request, inv, ip, amount, is_payoff=False):
-        pay_currency = (request.data.get("pay_currency") or "").strip().lower()
-        if not pay_currency:
-            return Response(
-                {"detail": "pay_currency is required for a crypto payment."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Crypto now rides NOW's HOSTED INVOICE (a link the buyer completes on NOW's page),
+        # matching the buy + deposit flows — no in-app coin picker / address screen.
         if not nowpayments_service.is_configured():
             return Response(
                 {"configured": False, "code": "nowpayments_unconfigured",
                  "detail": "Crypto payments are not configured yet."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        # A single small installment can fall under NOW's ~$19 floor → give the exact figure
+        # (the buyer can pay off all remaining at once, or use card) before writing any rows.
+        below_min = crypto_min_amount_block(amount, "usdttrc20")
+        if below_min is not None:
+            return below_min
         payment = get_or_create_payment(
             inv, amount=amount, currency="usd", provider="nowpayments",
             installment_payment=ip, is_installment_payoff=is_payoff,
         )
         ipn_url = request.build_absolute_uri(reverse("payments:nowpayments-ipn"))
+        base = settings.FRONTEND_URL.rstrip("/")
         try:
-            created = nowpayments_service.create_payment(
+            created = nowpayments_service.create_invoice(
                 price_amount=amount,
                 price_currency="usd",
-                pay_currency=pay_currency,
                 order_id=str(payment.id),
                 ipn_callback_url=ipn_url,
+                success_url=f"{base}/installments",
+                cancel_url=f"{base}/installments",
             )
-        except nowpayments_service.NowPaymentsError:
+        except nowpayments_service.NowPaymentsError as exc:
+            log.warning("NOW installment invoice failed for investment %s: %s", inv.id, exc)
             return Response(
                 {"detail": "Could not start the crypto payment. Please try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        payment.nowpayments_payment_id = created["payment_id"]
-        payment.pay_currency = created["pay_currency"]
-        payment.pay_address = created["pay_address"]
-        payment.pay_amount = created["pay_amount"]
-        payment.save(update_fields=[
-            "nowpayments_payment_id", "pay_currency", "pay_address", "pay_amount",
-            "updated_at",
-        ])
+        # The bare payment id isn't known until the buyer picks a coin on NOW's page — the IPN
+        # backfills it, matched by order_id (= this Payment.id).
         return Response({
             "provider": "nowpayments",
-            "payment_id": created["payment_id"],
-            "pay_address": created["pay_address"],
-            "pay_amount": str(created["pay_amount"]) if created["pay_amount"] is not None else None,
-            "pay_currency": created["pay_currency"],
+            "invoice_url": created["invoice_url"],
+            "invoice_id": created["invoice_id"],
             "installment_payment_id": str(ip.id),
             "sequence": ip.sequence,
             "amount": str(amount),

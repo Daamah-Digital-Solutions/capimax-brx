@@ -461,6 +461,21 @@ export const paymentsApi = {
       deposit_id: string;
     }>,
   /**
+   * DEPOSIT / top-up (crypto, HOSTED INVOICE) — returns a NOW-hosted `invoice_url` the caller
+   * completes on NOW's page. The balance is credited only on the confirmed IPN (matched by
+   * order_id). 503 ⇒ NOW not configured; 400 `amount_below_minimum` ⇒ under NOW's floor.
+   */
+  createDepositNowInvoice: (amount: number, target: "wallet" | "lp" = "wallet") =>
+    rawRequest("/payments/deposit/nowpayments/invoice/", {
+      method: "POST",
+      auth: true,
+      body: { amount, target },
+    }) as Promise<{
+      invoice_url: string;
+      invoice_id: string;
+      deposit_id: string;
+    }>,
+  /**
    * DEPOSIT / top-up (manual bank transfer) — the platform's receiving-account details the
    * user wires funds to. `configured` is false (details omitted) until the operator sets them.
    */
@@ -1468,10 +1483,9 @@ export interface PayNextStripeResult {
 }
 export interface PayNextNowResult {
   provider: "nowpayments";
-  payment_id: string;
-  pay_address: string;
-  pay_amount: string | null;
-  pay_currency: string;
+  /** NOW-hosted invoice link the buyer completes on NOW's page (address/QR + status live there). */
+  invoice_url: string;
+  invoice_id: string;
   installment_payment_id: string;
   sequence: number;
   amount: string;

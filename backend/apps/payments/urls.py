@@ -4,6 +4,7 @@ from django.urls import path
 from .views import (
     BankDepositDetailsView,
     CreateBankDepositView,
+    CreateDepositNowInvoiceView,
     CreateDepositNowPaymentsView,
     CreateDepositStripeIntentView,
     CreateNowInvoiceView,
@@ -33,6 +34,7 @@ urlpatterns = [
     # Deposit / top-up — reuses the gated Stripe/NOW path; credits balance (no mint).
     path("deposit/stripe/", CreateDepositStripeIntentView.as_view(), name="deposit-stripe"),
     path("deposit/nowpayments/", CreateDepositNowPaymentsView.as_view(), name="deposit-nowpayments"),
+    path("deposit/nowpayments/invoice/", CreateDepositNowInvoiceView.as_view(), name="deposit-nowpayments-invoice"),
     # Manual bank transfer — reference + proof upload; admin-approved credit (no PSP).
     path("deposit/bank/details/", BankDepositDetailsView.as_view(), name="deposit-bank-details"),
     path("deposit/bank/", CreateBankDepositView.as_view(), name="deposit-bank"),
