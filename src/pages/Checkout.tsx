@@ -10,6 +10,7 @@ import { NowCryptoCheckout } from "@/components/checkout/NowCryptoCheckout";
 import { SukukPayment } from "@/components/checkout/methods/SukukPayment";
 import { PronovaCheckout } from "@/components/checkout/PronovaCheckout";
 import { WalletPayCheckout } from "@/components/checkout/WalletPayCheckout";
+import { InstallmentScheduleReview } from "@/components/checkout/InstallmentScheduleReview";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -748,6 +749,21 @@ export default function Checkout() {
 
             {/* Payment Methods - Right/Bottom */}
             <div className="lg:col-span-2 order-1 lg:order-2 space-y-6">
+              {/* Installments (client note): BEFORE any pay button, let the buyer review the FULL
+                  schedule (dates + amounts + ownership growth) and download the plan. Sourced from
+                  the same engine preview the server persists on purchase, so it's cent-exact. */}
+              {installmentTerms && (
+                <InstallmentScheduleReview
+                  propertyId={propertyId}
+                  propertyName={property?.name ?? ""}
+                  propertyNameAr={property?.nameAr ?? ""}
+                  units={units}
+                  downPct={downPaymentPercent}
+                  nInstallments={installmentCount}
+                  frequency={installmentFrequency}
+                />
+              )}
+
               <PaymentMethodSelector
                 selectedMethod={selectedMethod}
                 onSelectMethod={setSelectedMethod}
