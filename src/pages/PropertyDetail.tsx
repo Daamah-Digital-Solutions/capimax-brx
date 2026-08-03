@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { InstallmentCalculator } from "@/components/property/InstallmentCalculator";
 import { PropertyModelSection } from "@/components/property/PropertyModelSection";
+import { OnChainContractCard, type OnChainDeployment } from "@/components/property/OnChainContractCard";
 import { PropertyDataRoom } from "@/components/property/PropertyDataRoom";
 import {
   useInstallmentPreview,
@@ -283,6 +284,14 @@ export default function PropertyDetail() {
     // outright "Own Now". Surface the down-payment + installment count in the sidebar and route
     // its CTA to the installment checkout (the SHARED terms the calculator on this page drives).
     const cpIsInstallment = cp.model === "installment";
+    // The API property carries token metadata incl. the REAL on-chain deployment (or null).
+    const cpTokenMeta = (cp as unknown as {
+      tokenMetadata?: {
+        onChain?: OnChainDeployment | null;
+        totalSupply?: number;
+        tokenPrice?: number | string;
+      };
+    }).tokenMetadata;
     const cpDownPayment = installmentPreview
       ? installmentPreview.downPayment
       : Math.round(
@@ -355,6 +364,14 @@ export default function PropertyDetail() {
 
             {/* Model-specific template */}
             <PropertyModelSection property={cp} />
+
+            {/* Smart Contract & Token Details — driven by the REAL on-chain deployment from the
+                API (tokenMetadata.onChain), or an honest "pending" state. Never a fake address. */}
+            <OnChainContractCard
+              onChain={cpTokenMeta?.onChain}
+              totalSupply={cpTokenMeta?.totalSupply}
+              tokenPrice={cpTokenMeta?.tokenPrice}
+            />
 
             {/* Installment purchase entry — real per-investor plan builder → Checkout charges
                 the down-payment + buyer-borne fee, mints-then-locks the full position. Only

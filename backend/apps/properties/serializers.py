@@ -189,6 +189,11 @@ class TokenMetadataSerializer(serializers.ModelSerializer):
     )
     deployedDate = serializers.DateField(source="deployed_date")
     explorerUrl = serializers.CharField(source="explorer_url")
+    # The REAL on-chain deployment (or null). Non-null ONLY when a PropertyToken was actually
+    # deployed + confirmed on-chain (apps/chain writes it post-receipt) — NEVER fabricated. This
+    # is what the property page uses to show a genuine verified contract + a real explorer link;
+    # the display fields above stay illustrative.
+    onChain = serializers.SerializerMethodField()
 
     class Meta:
         model = TokenMetadata
@@ -203,7 +208,28 @@ class TokenMetadataSerializer(serializers.ModelSerializer):
             "verified",
             "deployedDate",
             "explorerUrl",
+            "onChain",
         )
+
+    def get_onChain(self, obj):
+        addr = (obj.deployed_contract_address or "").strip()
+        if not addr:
+            return None  # not deployed yet → the UI shows an honest "pending" state
+        net = (obj.deployment_network or "bsc-testnet").strip()
+        is_testnet = "test" in net.lower()
+        base = "https://testnet.bscscan.com" if is_testnet else "https://bscscan.com"
+        tx = (obj.deployment_tx or "").strip()
+        return {
+            "address": addr,
+            "network": net,
+            "networkLabel": "BSC Testnet" if is_testnet else "BSC Mainnet",
+            "isTestnet": is_testnet,
+            "chainId": obj.deployment_chain_id,
+            "txHash": tx or None,
+            "deployedAt": obj.deployed_at.isoformat() if obj.deployed_at else None,
+            "explorerUrl": f"{base}/address/{addr}",
+            "txExplorerUrl": f"{base}/tx/{tx}" if tx else None,
+        }
 
 
 class FinancialsSerializer(serializers.ModelSerializer):
