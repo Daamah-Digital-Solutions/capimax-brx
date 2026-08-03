@@ -245,7 +245,10 @@ WALLET_NETWORK = env("WALLET_NETWORK", default="bsc-testnet")
 
 # BSC Testnet chain connection (chain id 97). Free public RPC by default.
 BSC_TESTNET_RPC_URL = env(
-    "BSC_TESTNET_RPC_URL", default="https://bsc-testnet-rpc.publicnode.com"
+    # Official BNB Chain testnet dataseed — supports eth_call/estimateGas/sendRawTransaction
+    # reliably. (The old publicnode default went dead: "no available nodes"; several free RPCs
+    # rate-limit eth_call. The VPS .env overrides this if a keyed endpoint is preferred.)
+    "BSC_TESTNET_RPC_URL", default="https://bsc-testnet-dataseed.bnbchain.org"
 )
 CHAIN_ID = env.int("CHAIN_ID", default=97)
 # Platform deployer/signer key — env only, NEVER hardcoded or stored in the DB.
