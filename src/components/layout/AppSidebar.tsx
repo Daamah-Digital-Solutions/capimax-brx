@@ -162,6 +162,7 @@ const menuSections: MenuSection[] = [
     color: "text-amber-500",
     roles: ["broker"],
     items: [
+      { titleKey: "nav.brokerVerification", icon: ShieldCheck, href: "/broker-verification" },
       { titleKey: "nav.listings", icon: Building2, href: "/listings" },
       { titleKey: "nav.referrals", icon: Users, href: "/referrals" },
       { titleKey: "nav.commissions", icon: Award, href: "/commissions" },

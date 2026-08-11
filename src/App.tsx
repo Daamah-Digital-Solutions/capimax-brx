@@ -42,6 +42,7 @@ import StrategicPartners from "./pages/StrategicPartners";
 import Listings from "./pages/Listings";
 import BrokerReports from "./pages/BrokerReports";
 import BrokerWallet from "./pages/BrokerWallet";
+import BrokerVerification from "./pages/BrokerVerification";
 import Referrals from "./pages/Referrals";
 import Commissions from "./pages/Commissions";
 import PublicReports from "./pages/PublicReports";
@@ -117,10 +118,14 @@ const App = () => (
           <Route path="/messages" element={<Messages />} />
           <Route path="/asset-validation" element={<OwnerReports />} />
           <Route path="/submit-property" element={<SubmitProperty />} />
-          {/* The broker hub now lives in the real Listings/Referrals/Commissions pages.
-              Redirect the orphan /broker-dashboard (kept off-nav) to Listings — no dead
-              route, no 404 for old links/notifications that pointed here. */}
-          <Route path="/broker-dashboard" element={<Navigate to="/listings" replace />} />
+          {/* Broker onboarding/verification — apply + identity KYC + professional licence
+              (admin-approved). The one reachable place a broker completes activation; its
+              card also holds the approved broker's referral link. */}
+          <Route path="/broker-verification" element={<BrokerVerification />} />
+          {/* The old broker "hub" was superseded by the real Listings/Referrals/Commissions
+              pages; send the orphan /broker-dashboard to verification — no dead route, no
+              404 for old links/notifications that pointed here. */}
+          <Route path="/broker-dashboard" element={<Navigate to="/broker-verification" replace />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/referrals" element={<Referrals />} />
           <Route path="/commissions" element={<Commissions />} />
