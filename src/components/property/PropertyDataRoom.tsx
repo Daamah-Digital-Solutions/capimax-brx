@@ -135,6 +135,49 @@ function KV({
 // ─────────────────────────────────────────────────────────────
 // 1. Property specifications & amenities
 // ─────────────────────────────────────────────────────────────
+// Real amenities + nearby landmarks for specific properties (from their brochures);
+// any property not listed here falls back to the generic set inside SpecsSection.
+const PROPERTY_EXTRAS: Record<string, { amenities: { en: string; ar: string }[]; landmarks: { en: string; ar: string }[] }> = {
+  "kensington-residences": {
+    amenities: [
+      { en: "24/7 Concierge & Doorman", ar: "كونسيرج وبوّاب على مدار الساعة" },
+      { en: "Residents' Wellness Spa", ar: "سبا وعافية للسكان" },
+      { en: "Rooftop Garden Lounge", ar: "صالة حديقة على السطح" },
+      { en: "Wine Cellar & Tasting Room", ar: "قبو نبيذ وغرفة تذوّق" },
+      { en: "Private Cinema", ar: "سينما خاصة" },
+      { en: "EV Underground Parking", ar: "موقف سفلي بشحن للسيارات الكهربائية" },
+      { en: "Smart-Home Integration", ar: "تكامل المنزل الذكي" },
+      { en: "Secure Cycle Store", ar: "مخزن دراجات آمن" },
+    ],
+    landmarks: [
+      { en: "Hyde Park — 6 min walk", ar: "هايد بارك — 6 دقائق سيراً" },
+      { en: "Harrods — 9 min walk", ar: "هارودز — 9 دقائق سيراً" },
+      { en: "South Kensington Tube — 5 min", ar: "مترو ساوث كنزينغتون — 5 دقائق" },
+      { en: "V&A Museum — 8 min walk", ar: "متحف V&A — 8 دقائق سيراً" },
+      { en: "Imperial College London — 10 min", ar: "إمبريال كوليدج لندن — 10 دقائق" },
+    ],
+  },
+  "thames-bay-residences": {
+    amenities: [
+      { en: "Sheltered Marina", ar: "مارينا محمية" },
+      { en: "Riverfront Promenade", ar: "ممشى على ضفة النهر" },
+      { en: "Sky Lounge", ar: "صالة سماوية (Sky Lounge)" },
+      { en: "Wellness Suite", ar: "جناح عافية" },
+      { en: "24/7 Concierge", ar: "كونسيرج على مدار الساعة" },
+      { en: "Underground Secure Parking", ar: "موقف سيارات سفلي آمن" },
+      { en: "Smart Building Infrastructure", ar: "بنية مبنى ذكية" },
+      { en: "Premium Retail Promenade", ar: "ممشى تجاري راقٍ" },
+    ],
+    landmarks: [
+      { en: "Canary Wharf — 8 min", ar: "كناري وارف — 8 دقائق" },
+      { en: "The O2 Arena — 10 min", ar: "ذا O2 أرينا — 10 دقائق" },
+      { en: "Greenwich — 12 min", ar: "غرينتش — 12 دقيقة" },
+      { en: "London City Airport — 14 min", ar: "مطار لندن سيتي — 14 دقيقة" },
+      { en: "Direct River-Bus Pier", ar: "رصيف حافلة نهرية مباشر" },
+    ],
+  },
+};
+
 function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
   const specs = [
     { en: "Asset Class", ar: "فئة الأصل", v: p.assetType },
@@ -153,7 +196,8 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
     { en: "Exit Availability", ar: "توفر التخارج", v: p.exitAvailability },
   ];
 
-  const amenities = [
+  const extras = PROPERTY_EXTRAS[p.id];
+  const amenities = extras?.amenities ?? [
     { en: "24/7 Security", ar: "أمن 24/7" },
     { en: "Smart Building Systems", ar: "أنظمة المبنى الذكية" },
     { en: "Underground Parking", ar: "موقف سيارات تحت الأرض" },
@@ -164,7 +208,7 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
     { en: "EV Charging", ar: "شحن السيارات الكهربائية" },
   ];
 
-  const landmarks = [
+  const landmarks = extras?.landmarks ?? [
     { en: "International Airport — 18 min", ar: "المطار الدولي — 18 دقيقة" },
     { en: "Central Business District — 6 min", ar: "وسط الأعمال — 6 دقائق" },
     { en: "Premium Shopping Mall — 4 min", ar: "مركز تسوق فاخر — 4 دقائق" },
