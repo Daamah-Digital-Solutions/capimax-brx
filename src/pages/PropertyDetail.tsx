@@ -214,6 +214,7 @@ export default function PropertyDetail() {
   // Units chosen in the catalogue-branch investment sidebar; drives the live total
   // and is forwarded to Checkout (which reads ?units=). Real state, not a dead stepper.
   const [units, setUnits] = useState(1);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   // Catalogue property from the API (replaces synchronous properties.ts lookup).
   // Fetched for every id; for ids "1"/"2" the inline `propertyDatabase` legacy
@@ -336,16 +337,16 @@ export default function PropertyDetail() {
               </div>
             </div>
 
-            {/* Gallery — the property's own renders/photos (from its brochure). */}
+            {/* Gallery — the property's own renders/photos (from its brochure). Opens an
+                in-page lightbox (not a navigation, which the SPA rewrite would 404). */}
             {Array.isArray(cp.images) && cp.images.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {cp.images.map((src: string, i: number) => (
-                  <a
+                  <button
                     key={i}
-                    href={src}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative aspect-video rounded-xl overflow-hidden border border-border bg-muted/30"
+                    type="button"
+                    onClick={() => setLightboxSrc(src)}
+                    className="group relative aspect-video rounded-xl overflow-hidden border border-border bg-muted/30 cursor-zoom-in"
                   >
                     <img
                       src={src}
@@ -353,8 +354,27 @@ export default function PropertyDetail() {
                       loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                  </a>
+                  </button>
                 ))}
+              </div>
+            )}
+
+            {lightboxSrc && (
+              <div
+                className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+                onClick={() => setLightboxSrc(null)}
+                role="dialog"
+                aria-modal="true"
+              >
+                <img src={lightboxSrc} alt={cpName} className="max-w-full max-h-full rounded-lg shadow-2xl" />
+                <button
+                  type="button"
+                  onClick={() => setLightboxSrc(null)}
+                  className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xl"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
               </div>
             )}
 
@@ -434,7 +454,10 @@ export default function PropertyDetail() {
             />
 
             {/* Insurance & Independent Valuation */}
-            <InsuranceValuationSection currentValuation={cp.totalValue ?? 5000000} />
+            <InsuranceValuationSection
+              currentValuation={cp.totalValue ?? 5000000}
+              insuranceDocUrl={cp.documents?.find((d) => d.type === "insurance")?.url}
+            />
 
             {/* Exit & disclosures */}
             <div className="grid md:grid-cols-3 gap-4">

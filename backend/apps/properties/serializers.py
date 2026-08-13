@@ -387,6 +387,11 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     financials = serializers.SerializerMethodField()
     documents = PropertyDocumentSerializer(many=True, read_only=True)
     fees = serializers.SerializerMethodField()
+    # Live progress (detail view only): the HIGHER of the seeded value or the real
+    # minted-investment figure — so a fresh listing shows a real 0% that grows as tokens
+    # sell, while the seeded demo/showcase numbers are never reduced.
+    funded = serializers.SerializerMethodField()
+    investors = serializers.SerializerMethodField()
 
     class Meta(_PropertyBaseSerializer.Meta):
         fields = _COMMON_FIELDS + (
@@ -444,6 +449,30 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             # The frontend mirrors this so the charged total equals the displayed total.
             "pronovaDiscount": float(obj.fee_pronova_discount),
         }
+
+    def get_funded(self, obj):
+        supply = int(obj.token_supply or 0)
+        sold = 0
+        if supply:
+            from django.db.models import Sum
+            from apps.investments.models import Investment
+
+            sold = Investment.objects.filter(
+                property=obj, tokens_minted=True
+            ).aggregate(s=Sum("token_amount"))["s"] or 0
+        live = max(0, min(100, round(sold / supply * 100))) if supply else 0
+        return max(int(obj.funded or 0), live)
+
+    def get_investors(self, obj):
+        from apps.investments.models import Investment
+
+        live = (
+            Investment.objects.filter(property=obj, tokens_minted=True)
+            .values("user")
+            .distinct()
+            .count()
+        )
+        return max(int(obj.investors or 0), live)
 
 
 class FundedPropertySerializer(serializers.ModelSerializer):

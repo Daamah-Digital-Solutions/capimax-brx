@@ -28,6 +28,7 @@ interface InsuranceValuationSectionProps {
   coverageAmount?: number;
   insurer?: string;
   valuationFirm?: string;
+  insuranceDocUrl?: string;
 }
 
 export function InsuranceValuationSection({
@@ -38,6 +39,7 @@ export function InsuranceValuationSection({
   coverageAmount,
   insurer = "CoverTech Insurance",
   valuationFirm = "CIM Global Financial",
+  insuranceDocUrl,
 }: InsuranceValuationSectionProps) {
   const { language, isRTL } = useLanguage();
 
@@ -161,16 +163,22 @@ export function InsuranceValuationSection({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-4">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Eye className="w-4 h-4" />
-                {language === "ar" ? "عرض الشهادة" : "View Certificate"}
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Download className="w-4 h-4" />
-                {language === "ar" ? "تنزيل وثيقة التأمين" : "Download Policy"}
-              </Button>
-            </div>
+            {insuranceDocUrl && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button asChild variant="outline" size="sm" className="gap-2">
+                  <a href={insuranceDocUrl} target="_blank" rel="noopener noreferrer">
+                    <Eye className="w-4 h-4" />
+                    {language === "ar" ? "عرض الشهادة" : "View Certificate"}
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="gap-2">
+                  <a href={`${insuranceDocUrl}?download=1`} target="_blank" rel="noopener noreferrer" download>
+                    <Download className="w-4 h-4" />
+                    {language === "ar" ? "تنزيل وثيقة التأمين" : "Download Policy"}
+                  </a>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 

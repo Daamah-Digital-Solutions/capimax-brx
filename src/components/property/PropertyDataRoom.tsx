@@ -619,7 +619,7 @@ function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
                                   </a>
                                 </Button>
                                 <Button asChild size="sm" variant="ghost" className="h-7 w-7 p-0" title={isAr ? "تنزيل" : "Download"}>
-                                  <a href={doc.url} target="_blank" rel="noopener noreferrer" download aria-label="Download document">
+                                  <a href={`${doc.url}?download=1`} target="_blank" rel="noopener noreferrer" download aria-label="Download document">
                                     <Download className="w-3.5 h-3.5" />
                                   </a>
                                 </Button>
