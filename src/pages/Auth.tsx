@@ -34,6 +34,12 @@ export default function Auth() {
   const { t, isRTL, language } = useLanguage();
   const urlMode = searchParams.get("mode") === "register" ? "register" : "login";
   const urlRole = (searchParams.get("role") as UserRole | null) ?? null;
+  // Post-auth return path (e.g. from checkout: /auth?next=/checkout?...). Only accept an
+  // internal absolute path — reject //host and /\host — to avoid an open-redirect, then
+  // fall back to the dashboard.
+  const nextParam = searchParams.get("next");
+  const postAuthTarget =
+    nextParam && /^\/(?![/\\])/.test(nextParam) ? nextParam : "/dashboard";
   // Broker referral code (Phase 12 Wave A): from ?ref= on this URL, or stashed by the
   // /ref/<code> landing route in localStorage. Carried through signup → linked set-once.
   const referralCode =
@@ -56,12 +62,12 @@ export default function Auth() {
     phone: "",
   });
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated (honoring ?next= so a mid-checkout guest returns there)
   useEffect(() => {
     if (user) {
-      navigate("/dashboard");
+      navigate(postAuthTarget);
     }
-  }, [user, navigate]);
+  }, [user, navigate, postAuthTarget]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +147,7 @@ export default function Auth() {
             title: language === "ar" ? "تم تسجيل الدخول بنجاح" : "Logged in successfully",
             description: language === "ar" ? "مرحباً بعودتك!" : "Welcome back!",
           });
-          navigate("/dashboard");
+          navigate(postAuthTarget);
         }
       }
     } catch (error) {

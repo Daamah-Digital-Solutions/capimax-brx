@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { InvestmentSummaryPanel } from "@/components/checkout/InvestmentSummaryPanel";
 import { PaymentMethodSelector } from "@/components/checkout/PaymentMethodSelector";
@@ -14,7 +14,7 @@ import { InstallmentScheduleReview } from "@/components/checkout/InstallmentSche
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Lock, Shield, ArrowLeft, ArrowRight, Plus, Minus } from "lucide-react";
+import { Lock, Shield, ArrowLeft, ArrowRight, Plus, Minus, LogIn, UserPlus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInvestment } from "@/hooks/useInvestment";
 import { useAuth } from "@/contexts/AuthContext";
@@ -64,6 +64,7 @@ const DEFAULT_PRONOVA_DISCOUNT_RATE = 0.05;
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
@@ -170,6 +171,14 @@ export default function Checkout() {
         : "Identity verification (KYC) is required before investing.",
     );
     navigate("/portfolio?tab=wallet");
+  };
+
+  // Guests can reach checkout (it's an open route) but can't invest until they sign in.
+  // Route them to /auth with a `next` back to THIS checkout so they resume the buy right
+  // after login — instead of a raw "payment failed" modal, which read as a broken checkout.
+  const routeToLogin = (mode: "login" | "register" = "login") => {
+    const next = encodeURIComponent(location.pathname + location.search);
+    navigate(`/auth?next=${next}${mode === "register" ? "&mode=register" : ""}`);
   };
 
   useEffect(() => {
@@ -285,9 +294,9 @@ export default function Checkout() {
     setPaymentStatus("processing");
 
     if (!user) {
-      toast.error(isRTL ? "يرجى تسجيل الدخول للاستثمار" : "Please log in to invest");
-      setPaymentStatus("failed");
-      setShowResult(true);
+      // Guide to sign-in (returning to this checkout) instead of a failed-payment modal.
+      setPaymentStatus("idle");
+      routeToLogin();
       return;
     }
 
@@ -534,6 +543,7 @@ export default function Checkout() {
             className="flex-1"
             disabled={!canProceed || paymentStatus === "processing"}
             onClick={() => {
+              if (!user) return routeToLogin();
               if (user && kycApproved === false) return routeToKyc();
               if (selectedMethod && UNWIRED_METHODS.includes(selectedMethod)) {
                 toast.info(isRTL ? UNWIRED_MESSAGE.ar : UNWIRED_MESSAGE.en);
@@ -749,6 +759,35 @@ export default function Checkout() {
 
             {/* Payment Methods - Right/Bottom */}
             <div className="lg:col-span-2 order-1 lg:order-2 space-y-6">
+              {/* Guest gate (UX): checkout is an open route, but investing needs a signed-in,
+                  verified account. Show a clear sign-in prompt up front — with a return to this
+                  page — instead of letting a guest hit a pay button that reads as an error. */}
+              {!user && (
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 sm:flex-row sm:items-center">
+                  <Shield className="w-5 h-5 text-primary shrink-0" />
+                  <div className="flex-1 text-sm">
+                    <p className="font-medium text-foreground">
+                      {isRTL ? "سجّل الدخول لإتمام الاستثمار" : "Sign in to complete your investment"}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {isRTL
+                        ? "الدفع يتطلب تسجيل الدخول والتحقق من الهوية (KYC). سنعيدك لهذه الصفحة بعد الدخول لإكمال عمليتك."
+                        : "Payment requires a signed-in, verified account. We'll bring you back here to finish after you log in."}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" onClick={() => routeToLogin("login")}>
+                      <LogIn className="w-4 h-4" />
+                      {isRTL ? "تسجيل الدخول" : "Log in"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => routeToLogin("register")}>
+                      <UserPlus className="w-4 h-4" />
+                      {isRTL ? "إنشاء حساب" : "Create account"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Installments (client note): BEFORE any pay button, let the buyer review the FULL
                   schedule (dates + amounts + ownership growth) and download the plan. Sourced from
                   the same engine preview the server persists on purchase, so it's cent-exact. */}
