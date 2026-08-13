@@ -197,7 +197,9 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
   ];
 
   const extras = PROPERTY_EXTRAS[p.id];
-  const amenities = extras?.amenities ?? [
+  const amenities = (p.amenities && p.amenities.length)
+    ? p.amenities.map((a) => ({ en: a.nameEn, ar: a.nameAr || a.nameEn }))
+    : extras?.amenities ?? [
     { en: "24/7 Security", ar: "أمن 24/7" },
     { en: "Smart Building Systems", ar: "أنظمة المبنى الذكية" },
     { en: "Underground Parking", ar: "موقف سيارات تحت الأرض" },
@@ -208,7 +210,9 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
     { en: "EV Charging", ar: "شحن السيارات الكهربائية" },
   ];
 
-  const landmarks = extras?.landmarks ?? [
+  const landmarks = (p.landmarks && p.landmarks.length)
+    ? p.landmarks.map((l) => ({ en: l.nameEn, ar: l.nameAr || l.nameEn }))
+    : extras?.landmarks ?? [
     { en: "International Airport — 18 min", ar: "المطار الدولي — 18 دقيقة" },
     { en: "Central Business District — 6 min", ar: "وسط الأعمال — 6 دقائق" },
     { en: "Premium Shopping Mall — 4 min", ar: "مركز تسوق فاخر — 4 دقائق" },
@@ -262,25 +266,7 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
           </div>
         </div>
 
-        {/* Media gallery placeholders */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-          <div className="aspect-video rounded-lg bg-muted/40 border border-border flex flex-col items-center justify-center text-muted-foreground">
-            <ImageIcon className="w-6 h-6 mb-1" />
-            <span className="text-xs">{isAr ? "معرض صور" : "Gallery"}</span>
-          </div>
-          <div className="aspect-video rounded-lg bg-muted/40 border border-border flex flex-col items-center justify-center text-muted-foreground">
-            <Video className="w-6 h-6 mb-1" />
-            <span className="text-xs">{isAr ? "فيديو" : "Video Tour"}</span>
-          </div>
-          <div className="aspect-video rounded-lg bg-muted/40 border border-border flex flex-col items-center justify-center text-muted-foreground">
-            <Map className="w-6 h-6 mb-1" />
-            <span className="text-xs">{isAr ? "خريطة" : "Interactive Map"}</span>
-          </div>
-          <div className="aspect-video rounded-lg bg-muted/40 border border-border flex flex-col items-center justify-center text-muted-foreground">
-            <Layers className="w-6 h-6 mb-1" />
-            <span className="text-xs">{isAr ? "مخطط الطوابق" : "Floor Plans"}</span>
-          </div>
-        </div>
+        {/* (Media placeholder tiles removed — the real gallery renders on the property hero.) */}
       </CardContent>
     </Card>
   );
@@ -290,8 +276,25 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // 2. Developer information
 // ─────────────────────────────────────────────────────────────
 function DeveloperSection({ p, isAr }: { p: Property; isAr: boolean }) {
-  const developer = {
-    name: "Capimax Real Estate Partners",
+  const d = p.developer;
+  const developer = d
+    ? {
+        name: d.name,
+        nameAr: d.nameAr || d.name,
+        overview: d.overview,
+        overviewAr: d.overviewAr || d.overview,
+        years: d.yearsExperience,
+        completed: d.completedProjects,
+        ongoing: d.ongoingProjects,
+        rating: d.rating,
+        location: d.location,
+        locationAr: d.locationAr || d.location,
+        email: d.email,
+        phone: d.phone,
+        related: (d.relatedProjects || []).map((r) => ({ en: r.en, ar: r.ar || r.en })),
+      }
+    : {
+        name: "Capimax Real Estate Partners",
     nameAr: "كابيماكس لشراكات العقار",
     overview:
       "An institutional-grade developer with a 22-year track record across the GCC. Specialised in income-producing commercial, residential, and hospitality assets.",
@@ -387,7 +390,21 @@ function DeveloperSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // 3. Tokenization & legal structure
 // ─────────────────────────────────────────────────────────────
 function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
-  const totalSupply = Math.round(p.totalValue / p.tokenPrice);
+  const tm = p.tokenMetadata;
+  const onChain = tm?.onChain;
+  const totalSupply = tm?.totalSupply ?? Math.round(p.totalValue / p.tokenPrice);
+  const network = onChain?.networkLabel ?? tm?.network ?? "Ethereum";
+  const standard = tm?.standard ?? "ERC-1155";
+  const addr = onChain?.address ?? tm?.contractAddress ?? "";
+  const contractShort = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "—";
+  const verified = onChain ? true : (tm?.verified ?? false);
+  const spv = p.spv;
+  const alloc = {
+    investor: tm?.investorAllocation ?? 85,
+    reserve: tm?.spvReserve ?? 10,
+    incentive: tm?.platformIncentive ?? 3,
+    liquidity: tm?.liquidity ?? 2,
+  };
   return (
     <Card>
       <CardHeader>
@@ -403,14 +420,24 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
               <Layers className="w-4 h-4 text-primary" />
               {isAr ? "بيانات الرمز" : "Token Details"}
             </h4>
-            <KV label="Network" labelAr="الشبكة" value="Ethereum (ERC-1155)" isAr={isAr} />
+            <KV label="Network" labelAr="الشبكة" value={network} isAr={isAr} />
             <KV label="Contract" labelAr="العقد الذكي" value={
-              <span className="font-mono text-xs">0x7a23…f3a4 <ExternalLink className="w-3 h-3 inline ml-1" /></span>
+              onChain ? (
+                <a href={onChain.explorerUrl} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-primary hover:underline">
+                  {contractShort} <ExternalLink className="w-3 h-3 inline ml-1" />
+                </a>
+              ) : (
+                <span className="font-mono text-xs">{contractShort}</span>
+              )
             } isAr={isAr} />
             <KV label="Total Supply" labelAr="إجمالي الإصدار" value={totalSupply.toLocaleString()} isAr={isAr} />
             <KV label="Token Price" labelAr="سعر الرمز" value={`$${p.tokenPrice}`} isAr={isAr} />
-            <KV label="Standard" labelAr="المعيار" value="ERC-1155 fractional" isAr={isAr} />
-            <KV label="Verified" labelAr="موثَّق" value={<Badge variant="outline" className="border-emerald-500/40 text-emerald-600">{isAr ? "نعم" : "Yes"}</Badge>} isAr={isAr} />
+            <KV label="Standard" labelAr="المعيار" value={standard} isAr={isAr} />
+            <KV label="Verified" labelAr="موثَّق" value={
+              verified
+                ? <Badge variant="outline" className="border-emerald-500/40 text-emerald-600">{isAr ? "نعم" : "Yes"}</Badge>
+                : <Badge variant="outline">{isAr ? "قيد التنفيذ" : "Pending"}</Badge>
+            } isAr={isAr} />
           </div>
 
           <div>
@@ -418,10 +445,10 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
               <Scale className="w-4 h-4 text-primary" />
               {isAr ? "هيكل SPV" : "SPV Structure"}
             </h4>
-            <KV label="SPV Name" labelAr="اسم الشركة" value="Capimax Asset SPV Ltd" isAr={isAr} />
-            <KV label="Jurisdiction" labelAr="الولاية القضائية" value="DIFC, UAE" isAr={isAr} />
-            <KV label="Reg. Number" labelAr="رقم التسجيل" value="SPV-2026-AX1294" isAr={isAr} />
-            <KV label="Established" labelAr="تأسست" value="2026-01-15" isAr={isAr} />
+            <KV label="SPV Name" labelAr="اسم الشركة" value={spv?.name ?? "—"} isAr={isAr} />
+            <KV label="Jurisdiction" labelAr="الولاية القضائية" value={spv?.jurisdiction ?? "—"} isAr={isAr} />
+            <KV label="Reg. Number" labelAr="رقم التسجيل" value={spv?.registrationNumber ?? "—"} isAr={isAr} />
+            <KV label="Established" labelAr="تأسست" value={spv?.established ?? "—"} isAr={isAr} />
             <KV label="Compliance" labelAr="الامتثال" value="Reg D 506(c) / Reg S" isAr={isAr} />
             <KV label="Custody" labelAr="الحفظ" value={isAr ? "حافظ مرخّص" : "Licensed Custodian"} isAr={isAr} />
           </div>
@@ -431,19 +458,19 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
         <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
             <p className="text-xs text-muted-foreground">{isAr ? "تخصيص للمستثمرين" : "Investor Allocation"}</p>
-            <p className="text-base font-bold">85%</p>
+            <p className="text-base font-bold">{alloc.investor}%</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">{isAr ? "احتياطي SPV" : "SPV Reserve"}</p>
-            <p className="text-base font-bold">10%</p>
+            <p className="text-base font-bold">{alloc.reserve}%</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">{isAr ? "حوافز المنصة" : "Platform Incentives"}</p>
-            <p className="text-base font-bold">3%</p>
+            <p className="text-base font-bold">{alloc.incentive}%</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">{isAr ? "السيولة" : "Liquidity"}</p>
-            <p className="text-base font-bold">2%</p>
+            <p className="text-base font-bold">{alloc.liquidity}%</p>
           </div>
         </div>
       </CardContent>
@@ -457,10 +484,11 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
 function FinancialSection({ p, isAr }: { p: Property; isAr: boolean }) {
   const yieldPct = p.expectedYield ?? 0;
   const growthPct = p.expectedGrowth ?? 0;
-  const grossIncome = Math.round(p.totalValue * (yieldPct / 100));
-  const opex = Math.round(grossIncome * 0.18);
-  const noi = grossIncome - opex;
-  const capRate = p.totalValue > 0 ? (noi / p.totalValue) * 100 : 0;
+  const fin = p.financials;
+  const grossIncome = fin ? Math.round(fin.grossRentalIncome) : Math.round(p.totalValue * (yieldPct / 100));
+  const opex = fin ? Math.round(fin.operatingExpenses) : Math.round(grossIncome * 0.18);
+  const noi = fin ? Math.round(fin.netOperatingIncome) : grossIncome - opex;
+  const capRate = fin ? Number(fin.capRate) : (p.totalValue > 0 ? (noi / p.totalValue) * 100 : 0);
 
   const projection = [
     { y: "Year 1", v: yieldPct },
@@ -1077,15 +1105,24 @@ function InstallmentScheduleSection({
 // 8. Market analysis
 // ─────────────────────────────────────────────────────────────
 function MarketAnalysisSection({ p, isAr }: { p: Property; isAr: boolean }) {
-  const cityHistory = [
-    { y: "2021", v: 100 },
-    { y: "2022", v: 108 },
-    { y: "2023", v: 117 },
-    { y: "2024", v: 126 },
-    { y: "2025", v: 138 },
-    { y: "2026", v: 149 },
-  ];
+  const md = p.market;
+  const cityHistory = (md?.priceIndexHistory && md.priceIndexHistory.length)
+    ? md.priceIndexHistory.map((h) => ({ y: h.year, v: h.value }))
+    : [
+        { y: "2021", v: 100 },
+        { y: "2022", v: 108 },
+        { y: "2023", v: 117 },
+        { y: "2024", v: 126 },
+        { y: "2025", v: 138 },
+        { y: "2026", v: 149 },
+      ];
   const max = Math.max(...cityHistory.map((c) => c.v));
+  const stats = [
+    { en: "Market Cap Rate", ar: "معدل السوق", v: md?.capRate || "7.8%" },
+    { en: "City Growth", ar: "نمو المدينة", v: md?.cityGrowth || "+9.2%" },
+    { en: "Vacancy Rate", ar: "معدل الشواغر", v: md?.vacancyRate || "4.1%" },
+    { en: "Rent Index", ar: "مؤشر الإيجار", v: md?.rentIndex || "112" },
+  ];
 
   return (
     <Card>
@@ -1097,12 +1134,7 @@ function MarketAnalysisSection({ p, isAr }: { p: Property; isAr: boolean }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { en: "Market Cap Rate", ar: "معدل العاصمة", v: "7.8%" },
-            { en: "City Growth", ar: "نمو المدينة", v: "+9.2%" },
-            { en: "Vacancy Rate", ar: "معدل الشواغر", v: "4.1%" },
-            { en: "Rent Index", ar: "مؤشر الإيجار", v: "112" },
-          ].map((m) => (
+          {stats.map((m) => (
             <div key={m.en} className="p-3 rounded-lg bg-muted/40 border border-border">
               <p className="text-xs text-muted-foreground">{isAr ? m.ar : m.en}</p>
               <p className="text-lg font-bold">{m.v}</p>
@@ -1136,6 +1168,15 @@ function MarketAnalysisSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // 9. Insurance & Risk
 // ─────────────────────────────────────────────────────────────
 function InsuranceRiskSection({ p, isAr }: { p: Property; isAr: boolean }) {
+  const ins = p.insurance;
+  const risks = (p.riskFactors && p.riskFactors.length)
+    ? p.riskFactors.map((r) => ({ en: r.textEn, ar: r.textAr || r.textEn }))
+    : [
+        { en: "Real estate investing carries risk including loss of capital.", ar: "الاستثمار العقاري ينطوي على مخاطر تشمل خسارة رأس المال." },
+        { en: "Past performance does not guarantee future returns.", ar: "الأداء السابق لا يضمن النتائج المستقبلية." },
+        { en: "Liquidity may be limited prior to operational phase.", ar: "السيولة قد تكون محدودة قبل مرحلة التشغيل." },
+        { en: "Returns are subject to market and occupancy fluctuations.", ar: "العوائد عرضة لتقلبات السوق والإشغال." },
+      ];
   return (
     <Card>
       <CardHeader>
@@ -1150,9 +1191,9 @@ function InsuranceRiskSection({ p, isAr }: { p: Property; isAr: boolean }) {
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <p className="font-semibold text-sm">{isAr ? "تغطية التأمين" : "Insurance Coverage"}</p>
           </div>
-          <KV label="Provider" labelAr="مزود التأمين" value="AXA Gulf" isAr={isAr} />
-          <KV label="Policy" labelAr="رقم البوليصة" value="POL-2026-AX-94821" isAr={isAr} />
-          <KV label="Coverage" labelAr="قيمة التغطية" value={fmtMoney(p.totalValue)} isAr={isAr} />
+          <KV label="Provider" labelAr="مزود التأمين" value={ins?.provider ?? "CoverTech Insurance"} isAr={isAr} />
+          <KV label="Policy" labelAr="رقم البوليصة" value={ins?.policyNumber ?? "—"} isAr={isAr} />
+          <KV label="Coverage" labelAr="قيمة التغطية" value={fmtMoney(ins?.coverageAmount ?? p.totalValue)} isAr={isAr} />
           <KV label="Status" labelAr="الحالة" value={
             <Badge className={p.insuranceActive ? "bg-emerald-500 text-white" : ""} variant={p.insuranceActive ? "default" : "outline"}>
               {p.insuranceActive ? (isAr ? "نشطة" : "Active") : (isAr ? "غير مفعلة" : "Inactive")}
@@ -1166,10 +1207,9 @@ function InsuranceRiskSection({ p, isAr }: { p: Property; isAr: boolean }) {
             <p className="font-semibold text-sm">{isAr ? "إفصاحات المخاطر" : "Risk Disclosures"}</p>
           </div>
           <ul className="text-xs text-muted-foreground space-y-1.5">
-            <li>• {isAr ? "الاستثمار العقاري ينطوي على مخاطر تشمل خسارة رأس المال." : "Real estate investing carries risk including loss of capital."}</li>
-            <li>• {isAr ? "الأداء السابق لا يضمن النتائج المستقبلية." : "Past performance does not guarantee future returns."}</li>
-            <li>• {isAr ? "السيولة قد تكون محدودة قبل مرحلة التشغيل." : "Liquidity may be limited prior to operational phase."}</li>
-            <li>• {isAr ? "العوائد عرضة لتقلبات السوق والإشغال." : "Returns are subject to market and occupancy fluctuations."}</li>
+            {risks.map((r, i) => (
+              <li key={i}>• {isAr ? r.ar : r.en}</li>
+            ))}
           </ul>
         </div>
       </CardContent>
@@ -1180,8 +1220,10 @@ function InsuranceRiskSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // ─────────────────────────────────────────────────────────────
 // 10. FAQ
 // ─────────────────────────────────────────────────────────────
-function FaqSection({ isAr }: { isAr: boolean }) {
-  const faqs = [
+function FaqSection({ p, isAr }: { p: Property; isAr: boolean }) {
+  const faqs = (p.faqs && p.faqs.length)
+    ? p.faqs.map((f) => ({ q: f.questionEn, qAr: f.questionAr || f.questionEn, a: f.answerEn, aAr: f.answerAr || f.answerEn }))
+    : [
     {
       q: "How is ownership recorded?",
       qAr: "كيف يتم تسجيل الملكية؟",
@@ -1476,7 +1518,7 @@ export function PropertyDataRoom({
           <InsuranceRiskSection p={property} isAr={isAr} />
         </TabsContent>
         <TabsContent value="faq" className="mt-4">
-          <FaqSection isAr={isAr} />
+          <FaqSection p={property} isAr={isAr} />
         </TabsContent>
       </Tabs>
     </div>

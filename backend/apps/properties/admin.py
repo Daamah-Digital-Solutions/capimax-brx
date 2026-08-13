@@ -10,15 +10,22 @@ repeating blocks (phases/portfolio assets/reports/documents) as tabular inlines.
 from django.contrib import admin, messages
 
 from .models import (
+    Amenity,
+    DeveloperInfo,
     DeveloperReport,
     FutureContract,
     InstallmentSchedule,
+    InsuranceInfo,
+    Landmark,
+    MarketData,
     OptionContract,
     PortfolioAsset,
     Property,
     PropertyDocument,
+    PropertyFAQ,
     PropertyFinancials,
     PropertyPhase,
+    RiskFactor,
     SharedOwnership,
     SPVRecord,
     TokenMetadata,
@@ -101,6 +108,42 @@ class PropertyDocumentInline(admin.TabularInline):
     extra = 0
 
 
+# --- data-room section content (admin-managed per property) --------------- #
+class DeveloperInfoInline(admin.StackedInline):
+    model = DeveloperInfo
+    extra = 0
+
+
+class InsuranceInfoInline(admin.StackedInline):
+    model = InsuranceInfo
+    extra = 0
+
+
+class MarketDataInline(admin.StackedInline):
+    model = MarketData
+    extra = 0
+
+
+class AmenityInline(admin.TabularInline):
+    model = Amenity
+    extra = 0
+
+
+class LandmarkInline(admin.TabularInline):
+    model = Landmark
+    extra = 0
+
+
+class RiskFactorInline(admin.TabularInline):
+    model = RiskFactor
+    extra = 0
+
+
+class PropertyFAQInline(admin.TabularInline):
+    model = PropertyFAQ
+    extra = 0
+
+
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
     list_display = (
@@ -175,6 +218,13 @@ class PropertyAdmin(admin.ModelAdmin):
         TokenMetadataInline,
         PropertyFinancialsInline,
         PropertyDocumentInline,
+        DeveloperInfoInline,
+        InsuranceInfoInline,
+        MarketDataInline,
+        AmenityInline,
+        LandmarkInline,
+        RiskFactorInline,
+        PropertyFAQInline,
     ]
     fieldsets = (
         (

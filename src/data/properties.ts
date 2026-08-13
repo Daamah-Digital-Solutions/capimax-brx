@@ -169,6 +169,31 @@ export interface Property {
   // data-room documents (downloadable) — from the API detail
   documents?: PropertyDocument[];
 
+  // data-room section content (from the API detail; admin-managed)
+  spv?: { name: string; jurisdiction: string; registrationNumber: string; established?: string };
+  tokenMetadata?: {
+    contractAddress?: string; network?: string; standard?: string;
+    totalSupply?: number; tokenPrice?: number; verified?: boolean;
+    investorAllocation?: number; spvReserve?: number; platformIncentive?: number; liquidity?: number;
+    onChain?: { address: string; networkLabel: string; isTestnet: boolean; explorerUrl: string; txExplorerUrl?: string | null } | null;
+  };
+  financials?: {
+    purchasePrice: number; currentValuation: number; grossRentalIncome: number;
+    operatingExpenses: number; netOperatingIncome: number; capRate: number; occupancyRate: number;
+  };
+  developer?: {
+    name: string; nameAr: string; overview: string; overviewAr: string;
+    yearsExperience: number; completedProjects: number; ongoingProjects: number; rating: number;
+    location: string; locationAr: string; email: string; phone: string;
+    relatedProjects: { en: string; ar: string }[];
+  };
+  insurance?: { provider: string; policyNumber: string; coverageAmount: number; reinsurer: string; valuationFirm: string };
+  market?: { capRate: string; cityGrowth: string; vacancyRate: string; rentIndex: string; priceIndexHistory: { year: string; value: number }[] };
+  amenities?: { nameEn: string; nameAr: string }[];
+  landmarks?: { nameEn: string; nameAr: string }[];
+  riskFactors?: { textEn: string; textAr: string }[];
+  faqs?: { questionEn: string; questionAr: string; answerEn: string; answerAr: string }[];
+
   // construction (for any under-construction model)
   constructionProgress?: number;
 }

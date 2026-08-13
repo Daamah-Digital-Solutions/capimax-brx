@@ -10,15 +10,22 @@ uses them numerically (e.g. `totalValue.toLocaleString()`).
 from rest_framework import serializers
 
 from .models import (
+    Amenity,
+    DeveloperInfo,
     DeveloperReport,
     FutureContract,
     InstallmentSchedule,
+    InsuranceInfo,
+    Landmark,
+    MarketData,
     OptionContract,
     PortfolioAsset,
     Property,
     PropertyDocument,
+    PropertyFAQ,
     PropertyFinancials,
     PropertyPhase,
+    RiskFactor,
     SharedOwnership,
     SPVRecord,
     TokenMetadata,
@@ -189,6 +196,9 @@ class TokenMetadataSerializer(serializers.ModelSerializer):
     )
     deployedDate = serializers.DateField(source="deployed_date")
     explorerUrl = serializers.CharField(source="explorer_url")
+    investorAllocation = serializers.IntegerField(source="investor_allocation")
+    spvReserve = serializers.IntegerField(source="spv_reserve")
+    platformIncentive = serializers.IntegerField(source="platform_incentive")
     # The REAL on-chain deployment (or null). Non-null ONLY when a PropertyToken was actually
     # deployed + confirmed on-chain (apps/chain writes it post-receipt) — NEVER fabricated. This
     # is what the property page uses to show a genuine verified contract + a real explorer link;
@@ -208,6 +218,10 @@ class TokenMetadataSerializer(serializers.ModelSerializer):
             "verified",
             "deployedDate",
             "explorerUrl",
+            "investorAllocation",
+            "spvReserve",
+            "platformIncentive",
+            "liquidity",
             "onChain",
         )
 
@@ -273,6 +287,85 @@ class PropertyDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = PropertyDocument
         fields = ("name", "nameEn", "date", "type", "url")
+
+
+# --- data-room section content (admin-managed) ---------------------------- #
+class DeveloperInfoSerializer(serializers.ModelSerializer):
+    nameAr = serializers.CharField(source="name_ar")
+    overviewAr = serializers.CharField(source="overview_ar")
+    yearsExperience = serializers.IntegerField(source="years_experience")
+    completedProjects = serializers.IntegerField(source="completed_projects")
+    ongoingProjects = serializers.IntegerField(source="ongoing_projects")
+    locationAr = serializers.CharField(source="location_ar")
+    relatedProjects = serializers.JSONField(source="related_projects")
+
+    class Meta:
+        model = DeveloperInfo
+        fields = (
+            "name", "nameAr", "overview", "overviewAr", "yearsExperience",
+            "completedProjects", "ongoingProjects", "rating", "location",
+            "locationAr", "email", "phone", "relatedProjects",
+        )
+
+
+class InsuranceInfoSerializer(serializers.ModelSerializer):
+    policyNumber = serializers.CharField(source="policy_number")
+    coverageAmount = serializers.DecimalField(source="coverage_amount", max_digits=16, decimal_places=2)
+    valuationFirm = serializers.CharField(source="valuation_firm")
+
+    class Meta:
+        model = InsuranceInfo
+        fields = ("provider", "policyNumber", "coverageAmount", "reinsurer", "valuationFirm")
+
+
+class MarketDataSerializer(serializers.ModelSerializer):
+    capRate = serializers.CharField(source="cap_rate")
+    cityGrowth = serializers.CharField(source="city_growth")
+    vacancyRate = serializers.CharField(source="vacancy_rate")
+    rentIndex = serializers.CharField(source="rent_index")
+    priceIndexHistory = serializers.JSONField(source="price_index_history")
+
+    class Meta:
+        model = MarketData
+        fields = ("capRate", "cityGrowth", "vacancyRate", "rentIndex", "priceIndexHistory")
+
+
+class AmenitySerializer(serializers.ModelSerializer):
+    nameEn = serializers.CharField(source="name_en")
+    nameAr = serializers.CharField(source="name_ar")
+
+    class Meta:
+        model = Amenity
+        fields = ("nameEn", "nameAr")
+
+
+class LandmarkSerializer(serializers.ModelSerializer):
+    nameEn = serializers.CharField(source="name_en")
+    nameAr = serializers.CharField(source="name_ar")
+
+    class Meta:
+        model = Landmark
+        fields = ("nameEn", "nameAr")
+
+
+class RiskFactorSerializer(serializers.ModelSerializer):
+    textEn = serializers.CharField(source="text_en")
+    textAr = serializers.CharField(source="text_ar")
+
+    class Meta:
+        model = RiskFactor
+        fields = ("textEn", "textAr")
+
+
+class PropertyFAQSerializer(serializers.ModelSerializer):
+    questionEn = serializers.CharField(source="question_en")
+    questionAr = serializers.CharField(source="question_ar")
+    answerEn = serializers.CharField(source="answer_en")
+    answerAr = serializers.CharField(source="answer_ar")
+
+    class Meta:
+        model = PropertyFAQ
+        fields = ("questionEn", "questionAr", "answerEn", "answerAr")
 
 
 # --------------------------------------------------------------------------- #
@@ -392,6 +485,13 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     # sell, while the seeded demo/showcase numbers are never reduced.
     funded = serializers.SerializerMethodField()
     investors = serializers.SerializerMethodField()
+    developer = serializers.SerializerMethodField()
+    insurance = serializers.SerializerMethodField()
+    market = serializers.SerializerMethodField()
+    amenities = AmenitySerializer(many=True, read_only=True)
+    landmarks = LandmarkSerializer(many=True, read_only=True)
+    riskFactors = RiskFactorSerializer(source="risk_factors", many=True, read_only=True)
+    faqs = PropertyFAQSerializer(many=True, read_only=True)
 
     class Meta(_PropertyBaseSerializer.Meta):
         fields = _COMMON_FIELDS + (
@@ -408,6 +508,13 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "financials",
             "documents",
             "fees",
+            "developer",
+            "insurance",
+            "market",
+            "amenities",
+            "landmarks",
+            "riskFactors",
+            "faqs",
         )
 
     def get_installment(self, obj):
@@ -473,6 +580,24 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             .count()
         )
         return max(int(obj.investors or 0), live)
+
+    def get_developer(self, obj):
+        return (
+            DeveloperInfoSerializer(obj.developer_info).data
+            if hasattr(obj, "developer_info") else None
+        )
+
+    def get_insurance(self, obj):
+        return (
+            InsuranceInfoSerializer(obj.insurance_info).data
+            if hasattr(obj, "insurance_info") else None
+        )
+
+    def get_market(self, obj):
+        return (
+            MarketDataSerializer(obj.market_data).data
+            if hasattr(obj, "market_data") else None
+        )
 
 
 class FundedPropertySerializer(serializers.ModelSerializer):

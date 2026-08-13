@@ -456,6 +456,11 @@ export default function PropertyDetail() {
             {/* Insurance & Independent Valuation */}
             <InsuranceValuationSection
               currentValuation={cp.totalValue ?? 5000000}
+              insuranceProvider={cp.insurance?.provider}
+              policyNumber={cp.insurance?.policyNumber}
+              coverageAmount={cp.insurance?.coverageAmount}
+              insurer={cp.insurance?.reinsurer}
+              valuationFirm={cp.insurance?.valuationFirm}
               insuranceDocUrl={cp.documents?.find((d) => d.type === "insurance")?.url}
             />
 

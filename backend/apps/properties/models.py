@@ -507,6 +507,13 @@ class TokenMetadata(models.Model):
     deployment_network = models.CharField(max_length=24, blank=True)
     factory_address = models.CharField(max_length=42, blank=True)
 
+    # Token economics allocation (data-room "Structure" tab) — admin-editable, sensible
+    # defaults that sum to 100. Shown as the allocation chips.
+    investor_allocation = models.PositiveSmallIntegerField(default=85)
+    spv_reserve = models.PositiveSmallIntegerField(default=10)
+    platform_incentive = models.PositiveSmallIntegerField(default=3)
+    liquidity = models.PositiveSmallIntegerField(default=2)
+
     def save(self, *args, **kwargs):
         # Wave 2 policy #4: the displayed supply MUST equal the property's
         # authoritative token_supply. Forced here so admin edits / seeds can't
@@ -573,3 +580,129 @@ class PropertyDocument(models.Model):
 
     def __str__(self):
         return f"{self.name_en} · {self.property.slug}"
+
+
+# --------------------------------------------------------------------------- #
+# Data-room section content — admin-managed per property so every tab shows real,
+# editable data instead of the frontend's old hardcoded placeholders.
+# --------------------------------------------------------------------------- #
+class DeveloperInfo(models.Model):
+    """The 'Developer' tab (bilingual). One per property."""
+
+    property = models.OneToOneField(
+        Property, on_delete=models.CASCADE, related_name="developer_info"
+    )
+    name = models.CharField(max_length=200)
+    name_ar = models.CharField(max_length=200, blank=True)
+    overview = models.TextField(blank=True)
+    overview_ar = models.TextField(blank=True)
+    years_experience = models.PositiveIntegerField(default=0)
+    completed_projects = models.PositiveIntegerField(default=0)
+    ongoing_projects = models.PositiveIntegerField(default=0)
+    rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)  # 0..5
+    location = models.CharField(max_length=200, blank=True)
+    location_ar = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    related_projects = models.JSONField(default=list, blank=True)  # [{"en":.., "ar":..}]
+
+    def __str__(self):
+        return f"Developer · {self.property.slug}"
+
+
+class InsuranceInfo(models.Model):
+    """Insurance details for the Insurance/Valuation + Insurance-&-Risk sections."""
+
+    property = models.OneToOneField(
+        Property, on_delete=models.CASCADE, related_name="insurance_info"
+    )
+    provider = models.CharField(max_length=200)
+    policy_number = models.CharField(max_length=80, blank=True)
+    coverage_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    reinsurer = models.CharField(max_length=200, blank=True)
+    valuation_firm = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return f"Insurance · {self.property.slug}"
+
+
+class MarketData(models.Model):
+    """The 'Market' tab — stat chips + a price-index history series."""
+
+    property = models.OneToOneField(
+        Property, on_delete=models.CASCADE, related_name="market_data"
+    )
+    cap_rate = models.CharField(max_length=16, blank=True)      # e.g. "7.8%"
+    city_growth = models.CharField(max_length=16, blank=True)   # e.g. "+9.2%"
+    vacancy_rate = models.CharField(max_length=16, blank=True)  # e.g. "4.1%"
+    rent_index = models.CharField(max_length=16, blank=True)    # e.g. "112"
+    price_index_history = models.JSONField(default=list, blank=True)  # [{"year":"2021","value":100}]
+
+    def __str__(self):
+        return f"Market · {self.property.slug}"
+
+
+class Amenity(models.Model):
+    """An amenity chip in the Overview tab (bilingual)."""
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="amenities"
+    )
+    name_en = models.CharField(max_length=120)
+    name_ar = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self):
+        return self.name_en
+
+
+class Landmark(models.Model):
+    """A nearby landmark line in the Overview tab (bilingual, incl. distance text)."""
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="landmarks"
+    )
+    name_en = models.CharField(max_length=160)
+    name_ar = models.CharField(max_length=160, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self):
+        return self.name_en
+
+
+class RiskFactor(models.Model):
+    """A risk-disclosure bullet in the Risk tab (bilingual)."""
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="risk_factors"
+    )
+    text_en = models.CharField(max_length=300)
+    text_ar = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self):
+        return self.text_en
+
+
+class PropertyFAQ(models.Model):
+    """A FAQ entry in the FAQ tab (bilingual Q + A)."""
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="faqs"
+    )
+    question_en = models.CharField(max_length=300)
+    question_ar = models.CharField(max_length=300, blank=True)
+    answer_en = models.TextField()
+    answer_ar = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self):
+        return self.question_en
