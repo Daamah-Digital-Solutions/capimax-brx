@@ -499,7 +499,107 @@ function FinancialSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // ─────────────────────────────────────────────────────────────
 // 5. Documents & Data Room
 // ─────────────────────────────────────────────────────────────
+// Real data-room documents are grouped by type into these sections (display order).
+const DOC_SECTIONS = [
+  { key: "brochure", icon: FileText, en: "Overview & Brochures", ar: "نظرة عامة وبروشورات" },
+  { key: "studies", icon: BarChart3, en: "Capimax Studies", ar: "دراسات كابيماكس" },
+  { key: "valuation", icon: Scale, en: "Valuation Reports", ar: "تقارير التقييم" },
+  { key: "financial", icon: BarChart3, en: "Financial Analysis", ar: "التحليل المالي" },
+  { key: "diligence", icon: ShieldCheck, en: "Due Diligence", ar: "العناية الواجبة" },
+  { key: "insurance", icon: Shield, en: "Insurance", ar: "التأمين" },
+  { key: "tokenization", icon: Coins, en: "Tokenization Agreement", ar: "اتفاقية الترميز" },
+  { key: "legal", icon: FileText, en: "Legal Documents", ar: "المستندات القانونية" },
+  { key: "lease", icon: FileText, en: "Lease Agreement", ar: "عقد الإيجار" },
+  { key: "audit", icon: ShieldCheck, en: "Smart Contract Audit", ar: "تدقيق العقد الذكي" },
+  { key: "construction", icon: Building2, en: "Construction Reports", ar: "تقارير الإنشاء" },
+];
+
 function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
+  // Real attached documents (downloadable) — grouped by type into the sections above.
+  // Only take over the data room when there are genuinely downloadable files, so demo
+  // properties (metadata-only or none) keep the representative placeholder set below.
+  const docs = p.documents ?? [];
+  if (docs.some((d) => d.url)) {
+    const known = new Set(DOC_SECTIONS.map((s) => s.key));
+    const groups = DOC_SECTIONS
+      .map((s) => ({ ...s, items: docs.filter((d) => d.type === s.key) }))
+      .filter((g) => g.items.length > 0);
+    const other = docs.filter((d) => !known.has(d.type));
+    if (other.length) {
+      groups.push({ key: "other", icon: FileText, en: "Other Documents", ar: "مستندات أخرى", items: other });
+    }
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileText className="w-5 h-5 text-primary" />
+            {isAr ? "غرفة البيانات والوثائق" : "Documents & Data Room"}
+            <Badge variant="outline" className="text-[10px] ml-1">{docs.length}</Badge>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            {isAr
+              ? "وثائق المشروع الرسمية — اضغط للعرض أو التنزيل."
+              : "Official project documents — click to view or download."}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="multiple" defaultValue={groups.slice(0, 2).map((g) => g.key)} className="w-full">
+            {groups.map((g) => (
+              <AccordionItem key={g.key} value={g.key}>
+                <AccordionTrigger className="hover:no-underline">
+                  <span className="flex items-center gap-2 text-sm">
+                    <g.icon className="w-4 h-4 text-primary" />
+                    {isAr ? g.ar : g.en}
+                    <Badge variant="outline" className="text-[10px] ml-2">{g.items.length}</Badge>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid md:grid-cols-2 gap-2">
+                    {g.items.map((doc, i) => {
+                      const label = isAr ? (doc.name || doc.nameEn) : (doc.nameEn || doc.name);
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border hover:border-primary/40 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm truncate" title={label}>{label}</span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {doc.url ? (
+                              <>
+                                <Button asChild size="sm" variant="ghost" className="h-7 w-7 p-0" title={isAr ? "عرض" : "View"}>
+                                  <a href={doc.url} target="_blank" rel="noopener noreferrer" aria-label="View document">
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </a>
+                                </Button>
+                                <Button asChild size="sm" variant="ghost" className="h-7 w-7 p-0" title={isAr ? "تنزيل" : "Download"}>
+                                  <a href={doc.url} target="_blank" rel="noopener noreferrer" download aria-label="Download document">
+                                    <Download className="w-3.5 h-3.5" />
+                                  </a>
+                                </Button>
+                              </>
+                            ) : (
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled>
+                                <Download className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Fallback: representative placeholder set (demo properties with no attached files).
   const groups = [
     {
       key: "ownership",

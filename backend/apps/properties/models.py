@@ -36,6 +36,7 @@ class Country(models.TextChoices):
     QATAR = "qatar", _("Qatar")
     BAHRAIN = "bahrain", _("Bahrain")
     OMAN = "oman", _("Oman")
+    UK = "uk", _("United Kingdom")
 
 
 class PropertyModelType(models.TextChoices):
@@ -548,6 +549,12 @@ class PropertyDocument(models.Model):
         INSURANCE = "insurance", _("Insurance")
         FINANCIAL = "financial", _("Financial")
         CONSTRUCTION = "construction", _("Construction")
+        STUDIES = "studies", _("Studies")
+        BROCHURE = "brochure", _("Brochure")
+        TOKENIZATION = "tokenization", _("Tokenization Agreement")
+        LEASE = "lease", _("Lease Agreement")
+        AUDIT = "audit", _("Smart Contract Audit")
+        DILIGENCE = "diligence", _("Due Diligence")
 
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="documents"
@@ -556,6 +563,10 @@ class PropertyDocument(models.Model):
     name_en = models.CharField(max_length=200)
     date = models.DateField()
     doc_type = models.CharField(max_length=16, choices=DocType.choices)
+    # Downloadable file. A real, resolvable URL (backend media on the API host, or an
+    # external store) — blank keeps the legacy metadata-only rows valid. This is what
+    # makes the data-room documents ACTUALLY download (was metadata-only before).
+    url = models.URLField(max_length=500, blank=True)
 
     class Meta:
         ordering = ("-date",)

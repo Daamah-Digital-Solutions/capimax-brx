@@ -33,11 +33,11 @@ interface InsuranceValuationSectionProps {
 export function InsuranceValuationSection({
   currentValuation,
   previousValuation,
-  insuranceProvider = "AIG Real Estate Insurance",
+  insuranceProvider = "CoverTech Insurance",
   policyNumber = "POL-RE-2025-00482",
   coverageAmount,
-  insurer = "Lloyd's of London (Reinsurer)",
-  valuationFirm = "JLL · CBRE · Knight Frank",
+  insurer = "CoverTech Insurance",
+  valuationFirm = "CIM Global Financial",
 }: InsuranceValuationSectionProps) {
   const { language, isRTL } = useLanguage();
 

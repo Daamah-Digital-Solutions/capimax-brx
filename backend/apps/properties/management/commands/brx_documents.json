@@ -1,0 +1,342 @@
+{
+  "kensington-residences": [
+    {
+      "name": "Smart Contract Audit",
+      "name_en": "Smart Contract Audit",
+      "date": "2025-11-01",
+      "doc_type": "audit",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/audit-smart-contract-audit.pdf"
+    },
+    {
+      "name": "Available Real Estate Opportunities",
+      "name_en": "Available Real Estate Opportunities",
+      "date": "2025-11-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/brochure-available-real-estate-opportunities.pdf"
+    },
+    {
+      "name": "Crestmark Company Portfolio",
+      "name_en": "Crestmark Company Portfolio",
+      "date": "2025-11-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/brochure-crestmark-company-portfolio.pdf"
+    },
+    {
+      "name": "Crestmark Projects Catalog",
+      "name_en": "Crestmark Projects Catalog",
+      "date": "2025-11-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/brochure-crestmark-projects-catalog.pdf"
+    },
+    {
+      "name": "The Kensington Residences",
+      "name_en": "The Kensington Residences",
+      "date": "2025-11-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/brochure-the-kensington-residences.pdf"
+    },
+    {
+      "name": "Independent Investment Committee Opinion",
+      "name_en": "Independent Investment Committee Opinion",
+      "date": "2025-11-01",
+      "doc_type": "diligence",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/diligence-independent-investment-committee-opinion.pdf"
+    },
+    {
+      "name": "Institutional Due Diligence & Verification Report",
+      "name_en": "Institutional Due Diligence & Verification Report",
+      "date": "2025-11-01",
+      "doc_type": "diligence",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/diligence-institutional-due-diligence-verification-report.pdf"
+    },
+    {
+      "name": "Financial & Investment Analysis Report",
+      "name_en": "Financial & Investment Analysis Report",
+      "date": "2025-11-01",
+      "doc_type": "financial",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/financial-financial-investment-analysis-report.pdf"
+    },
+    {
+      "name": "Institutional Financial & Investment Analysis Report",
+      "name_en": "Institutional Financial & Investment Analysis Report",
+      "date": "2025-11-01",
+      "doc_type": "financial",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/financial-institutional-financial-investment-analysis-report.pdf"
+    },
+    {
+      "name": "Covertech Insurance",
+      "name_en": "Covertech Insurance",
+      "date": "2025-11-01",
+      "doc_type": "insurance",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/insurance-covertech-insurance.pdf"
+    },
+    {
+      "name": "Corporate Property Lease & Subletting Agreement",
+      "name_en": "Corporate Property Lease & Subletting Agreement",
+      "date": "2025-11-01",
+      "doc_type": "lease",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/lease-corporate-property-lease-subletting-agreement.pdf"
+    },
+    {
+      "name": "Master Agreement Non Tokenized",
+      "name_en": "Master Agreement Non Tokenized",
+      "date": "2025-11-01",
+      "doc_type": "legal",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/legal-master-agreement-non-tokenized.pdf"
+    },
+    {
+      "name": "Capimax",
+      "name_en": "Capimax",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-capimax.pdf"
+    },
+    {
+      "name": "Capimax Digital Trust Center CDTC",
+      "name_en": "Capimax Digital Trust Center CDTC",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-capimax-digital-trust-center-cdtc.pdf"
+    },
+    {
+      "name": "Capimax Institutional Real Estate Investment Platform",
+      "name_en": "Capimax Institutional Real Estate Investment Platform",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-capimax-institutional-real-estate-investment-platform.pdf"
+    },
+    {
+      "name": "Institutional Real Estate Investment Platform",
+      "name_en": "Institutional Real Estate Investment Platform",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-institutional-real-estate-investment-platform.pdf"
+    },
+    {
+      "name": "Market Research Report",
+      "name_en": "Market Research Report",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-market-research-report.pdf"
+    },
+    {
+      "name": "Risk Assessment Report",
+      "name_en": "Risk Assessment Report",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-risk-assessment-report.pdf"
+    },
+    {
+      "name": "The Advantage of CAPIMAX Fractional Real Estate Ownership",
+      "name_en": "The Advantage of CAPIMAX Fractional Real Estate Ownership",
+      "date": "2025-11-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/studies-the-advantage-of-capimax-fractional-real-estate-ownership.pdf"
+    },
+    {
+      "name": "Master Agreement Tokenization",
+      "name_en": "Master Agreement Tokenization",
+      "date": "2025-11-01",
+      "doc_type": "tokenization",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/tokenization-master-agreement-tokenization.pdf"
+    },
+    {
+      "name": "Independent Institutional Real Estate Valuation Report",
+      "name_en": "Independent Institutional Real Estate Valuation Report",
+      "date": "2025-11-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/valuation-independent-institutional-real-estate-valuation-report.pdf"
+    },
+    {
+      "name": "One Bedroom Apartment Unit VALUATION REPORT",
+      "name_en": "One Bedroom Apartment Unit VALUATION REPORT",
+      "date": "2025-11-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/valuation-one-bedroom-apartment-unit-valuation-report.pdf"
+    },
+    {
+      "name": "THREE BED ROOM Independent Institutional Real Estate Valuation Report — Single Unit",
+      "name_en": "THREE BED ROOM Independent Institutional Real Estate Valuation Report — Single Unit",
+      "date": "2025-11-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/valuation-three-bed-room-independent-institutional-real-estate-valuation-report-.pdf"
+    },
+    {
+      "name": "TWO BED ROOMIndependent Institutional Real Estate Valuation Report — Single Unit",
+      "name_en": "TWO BED ROOMIndependent Institutional Real Estate Valuation Report — Single Unit",
+      "date": "2025-11-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/valuation-two-bed-roomindependent-institutional-real-estate-valuation-report-sin.pdf"
+    },
+    {
+      "name": "Valuation +Certificate",
+      "name_en": "Valuation +Certificate",
+      "date": "2025-11-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/kensington-residences/valuation-valuation-certificate.pdf"
+    }
+  ],
+  "thames-bay-residences": [
+    {
+      "name": "Smart Contract Audit",
+      "name_en": "Smart Contract Audit",
+      "date": "2026-04-01",
+      "doc_type": "audit",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/audit-smart-contract-audit.pdf"
+    },
+    {
+      "name": "CAPIMAX Standard Institutional Executive Asset Passport IEAP",
+      "name_en": "CAPIMAX Standard Institutional Executive Asset Passport IEAP",
+      "date": "2026-04-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/brochure-capimax-standard-institutional-executive-asset-passport-ieap.pdf"
+    },
+    {
+      "name": "Executive Property Profile",
+      "name_en": "Executive Property Profile",
+      "date": "2026-04-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/brochure-executive-property-profile.pdf"
+    },
+    {
+      "name": "Thames Bay Residences",
+      "name_en": "Thames Bay Residences",
+      "date": "2026-04-01",
+      "doc_type": "brochure",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/brochure-thames-bay-residences.pdf"
+    },
+    {
+      "name": "Compliance & Regulatory Due Diligence Report",
+      "name_en": "Compliance & Regulatory Due Diligence Report",
+      "date": "2026-04-01",
+      "doc_type": "diligence",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/diligence-compliance-regulatory-due-diligence-report.pdf"
+    },
+    {
+      "name": "Engineering Due Diligence Report",
+      "name_en": "Engineering Due Diligence Report",
+      "date": "2026-04-01",
+      "doc_type": "diligence",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/diligence-engineering-due-diligence-report.pdf"
+    },
+    {
+      "name": "Legal Due Diligence Report",
+      "name_en": "Legal Due Diligence Report",
+      "date": "2026-04-01",
+      "doc_type": "diligence",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/diligence-legal-due-diligence-report.pdf"
+    },
+    {
+      "name": "PROPERTY DUE DILIGENCE and REAL ESTATE ASSESSMENT",
+      "name_en": "PROPERTY DUE DILIGENCE and REAL ESTATE ASSESSMENT",
+      "date": "2026-04-01",
+      "doc_type": "diligence",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/diligence-property-due-diligence-and-real-estate-assessment.pdf"
+    },
+    {
+      "name": "Institutional Investment & Financial Analysis",
+      "name_en": "Institutional Investment & Financial Analysis",
+      "date": "2026-04-01",
+      "doc_type": "financial",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/financial-institutional-investment-financial-analysis.pdf"
+    },
+    {
+      "name": "Institutional Investment Memorandum",
+      "name_en": "Institutional Investment Memorandum",
+      "date": "2026-04-01",
+      "doc_type": "financial",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/financial-institutional-investment-memorandum.pdf"
+    },
+    {
+      "name": "Cover Tech Insurance",
+      "name_en": "Cover Tech Insurance",
+      "date": "2026-04-01",
+      "doc_type": "insurance",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/insurance-cover-tech-insurance.pdf"
+    },
+    {
+      "name": "Capimax Digital Trust Center Cdtc",
+      "name_en": "Capimax Digital Trust Center Cdtc",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-capimax-digital-trust-center-cdtc.pdf"
+    },
+    {
+      "name": "Final Investment Opinion",
+      "name_en": "Final Investment Opinion",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-final-investment-opinion.pdf"
+    },
+    {
+      "name": "Institutional Fractional Property Investment",
+      "name_en": "Institutional Fractional Property Investment",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-institutional-fractional-property-investment.pdf"
+    },
+    {
+      "name": "Market Analysis Report",
+      "name_en": "Market Analysis Report",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-market-analysis-report.pdf"
+    },
+    {
+      "name": "Risk Management Framework",
+      "name_en": "Risk Management Framework",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-risk-management-framework.pdf"
+    },
+    {
+      "name": "The Advantage of CAPIMAX Fractional Real Estate Ownership",
+      "name_en": "The Advantage of CAPIMAX Fractional Real Estate Ownership",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-the-advantage-of-capimax-fractional-real-estate-ownership.pdf"
+    },
+    {
+      "name": "Why Invest in Off Plan Real Estate Through Capimax",
+      "name_en": "Why Invest in Off Plan Real Estate Through Capimax",
+      "date": "2026-04-01",
+      "doc_type": "studies",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/studies-why-invest-in-off-plan-real-estate-through-capimax.pdf"
+    },
+    {
+      "name": "Master Real Estate Agreement",
+      "name_en": "Master Real Estate Agreement",
+      "date": "2026-04-01",
+      "doc_type": "tokenization",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/tokenization-master-real-estate-agreement.pdf"
+    },
+    {
+      "name": "One Bed Roomindependent Real Estate Valuation",
+      "name_en": "One Bed Roomindependent Real Estate Valuation",
+      "date": "2026-04-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/valuation-one-bed-roomindependent-real-estate-valuation.pdf"
+    },
+    {
+      "name": "penthouse INDEPENDENT REAL ESTATE VALUATION",
+      "name_en": "penthouse INDEPENDENT REAL ESTATE VALUATION",
+      "date": "2026-04-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/valuation-penthouse-independent-real-estate-valuation.pdf"
+    },
+    {
+      "name": "studio INDEPENDENT REAL ESTATE VALUATION",
+      "name_en": "studio INDEPENDENT REAL ESTATE VALUATION",
+      "date": "2026-04-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/valuation-studio-independent-real-estate-valuation.pdf"
+    },
+    {
+      "name": "two bed INDEPENDENT REAL ESTATE VALUATION",
+      "name_en": "two bed INDEPENDENT REAL ESTATE VALUATION",
+      "date": "2026-04-01",
+      "doc_type": "valuation",
+      "url": "https://api.capimaxbrx.com/media/property_docs/thames-bay-residences/valuation-two-bed-independent-real-estate-valuation.pdf"
+    }
+  ]
+}

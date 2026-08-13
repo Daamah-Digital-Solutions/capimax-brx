@@ -103,6 +103,14 @@ export interface ValuationReport {
   appraiser: string;
 }
 
+export interface PropertyDocument {
+  name: string;   // display name (Arabic UI)
+  nameEn: string;
+  date: string;
+  type: string;   // studies|valuation|financial|diligence|insurance|brochure|tokenization|legal|lease|audit|construction
+  url?: string;   // resolvable download URL (empty for legacy metadata-only rows)
+}
+
 // ---- main property type ----
 export interface Property {
   id: string;
@@ -114,7 +122,7 @@ export interface Property {
   nameAr: string;
   location: string;
   locationAr: string;
-  country: string; // uae | ksa | qatar | bahrain | oman
+  country: string; // uae | ksa | qatar | bahrain | oman | uk
   city: string;
   image: string;
   images?: string[];
@@ -157,6 +165,9 @@ export interface Property {
   // reports
   developerReports?: DeveloperReport[];
   valuationReports?: ValuationReport[];
+
+  // data-room documents (downloadable) — from the API detail
+  documents?: PropertyDocument[];
 
   // construction (for any under-construction model)
   constructionProgress?: number;

@@ -272,7 +272,7 @@ class PropertyDocumentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PropertyDocument
-        fields = ("name", "nameEn", "date", "type")
+        fields = ("name", "nameEn", "date", "type", "url")
 
 
 # --------------------------------------------------------------------------- #
