@@ -366,22 +366,26 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           "flex items-center h-16 px-4 border-b border-sidebar-border shrink-0",
           !isOpen && "lg:justify-center"
         )}>
+          {/* Official Capimax BRX logo — full wordmark when expanded, brand mark when collapsed */}
           {isOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-gold rounded-xl flex items-center justify-center shadow-gold">
-                <Landmark className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="font-display text-lg font-bold text-foreground">Capimax BRX</h1>
-                <p className="text-xs text-muted-foreground">
-                  {language === "ar" ? "توكين العقارات" : "Real Estate Tokenization"}
-                </p>
-              </div>
-            </div>
+            <>
+              <img
+                src="/capimax-brx-logo-dark.svg"
+                alt="Capimax BRX"
+                className="h-9 w-auto dark:hidden"
+              />
+              <img
+                src="/capimax-brx-logo-light.svg"
+                alt="Capimax BRX"
+                className="h-9 w-auto hidden dark:block"
+              />
+            </>
           ) : (
-            <div className="hidden lg:flex w-10 h-10 bg-gradient-gold rounded-xl items-center justify-center shadow-gold">
-              <Landmark className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img
+              src="/pwa-icon.svg"
+              alt="Capimax BRX"
+              className="hidden lg:block w-10 h-10 rounded-xl"
+            />
           )}
           <Button
             variant="ghost"

@@ -1,4 +1,4 @@
-import { Bell, Search, Menu, Globe, LogOut, User, Home, Landmark, Sun, Moon } from "lucide-react";
+import { Bell, Search, Menu, Globe, LogOut, User, Home, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,15 +77,18 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <Menu className="w-5 h-5" />
           </Button>
 
-          {/* Platform Logo & Name - Always Visible */}
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-gold rounded-lg flex items-center justify-center shadow-gold">
-              <Landmark className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-display text-base sm:text-lg font-bold text-foreground leading-tight">Capimax BRX</h1>
-              <p className="hidden sm:block text-[10px] text-muted-foreground -mt-0.5">Real Estate Tokenization</p>
-            </div>
+          {/* Platform Logo — official Capimax BRX wordmark (navy on light, white on dark) */}
+          <Link to="/" className="flex items-center">
+            <img
+              src="/capimax-brx-logo-dark.svg"
+              alt="Capimax BRX"
+              className="h-8 sm:h-9 w-auto dark:hidden"
+            />
+            <img
+              src="/capimax-brx-logo-light.svg"
+              alt="Capimax BRX"
+              className="h-8 sm:h-9 w-auto hidden dark:block"
+            />
           </Link>
           
           {/* Search */}
