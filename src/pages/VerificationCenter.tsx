@@ -2,6 +2,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ExternalLink, BadgeCheck, Building2, Landmark, Scale, FileCheck } from "lucide-react";
+import capimaxTrustLogo from "@/assets/capimax-trust-logo.png";
 
 /**
  * Verification Center — a GATEWAY page, not a verification engine.
@@ -63,18 +64,18 @@ export default function VerificationCenter() {
           <div className="max-w-3xl mx-auto space-y-10">
             {/* Capimax Trust gateway card */}
             <div className="rounded-3xl border border-border bg-card p-8 sm:p-12 text-center shadow-sm">
-              {/* Brand logo — PLACEHOLDER. Replace this block with the official Capimax Trust logo. */}
+              {/* Official Capimax Trust logo. Kept on a white panel in BOTH themes so the
+                  navy wordmark stays legible in dark mode (the artwork has a light background). */}
               <div className="mx-auto mb-6 flex flex-col items-center gap-4">
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20">
-                  <ShieldCheck className="w-12 h-12 text-primary-foreground" strokeWidth={1.75} />
+                <div className="rounded-2xl bg-white px-8 py-6 shadow-lg shadow-primary/10 ring-1 ring-border">
+                  <img
+                    src={capimaxTrustLogo}
+                    alt="Capimax Trust"
+                    className="h-24 sm:h-28 w-auto"
+                  />
                 </div>
-                <div>
-                  <div className="font-display text-2xl font-bold text-foreground tracking-tight">
-                    Capimax <span className="text-primary">Trust</span>
-                  </div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                    {isAr ? "بوابة التحقق المركزية" : "Central Verification Gateway"}
-                  </div>
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  {isAr ? "بوابة التحقق المركزية" : "Central Verification Gateway"}
                 </div>
               </div>
 
