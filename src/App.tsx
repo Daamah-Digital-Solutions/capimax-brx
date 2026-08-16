@@ -43,6 +43,7 @@ import Listings from "./pages/Listings";
 import BrokerReports from "./pages/BrokerReports";
 import BrokerWallet from "./pages/BrokerWallet";
 import BrokerVerification from "./pages/BrokerVerification";
+import VerificationCenter from "./pages/VerificationCenter";
 import Referrals from "./pages/Referrals";
 import Commissions from "./pages/Commissions";
 import PublicReports from "./pages/PublicReports";
@@ -126,6 +127,10 @@ const App = () => (
               pages; send the orphan /broker-dashboard to verification — no dead route, no
               404 for old links/notifications that pointed here. */}
           <Route path="/broker-dashboard" element={<Navigate to="/broker-verification" replace />} />
+          {/* Verification Center — group-wide gateway that hands off to Capimax Trust
+              (www.capimax.pro), the central authority that verifies every document/
+              certificate/record. BRX itself hosts no verification engine — see the page. */}
+          <Route path="/verification-center" element={<VerificationCenter />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/referrals" element={<Referrals />} />
           <Route path="/commissions" element={<Commissions />} />
