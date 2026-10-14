@@ -91,6 +91,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_path": "/portfolio",
         "outro": "",
     },
+    "purchase_refunded": {
+        "subject": "Your payment was refunded to your wallet",
+        "heading": "Payment refunded",
+        "intro": "Your payment of ${amount} for {property} was not executed: {reason}. The full amount has been credited to your wallet balance — you can buy again at today's price.",
+        "cta_label": "View the property",
+        "cta_path": "/marketplace",
+        "outro": "",
+    },
     "earnings_credited": {
         "subject": "Funds credited to your wallet",
         "heading": "Proceeds credited",

@@ -340,6 +340,7 @@ class PropertyAdmin(admin.ModelAdmin):
                     ("expected_yield", "expected_growth"),
                     ("funded", "investors"),
                     ("duration", "duration_ar"),
+                    "offplan_payment",
                 ),
             },
         ),

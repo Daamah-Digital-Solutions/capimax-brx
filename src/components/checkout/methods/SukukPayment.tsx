@@ -22,6 +22,8 @@ const MAX_BYTES = 10 * 1024 * 1024; // 10 MB (matches the server cap)
 export interface SukukPaymentProps {
   propertyId: string;
   tokenAmount: number;
+  /** Unit price shown to the buyer — sent so the server can refuse a changed price. */
+  unitPrice?: number;
   /** Token value + the buyer-borne fee — the amount the certificate must cover. */
   finalAmount: number;
   /** True only when the terms/risk gating in the parent is satisfied. */
@@ -77,6 +79,7 @@ export function SukukPayment(props: SukukPaymentProps) {
       const created = await processInvestment({
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
+        expected_unit_price: props.unitPrice,
         payment_method: "sukuk",
         ...(props.installment
           ? {

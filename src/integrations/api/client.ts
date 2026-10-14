@@ -305,6 +305,8 @@ export const investmentsApi = {
     down_payment_percent?: number;
     n_installments?: number;
     frequency?: "monthly" | "quarterly";
+    /** The unit price the buyer saw — the server answers 409 PRICE_CHANGED if it moved. */
+    expected_unit_price?: number;
   }) =>
     rawRequest("/investments/", {
       method: "POST",

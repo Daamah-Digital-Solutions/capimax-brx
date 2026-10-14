@@ -26,6 +26,8 @@ import { toast } from "sonner";
 export interface PronovaCheckoutProps {
   propertyId: string;
   tokenAmount: number;
+  /** Unit price shown to the buyer — sent so the server can refuse a changed price. */
+  unitPrice?: number;
   /** The DISCOUNTED total the buyer pays (server is authoritative; this must match it). */
   finalAmount: number;
   /** The Pronova discount amount (for the branded breakdown). */
@@ -83,6 +85,7 @@ function PronovaForm(props: PronovaCheckoutProps) {
       const created = await processInvestment({
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
+        expected_unit_price: props.unitPrice,
         payment_method: "pronova",
         ...(props.installment
           ? {

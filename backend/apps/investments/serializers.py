@@ -43,6 +43,11 @@ class InvestmentCreateSerializer(serializers.Serializer):
     frequency = serializers.ChoiceField(
         choices=["monthly", "quarterly"], required=False, default="monthly"
     )
+    # Off-plan §3.4.1: the unit price the buyer saw. If it changed meanwhile → 409
+    # PRICE_CHANGED (optional: older clients that don't send it skip the check).
+    expected_unit_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True
+    )
 
     def validate(self, attrs):
         try:

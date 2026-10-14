@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Lock, Shield, ArrowLeft, ArrowRight, Plus, Minus, LogIn, UserPlus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useInvestment } from "@/hooks/useInvestment";
+import { useInvestment, PRICE_CHANGED_EVENT } from "@/hooks/useInvestment";
 import { useAuth } from "@/contexts/AuthContext";
 import { propertiesApi, kycApi, walletsApi } from "@/integrations/api/client";
 import { toast } from "sonner";
@@ -197,6 +197,23 @@ export default function Checkout() {
     };
   }, [propertyId]);
 
+  // Off-plan §3.4.1: the server refused a buy because the unit price changed while this page
+  // was open → reload the property so every amount on the page shows today's price; the buyer
+  // reviews it and confirms again (the payment step already shows the bilingual message).
+  useEffect(() => {
+    const onPriceChanged = (e: Event) => {
+      const detail = (e as CustomEvent<{ propertyId: string }>).detail;
+      if (detail?.propertyId !== propertyId) return;
+      setPaymentStatus("idle");
+      propertiesApi
+        .detail(propertyId)
+        .then((p) => setProperty(p))
+        .catch(() => undefined);
+    };
+    window.addEventListener(PRICE_CHANGED_EVENT, onPriceChanged);
+    return () => window.removeEventListener(PRICE_CHANGED_EVENT, onPriceChanged);
+  }, [propertyId]);
+
   // --- Real economics from the property (LOCKED policy) ---------------------- //
   const unitPrice = property ? Number(property.tokenPrice) : 0; // per-property, admin-set
   const tokenSupply = property ? Number(property.tokenSupply) : 0; // single source of truth
@@ -325,6 +342,7 @@ export default function Checkout() {
         property_id: propertyId,
         token_amount: units,
         payment_method: selectedMethod || "card",
+        expected_unit_price: unitPrice || undefined,
         ...(installmentTerms
           ? {
               is_installment: true,
@@ -426,6 +444,7 @@ export default function Checkout() {
         {selectedMethod === "card" ? (
           <StripeCardCheckout
             propertyId={propertyId}
+            unitPrice={unitPrice || undefined}
             tokenAmount={units}
             finalAmount={finalAmount}
             ready={termsAccepted && riskAccepted && !!property}
@@ -438,6 +457,7 @@ export default function Checkout() {
         ) : (
           <NowCryptoCheckout
             propertyId={propertyId}
+            unitPrice={unitPrice || undefined}
             tokenAmount={units}
             ready={termsAccepted && riskAccepted && !!property}
             installment={installmentTerms}
@@ -461,6 +481,7 @@ export default function Checkout() {
       <div className="space-y-4">
         <SukukPayment
           propertyId={propertyId}
+          unitPrice={unitPrice || undefined}
           tokenAmount={units}
           finalAmount={finalAmount}
           ready={termsAccepted && riskAccepted && !!property}
@@ -483,6 +504,7 @@ export default function Checkout() {
       <div className="space-y-4">
         <PronovaCheckout
           propertyId={propertyId}
+          unitPrice={unitPrice || undefined}
           tokenAmount={units}
           finalAmount={finalAmount}
           discount={pronovaDiscount}
@@ -514,6 +536,7 @@ export default function Checkout() {
         <WalletPayCheckout
           wallet={selectedMethod === "apple_pay" ? "apple" : "google"}
           propertyId={propertyId}
+          unitPrice={unitPrice || undefined}
           tokenAmount={units}
           finalAmount={finalAmount}
           ready={termsAccepted && riskAccepted && !!property}

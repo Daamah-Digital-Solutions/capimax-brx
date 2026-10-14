@@ -90,6 +90,40 @@ class OverPurchaseError(APIException):
     default_code = "over_purchase"
 
 
+# Off-plan §3.4.1: a purchase price holds for this long; a payment confirmed later while the
+# price (or availability) changed is refunded to the wallet instead of executed.
+DEFAULT_RESERVATION_MINUTES = 30
+
+
+class PriceChangedError(APIException):
+    """The unit price changed while the buyer's page was open (off-plan §3.4.1)."""
+
+    status_code = 409
+    default_code = "PRICE_CHANGED"
+
+    def __init__(self, current_price):
+        super().__init__(
+            detail={
+                "code": "PRICE_CHANGED",
+                "detail": "The unit price has changed. Please review the new amount and confirm again.",
+                "current_price": str(current_price),
+            }
+        )
+
+
+class PurchaseModeError(APIException):
+    """The property's off-plan payment mode doesn't allow this way of buying (off-plan §4)."""
+
+    status_code = 409
+
+    def __init__(self, code: str):
+        message = {
+            "INSTALLMENTS_ONLY": "This property is sold through installment plans only.",
+            "FULL_PAYMENT_ONLY": "This property is sold by full payment only.",
+        }[code]
+        super().__init__(detail={"code": code, "detail": message})
+
+
 # --------------------------------------------------------------------------- #
 # Fees — buyer-borne (Option A). The platform + management fee is charged to the BUYER
 # on top of the token value, from the property's ADMIN-SET rates (Property.fee_platform
@@ -169,6 +203,7 @@ def create_investment(
     down_payment_percent=None,
     n_installments=None,
     frequency="monthly",
+    expected_unit_price=None,
 ) -> dict:
     """
     Create an investment per the LOCKED token-economics policy, simulate payment,
@@ -208,6 +243,17 @@ def create_investment(
             )
 
         price = locked_prop.token_price  # Policy 1 & 6: per-property, admin-set
+        # Off-plan §3.4.1: the buyer confirms the price they SAW. If it changed while their
+        # page was open, refuse — the UI refreshes and asks them to confirm the new amount.
+        if expected_unit_price is not None and Decimal(str(expected_unit_price)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        ) != Decimal(price):
+            raise PriceChangedError(price)
+        # Off-plan §4: the property's payment mode decides installments vs full payment.
+        if is_installment and not locked_prop.allows_installments():
+            raise PurchaseModeError("FULL_PAYMENT_ONLY")
+        if not is_installment and not locked_prop.allows_full_payment():
+            raise PurchaseModeError("INSTALLMENTS_ONLY")
         amount = (Decimal(token_amount) * price).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -240,10 +286,6 @@ def create_investment(
             if payment_method not in INSTALLMENT_METHODS:
                 raise ValidationError(
                     {"payment_method": "This payment method can't fund an installment plan."}
-                )
-            if locked_prop.model != "installment":
-                raise ValidationError(
-                    {"property": "This property is not an installment-model property."}
                 )
             if down_payment_percent is None or n_installments is None:
                 raise ValidationError(
@@ -318,6 +360,14 @@ def create_investment(
             fee_amount=fee_amount,
             discount_amount=discount_amount,
             installment_plan=installment_plan,
+            # Webhook-settled (PSP) buys hold the price for the reservation window only.
+            reserved_until=(
+                timezone.now() + timezone.timedelta(minutes=getattr(
+                    settings, "INVESTMENT_RESERVATION_MINUTES", DEFAULT_RESERVATION_MINUTES
+                ))
+                if payment_method in PSP_INFLIGHT_METHODS
+                else None
+            ),
         )
 
         # Reinvestment (internal-balance funding): debit the investor's UserBalance for the
@@ -761,6 +811,68 @@ def mint_investment(investment: Investment) -> dict:
     }
 
 
+REFUND_REASONS = {
+    "expired": "the purchase had already expired before the payment arrived",
+    "price_changed": "it arrived after your 30-minute reservation and the unit price had changed",
+    "sold_out": "it arrived after your reservation and the units were no longer available",
+}
+
+
+def _late_settlement_blocker(inv: Investment):
+    """Why a confirmed payment must be refunded instead of executed — or None. Caller holds the investment lock."""
+    if inv.payment_status == PaymentStatus.FAILED:
+        return "expired"
+    if inv.reserved_until is None or timezone.now() <= inv.reserved_until:
+        return None
+    prop = Property.objects.select_for_update().get(pk=inv.property_id)
+    if Decimal(prop.token_price) != Decimal(inv.price_per_token):
+        return "price_changed"
+    if inv.token_amount > int(prop.token_supply or 0) - sold_tokens(prop):
+        return "sold_out"
+    return None  # late, but same price and still available → execute normally
+
+
+def _refund_to_wallet(inv: Investment, reason: str) -> None:
+    """Credit what the buyer paid back to their wallet; void the buy (and its pending plan)."""
+    from apps.installments.models import (
+        InstallmentPayment,
+        InstallmentPaymentStatus,
+        InstallmentPlan,
+        InstallmentPlanStatus,
+    )
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
+    from apps.wallets.services import credit_user_balance
+
+    amount = inv.settlement_amount
+    credit_user_balance(
+        inv.user, amount, source="purchase_refund", reference=str(inv.id),
+        memo=f"Refund: {inv.token_amount} {inv.token_symbol} of {inv.property_name} ({reason})",
+    )
+    inv.payment_status = PaymentStatus.FAILED
+    inv.refunded_at = timezone.now()
+    inv.refund_reason = reason
+    inv.save(update_fields=["payment_status", "refunded_at", "refund_reason", "updated_at"])
+    if inv.installment_plan_id:
+        # The down-payment never settled, so the plan never started: void it + its schedule.
+        voided = InstallmentPlan.objects.filter(
+            pk=inv.installment_plan_id, status=InstallmentPlanStatus.DRAFT
+        ).update(status=InstallmentPlanStatus.CANCELLED, updated_at=timezone.now())
+        if voided:
+            InstallmentPayment.objects.filter(
+                plan_id=inv.installment_plan_id, status=InstallmentPaymentStatus.PENDING
+            ).update(status=InstallmentPaymentStatus.CANCELLED)
+    notify(
+        inv.user, Notification.Type.PURCHASE_REFUNDED,
+        params={
+            "amount": f"{amount:,.2f}",
+            "property": inv.property_name,
+            "reason": REFUND_REASONS.get(reason, reason),
+        },
+        action_url="/wallet",
+    )
+
+
 def settle_investment(investment: Investment) -> dict:
     """
     Settle a COMPLETED buy: mark the investment `completed` (idempotent, row-locked) then
@@ -774,15 +886,18 @@ def settle_investment(investment: Investment) -> dict:
     """
     with transaction.atomic():
         inv = Investment.objects.select_for_update().get(pk=investment.pk)
-        # Webhook-safety: never resurrect an investment that is already FAILED — e.g. an
-        # abandoned attempt the stale-inflight sweep expired, or one a PSP marked failed. A
-        # late/duplicate success callback for it is logged for manual reconciliation, not
-        # completed or minted (which could double-issue against a since-retried buy).
-        if inv.payment_status == PaymentStatus.FAILED:
-            log.warning(
-                "Refusing to settle FAILED investment %s (late/duplicate callback)", inv.pk
-            )
-            return {"minted": False, "reason": "failed"}
+        if inv.refunded_at is not None:  # duplicate callback for an already-refunded buy
+            return {"minted": False, "reason": "refunded"}
+        # Webhook-safety + off-plan §3.4.1: never resurrect a FAILED investment (an abandoned
+        # attempt the stale-inflight sweep expired, or one a PSP marked failed), and never
+        # execute a payment that landed after its reservation at a since-changed price or
+        # for units no longer available. The money was really captured, so it is refunded to
+        # the buyer's wallet (idempotent via refunded_at) instead of being left stuck.
+        blocker = _late_settlement_blocker(inv)
+        if blocker:
+            _refund_to_wallet(inv, blocker)
+            log.warning("Refunded investment %s to wallet instead of settling (%s)", inv.pk, blocker)
+            return {"minted": False, "reason": f"refunded_{blocker}"}
         if inv.payment_status != PaymentStatus.COMPLETED:
             inv.payment_status = PaymentStatus.COMPLETED
             inv.save(update_fields=["payment_status", "updated_at"])

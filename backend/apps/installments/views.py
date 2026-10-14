@@ -32,7 +32,7 @@ from apps.payments.services import get_or_create_payment
 from apps.payments.views import crypto_min_amount_block
 
 log = logging.getLogger(__name__)
-from apps.properties.models import Property, PropertyModelType
+from apps.properties.models import Property
 from apps.wallets.models import OwnershipToken
 
 from .models import (
@@ -438,10 +438,11 @@ class InstallmentPreviewView(APIView):
                 {"detail": "Property not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        # Only installment-model properties can be previewed (mirrors build_installment_plan).
-        if prop.model != PropertyModelType.INSTALLMENT.value:
+        # Only properties sold through installment plans can be previewed (mirrors
+        # build_installment_plan; off-plan §4 payment mode).
+        if not prop.allows_installments():
             return Response(
-                {"property": "This property is not an installment-model property."},
+                {"property": "This property is not sold through installment plans."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

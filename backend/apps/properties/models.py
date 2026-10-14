@@ -128,6 +128,17 @@ class ExitAvailability(models.TextChoices):
     NONE = "none", _("None")
 
 
+class OffplanPayment(models.TextChoices):
+    """How investors may pay for an UNDER-CONSTRUCTION property (off-plan model §4)."""
+
+    INSTALLMENTS = "installments", _("Installments only (down payment + monthly)")
+    FULL = "full", _("Full payment only (at the open phase price)")
+    BOTH = "both", _("Investor chooses")
+
+
+CONSTRUCTION_CATEGORIES = ("construction", "construction_portfolio")
+
+
 class RiskLevel(models.TextChoices):
     LOW = "low", _("Low")
     MEDIUM = "medium", _("Medium")
@@ -228,6 +239,12 @@ class Property(models.Model):
     duration = models.CharField(max_length=40)
     duration_ar = models.CharField(max_length=40)
 
+    # Off-plan purchase mode (ignored for ready properties, which are always paid in full).
+    offplan_payment = models.CharField(
+        max_length=16, choices=OffplanPayment.choices, default=OffplanPayment.INSTALLMENTS,
+        help_text="How investors pay for an under-construction property.",
+    )
+
     # exit & liquidity
     exit_eligible = models.BooleanField(default=False)
     exit_availability = models.CharField(max_length=16, choices=ExitAvailability.choices)
@@ -318,6 +335,22 @@ class Property(models.Model):
         # %). From then on the price only moves via properties.pricing.record_price.
         if self.total_value is not None and self.token_price and not self.price_locked():
             self.token_supply = int(self.total_value / self.token_price)
+
+    @property
+    def is_under_construction(self) -> bool:
+        return self.category in CONSTRUCTION_CATEGORIES
+
+    def allows_installments(self) -> bool:
+        """Off-plan §4: installment plans only on under-construction properties that offer them."""
+        return self.is_under_construction and self.offplan_payment in (
+            OffplanPayment.INSTALLMENTS, OffplanPayment.BOTH,
+        )
+
+    def allows_full_payment(self) -> bool:
+        """Ready properties are always paid in full; off-plan ones only if the mode allows it."""
+        return not self.is_under_construction or self.offplan_payment in (
+            OffplanPayment.FULL, OffplanPayment.BOTH,
+        )
 
     def price_locked(self) -> bool:
         """True once the property has primary sales or any recorded price change."""

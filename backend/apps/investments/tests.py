@@ -157,7 +157,8 @@ class TokenEconomicsTests(TestCase):
 
     def test_settle_refuses_failed_investment(self):
         """Webhook-safety: settle_investment never completes/mints a FAILED (expired) one —
-        a late/duplicate success callback can't resurrect an abandoned attempt."""
+        a late success callback can't resurrect an abandoned attempt. The money WAS captured,
+        so it is refunded to the buyer's wallet (off-plan §3.4.1) instead of being stuck."""
         from .services import settle_investment
 
         prop = _make_property("pfailedsettle", total_value=1_000_000, token_price=100, deployed=True)
@@ -169,10 +170,14 @@ class TokenEconomicsTests(TestCase):
 
         result = settle_investment(inv)
         self.assertFalse(result["minted"])
-        self.assertEqual(result["reason"], "failed")
+        self.assertEqual(result["reason"], "refunded_expired")
         inv.refresh_from_db()
         self.assertEqual(inv.payment_status, PaymentStatus.FAILED)  # not resurrected
         self.assertFalse(inv.tokens_minted)
+        self.assertIsNotNone(inv.refunded_at)
+        from apps.wallets.models import UserBalance
+
+        self.assertEqual(UserBalance.objects.get(user=self.user).current_balance, inv.settlement_amount)
 
     def test_provisional_certificate_uses_real_location_not_hardcoded(self):
         prop = _make_property("pcert", total_value=1_000_000, token_price=100)
@@ -720,14 +725,16 @@ class PronovaDiscountTests(TestCase):
         self.assertEqual(stale.payment_status, PaymentStatus.FAILED)
 
     def test_pronova_installment_rejected(self):
-        # Pronova is full-buy only — the installment gate (card/crypto) rejects it.
-        from rest_framework.exceptions import ValidationError
+        # This property isn't sold through installment plans, so the off-plan payment-mode
+        # gate rejects a plan on it (whatever the method) with a machine-readable code.
+        from .services import PurchaseModeError
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(PurchaseModeError) as ctx:
             create_investment(
                 user=self.investor, prop=self.prop, token_amount=3, payment_method="pronova",
                 is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
             )
+        self.assertEqual(ctx.exception.detail["code"], "FULL_PAYMENT_ONLY")
 
     def test_serializer_exposes_discount_amount(self):
         from .serializers import InvestmentSerializer

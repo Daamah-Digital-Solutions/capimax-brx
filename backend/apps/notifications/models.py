@@ -31,6 +31,8 @@ class Notification(models.Model):
         # Wallet / investing.
         WALLET_CREATED = "wallet_created", _("Wallet created")
         INVESTMENT_MINTED = "investment_minted", _("Investment minted")
+        # Off-plan §3.4.1: a late payment at a stale price is refunded to the wallet.
+        PURCHASE_REFUNDED = "purchase_refunded", _("Purchase refunded to wallet")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

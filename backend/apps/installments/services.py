@@ -24,7 +24,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.properties.models import Property, PropertyModelType
+from apps.properties.models import Property
 
 from .models import (
     InstallmentFrequency,
@@ -137,11 +137,11 @@ def build_installment_plan(
 
     NO money, NO mint, NO token movement — this is purely the plan/schedule foundation.
     """
-    # Eligibility: only installment-model properties (Property.model field,
-    # apps/properties/models.py:147 / PropertyModelType.INSTALLMENT).
-    if prop.model != PropertyModelType.INSTALLMENT.value:
+    # Eligibility (off-plan §4): an under-construction property whose payment mode offers
+    # installment plans (Property.offplan_payment = installments | both).
+    if not prop.allows_installments():
         raise ValidationError(
-            {"property": "This property is not an installment-model property."}
+            {"property": "This property is not sold through installment plans."}
         )
 
     sched = compute_schedule(

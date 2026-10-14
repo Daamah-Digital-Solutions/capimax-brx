@@ -55,6 +55,7 @@ class InvestmentCreateView(APIView):
             down_payment_percent=data.get("down_payment_percent"),
             n_installments=data.get("n_installments"),
             frequency=data.get("frequency", "monthly"),
+            expected_unit_price=data.get("expected_unit_price"),
         )
         investment = result["investment"]
         return Response(

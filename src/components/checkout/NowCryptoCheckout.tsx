@@ -20,6 +20,8 @@ import { toast } from "sonner";
 export interface NowCryptoCheckoutProps {
   propertyId: string;
   tokenAmount: number;
+  /** Unit price shown to the buyer — sent so the server can refuse a changed price. */
+  unitPrice?: number;
   ready: boolean;
   /** Terms & risk declarations, rendered inline directly ABOVE the Pay button. */
   declarations?: ReactNode;
@@ -79,6 +81,7 @@ export function NowCryptoCheckout(props: NowCryptoCheckoutProps) {
       const created = await processInvestment({
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
+        expected_unit_price: props.unitPrice,
         payment_method: "crypto",
         ...(props.installment
           ? {

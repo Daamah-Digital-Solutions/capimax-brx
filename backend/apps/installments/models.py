@@ -32,6 +32,9 @@ class InstallmentPlanStatus(models.TextChoices):
     ACTIVE = "active", _("Active")        # down-payment cleared (later wave)
     COMPLETED = "completed", _("Completed")  # all installments paid (later wave)
     DEFAULTED = "defaulted", _("Defaulted")  # missed beyond policy (later wave)
+    # Off-plan §3.4.1: the down-payment arrived too late at a changed price → refunded, the
+    # plan never started.
+    CANCELLED = "cancelled", _("Cancelled")
 
 
 class InstallmentPaymentStatus(models.TextChoices):

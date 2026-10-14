@@ -23,6 +23,8 @@ import { toast } from "sonner";
 export interface StripeCardCheckoutProps {
   propertyId: string;
   tokenAmount: number;
+  /** Unit price shown to the buyer — sent so the server can refuse a changed price. */
+  unitPrice?: number;
   finalAmount: number;
   /** True only when the terms/risk gating in the parent is satisfied. */
   ready: boolean;
@@ -75,6 +77,7 @@ function CardForm(props: StripeCardCheckoutProps) {
       const created = await processInvestment({
         property_id: props.propertyId,
         token_amount: props.tokenAmount,
+        expected_unit_price: props.unitPrice,
         payment_method: "card",
         ...(props.installment
           ? {

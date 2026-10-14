@@ -98,6 +98,12 @@ class Investment(models.Model):
         related_name="investments",
     )
 
+    # Off-plan §3.4.1: a PSP purchase holds its price for a short reservation. A payment that
+    # lands after `reserved_until` while the price (or availability) changed is NOT executed
+    # at the old price — it is refunded to the buyer's wallet (`refunded_at`, idempotent).
+    reserved_until = models.DateTimeField(null=True, blank=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
+    refund_reason = models.CharField(max_length=40, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

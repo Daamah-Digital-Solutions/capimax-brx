@@ -32,10 +32,13 @@ from .services import build_installment_plan, compute_schedule
 
 
 def _make_property(slug, *, model="installment", category="construction",
-                   total_value="5000000", token_price="100"):
+                   total_value="5000000", token_price="100", offplan_payment="both"):
+    # Existing installment-model properties accept a plan OR a full payment ("both" — what
+    # properties 0012 preserved); tests needing a stricter mode pass it explicitly.
     p = Property(**_valid_property_kwargs(
         slug=slug, model=model, category=category,
         total_value=Decimal(str(total_value)), token_price=Decimal(str(token_price)),
+        offplan_payment=offplan_payment,
     ))
     p.save()
     return p
@@ -181,6 +184,7 @@ def _deployed_installment_property(slug, owner, *, total_value="10000", token_pr
         slug=slug, model="installment", category="construction",
         total_value=Decimal(str(total_value)), token_price=Decimal(str(token_price)),
         is_published=True,
+        offplan_payment="both",  # sells as a plan OR in full, like migrated installment props
     ))
     p.submitted_by = owner
     if fees0:
