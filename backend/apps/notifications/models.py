@@ -33,6 +33,9 @@ class Notification(models.Model):
         INVESTMENT_MINTED = "investment_minted", _("Investment minted")
         # Off-plan §3.4.1: a late payment at a stale price is refunded to the wallet.
         PURCHASE_REFUNDED = "purchase_refunded", _("Purchase refunded to wallet")
+        # Off-plan §3.3.4: a new unit price was recorded for a property the user holds or
+        # is paying off in installments.
+        UNIT_PRICE_CHANGED = "unit_price_changed", _("Unit price changed")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

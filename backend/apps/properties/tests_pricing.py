@@ -236,3 +236,67 @@ class UnitPricesAdminTests(TestCase):
         page = self.client.get(f"/admin/properties/property/{self.prop.pk}/change/")
         self.assertContains(page, "Locked — change it from Properties › Unit prices")
         self.assertNotContains(page, 'name="token_price"')
+
+
+class PriceChangeNotificationTests(TestCase):
+    """§3.3.4: holders, active installment payers and open-listing sellers are notified, once."""
+
+    def setUp(self):
+        from apps.installments.models import InstallmentPlan, InstallmentPlanStatus
+        from apps.secondary_market.models import SecondaryMarketListing
+
+        self.prop = _offplan()
+        mk = lambda e: User.objects.create_user(email=e, password="pw-12345-strong")  # noqa: E731
+        self.holder, self.payer, self.seller, self.stranger = (
+            mk("holder@ex.com"), mk("payer@ex.com"), mk("seller@ex.com"), mk("stranger@ex.com"),
+        )
+        wallet, _ = get_or_create_custodial_wallet(self.holder)
+        OwnershipToken.objects.create(
+            wallet=wallet, property_id=self.prop.slug, property_name=self.prop.name,
+            token_symbol="BRX", token_amount=5, token_value_usd=Decimal("500"),
+        )
+        # The seller also holds units (an open listing escrows them) → still ONE notification.
+        swallet, _ = get_or_create_custodial_wallet(self.seller)
+        OwnershipToken.objects.create(
+            wallet=swallet, property_id=self.prop.slug, property_name=self.prop.name,
+            token_symbol="BRX", token_amount=3, token_value_usd=Decimal("300"),
+        )
+        SecondaryMarketListing.objects.create(
+            seller=self.seller, property_id=self.prop.slug, property_name=self.prop.name,
+            token_symbol="BRX", token_amount=3, unit_price=Decimal("120"), total_value=Decimal("360"),
+        )
+        InstallmentPlan.objects.create(
+            investor=self.payer, property=self.prop, property_name=self.prop.name,
+            total_amount=Decimal("1000"), down_payment_amount=Decimal("200"),
+            down_payment_percent=Decimal("20"), number_of_installments=8,
+            installment_amount=Decimal("100"), frequency="monthly", duration_months=8,
+            status=InstallmentPlanStatus.ACTIVE,
+        )
+
+    def _notified(self):
+        from apps.notifications.models import Notification
+
+        return Notification.objects.filter(type=Notification.Type.UNIT_PRICE_CHANGED)
+
+    def test_the_right_people_are_notified_once_after_commit(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            record_price(self.prop, "110", by=_admin(), label="Phase 2")
+        rows = self._notified()
+        self.assertEqual(
+            sorted(rows.values_list("user__email", flat=True)),
+            ["holder@ex.com", "payer@ex.com", "seller@ex.com"],
+        )
+        seller_params = rows.get(user=self.seller).params
+        self.assertEqual(
+            (seller_params["old_price"], seller_params["new_price"], seller_params["change_pct"]),
+            ("100.00", "110.00", "+10.00"),
+        )
+        self.assertIn("listing keeps the price you set", seller_params["listing_note"])
+        self.assertEqual(rows.get(user=self.holder).params["listing_note"], "")
+        self.assertEqual(rows.get(user=self.holder).params["label_suffix"], " — Phase 2")
+
+    def test_a_rejected_price_notifies_nobody(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            with self.assertRaises(PriceError):
+                record_price(self.prop, "100", by=_admin())  # same price
+        self.assertFalse(self._notified().exists())

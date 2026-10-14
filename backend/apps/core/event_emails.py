@@ -91,6 +91,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_path": "/portfolio",
         "outro": "",
     },
+    "unit_price_changed": {
+        "subject": "New unit price for {property}",
+        "heading": "Unit price updated",
+        "intro": "The unit price of {property} has been updated from ${old_price} to ${new_price} ({change_pct}%){label_suffix}. Your holding is now valued at the new price. Installment plans you already started keep their locked price.{listing_note}",
+        "cta_label": "View the property",
+        "cta_path": "/marketplace",
+        "outro": "Prices can go down as well as up.",
+    },
     "purchase_refunded": {
         "subject": "Your payment was refunded to your wallet",
         "heading": "Payment refunded",

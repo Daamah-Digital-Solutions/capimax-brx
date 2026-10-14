@@ -473,6 +473,7 @@ class UnitPriceAdmin(admin.ModelAdmin):
                     "Applies immediately to new buyers, every holder's position value and the "
                     "offering total (on unsold units only). Live installment plans keep their "
                     "locked price. The minimum investment stays the same number of units. "
+                    "Holders, installment payers and listing sellers are notified (in-app + email). "
                     "A mistake is fixed by recording the right price."
                 ),
                 "fields": ("new_price", "phase_label", "investor_note", "confirm_large_change"),

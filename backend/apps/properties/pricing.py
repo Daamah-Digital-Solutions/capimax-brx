@@ -125,6 +125,10 @@ def record_price(
             )
         )
 
+        # §3.3.4: tell holders, installment payers and sellers with open listings — after the
+        # commit, so a rolled-back change never notifies anyone.
+        transaction.on_commit(lambda: notify_price_change(p.pk, entry.pk))
+
         if by is not None:
             LogEntry.objects.create(
                 user_id=by.pk,
@@ -139,6 +143,62 @@ def record_price(
             )
     prop.refresh_from_db()
     return entry
+
+
+LISTING_NOTE = (
+    " Your open secondary-market listing keeps the price you set — cancel and relist it"
+    " if you want to change it."
+)
+
+
+def notify_price_change(property_pk, entry_pk) -> int:
+    """
+    Notify everyone affected by a recorded price (in-app + email): holders of the property's
+    units, investors with an active installment plan on it, and sellers with an open
+    secondary listing (whose listing keeps their own price). One notification per person.
+    Returns how many were notified.
+    """
+    from apps.core.models import User
+    from apps.installments.models import InstallmentPlan, InstallmentPlanStatus
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
+    from apps.secondary_market.models import SecondaryMarketListing
+    from apps.wallets.models import OwnershipToken
+
+    prop = Property.objects.get(pk=property_pk)
+    entry = PropertyPrice.objects.get(pk=entry_pk)
+    holders = set(
+        OwnershipToken.objects.filter(property_id=prop.slug, token_amount__gt=0)
+        .values_list("wallet__user_id", flat=True)
+    )
+    payers = set(
+        InstallmentPlan.objects.filter(property=prop, status=InstallmentPlanStatus.ACTIVE)
+        .values_list("investor_id", flat=True)
+    )
+    sellers = set(
+        SecondaryMarketListing.objects.filter(
+            property_id=prop.slug, status=SecondaryMarketListing.Status.LISTED
+        ).values_list("seller_id", flat=True)
+    )
+    change = (
+        (entry.price - entry.previous_price) / entry.previous_price * 100
+    ).quantize(_CENT, rounding=ROUND_HALF_UP) if entry.previous_price else Decimal("0")
+    base_params = {
+        "property": prop.name,
+        "old_price": f"{entry.previous_price:,.2f}",
+        "new_price": f"{entry.price:,.2f}",
+        "change_pct": f"{change:+}",
+        "label_suffix": f" — {entry.label}" if entry.label else "",
+    }
+    count = 0
+    for user in User.objects.filter(pk__in=(holders | payers | sellers) - {None}):
+        notify(
+            user, Notification.Type.UNIT_PRICE_CHANGED,
+            params={**base_params, "listing_note": LISTING_NOTE if user.pk in sellers else ""},
+            action_url=f"/property/{prop.slug}",
+        )
+        count += 1
+    return count
 
 
 # --------------------------------------------------------------------------- #
