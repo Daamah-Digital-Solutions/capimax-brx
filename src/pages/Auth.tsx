@@ -69,6 +69,12 @@ export default function Auth() {
     }
   }, [user, navigate, postAuthTarget]);
 
+  // The API answers 429 "Request was throttled…" after too many login/register attempts.
+  const tooManyAttemptsMessage =
+    language === "ar"
+      ? "محاولات كثيرة. انتظر دقيقة ثم حاول مرة أخرى."
+      : "Too many attempts. Please wait a minute and try again.";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -108,7 +114,9 @@ export default function Auth() {
 
         if (error) {
           let errorMessage = error.message;
-          if (error.message.includes("already registered")) {
+          if (/throttled/i.test(error.message)) {
+            errorMessage = tooManyAttemptsMessage;
+          } else if (error.message.includes("already registered")) {
             errorMessage = language === "ar" ? "هذا البريد الإلكتروني مسجل بالفعل" : "This email is already registered";
           }
           toast({
@@ -134,7 +142,9 @@ export default function Auth() {
 
         if (error) {
           let errorMessage = error.message;
-          if (error.message.includes("Invalid login credentials")) {
+          if (/throttled/i.test(error.message)) {
+            errorMessage = tooManyAttemptsMessage;
+          } else if (error.message.includes("Invalid login credentials")) {
             errorMessage = language === "ar" ? "بيانات الدخول غير صحيحة" : "Invalid email or password";
           }
           toast({

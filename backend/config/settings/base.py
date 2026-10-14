@@ -107,6 +107,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",  # required by allauth
+    "apps.core.throttling.AdminLoginRateLimitMiddleware",  # admin login brute-force limit
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -212,6 +213,36 @@ REST_FRAMEWORK = {
     # Phase 2: emit Decimals as JSON numbers (not strings). The property frontend
     # uses them numerically (e.g. totalValue.toLocaleString(), `${fee}%`). SPEC §3.3.
     "COERCE_DECIMAL_TO_STRING": False,
+    # Trusted reverse proxies in front of Django (prod: nginx → 1). Lets throttles key on
+    # the real client IP from X-Forwarded-For instead of nginx's 127.0.0.1.
+    "NUM_PROXIES": env.int("DRF_NUM_PROXIES", default=0),
+}
+
+# --------------------------------------------------------------------------- #
+# Brute-force protection for auth (apps/core/throttling.py). Per client IP and, where
+# an email is submitted, per account. Off unless AUTH_THROTTLE_ENABLED (prod: on).
+# --------------------------------------------------------------------------- #
+AUTH_THROTTLE_ENABLED = env.bool("AUTH_THROTTLE_ENABLED", default=True)
+AUTH_THROTTLE_RATES = {
+    "auth_login": "10/min",
+    "auth_login_account": "20/hour",
+    "auth_register": "10/hour",
+    "auth_password_reset": "5/hour",
+    "auth_password_reset_account": "5/hour",
+    "auth_password_reset_confirm": "20/hour",
+    "auth_token_refresh": "120/min",
+    "auth_oauth": "30/min",
+    "auth_email_verify": "30/hour",
+    "admin_login": "10/min",
+}
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    # Throttle counters (prod overrides with a cache shared by all gunicorn workers).
+    "throttle": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "auth-throttle",
+        "TIMEOUT": 900,
+    },
 }
 
 SIMPLE_JWT = {

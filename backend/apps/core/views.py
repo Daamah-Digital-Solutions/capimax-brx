@@ -23,7 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .emails import send_password_reset_email, send_verification_email
 from .oauth import GoogleTokenError, verify_google_id_token
@@ -34,6 +34,7 @@ from .serializers import (
     RegisterSerializer,
     UserSerializer,
 )
+from .throttling import AuthAccountThrottle, AuthIPThrottle
 from .tokens import email_verification_token, password_reset_token
 
 User = get_user_model()
@@ -48,6 +49,9 @@ class RegisterView(generics.CreateAPIView):
     """POST /api/auth/register/ — public. SPEC §4 / §5.2."""
 
     permission_classes = [AllowAny]
+    # Brute-force protection (apps/core/throttling.py).
+    throttle_classes = [AuthIPThrottle]
+    throttle_scope = "auth_register"
     serializer_class = RegisterSerializer
 
     def create(self, request, *args, **kwargs):
@@ -88,6 +92,10 @@ class LoginView(TokenObtainPairView):
     """POST /api/auth/login/ — public."""
 
     permission_classes = [AllowAny]
+    # Brute-force protection (apps/core/throttling.py).
+    throttle_classes = [AuthIPThrottle, AuthAccountThrottle]
+    throttle_scope = "auth_login"
+    throttle_account_scope = "auth_login_account"
     serializer_class = CustomTokenObtainPairSerializer
 
 
@@ -147,10 +155,21 @@ class SessionView(APIView):
         )
 
 
+class ThrottledTokenRefreshView(TokenRefreshView):
+    """POST /api/auth/token/refresh/ — SimpleJWT refresh with a (generous) per-IP limit."""
+
+    throttle_classes = [AuthIPThrottle]
+    throttle_scope = "auth_token_refresh"
+
+
 class PasswordResetRequestView(APIView):
     """POST /api/auth/password/reset/ — always 200 (no account enumeration). SPEC §5.2."""
 
     permission_classes = [AllowAny]
+    # Brute-force protection (apps/core/throttling.py).
+    throttle_classes = [AuthIPThrottle, AuthAccountThrottle]
+    throttle_scope = "auth_password_reset"
+    throttle_account_scope = "auth_password_reset_account"
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -166,6 +185,9 @@ class PasswordResetConfirmView(APIView):
     """POST /api/auth/password/reset/confirm/ — set a new password from a token."""
 
     permission_classes = [AllowAny]
+    # Brute-force protection (apps/core/throttling.py).
+    throttle_classes = [AuthIPThrottle]
+    throttle_scope = "auth_password_reset_confirm"
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -187,6 +209,9 @@ class EmailVerifyConfirmView(APIView):
     """POST /api/auth/email/verify/ — confirm an email-verification token. SPEC §5.2."""
 
     permission_classes = [AllowAny]
+    # Brute-force protection (apps/core/throttling.py).
+    throttle_classes = [AuthIPThrottle]
+    throttle_scope = "auth_email_verify"
 
     def post(self, request):
         serializer = EmailVerificationConfirmSerializer(data=request.data)
@@ -216,6 +241,9 @@ class GoogleOAuthView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # Brute-force protection (apps/core/throttling.py).
+    throttle_classes = [AuthIPThrottle]
+    throttle_scope = "auth_oauth"
 
     def post(self, request):
         token = request.data.get("id_token") or request.data.get("credential")

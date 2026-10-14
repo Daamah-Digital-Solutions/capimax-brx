@@ -29,3 +29,6 @@ EMAIL_BACKEND = env(
 
 # Convenience for local frontend dev.
 CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=False)
+
+# Auth throttling off locally (and in the general test suite); throttle tests enable it.
+AUTH_THROTTLE_ENABLED = env.bool("AUTH_THROTTLE_ENABLED", default=False)

@@ -12,6 +12,17 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 PUBLIC_API_ORIGIN = env("PUBLIC_API_ORIGIN", default="https://api.capimaxbrx.com")
 
+# Brute-force protection: nginx is the one trusted proxy, and the throttle counters live
+# in a file cache shared by every gunicorn worker (per-process memory would let each
+# worker count separately).
+REST_FRAMEWORK["NUM_PROXIES"] = env.int("DRF_NUM_PROXIES", default=1)  # noqa: F405
+AUTH_THROTTLE_ENABLED = env.bool("AUTH_THROTTLE_ENABLED", default=True)
+CACHES["throttle"] = {  # noqa: F405
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": env("THROTTLE_CACHE_DIR", default="/var/tmp/capimax-throttle"),
+    "TIMEOUT": 900,
+}
+
 # --- Security hardening (fintech; SECURITY-FIRST). ---
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
