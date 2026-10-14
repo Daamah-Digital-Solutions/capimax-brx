@@ -19,6 +19,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from . import pricing
 from .filters import PropertyFilter
 from .models import Property
 from .serializers import (
@@ -79,6 +80,14 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
         """Index featured carousel."""
         qs = self.get_queryset().filter(is_featured=True)
         return Response(PropertyListSerializer(qs, many=True, context=self.get_serializer_context()).data)
+
+    @action(detail=True)
+    def prices(self, request, slug=None):
+        """
+        GET /api/properties/{slug}/prices/ — off-plan unit price: launch, current, % change
+        since launch, current phase name, and every recorded point (public).
+        """
+        return Response(pricing.price_summary(self.get_object()))
 
     @action(detail=False)
     def funded(self, request):

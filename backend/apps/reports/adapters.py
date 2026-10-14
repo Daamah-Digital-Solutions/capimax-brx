@@ -141,14 +141,15 @@ def distributions_tax(user, *, year=None, **_):
 def owner_earnings(user, *, year=None, period="", **_):
     from django.db.models import Count, Sum
 
-    from apps.investments.models import Investment, PaymentStatus
+    from apps.investments.models import RESALE_PAYMENT_METHODS, Investment, PaymentStatus
     from apps.properties.models import Property
 
     rows, total_net = [], Decimal("0")
     for prop in Property.objects.filter(submitted_by=user):
+        # Primary sales only (resales never paid the owner).
         agg = Investment.objects.filter(
             property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
-        ).aggregate(
+        ).exclude(payment_method__in=RESALE_PAYMENT_METHODS).aggregate(
             gross=Sum("amount_invested"), units=Sum("token_amount"),
             investors=Count("user", distinct=True),
         )

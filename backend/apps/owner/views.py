@@ -433,7 +433,7 @@ class OwnerEarningsView(APIView):
 
         from django.db.models import Count, Sum
 
-        from apps.investments.models import Investment, PaymentStatus
+        from apps.investments.models import RESALE_PAYMENT_METHODS, Investment, PaymentStatus
 
         start = _period_start(request.query_params.get("period") or "all")
 
@@ -443,9 +443,11 @@ class OwnerEarningsView(APIView):
         total_investors = 0
         # Only the caller's owned (submitted_by) properties.
         for prop in _owner_properties(request.user):
+            # Primary sales only: resale rows are other holders trading already-sold
+            # tokens — the owner never received that money.
             inv_qs = Investment.objects.filter(
                 property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
-            )
+            ).exclude(payment_method__in=RESALE_PAYMENT_METHODS)
             if start is not None:
                 inv_qs = inv_qs.filter(created_at__date__gte=start)
             agg = inv_qs.aggregate(
@@ -568,16 +570,18 @@ class OwnerInvestorsView(APIView):
 
         from django.db.models import Count, Sum
 
-        from apps.investments.models import Investment, PaymentStatus
+        from apps.investments.models import RESALE_PAYMENT_METHODS, Investment, PaymentStatus
 
         start = _period_start(request.query_params.get("period") or "all")
 
         by_property = []
         investor_map: dict = {}  # user_id -> aggregated position across the owner's props
         for prop in _owner_properties(request.user):
+            # Primary sales only: resale rows are other holders trading already-sold
+            # tokens — the owner never received that money.
             inv_qs = Investment.objects.filter(
                 property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
-            )
+            ).exclude(payment_method__in=RESALE_PAYMENT_METHODS)
             if start is not None:
                 inv_qs = inv_qs.filter(created_at__date__gte=start)
 

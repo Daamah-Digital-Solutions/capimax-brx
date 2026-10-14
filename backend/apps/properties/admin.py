@@ -7,8 +7,11 @@ Per-model detail is edited inline on the Property page: the OneToOne blocks
 (installment/future/option/shared/spv/token/financials) as stacked inlines, and the
 repeating blocks (phases/portfolio assets/reports/documents) as tabular inlines.
 """
+from django import forms
 from django.contrib import admin, messages
 from django.utils.html import format_html
+
+from . import pricing
 
 from .models import (
     Amenity,
@@ -27,6 +30,8 @@ from .models import (
     PropertyFinancials,
     PropertyImage,
     PropertyPhase,
+    PropertyPrice,
+    PropertyUnitPrice,
     RiskFactor,
     SharedOwnership,
     SPVRecord,
@@ -205,6 +210,20 @@ class PropertyAdmin(admin.ModelAdmin):
     def hero_preview(self, obj):
         return _thumb(obj.hero_image_url() if obj and obj.pk else "", height=110)
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        # §3.5: once there are holders or a recorded price, the price (and the offering
+        # total it drives) only change via "Unit prices", so every change is in the history.
+        if obj is not None and obj.price_locked():
+            fields += ["token_price", "total_value"]
+        return fields
+
+    @admin.display(description="Price")
+    def price_lock_note(self, obj):
+        if obj is not None and obj.pk and obj.price_locked():
+            return "Locked — change it from Properties › Unit prices (keeps the price history)."
+        return "Editable here until the first sale or recorded price."
+
     @admin.action(description="Deploy token contract to BSC Testnet (one per property)")
     def deploy_token_contract(self, request, queryset):
         """
@@ -236,7 +255,10 @@ class PropertyAdmin(admin.ModelAdmin):
             )
     # category + token_supply are AUTO-DERIVED on save (from model / total_value) so
     # they can never desync — they are read-only here. See Property._sync_derived.
-    readonly_fields = ("id", "category", "token_supply", "created_at", "updated_at", "hero_preview")
+    readonly_fields = (
+        "id", "category", "token_supply", "created_at", "updated_at", "hero_preview",
+        "price_lock_note",
+    )
     inlines = [
         PropertyImageInline,
         InstallmentScheduleInline,
@@ -293,6 +315,7 @@ class PropertyAdmin(admin.ModelAdmin):
                 ),
                 "fields": (
                     ("total_value", "token_price", "token_supply"),
+                    "price_lock_note",
                     ("future_token_price", "min_investment"),
                     ("expected_yield", "expected_growth"),
                     ("funded", "investors"),
@@ -323,3 +346,196 @@ class PropertyAdmin(admin.ModelAdmin):
         ),
         ("System", {"classes": ("collapse",), "fields": ("id", "created_at", "updated_at")}),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Unit prices (off-plan model §3.2) — the only way to change a live property's price.
+# Full admins only. Each save appends to the immutable price history.
+# --------------------------------------------------------------------------- #
+class PriceHistoryInline(admin.TabularInline):
+    model = PropertyPrice
+    extra = 0
+    can_delete = False
+    fields = ("created_at", "previous_price", "price", "label", "note", "created_by")
+    readonly_fields = fields
+    ordering = ("-created_at", "-id")
+    verbose_name = "Price change"
+    verbose_name_plural = "Price history (permanent — cannot be edited or deleted)"
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class UnitPriceForm(forms.ModelForm):
+    new_price = forms.DecimalField(
+        max_digits=12, decimal_places=2, required=False, label="New unit price (USD)",
+        help_text="Leave empty to keep the current price.",
+    )
+    phase_label = forms.CharField(
+        max_length=80, required=False, label="Phase name (optional)",
+        help_text="e.g. Phase 2 — shown to investors with the new price.",
+    )
+    investor_note = forms.CharField(
+        max_length=280, required=False, label="Note to investors (optional)",
+    )
+    confirm_large_change = forms.BooleanField(
+        required=False, label="I confirm a change of more than 25%",
+    )
+
+    class Meta:
+        model = PropertyUnitPrice
+        fields = ()
+
+    def __init__(self, *args, **kwargs):
+        self.request_user = kwargs.pop("request_user", None)
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        data = super().clean()
+        if data.get("new_price") is None:
+            return data
+        try:
+            data["new_price"] = pricing.validate_new_price(
+                self.instance, data["new_price"], by=self.request_user,
+                confirm_large=bool(data.get("confirm_large_change")),
+            )
+        except pricing.PriceError as exc:
+            field = "confirm_large_change" if exc.code == "large_change" else "new_price"
+            self.add_error(field, exc.message)
+        return data
+
+
+@admin.register(PropertyUnitPrice)
+class UnitPriceAdmin(admin.ModelAdmin):
+    form = UnitPriceForm
+    inlines = [PriceHistoryInline]
+    list_display = (
+        "name", "slug", "category", "current_price", "launch_price_display",
+        "change_since_launch", "last_change", "price_due",
+    )
+    list_filter = ("category",)
+    search_fields = ("name", "name_ar", "slug")
+    ordering = ("display_order", "name")
+    readonly_fields = (
+        "name", "slug", "current_price", "launch_price_display", "change_since_launch",
+        "last_change", "token_supply", "sold_units", "unsold_units", "total_value",
+        "min_investment",
+    )
+    fieldsets = (
+        (
+            "Current price",
+            {
+                "fields": (
+                    ("name", "slug"),
+                    ("current_price", "launch_price_display", "change_since_launch"),
+                    ("token_supply", "sold_units", "unsold_units"),
+                    ("total_value", "min_investment"),
+                    "last_change",
+                )
+            },
+        ),
+        (
+            "Record a new price",
+            {
+                "description": (
+                    "Applies immediately to new buyers, every holder's position value and the "
+                    "offering total (on unsold units only). Live installment plans keep their "
+                    "locked price. The minimum investment stays the same number of units. "
+                    "A mistake is fixed by recording the right price."
+                ),
+                "fields": ("new_price", "phase_label", "investor_note", "confirm_large_change"),
+            },
+        ),
+    )
+
+    # Only published properties are priced here; drafts use the property editor (§3.2).
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(is_published=True)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form_class = super().get_form(request, obj, **kwargs)
+
+        class _Form(form_class):
+            def __init__(self, *args, **kw):
+                kw["request_user"] = request.user
+                super().__init__(*args, **kw)
+
+        return _Form
+
+    # --- full admins only ------------------------------------------------- #
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        new = form.cleaned_data.get("new_price")
+        if new is None:
+            return
+        try:
+            entry = pricing.record_price(
+                obj, new, by=request.user,
+                label=form.cleaned_data.get("phase_label", ""),
+                note=form.cleaned_data.get("investor_note", ""),
+                confirm_large=bool(form.cleaned_data.get("confirm_large_change")),
+            )
+        except pricing.PriceError as exc:  # raced with another change after validation
+            self.message_user(request, exc.message, messages.ERROR)
+            return
+        self.message_user(
+            request,
+            f"New unit price recorded for {obj.name}: {entry.previous_price} → {entry.price}.",
+            messages.SUCCESS,
+        )
+
+    # --- columns ----------------------------------------------------------- #
+    @admin.display(description="Current price")
+    def current_price(self, obj):
+        return obj.token_price
+
+    @admin.display(description="Launch price")
+    def launch_price_display(self, obj):
+        return obj.launch_price or obj.token_price
+
+    @admin.display(description="Since launch")
+    def change_since_launch(self, obj):
+        return f"{pricing.change_since_launch_pct(obj):+}%"
+
+    @admin.display(description="Last price change")
+    def last_change(self, obj):
+        last = pricing.last_price_change(obj)
+        if not last:
+            return "Never"
+        return f"{last.created_at:%Y-%m-%d}" + (f" · {last.label}" if last.label else "")
+
+    @admin.display(description="Price due (31+ days)", boolean=True)
+    def price_due(self, obj):
+        return pricing.is_price_due(obj)
+
+    @admin.display(description="Sold units")
+    def sold_units(self, obj):
+        from apps.investments.services import sold_tokens
+
+        return sold_tokens(obj)
+
+    @admin.display(description="Unsold units")
+    def unsold_units(self, obj):
+        from apps.investments.services import sold_tokens
+
+        return max(0, int(obj.token_supply or 0) - sold_tokens(obj))

@@ -24,6 +24,13 @@ class PaymentStatus(models.TextChoices):
     FAILED = "failed", _("Failed")
 
 
+# `payment_method` of the cost-basis rows written for SECONDARY / LP-market buys
+# (investments.services.record_acquisition_cost). Those are resales of tokens that were
+# already sold once, so they must never count as primary sales, availability, funding or
+# owner proceeds — only as the buyer's cost basis.
+RESALE_PAYMENT_METHODS = ("secondary_market", "lp_market")
+
+
 class Investment(models.Model):
     """A token purchase. Mirrors Supabase `investments` (SPEC §3.2)."""
 

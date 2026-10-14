@@ -203,6 +203,11 @@ class Property(models.Model):
     token_price = models.DecimalField(max_digits=12, decimal_places=2, default=100)
     # SPEC §7C.6: supply makes ownership % derivable server-side (≈ total_value/token_price).
     token_supply = models.PositiveIntegerField(default=0)
+    # Off-plan pricing: the price the property was first offered at. Written once, by the
+    # first recorded price change (null = the price has never changed).
+    launch_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, editable=False
+    )
     future_token_price = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True
     )
@@ -294,8 +299,21 @@ class Property(models.Model):
         derived_category = MODEL_CATEGORY_MAP.get(self.model)
         if derived_category:
             self.category = derived_category
-        if self.total_value is not None and self.token_price:
+        # Once tokens are sold or a price has been recorded, the supply is FIXED: a price
+        # change must never rescale it (that would silently change every holder's ownership
+        # %). From then on the price only moves via properties.pricing.record_price.
+        if self.total_value is not None and self.token_price and not self.price_locked():
             self.token_supply = int(self.total_value / self.token_price)
+
+    def price_locked(self) -> bool:
+        """True once the property has primary sales or any recorded price change."""
+        if self._state.adding or not self.pk:
+            return False
+        if self.price_history.exists():
+            return True
+        from apps.investments.services import sold_tokens  # avoid an import cycle
+
+        return sold_tokens(self) > 0
 
     def clean(self):
         """
@@ -652,6 +670,52 @@ class PropertyDocument(models.Model):
         if self.file:
             return public_media_url(self.file, request)
         return self.url
+
+
+class PropertyPrice(models.Model):
+    """
+    Append-only unit-price history (off-plan model §3.1). One row per recorded change:
+    previous → new price, optional phase name + investor note, who and when. Rows are never
+    edited or deleted — a mistake is corrected by recording the right price.
+    """
+
+    property = models.ForeignKey(
+        Property, on_delete=models.PROTECT, related_name="price_history"
+    )
+    previous_price = models.DecimalField(max_digits=12, decimal_places=2)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    label = models.CharField(max_length=80, blank=True, help_text="Phase name, e.g. Phase 2")
+    note = models.CharField(max_length=280, blank=True, help_text="One-line note to investors")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        verbose_name = _("price change")
+        verbose_name_plural = _("price history")
+
+    def __str__(self):
+        return f"{self.property.slug}: {self.previous_price} → {self.price}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValueError("Price history is append-only; record a new price instead.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Price history is append-only and cannot be deleted.")
+
+
+class PropertyUnitPrice(Property):
+    """Admin entry point for recording unit prices (the 'Unit prices' page)."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("unit price")
+        verbose_name_plural = _("unit prices")
 
 
 class PropertyImage(models.Model):

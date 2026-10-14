@@ -576,11 +576,16 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         sold = 0
         if supply:
             from django.db.models import Sum
-            from apps.investments.models import Investment
+            from apps.investments.models import RESALE_PAYMENT_METHODS, Investment
 
-            sold = Investment.objects.filter(
-                property=obj, tokens_minted=True
-            ).aggregate(s=Sum("token_amount"))["s"] or 0
+            # Primary sales only — resales move already-sold tokens and must not
+            # inflate the funded %.
+            sold = (
+                Investment.objects.filter(property=obj, tokens_minted=True)
+                .exclude(payment_method__in=RESALE_PAYMENT_METHODS)
+                .aggregate(s=Sum("token_amount"))["s"]
+                or 0
+            )
         live = max(0, min(100, round(sold / supply * 100))) if supply else 0
         return max(int(obj.funded or 0), live)
 

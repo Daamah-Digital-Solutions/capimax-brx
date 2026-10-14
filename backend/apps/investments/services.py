@@ -24,7 +24,7 @@ from apps.notifications.services import NotificationType, notify
 from apps.properties.models import Property
 from apps.wallets.models import OwnershipToken, UserWallet, WalletTransaction
 
-from .models import Investment, PaymentStatus
+from .models import RESALE_PAYMENT_METHODS, Investment, PaymentStatus
 
 log = logging.getLogger(__name__)
 
@@ -140,10 +140,15 @@ def pronova_discount_for(prop: Property, base_amount) -> Decimal:
 # Availability
 # --------------------------------------------------------------------------- #
 def sold_tokens(prop: Property) -> int:
-    """Tokens already sold for a property = sum over its COMPLETED investments."""
-    agg = Investment.objects.filter(
-        property=prop, payment_status=PaymentStatus.COMPLETED
-    ).aggregate(total=Sum("token_amount"))
+    """
+    Tokens already sold for a property = sum over its COMPLETED primary investments.
+    Resale cost-basis rows are excluded — they move already-sold tokens between holders.
+    """
+    agg = (
+        Investment.objects.filter(property=prop, payment_status=PaymentStatus.COMPLETED)
+        .exclude(payment_method__in=RESALE_PAYMENT_METHODS)
+        .aggregate(total=Sum("token_amount"))
+    )
     return int(agg["total"] or 0)
 
 
