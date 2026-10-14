@@ -14,15 +14,15 @@ export const PRICE_CHANGED_EVENT = "capimax:price-changed";
 const OFFPLAN_CODE_MESSAGES: Record<string, { en: string; ar: string }> = {
   PRICE_CHANGED: {
     en: "The unit price has just changed. The amounts were updated — please review and confirm again.",
-    ar: "سعر الوحدة اتغيّر للتو. الأرقام اتحدّثت — راجعها وأكّد مرة تانية.",
+    ar: "تغيّر سعر الوحدة للتو وتم تحديث المبالغ — يرجى مراجعتها والتأكيد مرة أخرى.",
   },
   INSTALLMENTS_ONLY: {
     en: "This property is sold through installment plans only.",
-    ar: "العقار ده متاح بالتقسيط فقط.",
+    ar: "هذا العقار متاح بنظام التقسيط فقط.",
   },
   FULL_PAYMENT_ONLY: {
     en: "This property is sold by full payment only.",
-    ar: "العقار ده متاح بالدفع الكامل فقط.",
+    ar: "هذا العقار متاح بالدفع الكامل فقط.",
   },
 };
 

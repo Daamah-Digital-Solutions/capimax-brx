@@ -175,6 +175,16 @@ def _try_credit_lp_deposit(deposit) -> bool:
     return True
 
 
+def _collect_installments_after_top_up(user_id) -> None:
+    """Best-effort: never let installment collection disturb the deposit that triggered it."""
+    try:
+        from apps.installments.services import collect_due_installments
+
+        collect_due_installments(user_id=user_id)
+    except Exception:  # noqa: BLE001
+        log.exception("Installment collection after top-up failed for user %s", user_id)
+
+
 def _credit_deposit(deposit_id) -> bool:
     """
     Credit a confirmed DEPOSIT to its target balance, exactly once. Returns True if it
@@ -200,6 +210,8 @@ def _credit_deposit(deposit_id) -> bool:
                 deposit.user, deposit.amount, source="deposit",
                 reference=str(deposit.id), memo="Wallet top-up",
             )
+            # Off-plan §4: a top-up immediately collects any installment waiting on the wallet.
+            transaction.on_commit(lambda uid=deposit.user_id: _collect_installments_after_top_up(uid))
         deposit.credited = True
         deposit.status = Deposit.Status.COMPLETED
         deposit.credited_at = timezone.now()

@@ -16,6 +16,7 @@ and a released amount grows as installments clear (the investor's "ownership gro
 is RELEASED %, not N separate mints). NONE of that lives in this wave.
 """
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -96,6 +97,14 @@ class InstallmentPlan(models.Model):
     # is NO money refund and NO on-chain clawback of the kept tokens.
     defaulted_at = models.DateTimeField(null=True, blank=True)
     forfeited_tokens = models.PositiveIntegerField(default=0)
+    # Off-plan model §4 (plans started after it shipped; NULL/0 on older plans, which keep
+    # their original terms): the term in months (down payment + term-1 monthly installments),
+    # the unit price LOCKED at the start, the whole units bought, and the installment fee %
+    # charged on the down payment and on every installment.
+    term_months = models.PositiveSmallIntegerField(null=True, blank=True)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    units_total = models.PositiveIntegerField(null=True, blank=True)
+    fee_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -133,6 +142,11 @@ class InstallmentPayment(models.Model):
         default=InstallmentPaymentStatus.PENDING,
     )
     paid_at = models.DateTimeField(null=True, blank=True)
+    # Off-plan §4: installment fee on this row's base `amount` (0 on older plans). The investor
+    # pays amount + fee_amount; the owner/broker are credited on `amount` only.
+    fee_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    # Auto-debit: set when the "top up your wallet" reminder for this row was sent (once).
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -144,6 +158,11 @@ class InstallmentPayment(models.Model):
                 fields=["plan", "sequence"], name="uniq_installment_seq_per_plan"
             )
         ]
+
+    @property
+    def charge_amount(self) -> Decimal:
+        """What the investor pays for this row: the base amount + its installment fee."""
+        return Decimal(self.amount) + Decimal(self.fee_amount or 0)
 
     def __str__(self):
         return f"#{self.sequence} {self.amount} due {self.due_date} [{self.status}]"

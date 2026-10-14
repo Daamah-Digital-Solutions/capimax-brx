@@ -29,6 +29,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from apps.installments.services import (
     default_plan,
+    forfeiture_enabled,
     find_defaultable_plan_ids,
     mark_overdue_missed,
 )
@@ -69,6 +70,17 @@ class Command(BaseCommand):
                 today = date.fromisoformat(opts["today"])
             except ValueError:
                 raise CommandError("--today must be an ISO date (YYYY-MM-DD).")
+
+        # Off-plan model §4: late installments are never forfeited. With forfeiture off (the
+        # default) this command only does the "overdue → missed" bookkeeping; the overdue rows
+        # stay due and are collected by `collect_due_installments` once the wallet is funded.
+        if not forfeiture_enabled():
+            marked = mark_overdue_missed(today) if (opts["yes"] and not opts["dry_run"]) else 0
+            self.stdout.write(
+                "Installment forfeiture is disabled (no penalty, no forfeiture). "
+                f"{marked} overdue installment(s) marked missed; nothing defaulted."
+            )
+            return
 
         # SAFE BY DEFAULT: only --yes (and not --dry-run) actually writes. Any other
         # invocation previews what WOULD default and forfeits nothing — so a stray/scheduled

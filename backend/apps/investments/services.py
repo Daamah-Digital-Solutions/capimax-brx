@@ -204,6 +204,7 @@ def create_investment(
     n_installments=None,
     frequency="monthly",
     expected_unit_price=None,
+    term_months=None,
 ) -> dict:
     """
     Create an investment per the LOCKED token-economics policy, simulate payment,
@@ -269,8 +270,8 @@ def create_investment(
 
         # Buyer-borne fee (Option A): platform + management fee on the token value, from
         # the property's admin rates. Charged to the buyer ON TOP (settlement_amount);
-        # the owner still receives the full token value. Same fee for a normal buy and an
-        # installment (charged once, with the down-payment).
+        # the owner still receives the full token value. An installment plan replaces it
+        # below with the installment fee on the down payment (off-plan §4).
         fee_amount = fee_amount_for(locked_prop, amount)
 
         # Installments (Wave B): build the plan + resolve the DOWN-PAYMENT. The full
@@ -287,20 +288,30 @@ def create_investment(
                 raise ValidationError(
                     {"payment_method": "This payment method can't fund an installment plan."}
                 )
-            if down_payment_percent is None or n_installments is None:
-                raise ValidationError(
-                    {"installment": "down_payment_percent and n_installments are required."}
-                )
             from apps.installments.services import build_installment_plan
+            from apps.installments.terms import fee_for, resolve_term
 
+            # Off-plan §4: only a term the property offers (default 6/12/18/24 months with
+            # 30/25/20/15% down) — a down payment now + (term - 1) monthly installments, at the
+            # unit price LOCKED here. The installment fee replaces the platform fee for a plan.
+            months, term_pct = resolve_term(
+                locked_prop, down_payment_percent=down_payment_percent,
+                n_installments=n_installments, frequency=frequency, term_months=term_months,
+            )
+            fee_rate = Decimal(locked_prop.fee_installment)
             installment_plan = build_installment_plan(
                 user, locked_prop,
                 total_amount=amount,  # the FULL position value is the plan total
-                down_payment_percent=down_payment_percent,
-                n_installments=n_installments,
-                frequency=frequency,
+                down_payment_percent=term_pct,
+                n_installments=months - 1,
+                frequency="monthly",
+                fee_rate=fee_rate,
+                term_months=months,
+                unit_price=price,
+                units_total=token_amount,
             )
             down_payment_amount = installment_plan.down_payment_amount
+            fee_amount = fee_for(down_payment_amount, fee_rate)  # charged with the down payment
 
         # Pronova (temporary rail): a PLATFORM-ABSORBED discount off the settlement subtotal
         # (the buyer pays less via Stripe; the owner still receives the FULL token value). The

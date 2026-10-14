@@ -208,6 +208,10 @@ export interface Property {
   constructionMilestones?: { nameEn: string; nameAr: string; threshold: number }[];
   sitePhotosUrl?: string;
   droneVideoUrl?: string;
+  // Off-plan §4 (API detail): how investors pay + the installment plans offered + their fee %.
+  offplanPayment?: "installments" | "full" | "both";
+  installmentTerms?: { months: number; downPaymentPercent: number }[];
+  installmentFeeRate?: number;
 }
 
 // =============================================================

@@ -1502,6 +1502,8 @@ export interface InstallmentPreviewRow {
   cumulative: number;               // down-payment + installments paid through this row
   balance: number;                  // total − cumulative
   ownershipPercent: number;         // cumulative / total × 100
+  fee?: number;                     // off-plan §4: installment fee on this row
+  charge?: number;                  // amount + fee — what the investor pays for the row
 }
 
 /**
@@ -1524,6 +1526,9 @@ export interface InstallmentPreview {
   frequency: "monthly" | "quarterly";
   amountDueNow: number;             // downPayment + fee (the installment charge at checkout)
   rows: InstallmentPreviewRow[];
+  feeRate?: number;                 // off-plan §4: installment fee % (fee = on the down payment)
+  installmentFee?: number;          // fee on a regular installment
+  termMonths?: number;              // the term (down payment + numberOfInstallments monthly)
 }
 
 export interface InstallmentPreviewParams {
@@ -1532,6 +1537,8 @@ export interface InstallmentPreviewParams {
   down_payment_percent: number;
   n_installments: number;
   frequency: "monthly" | "quarterly";
+  /** Off-plan §4: the term in months (down payment + term-1 monthly installments). */
+  term_months?: number;
 }
 
 export const installmentsApi = {

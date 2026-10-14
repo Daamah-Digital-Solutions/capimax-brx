@@ -26,7 +26,6 @@ from django.conf import settings
 from django.urls import reverse
 
 from apps.core.permissions import KYCApprovedPermission
-from apps.investments.services import fee_amount_for
 from apps.payments import nowpayments_service, stripe_service
 from apps.payments.services import get_or_create_payment
 from apps.payments.views import crypto_min_amount_block
@@ -41,7 +40,8 @@ from .models import (
     InstallmentPaymentStatus,
     InstallmentPlanStatus,
 )
-from .services import compute_schedule
+from .terms import fee_for, resolve_term
+from .services import compute_schedule, pay_installments_from_balance
 
 
 class InstallmentPlansView(APIView):
@@ -83,6 +83,7 @@ class InstallmentPlansView(APIView):
             )
             # Wave B: a CONFIRMED down-payment is tracked on the plan (down_paid_at).
             down_paid = plan.down_paid_at is not None
+            down_fee = fee_for(plan.down_payment_amount, plan.fee_rate or 0)
             # Display schedule = a synthesized down-payment row (display-only; the DB keeps
             # the down-payment on the plan) followed by the N installment rows.
             display_payments = [
@@ -91,6 +92,8 @@ class InstallmentPlansView(APIView):
                     "type": "down_payment",
                     "date": (plan.down_paid_at or plan.created_at).date().isoformat(),
                     "amount": float(plan.down_payment_amount),
+                    "fee": float(down_fee),
+                    "charge": float(plan.down_payment_amount + down_fee),
                     "status": "paid" if down_paid else "pending",
                 }
             ] + [
@@ -99,6 +102,10 @@ class InstallmentPlansView(APIView):
                     "type": "installment",
                     "date": p.due_date.isoformat(),
                     "amount": float(p.amount),
+                    # Off-plan §4: installment fee on the row (0 on older plans) — the investor
+                    # pays amount + fee.
+                    "fee": float(p.fee_amount),
+                    "charge": float(p.charge_amount),
                     "status": p.status,
                 }
                 for p in payments
@@ -130,11 +137,15 @@ class InstallmentPlansView(APIView):
                     locked_tokens = token_amount_full  # not minted yet → all locked
                 released_tokens = token_amount_full - locked_tokens
 
+            # Next to pay = the earliest unpaid row, an overdue ("missed") one included.
             pending = next(
-                (p for p in payments if p.status == InstallmentPaymentStatus.PENDING), None
+                (p for p in payments if p.status in (
+                    InstallmentPaymentStatus.PENDING, InstallmentPaymentStatus.MISSED,
+                )),
+                None,
             )
             if pending is not None and (next_due is None or pending.due_date < next_due[0]):
-                next_due = (pending.due_date, pending.amount)
+                next_due = (pending.due_date, pending.charge_amount)
 
             total_commitment += plan.total_amount
             total_paid += paid_amount
@@ -156,6 +167,15 @@ class InstallmentPlansView(APIView):
                     "frequency": plan.frequency,
                     "durationMonths": plan.duration_months,
                     "nextDueDate": pending.due_date.isoformat() if pending else None,
+                    "nextPaymentAmount": float(pending.charge_amount) if pending else 0.0,
+                    "overdueInstallments": sum(
+                        1 for p in payments if p.status == InstallmentPaymentStatus.MISSED
+                    ),
+                    # Off-plan §4 terms (null/0 on plans started before it shipped).
+                    "termMonths": plan.term_months,
+                    "unitPrice": float(plan.unit_price) if plan.unit_price is not None else None,
+                    "feeRate": float(plan.fee_rate or 0),
+                    "installmentFee": float(fee_for(plan.installment_amount, plan.fee_rate or 0)),
                     "progress": round(progress, 2),
                     "downPaid": down_paid,
                     # Real on-chain token split (full-mint-then-lock). null until minted.
@@ -184,6 +204,10 @@ class InstallmentPlansView(APIView):
         return Response({"stats": stats, "plans": plan_rows})
 
 
+BALANCE_PROVIDER = "balance"  # pay from the wallet balance (settles immediately)
+PROVIDERS = ("stripe", "nowpayments", BALANCE_PROVIDER)
+
+
 class PayNextInstallmentView(APIView):
     """
     Wave C — start a GATED charge for the caller's NEXT due installment on an ACTIVE plan.
@@ -206,9 +230,9 @@ class PayNextInstallmentView(APIView):
 
     def post(self, request, plan_id):
         provider = (request.data.get("provider") or "stripe").strip().lower()
-        if provider not in ("stripe", "nowpayments"):
+        if provider not in PROVIDERS:
             return Response(
-                {"detail": "provider must be 'stripe' or 'nowpayments'."},
+                {"detail": "provider must be 'stripe', 'nowpayments' or 'balance'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -227,10 +251,12 @@ class PayNextInstallmentView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # Always charge the LOWEST-sequence pending row → installments clear in order; the
-        # investor can't skip ahead.
+        # Always charge the LOWEST-sequence unpaid row (an overdue one first) → installments
+        # clear in order; the investor can't skip ahead.
         ip = (
-            plan.payments.filter(status=InstallmentPaymentStatus.PENDING)
+            plan.payments.filter(
+                status__in=[InstallmentPaymentStatus.PENDING, InstallmentPaymentStatus.MISSED]
+            )
             .order_by("sequence")
             .first()
         )
@@ -247,9 +273,36 @@ class PayNextInstallmentView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # The investor pays the row's base amount + its installment fee (0 on older plans).
+        if provider == BALANCE_PROVIDER:
+            return self._pay_from_balance(request, plan, [ip])
         if provider == "stripe":
-            return self._start_stripe(inv, ip, ip.amount)
-        return self._start_nowpayments(request, inv, ip, ip.amount)
+            return self._start_stripe(inv, ip, ip.charge_amount)
+        return self._start_nowpayments(request, inv, ip, ip.charge_amount)
+
+    def _pay_from_balance(self, request, plan, rows, is_payoff=False):
+        """Pay the given unpaid rows from the investor's wallet balance, settling at once."""
+        result = pay_installments_from_balance(plan, [r.id for r in rows])
+        if result.get("code") == "insufficient_balance":
+            return Response(
+                {
+                    "code": "insufficient_balance",
+                    "detail": "Your wallet balance doesn't cover this payment. Top up and try again.",
+                    "amount": str(result["amount"]),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if result.get("code") == "already_paid":
+            return Response(
+                {"detail": "This installment was already paid."}, status=status.HTTP_409_CONFLICT
+            )
+        return Response({
+            "provider": BALANCE_PROVIDER,
+            "settled": True,
+            "amount": str(result["amount"]),
+            "rows_settled": result["rows_settled"],
+            "payoff": is_payoff,
+        })
 
     # -- providers (mirror apps/payments/views.py, charging `amount` against `ip`) -- #
     # `amount` is one installment for pay-next, or the SUM of all remaining rows for a
@@ -356,9 +409,9 @@ class PayoffInstallmentView(PayNextInstallmentView):
 
     def post(self, request, plan_id):
         provider = (request.data.get("provider") or "stripe").strip().lower()
-        if provider not in ("stripe", "nowpayments"):
+        if provider not in PROVIDERS:
             return Response(
-                {"detail": "provider must be 'stripe' or 'nowpayments'."},
+                {"detail": "provider must be 'stripe', 'nowpayments' or 'balance'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -388,7 +441,7 @@ class PayoffInstallmentView(PayNextInstallmentView):
                 status=status.HTTP_409_CONFLICT,
             )
         anchor = unpaid[0]
-        total = sum((Decimal(p.amount) for p in unpaid), Decimal("0"))
+        total = sum((p.charge_amount for p in unpaid), Decimal("0"))  # base + fee per row
 
         inv = plan.investments.order_by("created_at").first()
         if inv is None or not inv.tokens_minted:
@@ -397,6 +450,8 @@ class PayoffInstallmentView(PayNextInstallmentView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        if provider == BALANCE_PROVIDER:
+            return self._pay_from_balance(request, plan, unpaid, is_payoff=True)
         if provider == "stripe":
             return self._start_stripe(inv, anchor, total, is_payoff=True)
         return self._start_nowpayments(request, inv, anchor, total, is_payoff=True)
@@ -414,8 +469,8 @@ class InstallmentPreviewView(APIView):
       body: { "property": "<slug>", "units": <int>, "down_payment_percent": <num>,
               "n_installments": <int>, "frequency": "monthly"|"quarterly" }
 
-    PURE PREVIEW: delegates to `compute_schedule` (the pure engine math) + `fee_amount_for`
-    (the real admin-set fee). Writes NOTHING — no plan, no payment, no money, no mint. PUBLIC:
+    PURE PREVIEW: delegates to `compute_schedule` (the pure engine math) + the installment fee
+    (Property.fee_installment). Writes NOTHING — no plan, no payment, no money, no mint. PUBLIC:
     it is math over public property values and carries no user data. The per-investor position
     is `units × token_price` (the SAME basis Checkout uses), never the full property value.
     """
@@ -465,33 +520,43 @@ class InstallmentPreviewView(APIView):
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
-        # compute_schedule raises a 400 ValidationError for bad down%/n/frequency — let DRF
-        # surface it (same validation build_installment_plan applies at checkout).
-        sched = compute_schedule(
-            total_amount=position,
+        # Off-plan §4: only a term this property offers (resolve_term → 400 otherwise), priced
+        # exactly as build_installment_plan will: a down payment now + (term - 1) monthly
+        # installments, with the installment fee on the down payment and on every installment.
+        months, term_pct = resolve_term(
+            prop,
             down_payment_percent=data.get("down_payment_percent"),
             n_installments=data.get("n_installments"),
             frequency=(data.get("frequency") or "monthly"),
+            term_months=data.get("term_months"),
         )
-
-        # The real buyer-borne fee (platform + management) on the position — identical to what
-        # Checkout charges with the down-payment (fee_amount_for, apps/investments/services.py).
-        fee = fee_amount_for(prop, position)
+        sched = compute_schedule(
+            total_amount=position,
+            down_payment_percent=term_pct,
+            n_installments=months - 1,
+            frequency="monthly",
+        )
+        fee_rate = Decimal(prop.fee_installment)
         down = sched["down_payment"]
         total = sched["total"]
+        fee = fee_for(down, fee_rate)  # charged now, with the down payment
 
-        # Enrich each installment row with the running cumulative/balance/ownership the charts
-        # + tables need. cumulative INCLUDES the down-payment (ownership starts at down%).
+        # Enrich each installment row with its fee + the running cumulative/balance/ownership
+        # the charts + tables need. cumulative INCLUDES the down-payment (ownership starts at
+        # down%) and counts principal only (the fee buys no units).
         rows = []
         cumulative = down
         for r in sched["rows"]:
             cumulative = cumulative + r["amount"]
             ownership = (cumulative / total * Decimal("100")) if total else Decimal("0")
+            row_fee = fee_for(r["amount"], fee_rate)
             rows.append(
                 {
                     "sequence": r["sequence"],
                     "dueDate": r["due_date"].isoformat(),
                     "amount": float(r["amount"]),
+                    "fee": float(row_fee),
+                    "charge": float(r["amount"] + row_fee),
                     "cumulative": float(cumulative),
                     "balance": float(max(Decimal("0"), total - cumulative)),
                     "ownershipPercent": round(float(ownership), 2),
@@ -505,14 +570,16 @@ class InstallmentPreviewView(APIView):
                 "unitPrice": float(prop.token_price),
                 "total": float(total),
                 "fee": float(fee),
+                "feeRate": float(fee_rate),
                 "downPayment": float(down),
-                "downPaymentPercent": float(sched["down_payment_percent"]),
+                "downPaymentPercent": float(term_pct),
                 "installmentAmount": float(sched["installment_amount"]),
+                "installmentFee": float(fee_for(sched["installment_amount"], fee_rate)),
                 "numberOfInstallments": len(rows),
-                "durationMonths": sched["duration_months"],
-                "frequency": sched["frequency"],
-                # The amount charged NOW at checkout for an installment buy = down + full fee
-                # (matches Checkout.tsx finalAmount for installmentTerms).
+                "termMonths": months,
+                "durationMonths": months,
+                "frequency": "monthly",
+                # Charged NOW at checkout = down payment + its installment fee.
                 "amountDueNow": float(down + fee),
                 "rows": rows,
             }

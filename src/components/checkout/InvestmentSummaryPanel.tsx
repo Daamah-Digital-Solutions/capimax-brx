@@ -9,6 +9,11 @@ interface InvestmentSummaryPanelProps {
   pronovaDiscount: number;
   finalAmount: number;
   onEdit: () => void;
+  /**
+   * Off-plan §4 installment purchase: what is charged NOW is the down payment + the
+   * installment fee on it (no platform/management fee). Omitted for a full purchase.
+   */
+  installment?: { downPayment: number; downPct: number; feeRate: number; fee: number };
 }
 
 export function InvestmentSummaryPanel({
@@ -16,6 +21,7 @@ export function InvestmentSummaryPanel({
   pronovaDiscount,
   finalAmount,
   onEdit,
+  installment,
 }: InvestmentSummaryPanelProps) {
   const { t, language } = useLanguage();
   const propertyName = language === "ar" ? investment.propertyNameAr : investment.propertyName;
@@ -75,6 +81,27 @@ export function InvestmentSummaryPanel({
           </span>
         </div>
 
+        {installment ? (
+          <>
+            <div className="flex items-center justify-between py-2 border-t border-border">
+              <span className="text-muted-foreground">
+                {language === "ar"
+                  ? `الدفعة المقدمة الآن (${installment.downPct}%)`
+                  : `Down payment now (${installment.downPct}%)`}
+              </span>
+              <span className="text-foreground">${installment.downPayment.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-t border-border">
+              <span className="text-muted-foreground">
+                {language === "ar"
+                  ? `رسوم التقسيط (${installment.feeRate}%)`
+                  : `Installment fee (${installment.feeRate}%)`}
+              </span>
+              <span className="text-foreground">${installment.fee.toLocaleString()}</span>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="flex items-center justify-between py-2 border-t border-border">
           <span className="text-muted-foreground">{t("checkout.platformFee")} (1.5%)</span>
           <span className="text-foreground">
@@ -88,6 +115,8 @@ export function InvestmentSummaryPanel({
             ${investment.managementFee.toLocaleString()}
           </span>
         </div>
+          </>
+        )}
 
         {pronovaDiscount > 0 && (
           <div className="flex items-center justify-between py-2 border-t border-border">
@@ -109,7 +138,7 @@ export function InvestmentSummaryPanel({
           <div className="text-end">
             {pronovaDiscount > 0 && (
               <span className="text-sm text-muted-foreground line-through block">
-                ${investment.totalPayable.toLocaleString()}
+                ${(installment ? installment.downPayment + installment.fee : investment.totalPayable).toLocaleString()}
               </span>
             )}
             <span className="text-2xl font-bold text-gradient-gold">

@@ -48,6 +48,9 @@ class InvestmentCreateSerializer(serializers.Serializer):
     expected_unit_price = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False, allow_null=True
     )
+    # Off-plan §4: the installment term in months (down payment + term-1 monthly
+    # installments). Alternative to n_installments; the server checks it is offered.
+    term_months = serializers.IntegerField(min_value=2, required=False, allow_null=True)
 
     def validate(self, attrs):
         try:
@@ -58,9 +61,9 @@ class InvestmentCreateSerializer(serializers.Serializer):
             )
         attrs["property"] = prop
         if attrs.get("is_installment"):
-            if attrs.get("down_payment_percent") is None or attrs.get("n_installments") is None:
+            if attrs.get("term_months") is None and attrs.get("n_installments") is None:
                 raise serializers.ValidationError(
-                    {"installment": "down_payment_percent and n_installments are required for an installment."}
+                    {"installment": "Choose an installment term (term_months)."}
                 )
         return attrs
 

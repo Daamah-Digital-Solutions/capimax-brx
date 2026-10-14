@@ -551,6 +551,12 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     )
     sitePhotosUrl = serializers.CharField(source="site_photos_url")
     droneVideoUrl = serializers.CharField(source="drone_video_url")
+    # Off-plan §4: how investors pay (installments / full / both) + the offered plans.
+    offplanPayment = serializers.CharField(source="offplan_payment")
+    installmentTerms = serializers.SerializerMethodField()
+    installmentFeeRate = serializers.DecimalField(
+        source="fee_installment", max_digits=5, decimal_places=2
+    )
 
     class Meta(_PropertyBaseSerializer.Meta):
         fields = _COMMON_FIELDS + (
@@ -578,6 +584,9 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "postHandoverBenefits",
             "sitePhotosUrl",
             "droneVideoUrl",
+            "offplanPayment",
+            "installmentTerms",
+            "installmentFeeRate",
         )
 
     def get_installment(self, obj):
@@ -648,6 +657,16 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             .count()
         )
         return max(int(obj.investors or 0), live)
+
+    def get_installmentTerms(self, obj):
+        """The plans this property offers — only when it actually sells by installments."""
+        if not obj.allows_installments():
+            return []
+        from apps.installments.terms import terms_for
+
+        return [
+            {"months": m, "downPaymentPercent": float(pct)} for m, pct in terms_for(obj)
+        ]
 
     def get_developer(self, obj):
         return (

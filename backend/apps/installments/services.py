@@ -26,6 +26,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.properties.models import Property
 
+from .terms import fee_for
 from .models import (
     InstallmentFrequency,
     InstallmentPayment,
@@ -127,9 +128,16 @@ def build_installment_plan(
     down_payment_percent,
     n_installments,
     frequency=InstallmentFrequency.MONTHLY,
+    fee_rate=Decimal("0"),
+    term_months=None,
+    unit_price=None,
+    units_total=None,
 ):
     """
     Validate installment-eligibility and create a DRAFT plan + its PENDING payment rows.
+
+    Off-plan §4 plans also pass the term (months), the LOCKED unit price, the units and the
+    installment fee % — each row then carries its fee (`fee_amount`), charged with it.
 
     `total_amount` is the investor's financed principal (units × token_price in the real
     Checkout wave); kept an explicit input so this wave carries no pricing logic. Returns
@@ -161,8 +169,12 @@ def build_installment_plan(
         number_of_installments=int(n_installments),
         installment_amount=sched["installment_amount"],
         frequency=frequency,
-        duration_months=sched["duration_months"],
+        duration_months=term_months or sched["duration_months"],
         status=InstallmentPlanStatus.DRAFT,
+        term_months=term_months,
+        unit_price=unit_price,
+        units_total=units_total,
+        fee_rate=Decimal(fee_rate or 0),
     )
 
     InstallmentPayment.objects.bulk_create(
@@ -172,6 +184,7 @@ def build_installment_plan(
                 sequence=row["sequence"],
                 due_date=row["due_date"],
                 amount=row["amount"],
+                fee_amount=fee_for(row["amount"], fee_rate or 0),
                 status=InstallmentPaymentStatus.PENDING,
             )
             for row in sched["rows"]
@@ -434,6 +447,109 @@ def installment_locked_tokens(user_id, property_slug) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Off-plan model §4 — pay installments from the WALLET (manually, early, or by the hourly
+# auto-debit). A late installment carries NO penalty and is NEVER forfeited: it stays due
+# and is debited as soon as the wallet holds enough (the investor gets one reminder).
+# --------------------------------------------------------------------------- #
+_UNPAID = (InstallmentPaymentStatus.PENDING, InstallmentPaymentStatus.MISSED)
+
+
+def pay_installments_from_balance(plan: InstallmentPlan, row_ids) -> dict:
+    """
+    Debit the given unpaid rows (base + fee each) from the investor's wallet and settle them
+    in order — all or nothing. Returns {amount, rows_settled} or {code: insufficient_balance |
+    already_paid}. Rows are locked first, so a row can never be paid twice.
+    """
+    from apps.wallets.services import InsufficientBalance, debit_user_balance
+
+    with transaction.atomic():
+        rows = list(
+            InstallmentPayment.objects.select_for_update()
+            .filter(pk__in=list(row_ids), plan_id=plan.pk, status__in=_UNPAID)
+            .order_by("sequence")
+        )
+        if not rows or len(rows) != len(list(row_ids)):
+            return {"code": "already_paid"}
+        amount = sum((r.charge_amount for r in rows), Decimal("0"))
+        seqs = ", ".join(str(r.sequence) for r in rows)
+        try:
+            debit_user_balance(
+                plan.investor, amount, source="installment", reference=str(rows[0].id),
+                memo=f"Installment {seqs} of {plan.property_name}",
+            )
+        except InsufficientBalance:
+            return {"code": "insufficient_balance", "amount": amount}
+        for r in rows:
+            settle_installment_payment(r.id)
+    return {"amount": amount, "rows_settled": len(rows)}
+
+
+def _collect_one(ip_id) -> str:
+    """Auto-debit ONE due row from the wallet. Returns paid | insufficient | skip."""
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
+    from apps.wallets.services import InsufficientBalance, debit_user_balance
+
+    with transaction.atomic():
+        ip = InstallmentPayment.objects.select_for_update().select_related("plan").get(pk=ip_id)
+        plan = ip.plan
+        if ip.status not in _UNPAID or plan.status != InstallmentPlanStatus.ACTIVE:
+            return "skip"
+        try:
+            debit_user_balance(
+                plan.investor, ip.charge_amount, source="installment_autodebit",
+                reference=str(ip.id),
+                memo=f"Installment {ip.sequence}/{plan.number_of_installments} of {plan.property_name}",
+            )
+        except InsufficientBalance:
+            if ip.reminder_sent_at is None:  # one reminder per installment, not one per run
+                ip.reminder_sent_at = timezone.now()
+                ip.save(update_fields=["reminder_sent_at"])
+                notify(
+                    plan.investor, Notification.Type.INSTALLMENT_DUE_UNPAID,
+                    params={
+                        "property": plan.property_name,
+                        "sequence": ip.sequence,
+                        "total": plan.number_of_installments,
+                        "amount": f"{ip.charge_amount:,.2f}",
+                        "due_date": ip.due_date.isoformat(),
+                    },
+                    action_url="/wallet",
+                )
+            return "insufficient"
+        settle_installment_payment(ip.id)
+    return "paid"
+
+
+def collect_due_installments(*, today: date | None = None, user_id=None) -> dict:
+    """
+    Debit every installment that is due (today or overdue) from the investor's wallet, oldest
+    first per plan; a plan stops at its first row the wallet can't cover (retried next run, or
+    right after a top-up). Idempotent. Returns {collected, insufficient}.
+    """
+    today = today or timezone.now().date()
+    due = InstallmentPayment.objects.filter(
+        plan__status=InstallmentPlanStatus.ACTIVE, status__in=_UNPAID, due_date__lte=today,
+    )
+    if user_id is not None:
+        due = due.filter(plan__investor_id=user_id)
+    collected = short = 0
+    # order_by() first: the model's default ordering would otherwise leak into DISTINCT and
+    # return the same plan once per due row.
+    for plan_id in due.order_by().values_list("plan_id", flat=True).distinct():
+        for ip_id in (
+            due.filter(plan_id=plan_id).order_by("sequence").values_list("id", flat=True)
+        ):
+            outcome = _collect_one(ip_id)
+            if outcome == "paid":
+                collected += 1
+            elif outcome == "insufficient":
+                short += 1
+                break  # keep this plan's order — retry later
+    return {"collected": collected, "insufficient": short}
+
+
+# --------------------------------------------------------------------------- #
 # Wave D — missed-payment DEFAULT + forfeiture (the last installments wave).
 #
 # An installment becomes `missed` once its due_date passes unpaid; a plan `defaults` only
@@ -482,6 +598,13 @@ def find_defaultable_plan_ids(grace_days: int, today: date | None = None) -> lis
     )
 
 
+def forfeiture_enabled() -> bool:
+    """Off-plan model §4: late installments are never forfeited (setting off by default)."""
+    from django.conf import settings
+
+    return bool(getattr(settings, "INSTALLMENT_FORFEIT_ENABLED", False))
+
+
 def default_plan(plan_id) -> dict:
     """
     Default ONE plan: forfeit the LOCKED (unpaid) tokens, KEEP the RELEASED (paid) ones,
@@ -502,6 +625,11 @@ def default_plan(plan_id) -> dict:
     from apps.notifications.services import notify
     from apps.wallets.models import OwnershipToken
 
+    if not forfeiture_enabled():
+        raise RuntimeError(
+            "Installment forfeiture is disabled (off-plan model: no penalty, no forfeiture). "
+            "Set INSTALLMENT_FORFEIT_ENABLED=True to re-enable it deliberately."
+        )
     with transaction.atomic():
         plan = InstallmentPlan.objects.select_for_update().get(pk=plan_id)
         if plan.status != InstallmentPlanStatus.ACTIVE:

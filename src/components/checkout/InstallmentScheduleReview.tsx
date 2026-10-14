@@ -48,6 +48,7 @@ interface ScheduleRow {
   cumulative: number;
   balance: number;
   ownership: number;
+  fee: number; // off-plan §4 installment fee charged with this row (0 if none)
 }
 
 export function InstallmentScheduleReview({
@@ -113,6 +114,7 @@ export function InstallmentScheduleReview({
         label: isAr ? "دفعة مقدمة" : "Down payment",
         date: isAr ? "عند الشراء" : "On purchase",
         amount: p.downPayment,
+        fee: p.feeRate ? p.fee : 0,
         cumulative: p.downPayment,
         balance: Math.max(0, p.total - p.downPayment),
         ownership: p.total > 0 ? (p.downPayment / p.total) * 100 : 0,
@@ -123,6 +125,7 @@ export function InstallmentScheduleReview({
         label: `${isAr ? "قسط" : "Installment"} ${r.sequence}`,
         date: r.dueDate,
         amount: r.amount,
+        fee: r.fee ?? 0,
         cumulative: r.cumulative,
         balance: r.balance,
         ownership: r.ownershipPercent,
@@ -141,7 +144,12 @@ export function InstallmentScheduleReview({
       [isAr ? "عدد الوحدات" : "Units", String(preview.units)],
       [isAr ? "سعر الوحدة" : "Unit price", String(preview.unitPrice)],
       [isAr ? "قيمة المركز" : "Position value", String(preview.total)],
-      [isAr ? "رسوم المنصة والإدارة" : "Platform + management fee", String(preview.fee)],
+      preview.feeRate
+        ? [
+            isAr ? `رسوم التقسيط (${preview.feeRate}%) على المقدّم` : `Installment fee (${preview.feeRate}%) on the down payment`,
+            String(preview.fee),
+          ]
+        : [isAr ? "رسوم المنصة والإدارة" : "Platform + management fee", String(preview.fee)],
       [isAr ? "الدفعة المقدمة %" : "Down payment %", `${preview.downPaymentPercent}%`],
       [isAr ? "قيمة الدفعة المقدمة" : "Down payment", String(preview.downPayment)],
       [isAr ? "المستحق الآن" : "Due now (down payment + fee)", String(preview.amountDueNow)],
@@ -155,6 +163,7 @@ export function InstallmentScheduleReview({
       isAr ? "البند" : "Item",
       isAr ? "التاريخ" : "Date",
       isAr ? "المبلغ (USD)" : "Amount (USD)",
+      isAr ? "الرسوم (USD)" : "Fee (USD)",
       isAr ? "المتراكم" : "Cumulative",
       isAr ? "الرصيد المتبقي" : "Remaining balance",
       isAr ? "نسبة الملكية %" : "Ownership %",
@@ -163,6 +172,7 @@ export function InstallmentScheduleReview({
       r.label,
       r.date,
       r.amount.toFixed(2),
+      r.fee.toFixed(2),
       r.cumulative.toFixed(2),
       r.balance.toFixed(2),
       r.ownership.toFixed(2) + "%",
@@ -208,6 +218,7 @@ export function InstallmentScheduleReview({
   }
 
   const rows = buildRows(preview);
+  const hasFees = rows.some((r) => r.fee > 0);
 
   return (
     <div
@@ -305,6 +316,9 @@ export function InstallmentScheduleReview({
                       <th className="p-2 text-start font-medium">{isAr ? "البند" : "Item"}</th>
                       <th className="p-2 text-start font-medium">{isAr ? "التاريخ" : "Date"}</th>
                       <th className="p-2 text-end font-medium">{isAr ? "المبلغ" : "Amount"}</th>
+                      {hasFees && (
+                        <th className="p-2 text-end font-medium">{isAr ? "الرسوم" : "Fee"}</th>
+                      )}
                       <th className="p-2 text-end font-medium">{isAr ? "المتراكم" : "Cumulative"}</th>
                       <th className="p-2 text-end font-medium">{isAr ? "الرصيد" : "Balance"}</th>
                       <th className="p-2 text-end font-medium">{isAr ? "ملكية %" : "Ownership"}</th>
@@ -323,6 +337,9 @@ export function InstallmentScheduleReview({
                         <td className="p-2 text-foreground whitespace-nowrap">{r.label}</td>
                         <td className="p-2 text-muted-foreground whitespace-nowrap">{r.date}</td>
                         <td className="p-2 text-end text-foreground whitespace-nowrap">{fmt(r.amount)}</td>
+                        {hasFees && (
+                          <td className="p-2 text-end text-muted-foreground whitespace-nowrap">{fmt(r.fee)}</td>
+                        )}
                         <td className="p-2 text-end text-muted-foreground whitespace-nowrap">{fmt(r.cumulative)}</td>
                         <td className="p-2 text-end text-muted-foreground whitespace-nowrap">{fmt(r.balance)}</td>
                         <td className="p-2 text-end font-medium text-foreground whitespace-nowrap">

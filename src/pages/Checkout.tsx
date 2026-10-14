@@ -273,9 +273,20 @@ export default function Checkout() {
   const downPaymentAmount = installmentTerms
     ? Math.round(investment.investmentAmount * downPaymentPercent) / 100
     : 0;
-  // The subtotal CHARGED now (before any Pronova discount): the down-payment + the full fee for
-  // an installment, else the full payable (token value + fees). Any payment method may fund it.
-  const chargedSubtotal = installmentTerms ? downPaymentAmount + feeTotal : investment.totalPayable;
+  // Off-plan §4: an installment pays the INSTALLMENT fee (property.installmentFeeRate, 4%) on
+  // the down payment instead of the platform/management fee — mirrored here so the total shown
+  // equals the server's charge. (Older API without the field → the previous rule.)
+  const installmentFeeRate =
+    property?.installmentFeeRate != null ? Number(property.installmentFeeRate) : null;
+  const installmentFee =
+    installmentTerms && installmentFeeRate != null
+      ? Math.round(downPaymentAmount * installmentFeeRate) / 100
+      : feeTotal;
+  // The subtotal CHARGED now (before any Pronova discount): the down-payment + its fee for an
+  // installment, else the full payable (token value + fees). Any payment method may fund it.
+  const chargedSubtotal = installmentTerms
+    ? downPaymentAmount + installmentFee
+    : investment.totalPayable;
   // Pronova: the ADMIN-set discount rate (property.fees.pronovaDiscount), mirrored client-side so
   // the displayed total equals the server's charge. The discount basis is what's actually charged
   // NOW (`chargedSubtotal`) — the down-payment + fee for a Pronova installment, else value + fees
@@ -735,10 +746,14 @@ export default function Checkout() {
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">
-                          {isRTL ? "رسوم المنصة والإدارة" : "Platform + management fees"}
+                          {installmentFeeRate != null
+                            ? isRTL
+                              ? `رسوم التقسيط (${installmentFeeRate}%)`
+                              : `Installment fee (${installmentFeeRate}%)`
+                            : isRTL ? "رسوم المنصة والإدارة" : "Platform + management fees"}
                         </span>
                         <span className="font-semibold text-foreground">
-                          ${feeTotal.toLocaleString()}
+                          ${installmentFee.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pt-2 border-t border-primary/20">
@@ -777,6 +792,16 @@ export default function Checkout() {
                 pronovaDiscount={pronovaDiscount}
                 finalAmount={finalAmount}
                 onEdit={() => navigate(-1)}
+                installment={
+                  installmentTerms && installmentFeeRate != null
+                    ? {
+                        downPayment: downPaymentAmount,
+                        downPct: downPaymentPercent,
+                        feeRate: installmentFeeRate,
+                        fee: installmentFee,
+                      }
+                    : undefined
+                }
               />
             </div>
 

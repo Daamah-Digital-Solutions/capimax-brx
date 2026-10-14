@@ -26,6 +26,7 @@ import {
 import type { InstallmentPreview } from "@/integrations/api/client";
 import {
   type InstallmentTerms,
+  type OfferedTerm,
   installmentCheckoutQuery,
 } from "@/hooks/useInstallmentPreview";
 
@@ -46,6 +47,11 @@ interface InstallmentCalculatorProps {
   terms?: InstallmentTerms;
   onTermsChange?: (t: InstallmentTerms) => void;
   preview?: InstallmentPreview | null;
+  /**
+   * Off-plan §4: the plans the property offers. When set, each term carries its own down
+   * payment % (choosing a duration sets it) — the investor can't pick a down % on its own.
+   */
+  offeredTerms?: OfferedTerm[];
 }
 
 export function InstallmentCalculator({
@@ -60,6 +66,7 @@ export function InstallmentCalculator({
   terms,
   onTermsChange,
   preview,
+  offeredTerms,
 }: InstallmentCalculatorProps) {
   const { t, language, isRTL } = useLanguage();
   const navigate = useNavigate();
@@ -80,16 +87,30 @@ export function InstallmentCalculator({
 
   const setUnits = (u: number) =>
     controlled ? onTermsChange!({ ...terms!, units: u }) : setInternalUnits(u);
-  const setSelectedDuration = (m: number) =>
-    controlled ? onTermsChange!({ ...terms!, months: m }) : setInternalDuration(m);
+  const termPctFor = (m: number) => offeredTerms?.find((o) => o.months === m)?.downPaymentPercent;
+  const setSelectedDuration = (m: number) => {
+    const pct = termPctFor(m);
+    if (controlled) {
+      onTermsChange!({
+        ...terms!,
+        months: m,
+        ...(pct !== undefined ? { downPct: pct, frequency: "monthly" as const } : {}),
+      });
+    } else {
+      setInternalDuration(m);
+      if (pct !== undefined) setInternalDownPct(pct);
+    }
+  };
   const setDownPct = (v: number) =>
     controlled ? onTermsChange!({ ...terms!, downPct: v }) : setInternalDownPct(v);
 
   // Down-payment % is investor-chosen (the plan is per-investor). Seed the options with the
   // property's advertised default so it's always offered, plus the standard tiers.
-  const downOptions = Array.from(new Set([downPaymentPercent, 20, 30, 40]))
-    .filter((n) => n > 0 && n < 100)
-    .sort((a, b) => a - b);
+  const downOptions = offeredTerms?.length
+    ? [termPctFor(selectedDuration) ?? downPct] // fixed by the chosen term
+    : Array.from(new Set([downPaymentPercent, 20, 30, 40]))
+        .filter((n) => n > 0 && n < 100)
+        .sort((a, b) => a - b);
 
   // Client-side FALLBACK estimate — used only until/unless the engine preview resolves. The
   // preview (from POST /installments/preview/) is authoritative + cent-exact; this keeps the
@@ -326,7 +347,11 @@ export function InstallmentCalculator({
 
         <div className="flex items-center justify-between py-2 border-b border-border">
           <span className="text-muted-foreground">{t("installmentCalc.numberOfInstallments")}</span>
-          <span className="font-semibold">{selectedDuration} {t("installmentCalc.months")}</span>
+          <span className="font-semibold">
+            {preview?.termMonths
+              ? `${view.numberOfInstallments} ${language === "ar" ? "قسط شهري" : "monthly"}`
+              : `${selectedDuration} ${t("installmentCalc.months")}`}
+          </span>
         </div>
 
         <div className="flex items-center justify-between py-2 border-b border-border">
@@ -336,10 +361,24 @@ export function InstallmentCalculator({
 
         <div className="flex items-center justify-between py-2 border-b border-border">
           <span className="text-muted-foreground">
-            {language === "ar" ? "رسوم المنصة والإدارة" : "Platform & management fee"}
+            {preview?.feeRate
+              ? language === "ar"
+                ? `رسوم التقسيط (${preview.feeRate}%) على المقدّم`
+                : `Installment fee (${preview.feeRate}%) on the down payment`
+              : language === "ar" ? "رسوم المنصة والإدارة" : "Platform & management fee"}
           </span>
           <span className="text-sm">${view.platformFee.toLocaleString()}</span>
         </div>
+        {!!preview?.installmentFee && (
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-muted-foreground">
+              {language === "ar"
+                ? `رسوم التقسيط (${preview.feeRate}%) على كل قسط`
+                : `Installment fee (${preview.feeRate}%) on each installment`}
+            </span>
+            <span className="text-sm">${preview.installmentFee.toLocaleString()}</span>
+          </div>
+        )}
       </div>
 
       {/* Payment at Checkout */}
@@ -349,12 +388,16 @@ export function InstallmentCalculator({
           <span className="font-medium text-foreground">{t("installmentCalc.payAtCheckout")}</span>
         </div>
         <div className="text-2xl font-bold text-gradient-gold">
-          ${view.downPayment.toLocaleString()}
+          ${(preview?.feeRate ? preview.amountDueNow : view.downPayment).toLocaleString()}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {language === "ar"
-            ? "الدفعة المقدمة + رسوم المنصة والإدارة تُضاف عند الدفع."
-            : "Down payment shown; platform & management fees are added at checkout."}
+          {preview?.feeRate
+            ? language === "ar"
+              ? `الدفعة المقدمة + رسوم التقسيط (${preview.feeRate}%) — وهو المبلغ الذي سيُخصم بالضبط.`
+              : `Down payment + installment fee (${preview.feeRate}%) — exactly what you'll be charged.`
+            : language === "ar"
+              ? "الدفعة المقدمة + رسوم المنصة والإدارة تُضاف عند الدفع."
+              : "Down payment shown; platform & management fees are added at checkout."}
         </p>
       </div>
 

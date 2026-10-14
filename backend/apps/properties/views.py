@@ -46,6 +46,7 @@ _DETAIL_PREFETCH = (
     "gallery",
     "construction_milestones",
     "post_handover_benefits",
+    "installment_terms",
 )
 
 

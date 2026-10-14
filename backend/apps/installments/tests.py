@@ -9,7 +9,7 @@ logic is touched (no BalanceTransaction, no OwnershipToken, no Investment, no ch
 from decimal import Decimal
 from unittest import mock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -31,6 +31,21 @@ from .models import (
 from .services import build_installment_plan, compute_schedule
 
 
+# The plan-mechanics tests below predate the off-plan term table: they start plans such as
+# "30% down + 3 monthly". The property offers those as admin terms, so the tests keep checking
+# the same mechanics (lock/release, payoff, owner/broker credit, idempotency).
+_LEGACY_TERMS = ((4, "30"), (5, "40"), (13, "20"), (25, "25"))
+
+
+def _offer_legacy_terms(prop):
+    from apps.properties.models import InstallmentTerm
+
+    for months, pct in _LEGACY_TERMS:
+        InstallmentTerm.objects.get_or_create(
+            property=prop, duration_months=months, defaults={"down_payment_percent": Decimal(pct)}
+        )
+
+
 def _make_property(slug, *, model="installment", category="construction",
                    total_value="5000000", token_price="100", offplan_payment="both"):
     # Existing installment-model properties accept a plan OR a full payment ("both" — what
@@ -41,6 +56,7 @@ def _make_property(slug, *, model="installment", category="construction",
         offplan_payment=offplan_payment,
     ))
     p.save()
+    _offer_legacy_terms(p)
     return p
 
 
@@ -190,7 +206,9 @@ def _deployed_installment_property(slug, owner, *, total_value="10000", token_pr
     if fees0:
         p.fee_platform = Decimal("0")
         p.fee_management = Decimal("0")
+        p.fee_installment = Decimal("0")
     p.save()  # token_supply auto-derives = total_value / token_price
+    _offer_legacy_terms(p)
     meta, _ = TokenMetadata.objects.get_or_create(property=p)
     meta.deployed_contract_address = "0x" + "22" * 20
     meta.deployment_chain_id = 97  # == settings.CHAIN_ID
@@ -344,17 +362,20 @@ class FeesBuyerBorneTests(TestCase):
         bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
         self.assertEqual(bt.amount, Decimal("1000.00"))              # owner gets the FULL value
 
-    def test_installment_charges_down_plus_full_fee_owner_full(self):
+    def test_installment_charges_down_plus_installment_fee_owner_full(self):
+        # Off-plan §4: a plan pays the INSTALLMENT fee (4%) on the down payment — not the
+        # 2% platform fee on the full value — and 4% on every later installment.
         res = create_investment(
             user=self.investor, prop=self.prop, token_amount=10, payment_method="card",
             is_installment=True, down_payment_percent=30, n_installments=3, frequency="monthly",
         )
         inv = res["investment"]
         self.assertEqual(inv.amount_invested, Decimal("1000.00"))     # full token value
-        self.assertEqual(inv.fee_amount, Decimal("20.00"))           # full 2% fee (on the base)
+        self.assertEqual(inv.fee_amount, Decimal("12.00"))           # 4% of the 300 down payment
         self.assertEqual(inv.down_payment_amount, Decimal("300.00")) # 30% of 1000
         self.assertEqual(inv.charge_amount, Decimal("300.00"))       # owner/credit + release basis
-        self.assertEqual(inv.settlement_amount, Decimal("320.00"))   # buyer pays down + FULL fee
+        self.assertEqual(inv.settlement_amount, Decimal("312.00"))   # buyer pays down + 4% of it
+        self.assertTrue(all(r.fee_amount > 0 for r in inv.installment_plan.payments.all()))
         _confirm_and_mint(inv)
         # owner credited the full down-payment token value (no fee carve).
         bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
@@ -404,7 +425,8 @@ class AllMethodsInstallmentTests(TestCase):
         p.submitted_by = self.owner
         if pronova:
             p.fee_pronova_discount = Decimal(str(pronova))
-        p.save()  # DEFAULT fees 1.5% + 0.5% = 2%
+        p.save()  # DEFAULT fees: installment fee 4% (replaces the 1.5% + 0.5% for a plan)
+        _offer_legacy_terms(p)
         return p
 
     def test_balance_installment_settles_inline_locks_and_activates_plan(self):
@@ -421,9 +443,10 @@ class AllMethodsInstallmentTests(TestCase):
         # Balance has NO webhook → it must settle INLINE: completed + minted, never left PENDING.
         self.assertEqual(inv.payment_status, PaymentStatus.COMPLETED)
         self.assertTrue(inv.tokens_minted)
-        # Charged only the DOWN-PAYMENT (30% of 1000 = 300) + the FULL fee (20) = 320 from balance.
+        # Charged only the DOWN-PAYMENT (30% of 1000 = 300) + the 4% installment fee on it (12)
+        # = 312 from balance (off-plan §4: the installment fee replaces the platform fee).
         debit = BalanceTransaction.objects.get(source="reinvestment", reference=str(inv.id))
-        self.assertEqual(debit.amount, Decimal("320.00"))
+        self.assertEqual(debit.amount, Decimal("312.00"))
         # FULL position minted (10); only the down-payment's share released (3), the rest LOCKED (7).
         token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=prop.slug)
         self.assertEqual(token.token_amount, 10)
@@ -444,10 +467,10 @@ class AllMethodsInstallmentTests(TestCase):
         self.assertEqual(inv.payment_status, PaymentStatus.PENDING)
         self.assertFalse(inv.tokens_minted)
         self.assertEqual(inv.down_payment_amount, Decimal("300.00"))
-        # The 5% discount is on the DOWN-PAYMENT basis (300 + 20 fee = 320 → 16.00), NOT the full
-        # price (which would be ~51) — the buyer pays down + fee LESS this discount.
-        self.assertEqual(inv.discount_amount, Decimal("16.00"))
-        self.assertEqual(inv.settlement_amount, Decimal("304.00"))  # 300 + 20 − 16
+        # The 5% discount is on the DOWN-PAYMENT basis (300 + 12 installment fee = 312 → 15.60),
+        # NOT the full price (which would be ~51) — the buyer pays down + fee LESS this discount.
+        self.assertEqual(inv.discount_amount, Decimal("15.60"))
+        self.assertEqual(inv.settlement_amount, Decimal("296.40"))  # 300 + 12 − 15.60
 
     def test_sukuk_installment_defers_for_admin_approval(self):
         prop = self._ledger_installment("suk-inst")
@@ -827,6 +850,7 @@ from .models import InstallmentPlanStatus  # noqa: E402
 from .services import default_plan  # noqa: E402
 
 
+@override_settings(INSTALLMENT_FORFEIT_ENABLED=True)  # off in production (off-plan §4)
 class WaveDDefaultForfeitureTests(TestCase):
     """$1000 @ 30%, 3×, 10 tokens. Down → 3 released / 7 locked. Default forfeits the 7."""
 
@@ -1079,14 +1103,13 @@ class PreviewEndpointTests(APITestCase):
         self.assertEqual(resp.data["units"], 3)
 
     def test_preview_includes_real_buyer_borne_fee_and_amount_due_now(self):
-        from apps.investments.services import fee_amount_for
-
         resp = self._preview(
             property="inst-preview", units=10, down_payment_percent=30,
             n_installments=3, frequency="monthly",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        expected_fee = fee_amount_for(self.prop, Decimal("1000.00"))
+        # Off-plan §4: the installment fee (Property.fee_installment, 4%) on the down payment.
+        expected_fee = (Decimal("300.00") * Decimal(str(self.prop.fee_installment)) / 100).quantize(Decimal("0.01"))
         self.assertEqual(Decimal(str(resp.data["fee"])), expected_fee)
         # amountDueNow = down + full fee (the installment charge at checkout).
         self.assertEqual(
@@ -1105,14 +1128,13 @@ class PreviewEndpointTests(APITestCase):
         self.assertEqual(rows[-1]["ownershipPercent"], 100.0)
         self.assertEqual(Decimal(str(rows[-1]["balance"])), Decimal("0.00"))
 
-    def test_preview_quarterly_frequency(self):
+    def test_preview_quarterly_frequency_is_not_offered(self):
+        # Off-plan §4: installment plans are monthly (a down payment + term-1 monthly rows).
         resp = self._preview(
             property="inst-preview", units=12, down_payment_percent=40,
             n_installments=4, frequency="quarterly",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["frequency"], "quarterly")
-        self.assertEqual(resp.data["durationMonths"], 12)  # 4 × 3
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_preview_rejects_non_installment_model(self):
         _make_property("ready-prop", model="ready", category="ready")

@@ -48,6 +48,7 @@ import { PropertyDataRoom } from "@/components/property/PropertyDataRoom";
 import {
   useInstallmentPreview,
   DEFAULT_INSTALLMENT_TERMS,
+  snapToOfferedTerm,
   installmentCheckoutQuery,
   termInstallmentCount,
   type InstallmentTerms,
@@ -250,12 +251,22 @@ export default function PropertyDetail() {
   // falls back to a clearly-labelled example). Declared before any early return (hook rules).
   const [installmentTerms, setInstallmentTerms] =
     useState<InstallmentTerms>(DEFAULT_INSTALLMENT_TERMS);
+  // Off-plan §4: the plans this property offers (empty = it doesn't sell by installments).
+  // Older API responses don't carry the field → keep the old "installment model" rule.
+  const offeredTerms = catalogueProperty?.installmentTerms;
+  const sellsByInstallments = offeredTerms
+    ? offeredTerms.length > 0
+    : catalogueProperty?.model === "installment";
+  // Snap the shared terms onto an offered term (with its down %) once the property loads.
+  useEffect(() => {
+    if (offeredTerms?.length) setInstallmentTerms((t) => snapToOfferedTerm(t, offeredTerms));
+  }, [offeredTerms]);
   const { preview: installmentPreview } = useInstallmentPreview(
     // Catalogue properties are keyed by slug, exposed as `id` on the API object (no `slug`
     // field); the backend preview looks up Property by slug, so pass the id.
     catalogueProperty?.id,
     installmentTerms,
-    catalogueProperty?.model === "installment",
+    sellsByInstallments,
   );
 
   // Get property data based on ID from URL
@@ -284,7 +295,11 @@ export default function PropertyDetail() {
     // Installment (under-construction) properties are bought via a DOWN-PAYMENT plan, not an
     // outright "Own Now". Surface the down-payment + installment count in the sidebar and route
     // its CTA to the installment checkout (the SHARED terms the calculator on this page drives).
-    const cpIsInstallment = cp.model === "installment";
+    // Off-plan §4: installment UI when the property sells by installment plans (payment mode
+    // "installments", or "both" until the investor-choice toggle lands); old rule otherwise.
+    const cpIsInstallment = cp.offplanPayment
+      ? sellsByInstallments && cp.offplanPayment !== "full"
+      : cp.model === "installment";
     // The API property carries token metadata incl. the REAL on-chain deployment (or null).
     const cpTokenMeta = (cp as unknown as {
       tokenMetadata?: {
@@ -423,12 +438,21 @@ export default function PropertyDetail() {
                 <InstallmentCalculator
                   propertyId={id || cp.id}
                   totalPropertyPrice={Number(cp.totalValue ?? 0)}
-                  downPaymentPercent={20}
-                  installmentDurations={[
-                    { months: 12, label: "12 Months", labelAr: "12 شهر" },
-                    { months: 24, label: "24 Months", labelAr: "24 شهر" },
-                    { months: 36, label: "36 Months", labelAr: "36 شهر" },
-                  ]}
+                  downPaymentPercent={offeredTerms?.length ? installmentTerms.downPct : 20}
+                  installmentDurations={
+                    offeredTerms?.length
+                      ? offeredTerms.map((o) => ({
+                          months: o.months,
+                          label: `${o.months} Months · ${o.downPaymentPercent}% down`,
+                          labelAr: `${o.months} شهر · مقدّم ${o.downPaymentPercent}%`,
+                        }))
+                      : [
+                          { months: 12, label: "12 Months", labelAr: "12 شهر" },
+                          { months: 24, label: "24 Months", labelAr: "24 شهر" },
+                          { months: 36, label: "36 Months", labelAr: "36 شهر" },
+                        ]
+                  }
+                  offeredTerms={offeredTerms}
                   unitPrice={Number(cp.tokenPrice)}
                   expectedGrowth={Number(cp.expectedGrowth ?? 0)}
                   constructionProgress={Number(cp.constructionProgress ?? 0)}

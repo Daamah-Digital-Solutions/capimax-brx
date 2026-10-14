@@ -40,6 +40,8 @@ type Property = {
   tokenPrice?: number;
   location?: string | { city?: string; country?: string };
   developer?: { name?: string } | string;
+  // Off-plan §4: the installment plans the property offers (API detail).
+  installmentTerms?: { months: number; downPaymentPercent: number }[];
 };
 
 type Frequency = "monthly" | "quarterly";
@@ -102,6 +104,24 @@ export function DynamicInstallmentPlanner({
     controlled ? onTermsChange!({ ...terms!, months: y * 12 }) : setInternalYears(y);
   const setFreq = (f: Frequency) =>
     controlled ? onTermsChange!({ ...terms!, frequency: f }) : setInternalFreq(f);
+
+  // Off-plan §4: the plans the property offers (term + its down %, monthly). When present they
+  // replace the free down-% / years / frequency chips — the server only accepts offered terms.
+  const offered = property.installmentTerms ?? [];
+  const useOffered = offered.length > 0;
+  const termMonths = terms?.months ?? years * 12;
+  const pickTerm = (o: { months: number; downPaymentPercent: number }) => {
+    if (controlled) {
+      onTermsChange!({ ...terms!, months: o.months, downPct: o.downPaymentPercent, frequency: "monthly" });
+    } else {
+      setInternalDownPct(o.downPaymentPercent);
+      setInternalYears((Math.max(1, Math.min(3, Math.round(o.months / 12))) as 1 | 2 | 3));
+      setInternalFreq("monthly");
+    }
+  };
+  const durationText = useOffered
+    ? `${termMonths} ${isAr ? "شهر" : "months"}`
+    : `${years} ${isAr ? "سنة" : "year(s)"}`;
 
   // Per-investor position (units × token price) — the real basis, NOT the full property value.
   // Falls back to defaultValue/totalValue only when there's no unit price to price on.
@@ -191,7 +211,7 @@ export function DynamicInstallmentPlanner({
       [isAr ? "الدفعة المقدمة %" : "Down Payment %", `${downPct}%`],
       [isAr ? "قيمة الدفعة المقدمة" : "Down Payment", String(plan.down)],
       [isAr ? "الرصيد الممول" : "Financed Balance", String(plan.remaining)],
-      [isAr ? "المدة" : "Duration", `${years} ${isAr ? "سنة" : "year(s)"}`],
+      [isAr ? "المدة" : "Duration", durationText],
       [isAr ? "التكرار" : "Frequency", freq],
       [isAr ? "قيمة القسط" : "Per Installment", String(plan.installment)],
       [isAr ? "عدد الأقساط" : "Total Installments", String(plan.periods)],
@@ -216,7 +236,7 @@ export function DynamicInstallmentPlanner({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `payment-plan-${property.id}-${downPct}pct-${years}y.csv`;
+    a.download = `payment-plan-${property.id}-${downPct}pct-${useOffered ? `${termMonths}m` : `${years}y`}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -273,6 +293,26 @@ export function DynamicInstallmentPlanner({
         </div>
 
         {/* Controls */}
+        {useOffered ? (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">
+              {isAr ? "خطة التقسيط (مقدّم + أقساط شهرية)" : "Installment plan (down payment + monthly)"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {offered.map((o) => (
+                <button
+                  key={o.months}
+                  className={chip(termMonths === o.months && downPct === o.downPaymentPercent)}
+                  onClick={() => pickTerm(o)}
+                >
+                  {isAr
+                    ? `${o.months} شهر · مقدّم ${o.downPaymentPercent}%`
+                    : `${o.months} months · ${o.downPaymentPercent}% down`}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="grid md:grid-cols-3 gap-4">
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">
@@ -312,6 +352,7 @@ export function DynamicInstallmentPlanner({
             </div>
           </div>
         </div>
+        )}
 
         <Separator />
 
@@ -430,7 +471,7 @@ export function DynamicInstallmentPlanner({
                   <KV k={isAr ? "إجمالي القيمة" : "Total Value"} v={fmt(total, isAr)} />
                   <KV k={isAr ? "دفعة مقدمة" : "Down Payment"} v={`${fmt(plan.down, isAr)} (${downPct}%)`} />
                   <KV k={isAr ? "ممول" : "Financed"} v={fmt(plan.remaining, isAr)} />
-                  <KV k={isAr ? "المدة" : "Duration"} v={`${years} ${isAr ? "سنة" : "yr"}`} />
+                  <KV k={isAr ? "المدة" : "Duration"} v={durationText} />
                   <KV k={isAr ? "التكرار" : "Frequency"} v={freq} />
                   <KV k={isAr ? "قيمة القسط" : "Installment"} v={fmt(plan.installment, isAr)} />
                   <KV k={isAr ? "عدد الأقساط" : "Total Installments"} v={String(plan.periods)} />

@@ -36,6 +36,8 @@ class Notification(models.Model):
         # Off-plan §3.3.4: a new unit price was recorded for a property the user holds or
         # is paying off in installments.
         UNIT_PRICE_CHANGED = "unit_price_changed", _("Unit price changed")
+        # Off-plan §4 auto-debit: an installment is due but the wallet can't cover it (sent once).
+        INSTALLMENT_DUE_UNPAID = "installment_due_unpaid", _("Installment due — top up wallet")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

@@ -19,6 +19,7 @@ Modeling notes:
   plus spv / token_metadata / financials (OneToOne) for the detail/data-room view.
 """
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -275,6 +276,12 @@ class Property(models.Model):
     # per property, same as the fee rates above (default 5%). The owner still receives the FULL
     # token value; this reduces ONLY the platform's net. UNCAPPED — may exceed the fee (net < 0).
     fee_pronova_discount = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    # Off-plan §4: installment-plan fee %, charged on the down payment and on every
+    # installment. Replaces the platform/management fee for purchases made by installments.
+    fee_installment = models.DecimalField(
+        max_digits=5, decimal_places=2, default=4.0,
+        help_text="Installment fee % on the down payment and on each installment.",
+    )
 
     # Broker affiliate program (Phase 12 / Broker Listings) — the PER-PROPERTY commission %
     # a referring broker earns on a referred investor's primary sale. Default 5% on the
@@ -928,6 +935,39 @@ class RiskFactor(models.Model):
 
     def __str__(self):
         return self.text_en
+
+
+class InstallmentTerm(models.Model):
+    """
+    An installment plan this property offers (off-plan §4): a term in months — a down
+    payment now plus (term - 1) monthly installments — and the down payment % for it.
+    A property with none offers the default table (properties.installment_terms).
+    """
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="installment_terms"
+    )
+    duration_months = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(2), MaxValueValidator(120)],
+        help_text="Total term in months (down payment + monthly installments), e.g. 12.",
+    )
+    down_payment_percent = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01")), MaxValueValidator(Decimal("99.99"))],
+        help_text="Down payment % for this term, e.g. 25.",
+    )
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ("order", "duration_months")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("property", "duration_months"), name="uniq_installment_term_per_duration"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.duration_months} months · {self.down_payment_percent}% down"
 
 
 class ConstructionMilestone(models.Model):

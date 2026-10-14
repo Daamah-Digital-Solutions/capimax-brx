@@ -222,6 +222,10 @@ REST_FRAMEWORK = {
 # Brute-force protection for auth (apps/core/throttling.py). Per client IP and, where
 # an email is submitted, per account. Off unless AUTH_THROTTLE_ENABLED (prod: on).
 # --------------------------------------------------------------------------- #
+# Off-plan model §4: late installments carry no penalty and are never forfeited. The old
+# default-and-forfeit sweep stays in the code but is OFF unless deliberately re-enabled.
+INSTALLMENT_FORFEIT_ENABLED = env.bool("INSTALLMENT_FORFEIT_ENABLED", default=False)
+
 AUTH_THROTTLE_ENABLED = env.bool("AUTH_THROTTLE_ENABLED", default=True)
 AUTH_THROTTLE_RATES = {
     "auth_login": "10/min",

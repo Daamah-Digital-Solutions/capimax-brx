@@ -91,6 +91,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_path": "/portfolio",
         "outro": "",
     },
+    "installment_due_unpaid": {
+        "subject": "Installment due for {property} — please top up your wallet",
+        "heading": "Installment due",
+        "intro": "Installment {sequence} of {total} for {property} (${amount}, due {due_date}) is collected automatically from your wallet, but your balance doesn't cover it yet. Top up your wallet and it will be collected automatically — there is no late fee.",
+        "cta_label": "Top up your wallet",
+        "cta_path": "/wallet",
+        "outro": "",
+    },
     "unit_price_changed": {
         "subject": "New unit price for {property}",
         "heading": "Unit price updated",

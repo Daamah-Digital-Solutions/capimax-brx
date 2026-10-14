@@ -20,6 +20,7 @@ from .models import (
     DeveloperReport,
     FutureContract,
     InstallmentSchedule,
+    InstallmentTerm,
     InsuranceInfo,
     Landmark,
     MarketData,
@@ -179,6 +180,19 @@ class PropertyFAQInline(admin.TabularInline):
     extra = 0
 
 
+class InstallmentTermInline(admin.TabularInline):
+    """Installment plans offered (off-plan §4). Empty → 6/12/18/24 months at 30/25/20/15% down."""
+
+    model = InstallmentTerm
+    extra = 0
+    fields = ("duration_months", "down_payment_percent", "order")
+    verbose_name = "Installment term"
+    verbose_name_plural = (
+        "Installment terms — empty uses the default: 6 months 30% · 12 months 25% · "
+        "18 months 20% · 24 months 15%"
+    )
+
+
 class ConstructionMilestoneInline(admin.TabularInline):
     """Construction tab milestones (empty → the page shows its 5 default milestones)."""
 
@@ -279,6 +293,7 @@ class PropertyAdmin(admin.ModelAdmin):
     )
     inlines = [
         PropertyImageInline,
+        InstallmentTermInline,
         InstallmentScheduleInline,
         FutureContractInline,
         OptionContractInline,
@@ -357,7 +372,7 @@ class PropertyAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount",))}),
+        ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount", "fee_installment"))}),
         (
             "Broker program",
             {

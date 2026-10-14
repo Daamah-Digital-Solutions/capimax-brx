@@ -4,28 +4,53 @@ import { installmentsApi, type InstallmentPreview } from "@/integrations/api/cli
 /**
  * The shared installment terms every property-page calculator reads + writes, so all four
  * blocks (InstallmentCalculator, DynamicInstallmentPlanner, InstallmentScheduleSection,
- * PostConstructionPaymentPlan) show ONE identical plan. Duration is stored in whole MONTHS
- * (12/24/36) — the common unit both the months-dropdown and the years-chips map onto.
+ * PostConstructionPaymentPlan) show ONE identical plan.
+ *
+ * Off-plan §4: `months` is the plan TERM — a down payment now + (months - 1) monthly
+ * installments — and each term has its own down payment % (default 6/12/18/24 months at
+ * 30/25/20/15%, or the property's admin-set terms). The server only accepts offered terms.
  */
 export interface InstallmentTerms {
   units: number;
   downPct: number;
-  months: number; // 12 / 24 / 36
+  months: number; // the term: 6 / 12 / 18 / 24 by default
   frequency: "monthly" | "quarterly";
+}
+
+/** A plan the property offers (PropertyDetail `installmentTerms`). */
+export interface OfferedTerm {
+  months: number;
+  downPaymentPercent: number;
 }
 
 export const DEFAULT_INSTALLMENT_TERMS: InstallmentTerms = {
   units: 1,
-  downPct: 20,
-  months: 24,
+  downPct: 25,
+  months: 12,
   frequency: "monthly",
 };
 
-/** Installments charged for these terms: one row per month, or per 3 months if quarterly. */
+/** Monthly installments after the down payment: a term of N months = N - 1 installments. */
 export function termInstallmentCount(t: InstallmentTerms): number {
   return t.frequency === "quarterly"
     ? Math.max(1, Math.round(t.months / 3))
-    : t.months;
+    : Math.max(1, t.months - 1);
+}
+
+/**
+ * Snap terms onto what the property offers: keep the current term if offered (with its down %),
+ * else the 12-month term if offered, else the first one. Unchanged when nothing is offered.
+ */
+export function snapToOfferedTerm(t: InstallmentTerms, offered?: OfferedTerm[] | null): InstallmentTerms {
+  if (!offered || offered.length === 0) return t;
+  const match =
+    offered.find((o) => o.months === t.months) ??
+    offered.find((o) => o.months === 12) ??
+    offered[0];
+  if (match.months === t.months && match.downPaymentPercent === t.downPct && t.frequency === "monthly") {
+    return t;
+  }
+  return { ...t, months: match.months, downPct: match.downPaymentPercent, frequency: "monthly" };
 }
 
 /**
@@ -41,6 +66,7 @@ export function installmentCheckoutQuery(propertySlug: string, t: InstallmentTer
     down: String(t.downPct),
     duration: String(termInstallmentCount(t)),
     frequency: t.frequency,
+    term: String(t.months),
   }).toString();
 }
 
@@ -71,6 +97,7 @@ export function useInstallmentPreview(
         down_payment_percent: terms.downPct,
         n_installments: n,
         frequency: terms.frequency,
+        ...(terms.frequency === "monthly" ? { term_months: terms.months } : {}),
       })
       .then((p) => {
         if (active) {

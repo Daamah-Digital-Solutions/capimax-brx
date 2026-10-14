@@ -57,7 +57,7 @@ class _Base(APITestCase):
         return self.client.post("/api/investments/", body, format="json")
 
     def plan(self, prop, **extra):
-        return self.buy(prop, is_installment=True, down_payment_percent="20", n_installments=12, **extra)
+        return self.buy(prop, is_installment=True, term_months=12, **extra)  # 25% down + 11 monthly
 
 
 class ExpectedPriceTests(_Base):
@@ -109,7 +109,7 @@ class PaymentModeTests(_Base):
         full_only = _prop(slug="pv", offplan_payment="full")
         resp = self.client.post(
             "/api/installments/preview/",
-            {"property": full_only.slug, "units": 10, "down_payment_percent": 20, "n_installments": 12},
+            {"property": full_only.slug, "units": 10, "term_months": 12},
             format="json",
         )
         self.assertEqual(resp.status_code, 400)

@@ -33,6 +33,7 @@ TYPE_PREF_KEY: dict[str, str] = {
     "distribution_credited": "distributions",
     "installment_paid": "installments",
     "installment_defaulted": "installments",
+    "installment_due_unpaid": "installments",
     "kyc_approved": "security",
     "kyc_rejected": "security",
     "kyb_approved": "security",
