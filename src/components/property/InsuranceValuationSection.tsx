@@ -29,6 +29,14 @@ interface InsuranceValuationSectionProps {
   insurer?: string;
   valuationFirm?: string;
   insuranceDocUrl?: string;
+  /** Admin-managed valuation reports. When present they drive the valuation block. */
+  valuationReports?: { date: string; valuation: number; appraiser?: string }[];
+  /** Property.insurance_active — false shows "Pending activation" instead of "Active". */
+  insuranceActive?: boolean;
+  /** Admin-managed market comparison (MarketData); empty keeps the default figures. */
+  marketAverage?: number | null;
+  comparablesValue?: number | null;
+  propertyPremium?: string;
 }
 
 export function InsuranceValuationSection({
@@ -40,12 +48,34 @@ export function InsuranceValuationSection({
   insurer = "CoverTech Insurance",
   valuationFirm = "CIM Global Financial",
   insuranceDocUrl,
+  valuationReports,
+  insuranceActive,
+  marketAverage,
+  comparablesValue,
+  propertyPremium,
 }: InsuranceValuationSectionProps) {
   const { language, isRTL } = useLanguage();
 
-  const prev = previousValuation ?? Math.round(currentValuation * 0.978);
-  const coverage = coverageAmount ?? Math.round(currentValuation * 1.1);
-  const delta = currentValuation - prev;
+  // Real valuation reports, oldest → newest. With none, the illustrative figures below are
+  // kept exactly as before.
+  const reports = (valuationReports ?? [])
+    .filter((r) => r.date && Number(r.valuation) > 0)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const hasReports = reports.length > 0;
+  const latestReport = hasReports ? reports[reports.length - 1] : undefined;
+  const previousReport = reports.length > 1 ? reports[reports.length - 2] : undefined;
+  const valuation = latestReport ? Number(latestReport.valuation) : currentValuation;
+  // Real mode with a single report has no previous figure to compare against.
+  const hasPrev = !hasReports || !!previousReport;
+  const fmtMonth = (iso: string) =>
+    new Date(iso).toLocaleDateString(isRTL ? "ar" : "en", { month: "short", year: "numeric" });
+
+  const prev = previousReport
+    ? Number(previousReport.valuation)
+    : previousValuation ?? Math.round(valuation * 0.978);
+  const coverage = coverageAmount ?? Math.round(valuation * 1.1);
+  const delta = valuation - prev;
   const deltaPct = ((delta / prev) * 100).toFixed(2);
   const isUp = delta >= 0;
 
@@ -53,14 +83,32 @@ export function InsuranceValuationSection({
   const months = isRTL
     ? ["يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
     : ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const baseStart = Math.round(currentValuation * 0.93);
-  const step = (currentValuation - baseStart) / 5;
-  const history = months.map((m, i) => ({
-    month: m,
-    value: Math.round(baseStart + step * i),
-  }));
+  const baseStart = Math.round(valuation * 0.93);
+  const step = (valuation - baseStart) / 5;
+  const history = hasReports
+    ? reports.slice(-6).map((r) => ({ month: fmtMonth(r.date), value: Number(r.valuation) }))
+    : months.map((m, i) => ({
+        month: m,
+        value: Math.round(baseStart + step * i),
+      }));
   const minH = Math.min(...history.map((h) => h.value));
   const maxH = Math.max(...history.map((h) => h.value));
+  const growthPct = ((valuation - history[0].value) / history[0].value) * 100;
+
+  // Market comparison: admin figures when set, else the original defaults.
+  const marketAvg =
+    marketAverage != null && Number(marketAverage) > 0
+      ? Number(marketAverage)
+      : Math.round(valuation * 0.94);
+  const comps =
+    comparablesValue != null && Number(comparablesValue) > 0
+      ? Number(comparablesValue)
+      : Math.round(valuation * 0.97);
+  const premium = propertyPremium?.trim()
+    ? propertyPremium.trim()
+    : comparablesValue != null && Number(comparablesValue) > 0
+      ? `${valuation >= comps ? "+" : ""}${(((valuation - comps) / comps) * 100).toFixed(1)}%`
+      : "+6.4%";
 
   const fmt = (n: number) =>
     `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -117,10 +165,16 @@ export function InsuranceValuationSection({
                       ? "العقار مؤمَّن بالكامل"
                       : "Property Fully Insured"}
                   </h3>
-                  <Badge className="bg-success/20 text-success border-success/30 gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    {language === "ar" ? "ساري المفعول" : "Active"}
-                  </Badge>
+                  {insuranceActive === false ? (
+                    <Badge variant="outline" className="gap-1 text-muted-foreground">
+                      {language === "ar" ? "قيد التفعيل" : "Pending activation"}
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-success/20 text-success border-success/30 gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      {language === "ar" ? "ساري المفعول" : "Active"}
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {language === "ar"
@@ -234,7 +288,11 @@ export function InsuranceValuationSection({
             </div>
             <Badge variant="outline" className="gap-1 self-start md:self-auto">
               <Calendar className="w-3 h-3" />
-              {language === "ar" ? "آخر تحديث: هذا الشهر" : "Last update: This month"}
+              {latestReport
+                ? language === "ar"
+                  ? `آخر تحديث: ${fmtMonth(latestReport.date)}`
+                  : `Last update: ${fmtMonth(latestReport.date)}`
+                : language === "ar" ? "آخر تحديث: هذا الشهر" : "Last update: This month"}
             </Badge>
           </div>
 
@@ -244,29 +302,42 @@ export function InsuranceValuationSection({
               <p className="text-xs text-muted-foreground mb-1">
                 {language === "ar" ? "التقييم الحالي" : "Current Valuation"}
               </p>
-              <p className="text-2xl font-bold text-primary">{fmt(currentValuation)}</p>
-              <div className={`text-xs mt-1 flex items-center gap-1 ${isUp ? "text-success" : "text-destructive"}`}>
-                <TrendingUp className="w-3 h-3" />
-                {isUp ? "+" : ""}{deltaPct}% {language === "ar" ? "مقارنة بالشهر السابق" : "vs previous month"}
-              </div>
+              <p className="text-2xl font-bold text-primary">{fmt(valuation)}</p>
+              {hasPrev && (
+                <div className={`text-xs mt-1 flex items-center gap-1 ${isUp ? "text-success" : "text-destructive"}`}>
+                  <TrendingUp className="w-3 h-3" />
+                  {isUp ? "+" : ""}{deltaPct}%{" "}
+                  {hasReports
+                    ? language === "ar" ? "مقارنة بالتقييم السابق" : "vs previous valuation"
+                    : language === "ar" ? "مقارنة بالشهر السابق" : "vs previous month"}
+                </div>
+              )}
             </div>
             <div className="p-5 rounded-xl border bg-card">
               <p className="text-xs text-muted-foreground mb-1">
                 {language === "ar" ? "التقييم السابق" : "Previous Valuation"}
               </p>
-              <p className="text-2xl font-bold">{fmt(prev)}</p>
+              <p className="text-2xl font-bold">{hasPrev ? fmt(prev) : "—"}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {language === "ar" ? "الشهر الماضي" : "Last month"}
+                {previousReport
+                  ? fmtMonth(previousReport.date)
+                  : hasReports
+                    ? language === "ar" ? "أول تقييم مسجّل" : "First valuation on record"
+                    : language === "ar" ? "الشهر الماضي" : "Last month"}
               </p>
             </div>
             <div className="p-5 rounded-xl border bg-card">
               <p className="text-xs text-muted-foreground mb-1">
-                {language === "ar" ? "النمو خلال 6 أشهر" : "6-Month Growth"}
+                {hasReports
+                  ? language === "ar"
+                    ? `النمو منذ ${fmtMonth(reports[Math.max(0, reports.length - 6)].date)}`
+                    : `Growth since ${fmtMonth(reports[Math.max(0, reports.length - 6)].date)}`
+                  : language === "ar" ? "النمو خلال 6 أشهر" : "6-Month Growth"}
               </p>
-              <p className="text-2xl font-bold text-success">
-                +{(((currentValuation - history[0].value) / history[0].value) * 100).toFixed(2)}%
+              <p className={`text-2xl font-bold ${growthPct >= 0 ? "text-success" : "text-destructive"}`}>
+                {growthPct >= 0 ? "+" : ""}{growthPct.toFixed(2)}%
               </p>
-              <Progress value={Math.min(100, ((currentValuation - history[0].value) / history[0].value) * 100 * 10)} className="h-1.5 mt-2" />
+              <Progress value={Math.max(0, Math.min(100, growthPct * 10))} className="h-1.5 mt-2" />
             </div>
           </div>
 
@@ -274,18 +345,22 @@ export function InsuranceValuationSection({
           <div className="p-5 rounded-xl border bg-muted/30 mb-6">
             <div className="flex items-center justify-between mb-4">
               <p className="font-medium text-sm">
-                {language === "ar" ? "تاريخ التقييم الشهري" : "Monthly Valuation History"}
+                {hasReports
+                  ? language === "ar" ? "تاريخ التقييم" : "Valuation History"
+                  : language === "ar" ? "تاريخ التقييم الشهري" : "Monthly Valuation History"}
               </p>
               <span className="text-xs text-muted-foreground">
-                {language === "ar" ? "آخر 6 أشهر" : "Last 6 months"}
+                {hasReports
+                  ? language === "ar" ? `${history.length} تقييم` : `${history.length} valuation${history.length === 1 ? "" : "s"}`
+                  : language === "ar" ? "آخر 6 أشهر" : "Last 6 months"}
               </span>
             </div>
             <div className="flex items-end justify-between gap-2 h-32">
-              {history.map((h) => {
+              {history.map((h, i) => {
                 const heightPct =
                   maxH === minH ? 60 : 30 + ((h.value - minH) / (maxH - minH)) * 70;
                 return (
-                  <div key={h.month} className="flex-1 flex flex-col items-center gap-2">
+                  <div key={`${h.month}-${i}`} className="flex-1 flex flex-col items-center gap-2">
                     <span className="text-[10px] font-mono text-muted-foreground">
                       ${(h.value / 1000).toFixed(0)}k
                     </span>
@@ -328,19 +403,21 @@ export function InsuranceValuationSection({
               <p className="text-xs text-muted-foreground">
                 {language === "ar" ? "متوسط السوق المحلي" : "Local Market Average"}
               </p>
-              <p className="text-lg font-semibold">{fmt(Math.round(currentValuation * 0.94))}</p>
+              <p className="text-lg font-semibold">{fmt(marketAvg)}</p>
             </div>
             <div className="p-4 rounded-xl border bg-card">
               <p className="text-xs text-muted-foreground">
                 {language === "ar" ? "مقارنة عقارات مماثلة" : "Comparable Properties"}
               </p>
-              <p className="text-lg font-semibold">{fmt(Math.round(currentValuation * 0.97))}</p>
+              <p className="text-lg font-semibold">{fmt(comps)}</p>
             </div>
             <div className="p-4 rounded-xl border bg-success/5 border-success/30">
               <p className="text-xs text-muted-foreground">
                 {language === "ar" ? "ميزة هذا العقار" : "This Property Premium"}
               </p>
-              <p className="text-lg font-semibold text-success">+6.4%</p>
+              <p className={`text-lg font-semibold ${premium.startsWith("-") ? "text-destructive" : "text-success"}`}>
+                {premium}
+              </p>
             </div>
           </div>
         </CardContent>

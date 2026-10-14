@@ -22,7 +22,12 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator, URLValidator
+from django.core.validators import (
+    FileExtensionValidator,
+    MaxValueValidator,
+    MinValueValidator,
+    URLValidator,
+)
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -234,6 +239,15 @@ class Property(models.Model):
 
     # construction (any under-construction model)
     construction_progress = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Construction tab media tiles (link or site path; empty → the tile shows as a label).
+    site_photos_url = models.CharField(
+        max_length=500, blank=True, validators=[validate_image_ref],
+        help_text="Link to the site photo album.",
+    )
+    drone_video_url = models.CharField(
+        max_length=500, blank=True, validators=[validate_image_ref],
+        help_text="Link to the drone footage (e.g. YouTube).",
+    )
 
     # fees (frontend shows these on the detail financials tab; constants today)
     fee_platform = models.DecimalField(max_digits=5, decimal_places=2, default=1.5)
@@ -339,6 +353,13 @@ class Property(models.Model):
             )
         if not self.image and not self.image_file:
             errors["image"] = "Upload a main image or enter an image URL."
+        if self.images not in (None, "") and (
+            not isinstance(self.images, list) or not all(isinstance(u, str) for u in self.images)
+        ):
+            errors["images"] = (
+                'Gallery must be a list of image links, e.g. ["/props/x/1.jpg", "https://…/2.jpg"]. '
+                "To upload files, use the Gallery section below."
+            )
         if errors:
             raise ValidationError(errors)
         # Derive after validation so the (read-only) admin fields reflect the saved values.
@@ -361,7 +382,15 @@ class Property(models.Model):
 
     def gallery_urls(self, request=None) -> list:
         """Gallery = the JSON URL list, then the admin-uploaded images in their set order."""
-        urls = [u for u in (self.images or []) if u]
+        # Tolerate legacy/malformed JSON (a bare string or number) — one bad row must never
+        # 500 the whole marketplace list. clean() blocks new malformed values in the admin.
+        raw = self.images
+        if isinstance(raw, str):
+            urls = [raw] if raw else []
+        elif isinstance(raw, (list, tuple)):
+            urls = [u for u in raw if u]
+        else:
+            urls = []
         urls += [public_media_url(g.image, request) for g in self.gallery.all() if g.image]
         return urls
 
@@ -550,6 +579,11 @@ class SPVRecord(models.Model):
     jurisdiction = models.CharField(max_length=120)
     registration_number = models.CharField(max_length=120)
     established = models.DateField(null=True, blank=True)
+    # Structure tab (empty → the page keeps its default wording).
+    compliance = models.CharField(max_length=120, blank=True, help_text='e.g. "Reg D 506(c) / Reg S"')
+    compliance_ar = models.CharField(max_length=120, blank=True)
+    custody = models.CharField(max_length=120, blank=True, help_text='e.g. "Licensed Custodian"')
+    custody_ar = models.CharField(max_length=120, blank=True)
 
     def __str__(self):
         return self.name
@@ -621,6 +655,11 @@ class PropertyFinancials(models.Model):
     net_operating_income = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     cap_rate = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     occupancy_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Financial tab "5-Year Yield Projection" (empty → the page keeps its default estimate).
+    yield_projection = models.JSONField(
+        default=list, blank=True,
+        help_text='Up to 5 points, e.g. [{"year": "Year 1", "value": 8.1}, {"year": "Year 2", "value": 8.4}]',
+    )
 
     def __str__(self):
         return f"Financials · {self.property.slug}"
@@ -641,6 +680,9 @@ class PropertyDocument(models.Model):
         LEASE = "lease", _("Lease Agreement")
         AUDIT = "audit", _("Smart Contract Audit")
         DILIGENCE = "diligence", _("Due Diligence")
+        # Drive the payment-plan card's buttons on under-construction properties.
+        PAYMENT_PLAN = "payment_plan", _("Payment Plan")
+        HANDOVER_TERMS = "handover_terms", _("Post-Handover Terms")
 
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="documents"
@@ -789,6 +831,19 @@ class MarketData(models.Model):
     vacancy_rate = models.CharField(max_length=16, blank=True)  # e.g. "4.1%"
     rent_index = models.CharField(max_length=16, blank=True)    # e.g. "112"
     price_index_history = models.JSONField(default=list, blank=True)  # [{"year":"2021","value":100}]
+    # Valuation section "market comparison" (empty → the page keeps its default figures).
+    market_average = models.DecimalField(
+        max_digits=16, decimal_places=2, null=True, blank=True,
+        help_text="Local market average value for a comparable asset (USD).",
+    )
+    comparables_value = models.DecimalField(
+        max_digits=16, decimal_places=2, null=True, blank=True,
+        help_text="Average value of comparable properties (USD).",
+    )
+    property_premium = models.CharField(
+        max_length=16, blank=True,
+        help_text='e.g. "+6.4%". Empty → computed from the comparables value when set.',
+    )
 
     def __str__(self):
         return f"Market · {self.property.slug}"
@@ -837,6 +892,44 @@ class RiskFactor(models.Model):
 
     class Meta:
         ordering = ("id",)
+
+    def __str__(self):
+        return self.text_en
+
+
+class ConstructionMilestone(models.Model):
+    """A construction-tab milestone, ticked once construction progress reaches `threshold`."""
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="construction_milestones"
+    )
+    name_en = models.CharField(max_length=80)
+    name_ar = models.CharField(max_length=80, blank=True)
+    threshold = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Construction progress % at which this milestone shows as done.",
+    )
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ("order", "threshold", "id")
+
+    def __str__(self):
+        return f"{self.name_en} ({self.threshold}%)"
+
+
+class PostHandoverBenefit(models.Model):
+    """A benefit bullet on the under-construction 'Payment Plan — After Construction' card."""
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="post_handover_benefits"
+    )
+    text_en = models.CharField(max_length=160)
+    text_ar = models.CharField(max_length=160, blank=True)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ("order", "id")
 
     def __str__(self):
         return self.text_en

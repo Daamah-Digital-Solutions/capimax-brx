@@ -458,10 +458,15 @@ export default function PropertyDetail() {
               currentValuation={cp.totalValue ?? 5000000}
               insuranceProvider={cp.insurance?.provider}
               policyNumber={cp.insurance?.policyNumber}
-              coverageAmount={cp.insurance?.coverageAmount}
+              coverageAmount={cp.insurance?.coverageAmount || undefined}
               insurer={cp.insurance?.reinsurer}
               valuationFirm={cp.insurance?.valuationFirm}
               insuranceDocUrl={cp.documents?.find((d) => d.type === "insurance")?.url}
+              valuationReports={cp.valuationReports}
+              insuranceActive={cp.insuranceActive}
+              marketAverage={cp.market?.marketAverage}
+              comparablesValue={cp.market?.comparablesValue}
+              propertyPremium={cp.market?.propertyPremium}
             />
 
             {/* Exit & disclosures */}

@@ -371,3 +371,74 @@ class PropertyUploadApiTests(APITestCase):
         self.assertTrue(
             self.prop.hero_image_url().startswith("https://api.capimaxbrx.com/media/property_images/")
         )
+
+
+class AdminManagedSectionsApiTests(APITestCase):
+    """Every per-property block the page used to hard-code now comes from admin data."""
+
+    def test_detail_exposes_admin_managed_sections(self):
+        from .models import (
+            ConstructionMilestone, MarketData, PostHandoverBenefit, PropertyFinancials,
+            SPVRecord, ValuationReport,
+        )
+
+        p = Property.objects.create(**_valid_property_kwargs(
+            slug="sections", model="installment",
+            site_photos_url="https://photos.example.com/album", drone_video_url="https://youtu.be/x",
+        ))
+        SPVRecord.objects.create(
+            property=p, name="SPV", jurisdiction="DE", registration_number="1",
+            compliance="Reg S", compliance_ar="لائحة S", custody="Custodian X", custody_ar="حافظ X",
+        )
+        PropertyFinancials.objects.create(property=p, yield_projection=[{"year": "Year 1", "value": 8.1}])
+        MarketData.objects.create(
+            property=p, market_average=Decimal("5000000"), comparables_value=Decimal("5200000"),
+            property_premium="+4.1%",
+        )
+        ConstructionMilestone.objects.create(property=p, name_en="Roof", name_ar="السقف", threshold=80, order=2)
+        ConstructionMilestone.objects.create(property=p, name_en="Piling", name_ar="الخوازيق", threshold=20, order=1)
+        PostHandoverBenefit.objects.create(property=p, text_en="No interest", text_ar="بدون فوائد")
+        ValuationReport.objects.create(property=p, date="2025-03-01", valuation=Decimal("5600000"), appraiser="CIM")
+
+        d = self.client.get("/api/properties/sections/").data
+        self.assertEqual(
+            (d["spv"]["compliance"], d["spv"]["complianceAr"], d["spv"]["custody"], d["spv"]["custodyAr"]),
+            ("Reg S", "لائحة S", "Custodian X", "حافظ X"),
+        )
+        self.assertEqual(d["financials"]["yieldProjection"], [{"year": "Year 1", "value": 8.1}])
+        self.assertEqual(
+            (d["market"]["marketAverage"], d["market"]["comparablesValue"], d["market"]["propertyPremium"]),
+            (5000000.0, 5200000.0, "+4.1%"),
+        )
+        self.assertEqual([m["nameEn"] for m in d["constructionMilestones"]], ["Piling", "Roof"])
+        self.assertEqual(d["postHandoverBenefits"], [{"textEn": "No interest", "textAr": "بدون فوائد"}])
+        self.assertEqual((d["sitePhotosUrl"], d["droneVideoUrl"]), ("https://photos.example.com/album", "https://youtu.be/x"))
+        self.assertEqual(d["valuationReports"][0]["valuation"], 5600000.0)
+
+    def test_new_document_types_are_accepted(self):
+        from .models import PropertyDocument
+
+        p = Property.objects.create(**_valid_property_kwargs(slug="doc-types"))
+        for t in ("payment_plan", "handover_terms"):
+            PropertyDocument(
+                property=p, name="x", name_en="x", date="2026-01-01", doc_type=t,
+                url="https://api.example.com/x.pdf",
+            ).full_clean()
+
+
+class MalformedGalleryTests(APITestCase):
+    def test_bad_gallery_value_never_breaks_the_list(self):
+        # A legacy row saved before validation (e.g. images=2) must not 500 the marketplace.
+        p = Property.objects.create(**_valid_property_kwargs(slug="bad-gallery"))
+        Property.objects.filter(pk=p.pk).update(images=2)
+        self.assertEqual(self.client.get("/api/properties/").status_code, 200)
+        self.assertEqual(self.client.get("/api/properties/bad-gallery/").data["images"], [])
+        Property.objects.filter(pk=p.pk).update(images="/props/x/1.jpg")
+        self.assertEqual(self.client.get("/api/properties/bad-gallery/").data["images"], ["/props/x/1.jpg"])
+
+    def test_admin_rejects_a_malformed_gallery(self):
+        for bad in (2, "x", [1, 2], {"a": 1}):
+            with self.subTest(bad=bad), self.assertRaises(ValidationError) as ctx:
+                Property(**_valid_property_kwargs(images=bad)).full_clean()
+            self.assertIn("images", ctx.exception.message_dict)
+        Property(**_valid_property_kwargs(images=["/a.jpg", "https://x.y/b.jpg"])).full_clean()

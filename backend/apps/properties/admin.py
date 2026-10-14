@@ -15,6 +15,7 @@ from . import pricing
 
 from .models import (
     Amenity,
+    ConstructionMilestone,
     DeveloperInfo,
     DeveloperReport,
     FutureContract,
@@ -24,6 +25,7 @@ from .models import (
     MarketData,
     OptionContract,
     PortfolioAsset,
+    PostHandoverBenefit,
     Property,
     PropertyDocument,
     PropertyFAQ,
@@ -177,6 +179,22 @@ class PropertyFAQInline(admin.TabularInline):
     extra = 0
 
 
+class ConstructionMilestoneInline(admin.TabularInline):
+    """Construction tab milestones (empty → the page shows its 5 default milestones)."""
+
+    model = ConstructionMilestone
+    extra = 0
+    fields = ("name_en", "name_ar", "threshold", "order")
+
+
+class PostHandoverBenefitInline(admin.TabularInline):
+    """Under-construction payment-plan benefits (empty → the page shows its defaults)."""
+
+    model = PostHandoverBenefit
+    extra = 0
+    fields = ("text_en", "text_ar", "order")
+
+
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
     list_display = (
@@ -280,6 +298,8 @@ class PropertyAdmin(admin.ModelAdmin):
         LandmarkInline,
         RiskFactorInline,
         PropertyFAQInline,
+        ConstructionMilestoneInline,
+        PostHandoverBenefitInline,
     ]
     fieldsets = (
         (
@@ -329,7 +349,12 @@ class PropertyAdmin(admin.ModelAdmin):
         ),
         (
             "Narrative",
-            {"fields": ("description", "description_ar", "construction_progress")},
+            {
+                "fields": (
+                    "description", "description_ar", "construction_progress",
+                    ("site_photos_url", "drone_video_url"),
+                )
+            },
         ),
         ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount",))}),
         (

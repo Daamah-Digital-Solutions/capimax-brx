@@ -170,7 +170,10 @@ export interface Property {
   documents?: PropertyDocument[];
 
   // data-room section content (from the API detail; admin-managed)
-  spv?: { name: string; jurisdiction: string; registrationNumber: string; established?: string };
+  spv?: {
+    name: string; jurisdiction: string; registrationNumber: string; established?: string;
+    compliance?: string; complianceAr?: string; custody?: string; custodyAr?: string;
+  };
   tokenMetadata?: {
     contractAddress?: string; network?: string; standard?: string;
     totalSupply?: number; tokenPrice?: number; verified?: boolean;
@@ -180,6 +183,7 @@ export interface Property {
   financials?: {
     purchasePrice: number; currentValuation: number; grossRentalIncome: number;
     operatingExpenses: number; netOperatingIncome: number; capRate: number; occupancyRate: number;
+    yieldProjection?: { year: string; value: number }[];
   };
   developer?: {
     name: string; nameAr: string; overview: string; overviewAr: string;
@@ -188,14 +192,22 @@ export interface Property {
     relatedProjects: { en: string; ar: string }[];
   };
   insurance?: { provider: string; policyNumber: string; coverageAmount: number; reinsurer: string; valuationFirm: string };
-  market?: { capRate: string; cityGrowth: string; vacancyRate: string; rentIndex: string; priceIndexHistory: { year: string; value: number }[] };
+  market?: {
+    capRate: string; cityGrowth: string; vacancyRate: string; rentIndex: string;
+    priceIndexHistory: { year: string; value: number }[];
+    marketAverage?: number | null; comparablesValue?: number | null; propertyPremium?: string;
+  };
   amenities?: { nameEn: string; nameAr: string }[];
   landmarks?: { nameEn: string; nameAr: string }[];
   riskFactors?: { textEn: string; textAr: string }[];
   faqs?: { questionEn: string; questionAr: string; answerEn: string; answerAr: string }[];
+  postHandoverBenefits?: { textEn: string; textAr: string }[];
 
   // construction (for any under-construction model)
   constructionProgress?: number;
+  constructionMilestones?: { nameEn: string; nameAr: string; threshold: number }[];
+  sitePhotosUrl?: string;
+  droneVideoUrl?: string;
 }
 
 // =============================================================

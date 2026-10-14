@@ -113,6 +113,11 @@ function SectionHeader({
   );
 }
 
+// Newest admin-attached document of a type (the API returns documents newest-first).
+function latestDocUrl(p: Property, type: string): string | undefined {
+  return (p.documents ?? []).find((d) => d.type === type && d.url)?.url || undefined;
+}
+
 function KV({
   label,
   labelAr,
@@ -449,8 +454,21 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
             <KV label="Jurisdiction" labelAr="الولاية القضائية" value={spv?.jurisdiction ?? "—"} isAr={isAr} />
             <KV label="Reg. Number" labelAr="رقم التسجيل" value={spv?.registrationNumber ?? "—"} isAr={isAr} />
             <KV label="Established" labelAr="تأسست" value={spv?.established ?? "—"} isAr={isAr} />
-            <KV label="Compliance" labelAr="الامتثال" value="Reg D 506(c) / Reg S" isAr={isAr} />
-            <KV label="Custody" labelAr="الحفظ" value={isAr ? "حافظ مرخّص" : "Licensed Custodian"} isAr={isAr} />
+            <KV
+              label="Compliance"
+              labelAr="الامتثال"
+              value={(isAr ? spv?.complianceAr || spv?.compliance : spv?.compliance) || "Reg D 506(c) / Reg S"}
+              isAr={isAr}
+            />
+            <KV
+              label="Custody"
+              labelAr="الحفظ"
+              value={
+                (isAr ? spv?.custodyAr || spv?.custody : spv?.custody) ||
+                (isAr ? "حافظ مرخّص" : "Licensed Custodian")
+              }
+              isAr={isAr}
+            />
           </div>
         </div>
 
@@ -490,13 +508,20 @@ function FinancialSection({ p, isAr }: { p: Property; isAr: boolean }) {
   const noi = fin ? Math.round(fin.netOperatingIncome) : grossIncome - opex;
   const capRate = fin ? Number(fin.capRate) : (p.totalValue > 0 ? (noi / p.totalValue) * 100 : 0);
 
-  const projection = [
-    { y: "Year 1", v: yieldPct },
-    { y: "Year 2", v: +(yieldPct * 1.04).toFixed(1) },
-    { y: "Year 3", v: +(yieldPct * 1.08).toFixed(1) },
-    { y: "Year 4", v: +(yieldPct * 1.12).toFixed(1) },
-    { y: "Year 5", v: +(yieldPct * 1.15).toFixed(1) },
-  ];
+  // Admin-set projection (Financials › yield projection) wins; else the default estimate.
+  const adminProjection = (fin?.yieldProjection ?? [])
+    .filter((pt) => pt && pt.year && Number.isFinite(Number(pt.value)))
+    .slice(0, 5)
+    .map((pt) => ({ y: String(pt.year), v: Number(pt.value) }));
+  const projection = adminProjection.length
+    ? adminProjection
+    : [
+        { y: "Year 1", v: yieldPct },
+        { y: "Year 2", v: +(yieldPct * 1.04).toFixed(1) },
+        { y: "Year 3", v: +(yieldPct * 1.08).toFixed(1) },
+        { y: "Year 4", v: +(yieldPct * 1.12).toFixed(1) },
+        { y: "Year 5", v: +(yieldPct * 1.15).toFixed(1) },
+      ];
 
   return (
     <Card>
@@ -584,6 +609,8 @@ const DOC_SECTIONS = [
   { key: "lease", icon: FileText, en: "Lease Agreement", ar: "عقد الإيجار" },
   { key: "audit", icon: ShieldCheck, en: "Smart Contract Audit", ar: "تدقيق العقد الذكي" },
   { key: "construction", icon: Building2, en: "Construction Reports", ar: "تقارير الإنشاء" },
+  { key: "payment_plan", icon: Calendar, en: "Payment Plan", ar: "خطة السداد" },
+  { key: "handover_terms", icon: FileText, en: "Post-Handover Terms", ar: "شروط ما بعد التسليم" },
 ];
 
 function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
@@ -825,12 +852,26 @@ function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
 function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
   if (p.status !== "construction") return null;
   const progress = p.constructionProgress ?? 0;
-  const milestones = [
-    { en: "Site Preparation", ar: "تجهيز الموقع", done: progress >= 10 },
-    { en: "Foundations", ar: "الأساسات", done: progress >= 25 },
-    { en: "Structural Build", ar: "البناء الإنشائي", done: progress >= 50 },
-    { en: "MEP & Façade", ar: "الواجهة والأنظمة", done: progress >= 75 },
-    { en: "Finishing & Handover", ar: "التشطيب والتسليم", done: progress >= 95 },
+  // Admin-set milestones (Construction milestones) win; else the default five.
+  const milestones = p.constructionMilestones?.length
+    ? p.constructionMilestones.map((m) => ({
+        en: m.nameEn,
+        ar: m.nameAr || m.nameEn,
+        done: progress >= m.threshold,
+      }))
+    : [
+        { en: "Site Preparation", ar: "تجهيز الموقع", done: progress >= 10 },
+        { en: "Foundations", ar: "الأساسات", done: progress >= 25 },
+        { en: "Structural Build", ar: "البناء الإنشائي", done: progress >= 50 },
+        { en: "MEP & Façade", ar: "الواجهة والأنظمة", done: progress >= 75 },
+        { en: "Finishing & Handover", ar: "التشطيب والتسليم", done: progress >= 95 },
+      ];
+  // Media tiles become links when the admin set them; otherwise they stay as labels.
+  const inspectionUrl = latestDocUrl(p, "construction");
+  const mediaTiles = [
+    { icon: Camera, en: "Site Photos", ar: "صور الموقع", href: p.sitePhotosUrl },
+    { icon: Video, en: "Drone Footage", ar: "فيديو من الدرون", href: p.droneVideoUrl },
+    { icon: ClipboardCheck, en: "Inspection Reports", ar: "تقارير الفحص", href: inspectionUrl },
   ];
 
   return (
@@ -850,9 +891,12 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
           <Progress value={progress} className="h-3" />
         </div>
 
-        <div className="grid grid-cols-5 gap-2">
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(milestones.length, 1), 6)}, minmax(0, 1fr))` }}
+        >
           {milestones.map((m, i) => (
-            <div key={m.en} className="text-center">
+            <div key={`${m.en}-${i}`} className="text-center">
               <div
                 className={`w-9 h-9 rounded-full mx-auto flex items-center justify-center text-xs font-bold mb-1 ${
                   m.done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
@@ -866,18 +910,31 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
         </div>
 
         <div className="grid md:grid-cols-3 gap-3">
-          <div className="p-3 rounded-lg bg-muted/40 border border-border flex items-center gap-2">
-            <Camera className="w-4 h-4 text-primary" />
-            <span className="text-xs">{isAr ? "صور الموقع" : "Site Photos"}</span>
-          </div>
-          <div className="p-3 rounded-lg bg-muted/40 border border-border flex items-center gap-2">
-            <Video className="w-4 h-4 text-primary" />
-            <span className="text-xs">{isAr ? "فيديو من الدرون" : "Drone Footage"}</span>
-          </div>
-          <div className="p-3 rounded-lg bg-muted/40 border border-border flex items-center gap-2">
-            <ClipboardCheck className="w-4 h-4 text-primary" />
-            <span className="text-xs">{isAr ? "تقارير الفحص" : "Inspection Reports"}</span>
-          </div>
+          {mediaTiles.map((t) => {
+            const Icon = t.icon;
+            const inner = (
+              <>
+                <Icon className="w-4 h-4 text-primary" />
+                <span className="text-xs">{isAr ? t.ar : t.en}</span>
+                {t.href && <ExternalLink className="w-3 h-3 text-muted-foreground ms-auto" />}
+              </>
+            );
+            return t.href ? (
+              <a
+                key={t.en}
+                href={t.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 rounded-lg bg-muted/40 border border-border flex items-center gap-2 hover:border-primary/50 transition-colors"
+              >
+                {inner}
+              </a>
+            ) : (
+              <div key={t.en} className="p-3 rounded-lg bg-muted/40 border border-border flex items-center gap-2">
+                {inner}
+              </div>
+            );
+          })}
         </div>
 
         {p.developerReports && p.developerReports.length > 0 && (
@@ -1335,12 +1392,48 @@ function PostConstructionPaymentPlan({
     },
   ];
 
-  const benefits = [
-    { en: "0% interest — interest-free plan", ar: "بدون فوائد" },
-    { en: "Token-backed ownership from day 1", ar: "ملكية مدعومة بالتوكن من اليوم الأول" },
-    { en: "Rental income offsets installments", ar: "الدخل الإيجاري يقابل الأقساط" },
-    { en: "Early settlement allowed anytime", ar: "السداد المبكر متاح في أي وقت" },
-  ];
+  // Admin-set benefits (Post-handover benefits) win; else the default four.
+  const benefits = p.postHandoverBenefits?.length
+    ? p.postHandoverBenefits.map((b) => ({ en: b.textEn, ar: b.textAr || b.textEn }))
+    : [
+        { en: "0% interest — interest-free plan", ar: "بدون فوائد" },
+        { en: "Token-backed ownership from day 1", ar: "ملكية مدعومة بالتوكن من اليوم الأول" },
+        { en: "Rental income offsets installments", ar: "الدخل الإيجاري يقابل الأقساط" },
+        { en: "Early settlement allowed anytime", ar: "السداد المبكر متاح في أي وقت" },
+      ];
+
+  // Buttons: an admin-attached document wins (Documents › Payment Plan / Post-Handover
+  // Terms); "Download Payment Plan" otherwise exports the investor's live plan as CSV.
+  const planDocUrl = latestDocUrl(p, "payment_plan");
+  const termsDocUrl = latestDocUrl(p, "handover_terms");
+  const downloadPlanCsv = () => {
+    if (!preview) return;
+    const headers = isAr
+      ? ["#", "تاريخ الاستحقاق", "المبلغ (USD)", "الملكية %", "المتبقي (USD)"]
+      : ["#", "Due Date", "Amount (USD)", "Ownership %", "Remaining (USD)"];
+    const rows: (string | number)[][] = [
+      [
+        0,
+        isAr ? "عند الشراء" : "On purchase",
+        preview.downPayment,
+        `${preview.downPaymentPercent}%`,
+        Math.max(0, preview.total - preview.downPayment),
+      ],
+      ...preview.rows.map((r) => [r.sequence, r.dueDate, r.amount, `${r.ownershipPercent}%`, r.balance]),
+    ];
+    const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    // BOM for Excel UTF-8 (Arabic)
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payment-plan-${p.id}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Card className="border-success/30">
@@ -1426,14 +1519,37 @@ function PostConstructionPaymentPlan({
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2">
-          <Button size="sm" variant="outline" className="gap-2">
-            <Download className="w-4 h-4" />
-            {isAr ? "تنزيل خطة السداد" : "Download Payment Plan"}
-          </Button>
-          <Button size="sm" variant="outline" className="gap-2">
-            <FileText className="w-4 h-4" />
-            {isAr ? "شروط ما بعد التسليم" : "Post-Handover Terms"}
-          </Button>
+          {planDocUrl ? (
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <a href={`${planDocUrl}?download=1`} target="_blank" rel="noopener noreferrer" download>
+                <Download className="w-4 h-4" />
+                {isAr ? "تنزيل خطة السداد" : "Download Payment Plan"}
+              </a>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={usingPreview ? downloadPlanCsv : undefined}
+            >
+              <Download className="w-4 h-4" />
+              {isAr ? "تنزيل خطة السداد" : "Download Payment Plan"}
+            </Button>
+          )}
+          {termsDocUrl ? (
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <a href={termsDocUrl} target="_blank" rel="noopener noreferrer">
+                <FileText className="w-4 h-4" />
+                {isAr ? "شروط ما بعد التسليم" : "Post-Handover Terms"}
+              </a>
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" className="gap-2">
+              <FileText className="w-4 h-4" />
+              {isAr ? "شروط ما بعد التسليم" : "Post-Handover Terms"}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

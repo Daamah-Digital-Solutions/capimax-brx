@@ -11,6 +11,7 @@ from rest_framework import serializers
 
 from .models import (
     Amenity,
+    ConstructionMilestone,
     DeveloperInfo,
     DeveloperReport,
     FutureContract,
@@ -20,6 +21,7 @@ from .models import (
     MarketData,
     OptionContract,
     PortfolioAsset,
+    PostHandoverBenefit,
     Property,
     PropertyDocument,
     PropertyFAQ,
@@ -180,10 +182,15 @@ class ValuationReportSerializer(serializers.ModelSerializer):
 # --- detail / data-room extras (SPEC §3.1) -------------------------------- #
 class SPVSerializer(serializers.ModelSerializer):
     registrationNumber = serializers.CharField(source="registration_number")
+    complianceAr = serializers.CharField(source="compliance_ar")
+    custodyAr = serializers.CharField(source="custody_ar")
 
     class Meta:
         model = SPVRecord
-        fields = ("name", "jurisdiction", "registrationNumber", "established")
+        fields = (
+            "name", "jurisdiction", "registrationNumber", "established",
+            "compliance", "complianceAr", "custody", "custodyAr",
+        )
 
 
 class TokenMetadataSerializer(serializers.ModelSerializer):
@@ -266,6 +273,7 @@ class FinancialsSerializer(serializers.ModelSerializer):
     occupancyRate = serializers.DecimalField(
         source="occupancy_rate", max_digits=5, decimal_places=2
     )
+    yieldProjection = serializers.JSONField(source="yield_projection")
 
     class Meta:
         model = PropertyFinancials
@@ -277,6 +285,7 @@ class FinancialsSerializer(serializers.ModelSerializer):
             "netOperatingIncome",
             "capRate",
             "occupancyRate",
+            "yieldProjection",
         )
 
 
@@ -329,10 +338,20 @@ class MarketDataSerializer(serializers.ModelSerializer):
     vacancyRate = serializers.CharField(source="vacancy_rate")
     rentIndex = serializers.CharField(source="rent_index")
     priceIndexHistory = serializers.JSONField(source="price_index_history")
+    marketAverage = serializers.DecimalField(
+        source="market_average", max_digits=16, decimal_places=2, allow_null=True
+    )
+    comparablesValue = serializers.DecimalField(
+        source="comparables_value", max_digits=16, decimal_places=2, allow_null=True
+    )
+    propertyPremium = serializers.CharField(source="property_premium")
 
     class Meta:
         model = MarketData
-        fields = ("capRate", "cityGrowth", "vacancyRate", "rentIndex", "priceIndexHistory")
+        fields = (
+            "capRate", "cityGrowth", "vacancyRate", "rentIndex", "priceIndexHistory",
+            "marketAverage", "comparablesValue", "propertyPremium",
+        )
 
 
 class AmenitySerializer(serializers.ModelSerializer):
@@ -359,6 +378,24 @@ class RiskFactorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RiskFactor
+        fields = ("textEn", "textAr")
+
+
+class ConstructionMilestoneSerializer(serializers.ModelSerializer):
+    nameEn = serializers.CharField(source="name_en")
+    nameAr = serializers.CharField(source="name_ar")
+
+    class Meta:
+        model = ConstructionMilestone
+        fields = ("nameEn", "nameAr", "threshold")
+
+
+class PostHandoverBenefitSerializer(serializers.ModelSerializer):
+    textEn = serializers.CharField(source="text_en")
+    textAr = serializers.CharField(source="text_ar")
+
+    class Meta:
+        model = PostHandoverBenefit
         fields = ("textEn", "textAr")
 
 
@@ -506,6 +543,14 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     landmarks = LandmarkSerializer(many=True, read_only=True)
     riskFactors = RiskFactorSerializer(source="risk_factors", many=True, read_only=True)
     faqs = PropertyFAQSerializer(many=True, read_only=True)
+    constructionMilestones = ConstructionMilestoneSerializer(
+        source="construction_milestones", many=True, read_only=True
+    )
+    postHandoverBenefits = PostHandoverBenefitSerializer(
+        source="post_handover_benefits", many=True, read_only=True
+    )
+    sitePhotosUrl = serializers.CharField(source="site_photos_url")
+    droneVideoUrl = serializers.CharField(source="drone_video_url")
 
     class Meta(_PropertyBaseSerializer.Meta):
         fields = _COMMON_FIELDS + (
@@ -529,6 +574,10 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "landmarks",
             "riskFactors",
             "faqs",
+            "constructionMilestones",
+            "postHandoverBenefits",
+            "sitePhotosUrl",
+            "droneVideoUrl",
         )
 
     def get_installment(self, obj):
