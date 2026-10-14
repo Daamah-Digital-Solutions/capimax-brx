@@ -311,17 +311,15 @@ class WaveBDownPaymentTests(TestCase):
         from apps.secondary_market.services import create_listing
 
         inv = self._make_installment()
-        _confirm_and_mint(inv)  # 3 available, 7 locked
-        with self.assertRaises(Exception):
-            create_listing(
-                user=self.investor,
-                data={"property_id": self.prop.slug, "token_amount": 5, "unit_price": 100},
-            )
-        listing = create_listing(
-            user=self.investor,
-            data={"property_id": self.prop.slug, "token_amount": 3, "unit_price": 100},
-        )
-        self.assertEqual(listing.token_amount, 3)
+        _confirm_and_mint(inv)  # 3 paid, 7 locked
+        # Off-plan §6: a running plan is sold only as a whole position — neither its locked
+        # units nor its paid ones can be listed one by one.
+        for amount in (5, 3, 1):
+            with self.assertRaises(Exception):
+                create_listing(
+                    user=self.investor,
+                    data={"property_id": self.prop.slug, "token_amount": amount, "unit_price": 100},
+                )
 
 
 class FeesBuyerBorneTests(TestCase):
@@ -774,16 +772,21 @@ class WaveCInstallmentSettlementTests(TestCase):
         from apps.secondary_market.services import create_listing
 
         settle_installment_payment(self.rows[0].id)  # 5 released / 5 locked
-        with self.assertRaises(Exception):
-            create_listing(
-                user=self.investor,
-                data={"property_id": self.prop.slug, "token_amount": 6, "unit_price": 100},
-            )
+        # While the plan runs its units go only as a whole position (off-plan §6).
+        for amount in (6, 5):
+            with self.assertRaises(Exception):
+                create_listing(
+                    user=self.investor,
+                    data={"property_id": self.prop.slug, "token_amount": amount, "unit_price": 100},
+                )
+        # Once every installment is paid they are plain units again.
+        for row in self.rows[1:]:
+            settle_installment_payment(row.id)
         listing = create_listing(
             user=self.investor,
-            data={"property_id": self.prop.slug, "token_amount": 5, "unit_price": 100},
+            data={"property_id": self.prop.slug, "token_amount": 10, "unit_price": 100},
         )
-        self.assertEqual(listing.token_amount, 5)
+        self.assertEqual(listing.token_amount, 10)
 
 
 class WaveCDistributionsOnReleasedTests(TestCase):

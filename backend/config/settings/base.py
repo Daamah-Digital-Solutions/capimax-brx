@@ -361,10 +361,10 @@ KYC_AUTO_APPROVE = env.bool("KYC_AUTO_APPROVE", default=False)
 # --------------------------------------------------------------------------- #
 LP_MARKET_FEE_PERCENT = env.float("LP_MARKET_FEE_PERCENT", default=1.0)
 
-# Investor PEER secondary market (Phase 6 Wave 3). Separate, backend-configurable
-# fee — the frontend used 0.5% for the peer market (vs 1% for the LP exit). Computed
-# server-side. SECONDARY_MARKET_SURFACE.md §3.3.
-SECONDARY_MARKET_FEE_PERCENT = env.float("SECONDARY_MARKET_FEE_PERCENT", default=0.5)
+# Investor PEER secondary market (Phase 6 Wave 3). Separate, backend-configurable resale
+# fee, computed server-side. Off-plan decision 5: the BUYER pays it on top of the price and
+# the seller receives the full price (was 0.5% taken from the seller).
+SECONDARY_MARKET_FEE_PERCENT = env.float("SECONDARY_MARKET_FEE_PERCENT", default=1.0)
 
 # --------------------------------------------------------------------------- #
 # Installments — default / forfeiture (Wave D). An installment becomes `missed`

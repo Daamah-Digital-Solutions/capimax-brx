@@ -133,8 +133,15 @@ def create_listing(*, user, data: dict) -> LPMarketListing:
             .filter(wallet=wallet, property_id=property_id)
             .first()
         )
-        if position is None or position.available_amount < token_amount:
-            available = position.available_amount if position else 0
+        # Units of a running installment plan are sold only as a whole position
+        # (off-plan §6), so its paid-for units are left out here.
+        from apps.installments.position import plan_bound_released
+
+        available = (
+            max(0, position.available_amount - plan_bound_released(user.pk, property_id))
+            if position else 0
+        )
+        if available < token_amount:
             raise InsufficientTokensError(
                 detail=f"Only {available} unlocked token(s) available to list."
             )

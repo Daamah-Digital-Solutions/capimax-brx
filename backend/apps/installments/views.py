@@ -41,7 +41,13 @@ from .models import (
     InstallmentPlanStatus,
 )
 from .terms import fee_for, resolve_term
-from .services import compute_schedule, pay_installments_from_balance
+from .position import holder_view
+from .services import (
+    _released_for,
+    compute_schedule,
+    holder_wallet_id,
+    pay_installments_from_balance,
+)
 
 
 class InstallmentPlansView(APIView):
@@ -62,7 +68,7 @@ class InstallmentPlansView(APIView):
         props = {
             prop.pk: prop
             for prop in Property.objects.filter(pk__in=prop_pks).only(
-                "pk", "slug", "name", "name_ar"
+                "pk", "slug", "name", "name_ar", "token_price"
             )
         }
 
@@ -121,20 +127,27 @@ class InstallmentPlansView(APIView):
                 float((paid_amount / plan.total_amount) * 100) if plan.total_amount else 0.0
             )
 
-            # Real on-chain token split from the linked (down-payment) investment's
-            # OwnershipToken: released = token_amount − locked_amount. Until the down-payment
-            # confirms (mint), nothing is released.
+            # Token split of THIS plan (full-mint-then-lock): released = the paid share,
+            # floor(paid / total × units). Until the down-payment confirms (mint), nothing is
+            # released. Derived from the plan's own payments, not the wallet's locked_amount,
+            # which also holds market-listing escrow (e.g. the plan listed as a position).
+            # A defaulted plan keeps the wallet's figures (its forfeited units are gone).
             inv = next(iter(plan.investments.all()), None)
             token_amount_full = locked_tokens = released_tokens = None
             if inv is not None:
                 token_amount_full = int(inv.token_amount)
-                if inv.tokens_minted and inv.wallet_id:
+                wallet_id = holder_wallet_id(plan, inv)
+                if not (inv.tokens_minted and wallet_id):
+                    locked_tokens = token_amount_full  # not minted yet → all locked
+                elif plan.defaulted_at is None:
+                    locked_tokens = token_amount_full - _released_for(
+                        paid_amount, Decimal(plan.total_amount), token_amount_full
+                    )
+                else:
                     otoken = OwnershipToken.objects.filter(
-                        wallet_id=inv.wallet_id, property_id=slug
+                        wallet_id=wallet_id, property_id=slug
                     ).first()
                     locked_tokens = min(int(otoken.locked_amount), token_amount_full) if otoken else 0
-                else:
-                    locked_tokens = token_amount_full  # not minted yet → all locked
                 released_tokens = token_amount_full - locked_tokens
 
             # Next to pay = the earliest unpaid row, an overdue ("missed") one included.
@@ -188,6 +201,13 @@ class InstallmentPlansView(APIView):
                     "forfeitedTokens": int(plan.forfeited_tokens or 0),
                     "defaultedAt": plan.defaulted_at.isoformat() if plan.defaulted_at else None,
                     "payments": display_payments,
+                    # Off-plan §6: the plan as a sellable position — value at today's price,
+                    # the holder's own cost and gain, why it can't be listed, its listing.
+                    "position": (
+                        holder_view(plan, prop.token_price, inv)
+                        if prop is not None and plan.status == InstallmentPlanStatus.ACTIVE
+                        else None
+                    ),
                 }
             )
 

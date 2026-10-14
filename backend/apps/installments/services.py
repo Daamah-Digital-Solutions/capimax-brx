@@ -234,6 +234,20 @@ def _released_for(total_paid: Decimal, total: Decimal, token_amount: int) -> int
     return max(0, min(int(token_amount), int(raw)))
 
 
+def holder_wallet_id(plan: InstallmentPlan, inv):
+    """
+    The wallet holding the plan's units: the investment's wallet while the plan is with its
+    original buyer, the current holder's wallet once the position was sold (off-plan §6).
+    """
+    from apps.wallets.models import UserWallet
+
+    if inv is not None and inv.user_id == plan.investor_id:
+        return inv.wallet_id
+    return (
+        UserWallet.objects.filter(user_id=plan.investor_id).values_list("id", flat=True).first()
+    )
+
+
 def settle_installment_payment(installment_payment_id) -> dict:
     """
     Settle ONE confirmed (webhook/IPN-gated) installment payment. Idempotent — a replay
@@ -265,6 +279,17 @@ def settle_installment_payment(installment_payment_id) -> dict:
         # the cumulative released math + the completed-transition can't race.
         plan = InstallmentPlan.objects.select_for_update().get(pk=ip.plan_id)
 
+        # Off-plan §6: a plan listed for sale keeps ALL its units in escrow (the paid share
+        # grows, the plan's locked share shrinks by the same amount), and its listing's
+        # figures follow the payment. Lock order: payment → plan → listing.
+        from apps.secondary_market.models import SecondaryMarketListing
+
+        listing = (
+            SecondaryMarketListing.objects.select_for_update()
+            .filter(plan=plan, status=SecondaryMarketListing.Status.LISTED)
+            .first()
+        )
+
         # The minted position holding the tokens (the down-payment investment). Lazy-loaded
         # off the plan — NOT select_related on a locked row (the nullable-join FOR UPDATE trap).
         inv = (
@@ -292,15 +317,16 @@ def settle_installment_payment(installment_payment_id) -> dict:
 
         # PROGRESSIVE RELEASE on the already-minted position (no new mint).
         released_before = released_after = token_total = 0
-        if inv is not None and inv.tokens_minted and inv.wallet_id:
+        wallet_id = holder_wallet_id(plan, inv)
+        if inv is not None and inv.tokens_minted and wallet_id:
             token_total = int(inv.token_amount)
             released_before = _released_for(total_paid_before, total, token_total)
             released_after = _released_for(total_paid_after, total, token_total)
             delta = released_after - released_before
-            if delta > 0:
+            if delta > 0 and listing is None:
                 token = (
                     OwnershipToken.objects.select_for_update()
-                    .filter(wallet_id=inv.wallet_id, property_id=inv.property.slug)
+                    .filter(wallet_id=wallet_id, property_id=inv.property.slug)
                     .first()
                 )
                 if token is not None:
@@ -316,10 +342,13 @@ def settle_installment_payment(installment_payment_id) -> dict:
                 inv, inv.property, gross=ip.amount, reference=str(ip.id),
                 memo=f"Primary sale ({tag})",
             )
-            broker_result = credit_broker_share(
-                inv, gross=ip.amount, reference=str(ip.id),
-                memo=f"Referral commission ({tag})",
-            )
+            # The referral commission belongs to the original buyer's broker; installments
+            # paid by someone who bought the position later earn none.
+            if inv.user_id == plan.investor_id:
+                broker_result = credit_broker_share(
+                    inv, gross=ip.amount, reference=str(ip.id),
+                    memo=f"Referral commission ({tag})",
+                )
 
         # Final installment cleared → complete the plan. By the floor math, total_paid_after
         # == total ⇒ released_after == token_total ⇒ the position is fully unlocked for this plan.
@@ -332,6 +361,17 @@ def settle_installment_payment(installment_payment_id) -> dict:
         if completed:
             plan.status = InstallmentPlanStatus.COMPLETED
             plan.save(update_fields=["status", "updated_at"])
+
+        if listing is not None:
+            from apps.secondary_market.services import (
+                close_position_listing,
+                refresh_position_listing,
+            )
+
+            if completed:
+                close_position_listing(listing)  # plain units now; the escrow is released
+            else:
+                refresh_position_listing(listing)
 
         # Notifications (same atomic block; only on the newly-settled path).
         if inv is not None:
@@ -644,7 +684,8 @@ def default_plan(plan_id) -> dict:
         )
 
         kept = forfeited = 0
-        if inv is not None and inv.tokens_minted and inv.wallet_id:
+        wallet_id = holder_wallet_id(plan, inv)
+        if inv is not None and inv.tokens_minted and wallet_id:
             token_total = int(inv.token_amount)
             total_paid = _down_paid(plan) + sum(
                 (Decimal(p.amount) for p in plan.payments.all()
@@ -659,7 +700,7 @@ def default_plan(plan_id) -> dict:
                 supply = int(prop.token_supply or 0)
                 token = (
                     OwnershipToken.objects.select_for_update()
-                    .filter(wallet_id=inv.wallet_id, property_id=prop.slug)
+                    .filter(wallet_id=wallet_id, property_id=prop.slug)
                     .first()
                 )
                 if token is not None:

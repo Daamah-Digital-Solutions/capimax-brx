@@ -879,24 +879,31 @@ export const walletsApi = {
 // settlement server-side. SPEC §2.8/§3.9. (NOT the bid/ask order book — deferred.)
 // --------------------------------------------------------------------------- //
 export const secondaryMarketApi = {
-  /** Browse: `my_listings` (own) + `listings` (others' listed inventory). */
+  /** Browse: `my_listings` (own) + `listings` (others' listed inventory) + the resale fee %
+   *  (paid by the buyer on top of the price). */
   market: () =>
     rawRequest("/secondary-market/", { auth: true }) as Promise<{
       my_listings: any[];
       listings: any[];
+      fee_percent?: number;
     }>,
-  /** List your UNLOCKED tokens (KYC-approved; server escrow-locks + computes the 0.5% fee). */
+  /** List your UNLOCKED tokens (KYC-approved; server escrow-locks + computes the resale fee). */
   listAsset: (payload: Record<string, unknown>) =>
     rawRequest("/secondary-market/", { method: "POST", auth: true, body: payload }),
   /** Seller-scoped cancel → unlock escrow. */
   cancelListing: (listingId: string) =>
     rawRequest(`/secondary-market/${listingId}/cancel/`, { method: "POST", auth: true }),
-  /** Buy a listing (KYC-approved investor) → on-chain transfer + UserBalance settlement. */
-  purchaseListing: (listingId: string) =>
+  /** Buy a listing (KYC-approved investor) → on-chain transfer + UserBalance settlement. A
+   *  position listing also needs the cash + fee the buyer saw (else 409 POSITION_CHANGED). */
+  purchaseListing: (listingId: string, expected?: { expected_cash: number; expected_fee: number }) =>
     rawRequest(`/secondary-market/${listingId}/purchase/`, {
       method: "POST",
       auth: true,
+      body: expected ?? {},
     }) as Promise<{ completed: boolean; already?: boolean; tx_hash?: string; explorer_tx?: string }>,
+  /** List a whole active installment plan as one position (off-plan §6). */
+  listPosition: (payload: { plan_id: string; price_per_unit?: number }) =>
+    rawRequest("/secondary-market/positions/", { method: "POST", auth: true, body: payload }),
   /** Completed trades involving the caller (trade history). */
   trades: () => rawRequest("/secondary-market/trades/", { auth: true }) as Promise<any[]>,
 };
@@ -1458,6 +1465,28 @@ export interface InstallmentPlanRow {
   forfeitedTokens: number;          // unpaid tokens forfeited on default (0 otherwise)
   defaultedAt: string | null;       // ISO when the plan defaulted (null otherwise)
   payments: InstallmentSchedulePayment[];
+  // Off-plan §6: the active plan as a sellable position (null when not active).
+  position?: PlanPosition | null;
+}
+
+/** An active plan valued at today's unit price, measured from the holder's own entry price. */
+export interface PlanPosition {
+  currentPrice: number;
+  units: number;
+  value: number;               // units × today's price
+  remainingPrincipal: number;  // installments not paid yet (principal)
+  paidPrincipal: number;
+  equity: number;              // what a buyer would pay today: value − remaining (≥ 0)
+  entryPrice: number;
+  cost: number;
+  gain: number;
+  acquiredAt: string | null;
+  feePercent: number;          // resale fee, paid by the buyer on top
+  // Why it can't be listed now: not_active | not_minted | fully_paid | below_remaining.
+  blocked: string | null;
+  listingId: string | null;
+  listingPrice: number | null;
+  listingCash: number | null;
 }
 
 export interface InstallmentsResponse {

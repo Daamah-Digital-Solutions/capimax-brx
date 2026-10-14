@@ -33,6 +33,7 @@ import { useInstallmentPlans } from "@/hooks/useInstallmentPlans";
 import { reportsApi, type InstallmentPlanRow } from "@/integrations/api/client";
 import { useExport } from "@/hooks/useExport";
 import { InstallmentPayDialog } from "@/components/installments/InstallmentPayDialog";
+import { PositionSaleCard } from "@/components/installments/PositionSaleCard";
 
 // Installments — REAL per-investor plans + cent-exact schedules from
 // GET /api/installments/plans/. Wave C: "Pay Now" charges the next due installment through
@@ -316,6 +317,9 @@ export default function Installments() {
                               </div>
                             )
                           )}
+
+                          {/* Off-plan §6: the plan valued as one position + "Sell this position". */}
+                          {plan.position && <PositionSaleCard plan={plan} onChanged={refresh} />}
 
                           {/* Payment Progress */}
                           <div className="grid sm:grid-cols-4 gap-4 mb-6">

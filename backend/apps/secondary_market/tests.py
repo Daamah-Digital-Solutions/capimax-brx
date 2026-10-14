@@ -85,9 +85,12 @@ class PeerListingTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["status"], "listed")
         self.assertEqual(resp.data["seller_type"], "investor")
-        # 0.5% default fee on $300 = $1.50, net $298.50
-        self.assertEqual(resp.data["platform_fee_amount"], 1.5)
-        self.assertEqual(resp.data["net_amount"], 298.5)
+        # Decision 5: 1% default fee on $300 = $3.00 paid by the BUYER on top; the seller
+        # receives the full $300.
+        self.assertEqual(resp.data["platform_fee_amount"], 3.0)
+        self.assertEqual(resp.data["net_amount"], 300.0)
+        self.assertEqual(resp.data["buyer_total"], 303.0)
+        self.assertEqual(resp.data["fee_payer"], "buyer")
         pos = OwnershipToken.objects.get(wallet=self.wallet, property_id=self.prop.slug)
         self.assertEqual(pos.locked_amount, 3)
 
@@ -121,8 +124,9 @@ class PeerListingTests(APITestCase):
             {"property_id": self.prop.slug, "token_amount": 5, "unit_price": "100"},
             format="json",
         )
-        self.assertEqual(resp.data["platform_fee_amount"], 10.0)  # 2% of 500
-        self.assertEqual(resp.data["net_amount"], 490.0)
+        self.assertEqual(resp.data["platform_fee_amount"], 10.0)  # 2% of 500, on the buyer
+        self.assertEqual(resp.data["net_amount"], 500.0)
+        self.assertEqual(resp.data["buyer_total"], 510.0)
 
     def test_non_kyc_cannot_list(self):
         plain = User.objects.create_user(email="nokyc@ex.com", password="pw-12345-strong")
@@ -160,9 +164,9 @@ class PeerPurchaseTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         m_transfer.assert_called_once()
 
-        # buyer UserBalance debited 400; seller credited net (400 - 0.5% = 398)
-        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("600.00"))
-        self.assertEqual(UserBalance.objects.get(user=self.seller).current_balance, Decimal("398.00"))
+        # buyer debited 400 + 1% fee = 404; seller credited the full 400
+        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("596.00"))
+        self.assertEqual(UserBalance.objects.get(user=self.seller).current_balance, Decimal("400.00"))
         # on-chain positions moved
         sp = OwnershipToken.objects.get(wallet=self.seller_wallet, property_id=self.prop.slug)
         self.assertEqual(sp.token_amount, 6)
@@ -184,7 +188,7 @@ class PeerPurchaseTests(APITestCase):
         second = self.client.post(f"/api/secondary-market/{self.listing_id}/purchase/")
         self.assertTrue(second.data.get("already"))
         m_transfer.assert_called_once()
-        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("600.00"))
+        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("596.00"))
 
     def test_insufficient_balance_no_transfer(self, m_transfer):
         buyer = self._buyer("poor@ex.com", 100)  # < 400
@@ -298,9 +302,9 @@ class PeerPurchaseOffChainTests(APITestCase):
         m_transfer.assert_not_called()
         self.assertFalse(resp.data.get("on_chain"))
         self.assertTrue(str(resp.data.get("tx_hash")).startswith("offchain:"))
-        # Balances settle exactly like the on-chain path (buyer −400, seller +398 net).
-        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("600.00"))
-        self.assertEqual(UserBalance.objects.get(user=self.seller).current_balance, Decimal("398.00"))
+        # Balances settle exactly like the on-chain path (buyer −404, seller +400).
+        self.assertEqual(UserBalance.objects.get(user=buyer).current_balance, Decimal("596.00"))
+        self.assertEqual(UserBalance.objects.get(user=self.seller).current_balance, Decimal("400.00"))
         # Ledger positions move (seller 10−4=6, buyer 4).
         sp = OwnershipToken.objects.get(wallet=self.seller_wallet, property_id=self.prop.slug)
         self.assertEqual(sp.token_amount, 6)

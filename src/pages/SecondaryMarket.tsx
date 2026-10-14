@@ -14,9 +14,11 @@ import {
   ArrowDownToLine,
   CreditCard,
   Smartphone,
+  Layers,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DepositPayStep } from "@/components/wallet/DepositPayStep";
+import { PositionBuyDialog } from "@/components/secondary-market/PositionBuyDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,11 +53,13 @@ export default function SecondaryMarket() {
   const { wallet } = useUserWallet();
   const { tokens } = useOwnershipTokens(wallet?.id || null);
   const {
-    listings, myListings, trades, balance, loading,
+    listings, myListings, trades, balance, loading, feePercent,
     listAsset, cancelListing, buyListing, withdraw,
   } = useSecondaryMarket();
 
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  // Off-plan §6: an installment position opens its breakdown + schedule before buying.
+  const [viewPosition, setViewPosition] = useState<typeof listings[0] | null>(null);
   const [showSell, setShowSell] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
 
@@ -94,13 +98,20 @@ export default function SecondaryMarket() {
 
   const handleBuy = async (listing: typeof listings[0]) => {
     if (!user) return requireLogin();
-    // Enough proceeds balance → settle straight from balance (unchanged path).
-    if (balance >= listing.total_value) {
-      setBuyingId(listing.id);
-      await buyListing(listing.id);
-      setBuyingId(null);
+    if (listing.is_position && viewPosition?.id !== listing.id) {
+      setViewPosition(listing);
       return;
     }
+    // Enough proceeds balance → settle straight from balance (unchanged path). The buyer pays
+    // the price + the resale fee (buyer_total).
+    if (balance >= listing.buyer_total) {
+      setBuyingId(listing.id);
+      const res = await buyListing(listing);
+      setBuyingId(null);
+      if (res.success || res.code === "POSITION_CHANGED") setViewPosition(null);
+      return;
+    }
+    setViewPosition(null);
     // Otherwise fund the shortfall first (card/crypto/wallet), then complete the buy.
     setFundMethod("card");
     setFundingListing(listing);
@@ -112,12 +123,12 @@ export default function SecondaryMarket() {
     if (!listing) return;
     setFundingListing(null);
     setBuyingId(listing.id);
-    await buyListing(listing.id);
+    await buyListing(listing);
     setBuyingId(null);
   };
 
   const fundShortfall = fundingListing
-    ? Math.max(0.01, Math.ceil((fundingListing.total_value - balance) * 100) / 100)
+    ? Math.max(0.01, Math.ceil((fundingListing.buyer_total - balance) * 100) / 100)
     : 0;
 
   const submitSell = async () => {
@@ -146,8 +157,10 @@ export default function SecondaryMarket() {
     }
   };
 
-  const fee = (sellUnits * sellPrice) * 0.005; // 0.5% (display; server is source of truth)
-  const youReceive = (sellUnits * sellPrice) - fee;
+  // Decision 5: the buyer pays the resale fee on top; the seller receives the full price
+  // (display; the server is the source of truth).
+  const fee = (sellUnits * sellPrice) * feePercent / 100;
+  const youReceive = sellUnits * sellPrice;
 
   return (
     <MainLayout>
@@ -244,8 +257,49 @@ export default function SecondaryMarket() {
                             <span className="text-xs text-muted-foreground font-mono">{l.token_symbol}</span>
                           </div>
                         </div>
-                        <Badge variant="success">{isAr ? "متاح" : "Available"}</Badge>
+                        {l.is_position ? (
+                          <Badge variant="gold" className="gap-1">
+                            <Layers className="w-3 h-3" />
+                            {isAr ? "مركز تقسيط" : "Installment position"}
+                          </Badge>
+                        ) : (
+                          <Badge variant="success">{isAr ? "متاح" : "Available"}</Badge>
+                        )}
                       </div>
+                      {l.is_position && l.position ? (
+                        <div className="space-y-2 mb-4 text-sm">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="text-center p-2 bg-muted rounded-lg">
+                              <div className="text-lg font-bold text-foreground">{l.token_amount}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {isAr ? "وحدة (كل وحدات الخطة)" : "units (whole plan)"}
+                              </div>
+                            </div>
+                            <div className="text-center p-2 bg-muted rounded-lg">
+                              <div className="text-lg font-bold text-gradient-gold" dir="ltr">${l.unit_price}</div>
+                              <div className="text-xs text-muted-foreground">{t("secondaryMarket.pricePerUnit")}</div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{isAr ? "تدفع الآن" : "You pay now"}</span>
+                            <span className="font-semibold" dir="ltr">${l.buyer_total.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              {isAr
+                                ? `ثم ${l.position.remaining_installments} قسطًا`
+                                : `Then ${l.position.remaining_installments} installments`}
+                            </span>
+                            <span dir="ltr">${l.position.remaining_charge.toLocaleString()}</span>
+                          </div>
+                          {l.position.first_due_date && (
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{isAr ? "أول قسط" : "First installment"}</span>
+                              <span dir="ltr">{l.position.first_due_date}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
                       <div className="grid grid-cols-3 gap-2 mb-4">
                         <div className="text-center p-2 bg-muted rounded-lg">
                           <div className="text-lg font-bold text-foreground">{l.token_amount}</div>
@@ -259,7 +313,15 @@ export default function SecondaryMarket() {
                           <div className="text-lg font-bold text-foreground" dir="ltr">${l.total_value.toLocaleString()}</div>
                           <div className="text-xs text-muted-foreground">{t("secondaryMarket.total")}</div>
                         </div>
+                        {l.buyer_total > l.total_value && (
+                          <div className="col-span-3 text-xs text-muted-foreground text-center" dir="ltr">
+                            {isAr
+                              ? `+ رسوم إعادة البيع ${l.platform_fee_percent}% ($${l.platform_fee_amount.toLocaleString()}) على المشتري`
+                              : `+ ${l.platform_fee_percent}% resale fee ($${l.platform_fee_amount.toLocaleString()}) paid by the buyer`}
+                          </div>
+                        )}
                       </div>
+                      )}
                       <Button
                         variant="hero" className="w-full gap-2"
                         disabled={buyingId === l.id}
@@ -267,14 +329,18 @@ export default function SecondaryMarket() {
                       >
                         {buyingId === l.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : balance >= l.total_value ? (
+                        ) : l.is_position ? (
+                          <Layers className="w-4 h-4" />
+                        ) : balance >= l.buyer_total ? (
                           <Coins className="w-4 h-4" />
                         ) : (
                           <CreditCard className="w-4 h-4" />
                         )}
-                        {balance >= l.total_value
-                          ? t("secondaryMarket.buyNow")
-                          : isAr ? "اشحن واشترِ" : "Add funds & buy"}
+                        {l.is_position
+                          ? isAr ? "عرض وشراء" : "View & Buy"
+                          : balance >= l.buyer_total
+                            ? t("secondaryMarket.buyNow")
+                            : isAr ? "اشحن واشترِ" : "Add funds & buy"}
                       </Button>
                     </div>
                   ))}
@@ -299,7 +365,14 @@ export default function SecondaryMarket() {
                             <Building2 className="w-6 h-6 text-primary" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-foreground">{l.property_name}</h4>
+                            <h4 className="font-semibold text-foreground">
+                              {l.property_name}
+                              {l.is_position && (
+                                <span className="ms-2 text-xs font-normal text-muted-foreground">
+                                  {isAr ? "· مركز تقسيط" : "· installment position"}
+                                </span>
+                              )}
+                            </h4>
                             <p className="text-sm text-muted-foreground" dir="ltr">
                               {l.token_amount} {t("secondaryMarket.units")} • ${l.unit_price}/{t("secondaryMarket.units")} • net ${l.net_amount.toLocaleString()}
                             </p>
@@ -470,8 +543,12 @@ export default function SecondaryMarket() {
                     <span className="font-semibold" dir="ltr">${(sellUnits * sellPrice).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{isAr ? "رسوم المنصة (0.5%)" : "Platform Fee (0.5%)"}</span>
-                    <span className="text-destructive" dir="ltr">-${fee.toFixed(2)}</span>
+                    <span className="text-muted-foreground">
+                      {isAr
+                        ? `رسوم إعادة البيع (${feePercent}%) — يدفعها المشتري`
+                        : `Resale fee (${feePercent}%) — paid by the buyer`}
+                    </span>
+                    <span className="text-muted-foreground" dir="ltr">${fee.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-border">
                     <span className="font-medium">{isAr ? "ستستلم" : "You Receive"}</span>
@@ -577,7 +654,7 @@ export default function SecondaryMarket() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{isAr ? "إجمالي الصفقة" : "Purchase total"}</span>
-                  <span className="font-semibold" dir="ltr">${fundingListing.total_value.toLocaleString()}</span>
+                  <span className="font-semibold" dir="ltr">${fundingListing.buyer_total.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{isAr ? "رصيدك" : "Your balance"}</span>
@@ -634,6 +711,13 @@ export default function SecondaryMarket() {
           )}
         </DialogContent>
       </Dialog>
+      <PositionBuyDialog
+        listing={viewPosition}
+        balance={balance}
+        buying={!!viewPosition && buyingId === viewPosition.id}
+        onOpenChange={(o) => !o && setViewPosition(null)}
+        onConfirm={handleBuy}
+      />
     </MainLayout>
   );
 }

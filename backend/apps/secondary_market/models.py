@@ -32,6 +32,13 @@ class SecondaryMarketListing(models.Model):
         INVESTOR = "investor", _("Investor")
         LP = "lp", _("Liquidity Provider")
 
+    class FeePayer(models.TextChoices):
+        # Off-plan decision 5: the BUYER pays the resale fee on top and the seller receives
+        # the full price. Listings made before that rule keep the seller-paid fee they were
+        # listed with (history stays true).
+        BUYER = "buyer", _("Buyer")
+        SELLER = "seller", _("Seller")
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
@@ -57,6 +64,24 @@ class SecondaryMarketListing(models.Model):
     platform_fee_percent = models.DecimalField(max_digits=6, decimal_places=3, default=0.5)
     platform_fee_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     net_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    fee_payer = models.CharField(
+        max_length=8, choices=FeePayer.choices, default=FeePayer.BUYER
+    )
+
+    # Off-plan §6 — POSITION listing: a whole active installment plan is sold as one
+    # position and the buyer takes over the remaining installments. token_amount = all the
+    # plan's units, unit_price = the seller's price per unit, total_value = the cash the
+    # seller receives (units × price − remaining principal). Figures are kept current while
+    # the listing is open (an installment paid meanwhile raises the seller's cash).
+    plan = models.ForeignKey(
+        "installments.InstallmentPlan", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="position_listings",
+    )
+    position_value = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    paid_principal = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    assumed_principal = models.DecimalField(
+        max_digits=18, decimal_places=2, null=True, blank=True
+    )
 
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.LISTED, db_index=True
@@ -77,6 +102,25 @@ class SecondaryMarketListing(models.Model):
         verbose_name = _("secondary market listing")
         verbose_name_plural = _("secondary market listings")
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plan"], condition=models.Q(status="listed"),
+                name="uniq_listed_position_per_plan",
+            )
+        ]
+
+    @property
+    def is_position(self) -> bool:
+        return self.plan_id is not None
+
+    @property
+    def buyer_fee(self):
+        return self.platform_fee_amount if self.fee_payer == self.FeePayer.BUYER else 0
+
+    @property
+    def buyer_total(self):
+        """What the buyer pays: the price, plus the resale fee when the buyer carries it."""
+        return self.total_value + self.buyer_fee
 
     def __str__(self):
         return f"{self.token_amount} {self.token_symbol} [{self.status}] by {self.seller_id}"
