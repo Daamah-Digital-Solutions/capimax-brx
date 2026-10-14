@@ -283,10 +283,15 @@ class FinancialsSerializer(serializers.ModelSerializer):
 class PropertyDocumentSerializer(serializers.ModelSerializer):
     nameEn = serializers.CharField(source="name_en")
     type = serializers.CharField(source="doc_type")
+    # Uploaded file (absolute API URL) if any, else the stored link.
+    url = serializers.SerializerMethodField()
 
     class Meta:
         model = PropertyDocument
         fields = ("name", "nameEn", "date", "type", "url")
+
+    def get_url(self, obj):
+        return obj.download_url(self.context.get("request"))
 
 
 # --- data-room section content (admin-managed) ---------------------------- #
@@ -415,6 +420,9 @@ class _PropertyBaseSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="slug")  # UI uses string ids; resolve by slug
     nameAr = serializers.CharField(source="name_ar")
     locationAr = serializers.CharField(source="location_ar")
+    # Uploaded hero/gallery files resolve to absolute API URLs; URL/path entries pass through.
+    image = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
     assetType = serializers.CharField(source="asset_type")
     yieldType = serializers.CharField(source="yield_type")
     riskLevel = serializers.CharField(source="risk_level")
@@ -447,6 +455,12 @@ class _PropertyBaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Property
         fields = _COMMON_FIELDS
+
+    def get_image(self, obj):
+        return obj.hero_image_url(self.context.get("request"))
+
+    def get_images(self, obj):
+        return obj.gallery_urls(self.context.get("request"))
 
 
 class PropertyListSerializer(_PropertyBaseSerializer):
@@ -613,6 +627,10 @@ class FundedPropertySerializer(serializers.ModelSerializer):
         source="expected_yield", max_digits=6, decimal_places=2, allow_null=True
     )
     durationAr = serializers.CharField(source="duration_ar")
+    image = serializers.SerializerMethodField()
+
+    def get_image(self, obj):
+        return obj.hero_image_url(self.context.get("request"))
 
     class Meta:
         model = Property

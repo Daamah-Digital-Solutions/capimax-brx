@@ -8,6 +8,7 @@ Per-model detail is edited inline on the Property page: the OneToOne blocks
 repeating blocks (phases/portfolio assets/reports/documents) as tabular inlines.
 """
 from django.contrib import admin, messages
+from django.utils.html import format_html
 
 from .models import (
     Amenity,
@@ -24,6 +25,7 @@ from .models import (
     PropertyDocument,
     PropertyFAQ,
     PropertyFinancials,
+    PropertyImage,
     PropertyPhase,
     RiskFactor,
     SharedOwnership,
@@ -106,6 +108,32 @@ class ValuationReportInline(admin.TabularInline):
 class PropertyDocumentInline(admin.TabularInline):
     model = PropertyDocument
     extra = 0
+    fields = ("name_en", "name", "doc_type", "date", "file", "url")
+
+
+def _thumb(url, height=70):
+    if not url:
+        return "—"
+    return format_html(
+        '<a href="{}" target="_blank" rel="noopener"><img src="{}" style="height:{}px;'
+        'border-radius:6px;object-fit:cover" /></a>',
+        url, url, height,
+    )
+
+
+class PropertyImageInline(admin.TabularInline):
+    """Gallery uploads — shown on the property page after the URL list in `images`."""
+
+    model = PropertyImage
+    extra = 1
+    fields = ("image", "preview", "order")
+    readonly_fields = ("preview",)
+    verbose_name = "Gallery image"
+    verbose_name_plural = "Gallery — upload images"
+
+    @admin.display(description="Preview")
+    def preview(self, obj):
+        return _thumb(obj.image.url if obj and obj.image else "")
 
 
 # --- data-room section content (admin-managed per property) --------------- #
@@ -173,6 +201,10 @@ class PropertyAdmin(admin.ModelAdmin):
     ordering = ("display_order", "name")
     actions = ["deploy_token_contract"]
 
+    @admin.display(description="Current main image")
+    def hero_preview(self, obj):
+        return _thumb(obj.hero_image_url() if obj and obj.pk else "", height=110)
+
     @admin.action(description="Deploy token contract to BSC Testnet (one per property)")
     def deploy_token_contract(self, request, queryset):
         """
@@ -204,8 +236,9 @@ class PropertyAdmin(admin.ModelAdmin):
             )
     # category + token_supply are AUTO-DERIVED on save (from model / total_value) so
     # they can never desync — they are read-only here. See Property._sync_derived.
-    readonly_fields = ("id", "category", "token_supply", "created_at", "updated_at")
+    readonly_fields = ("id", "category", "token_supply", "created_at", "updated_at", "hero_preview")
     inlines = [
+        PropertyImageInline,
         InstallmentScheduleInline,
         FutureContractInline,
         OptionContractInline,
@@ -235,6 +268,7 @@ class PropertyAdmin(admin.ModelAdmin):
                     ("name", "name_ar"),
                     ("location", "location_ar"),
                     ("country", "city"),
+                    ("image_file", "hero_preview"),
                     "image",
                     "images",
                 )
@@ -275,6 +309,14 @@ class PropertyAdmin(admin.ModelAdmin):
             {"fields": ("description", "description_ar", "construction_progress")},
         ),
         ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount",))}),
+        (
+            "Broker program",
+            {
+                "description": "Commission % a referring broker earns on this property "
+                               "(empty = the broker's own rate), and whether brokers can promote it.",
+                "fields": (("broker_commission_rate", "open_for_promotion"),),
+            },
+        ),
         (
             "Catalogue management",
             {"fields": (("is_published", "is_featured"), ("funded_date", "display_order"))},

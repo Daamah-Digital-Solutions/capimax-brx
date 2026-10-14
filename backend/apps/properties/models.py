@@ -22,8 +22,42 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator, URLValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+
+def validate_image_ref(value):
+    """
+    An image reference is either an absolute http(s) URL or a site-root path served by the
+    frontend (e.g. "/props/kensington-residences/hero.jpg"). The old URLField rejected the
+    root paths the BRX seed stores, which made those properties un-saveable in the admin.
+    """
+    if not value:
+        return
+    if value.startswith("/") and not value.startswith("//"):
+        return
+    URLValidator(schemes=["http", "https"])(value)
+
+
+def public_media_url(field_file, request=None) -> str:
+    """
+    Absolute URL for an uploaded file. The frontend runs on a different origin than the API,
+    so a bare "/media/..." would resolve against the frontend host — always return the API
+    origin (from the request, else PUBLIC_API_ORIGIN).
+    """
+    if not field_file:
+        return ""
+    url = field_file.url
+    if request is not None:
+        return request.build_absolute_uri(url)
+    origin = getattr(settings, "PUBLIC_API_ORIGIN", "")
+    return f"{origin.rstrip('/')}{url}" if origin else url
+
+
+# Uploadable data-room file types. No HTML/SVG: these are served from the API origin, where
+# an uploaded page or SVG could run script.
+DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "jpg", "jpeg", "png", "webp"]
 
 
 # --------------------------------------------------------------------------- #
@@ -140,8 +174,21 @@ class Property(models.Model):
     location_ar = models.CharField(max_length=200)
     country = models.CharField(max_length=16, choices=Country.choices)
     city = models.CharField(max_length=80)
-    image = models.URLField(max_length=500)
-    images = models.JSONField(default=list, blank=True)  # optional gallery (string[])
+    # Hero image: an uploaded file wins; otherwise the URL / site path. One of the two is
+    # required (enforced in clean()).
+    image = models.CharField(
+        max_length=500, blank=True, validators=[validate_image_ref],
+        help_text="Image URL (https://…) or site path (/props/…). Not needed if you upload a file.",
+    )
+    image_file = models.ImageField(
+        upload_to="property_images/", blank=True,
+        help_text="Upload the main image. Overrides the URL above when set.",
+    )
+    images = models.JSONField(
+        default=list, blank=True,
+        help_text='Gallery as a list of URLs/paths, e.g. ["/props/x/1.jpg"]. '
+                  "Uploads in the Gallery section below are added after these.",
+    )  # optional gallery (string[])
 
     # classification
     asset_type = models.CharField(max_length=16, choices=AssetType.choices)
@@ -272,6 +319,8 @@ class Property(models.Model):
             errors["broker_commission_rate"] = (
                 f"Broker commission % must be between 0 and 100 (got {self.broker_commission_rate})."
             )
+        if not self.image and not self.image_file:
+            errors["image"] = "Upload a main image or enter an image URL."
         if errors:
             raise ValidationError(errors)
         # Derive after validation so the (read-only) admin fields reflect the saved values.
@@ -285,6 +334,18 @@ class Property(models.Model):
         # Wave 2 policy #4: the data-room display supply MUST track the authoritative
         # token_supply (fixes the 5,000-vs-50,000 mismatch). Resync any TokenMetadata.
         self._resync_token_metadata()
+
+    def hero_image_url(self, request=None) -> str:
+        """The image the UI shows: the uploaded file if any, else the URL / site path."""
+        if self.image_file:
+            return public_media_url(self.image_file, request)
+        return self.image
+
+    def gallery_urls(self, request=None) -> list:
+        """Gallery = the JSON URL list, then the admin-uploaded images in their set order."""
+        urls = [u for u in (self.images or []) if u]
+        urls += [public_media_url(g.image, request) for g in self.gallery.all() if g.image]
+        return urls
 
     def _resync_token_metadata(self):
         """Force this property's TokenMetadata display supply to equal token_supply."""
@@ -574,12 +635,39 @@ class PropertyDocument(models.Model):
     # external store) — blank keeps the legacy metadata-only rows valid. This is what
     # makes the data-room documents ACTUALLY download (was metadata-only before).
     url = models.URLField(max_length=500, blank=True)
+    # Or upload the file straight from the admin (wins over `url` when set).
+    file = models.FileField(
+        upload_to="property_docs/uploads/", blank=True,
+        validators=[FileExtensionValidator(DOCUMENT_EXTENSIONS)],
+        help_text="Upload the document (PDF, Word, Excel, image). Overrides the URL when set.",
+    )
 
     class Meta:
         ordering = ("-date",)
 
     def __str__(self):
         return f"{self.name_en} · {self.property.slug}"
+
+    def download_url(self, request=None) -> str:
+        if self.file:
+            return public_media_url(self.file, request)
+        return self.url
+
+
+class PropertyImage(models.Model):
+    """A gallery image uploaded from the admin (shown after the JSON `images` list)."""
+
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="gallery")
+    image = models.ImageField(upload_to="property_gallery/")
+    order = models.PositiveIntegerField(default=0, help_text="Lower numbers show first.")
+
+    class Meta:
+        ordering = ("order", "id")
+        verbose_name = _("gallery image")
+        verbose_name_plural = _("gallery images")
+
+    def __str__(self):
+        return f"{self.property.slug} · image {self.order}"
 
 
 # --------------------------------------------------------------------------- #

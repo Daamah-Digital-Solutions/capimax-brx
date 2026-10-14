@@ -10,6 +10,7 @@ DEBUG = False
 # Must be provided in prod; no insecure fallback.
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
+PUBLIC_API_ORIGIN = env("PUBLIC_API_ORIGIN", default="https://api.capimaxbrx.com")
 
 # --- Security hardening (fintech; SECURITY-FIRST). ---
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)

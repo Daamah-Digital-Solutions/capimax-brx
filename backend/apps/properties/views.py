@@ -42,6 +42,7 @@ _DETAIL_PREFETCH = (
     "developer_reports",
     "valuation_reports",
     "documents",
+    "gallery",
 )
 
 
@@ -65,7 +66,7 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None  # Marketplace expects a plain array, not {count, results}
 
     def get_queryset(self):
-        qs = Property.objects.filter(is_published=True)
+        qs = Property.objects.filter(is_published=True).prefetch_related("gallery")
         if self.action == "retrieve":
             qs = qs.select_related(*_DETAIL_RELATED).prefetch_related(*_DETAIL_PREFETCH)
         return qs

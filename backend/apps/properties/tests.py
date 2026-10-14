@@ -254,3 +254,120 @@ class PropertyValidationTests(TestCase):
         # funded deals (fp-*) legitimately use 100 — boundary must pass.
         p = Property(**_valid_property_kwargs(slug="f100", funded=100))
         p.full_clean()  # must not raise
+
+
+# --------------------------------------------------------------------------- #
+# Admin uploads: hero image, gallery and data-room documents can be uploaded from
+# the admin, and the API returns them as absolute links on the API origin.
+# --------------------------------------------------------------------------- #
+import io
+import shutil
+import tempfile
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from PIL import Image as PILImage
+
+from .models import PropertyDocument, PropertyImage
+
+_TMP_MEDIA = tempfile.mkdtemp(prefix="brx-media-test-")
+
+
+def _png(name="x.png"):
+    buf = io.BytesIO()
+    PILImage.new("RGB", (4, 4), (10, 41, 40)).save(buf, format="PNG")
+    return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
+
+
+class PropertyImageReferenceTests(TestCase):
+    def test_site_root_path_is_a_valid_image(self):
+        # The BRX seed stores "/props/<slug>/hero.jpg" — must be saveable in the admin.
+        Property(**_valid_property_kwargs(image="/props/x/hero.jpg")).full_clean()
+
+    def test_absolute_url_is_a_valid_image(self):
+        Property(**_valid_property_kwargs(image="https://cdn.example.com/a.jpg")).full_clean()
+
+    def test_garbage_image_value_is_rejected(self):
+        with self.assertRaises(ValidationError) as ctx:
+            Property(**_valid_property_kwargs(image="not a url")).full_clean()
+        self.assertIn("image", ctx.exception.message_dict)
+
+    def test_protocol_relative_path_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            Property(**_valid_property_kwargs(image="//evil.example.com/a.jpg")).full_clean()
+
+    def test_image_or_upload_is_required(self):
+        with self.assertRaises(ValidationError) as ctx:
+            Property(**_valid_property_kwargs(image="")).full_clean()
+        self.assertIn("image", ctx.exception.message_dict)
+
+    @override_settings(MEDIA_ROOT=_TMP_MEDIA)
+    def test_upload_alone_satisfies_the_image_requirement(self):
+        Property(**_valid_property_kwargs(image="", image_file=_png())).full_clean()
+
+    def test_document_rejects_html_upload(self):
+        prop = Property.objects.create(**_valid_property_kwargs(slug="doc-html"))
+        doc = PropertyDocument(
+            property=prop, name="x", name_en="x", date="2026-01-01", doc_type="legal",
+            file=SimpleUploadedFile("page.html", b"<script>alert(1)</script>"),
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            doc.full_clean()
+        self.assertIn("file", ctx.exception.message_dict)
+
+
+@override_settings(MEDIA_ROOT=_TMP_MEDIA)
+class PropertyUploadApiTests(APITestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(_TMP_MEDIA, ignore_errors=True)
+
+    def setUp(self):
+        self.prop = Property.objects.create(
+            **_valid_property_kwargs(
+                slug="uploads",
+                image="",
+                image_file=_png("hero.png"),
+                images=["/props/uploads/1.jpg"],
+            )
+        )
+        PropertyImage.objects.create(property=self.prop, image=_png("g2.png"), order=2)
+        PropertyImage.objects.create(property=self.prop, image=_png("g1.png"), order=1)
+        PropertyDocument.objects.create(
+            property=self.prop, name="تقرير", name_en="Report", date="2026-01-01",
+            doc_type="valuation",
+            file=SimpleUploadedFile("report.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+        )
+        PropertyDocument.objects.create(
+            property=self.prop, name="رابط", name_en="Linked", date="2025-01-01",
+            doc_type="legal", url="https://api.example.com/media/x.pdf",
+        )
+
+    def test_detail_returns_absolute_upload_urls(self):
+        data = self.client.get("/api/properties/uploads/").data
+        self.assertTrue(data["image"].startswith("http://testserver/media/property_images/hero"))
+        # JSON list first, then uploads in their admin order (order=1 before order=2).
+        self.assertEqual(data["images"][0], "/props/uploads/1.jpg")
+        self.assertEqual(len(data["images"]), 3)
+        self.assertIn("/media/property_gallery/g1", data["images"][1])
+        self.assertIn("/media/property_gallery/g2", data["images"][2])
+        docs = {d["nameEn"]: d["url"] for d in data["documents"]}
+        self.assertTrue(docs["Report"].startswith("http://testserver/media/property_docs/uploads/report"))
+        self.assertEqual(docs["Linked"], "https://api.example.com/media/x.pdf")
+
+    def test_list_returns_absolute_hero_url(self):
+        item = next(p for p in self.client.get("/api/properties/").data if p["id"] == "uploads")
+        self.assertTrue(item["image"].startswith("http://testserver/media/property_images/"))
+
+    def test_url_only_property_is_unchanged(self):
+        Property.objects.create(**_valid_property_kwargs(slug="url-only", image="/props/u/hero.jpg"))
+        data = self.client.get("/api/properties/url-only/").data
+        self.assertEqual(data["image"], "/props/u/hero.jpg")
+        self.assertEqual(data["images"], [])
+
+    @override_settings(PUBLIC_API_ORIGIN="https://api.capimaxbrx.com")
+    def test_without_request_falls_back_to_public_origin(self):
+        self.assertTrue(
+            self.prop.hero_image_url().startswith("https://api.capimaxbrx.com/media/property_images/")
+        )

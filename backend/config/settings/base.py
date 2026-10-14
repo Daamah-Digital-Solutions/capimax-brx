@@ -398,5 +398,8 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+# Public origin of THIS API, used to build absolute links to uploaded media when no request
+# is at hand (the frontend lives on another origin, so a bare /media/... would break).
+PUBLIC_API_ORIGIN = env("PUBLIC_API_ORIGIN", default="")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

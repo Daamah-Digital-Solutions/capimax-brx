@@ -103,7 +103,12 @@ class WalletTokensView(APIView):
         # Property). Missing/unpublished property → honest nulls, never faked. ---
         slugs = {t.property_id for t in tokens}
         props = (
-            {p.slug: p for p in Property.objects.filter(slug__in=slugs)} if slugs else {}
+            {
+                p.slug: p
+                for p in Property.objects.filter(slug__in=slugs).prefetch_related("gallery")
+            }
+            if slugs
+            else {}
         )
 
         # --- Average cost basis per property from the caller's completed acquisitions.
@@ -133,8 +138,8 @@ class WalletTokensView(APIView):
             d["expected_yield"] = (
                 float(p.expected_yield) if p and p.expected_yield is not None else None
             )
-            d["image"] = p.image if p else None
-            d["images"] = (p.images if p else []) or []
+            d["image"] = p.hero_image_url(request) if p else None
+            d["images"] = p.gallery_urls(request) if p else []
             d["construction_progress"] = p.construction_progress if p else None
             d["exit_eligible"] = bool(p.exit_eligible) if p else False
             ac = avg_cost.get(tok.property_id)
