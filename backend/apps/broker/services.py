@@ -74,6 +74,12 @@ def submit_license(broker: BrokerProfile, *, license_info: dict | None = None) -
                 setattr(broker, key, value)
     broker.mark_license_submitted()
     broker.save()
+    from apps.notifications.admin_alerts import notify_admins
+
+    notify_admins(
+        "broker_license", obj=broker,
+        summary=f"{broker.contact_name} ({broker.user.email}) submitted broker licence details for approval.",
+    )
     return broker
 
 

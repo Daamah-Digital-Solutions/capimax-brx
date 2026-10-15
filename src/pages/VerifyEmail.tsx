@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Landmark, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { authApi } from "@/integrations/api/client";
 
 type State = "pending" | "success" | "error";
@@ -11,6 +12,7 @@ type State = "pending" | "success" | "error";
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const { language, isRTL } = useLanguage();
+  const { refreshUser } = useAuth();
   const ar = language === "ar";
 
   const uid = searchParams.get("uid") || "";
@@ -28,7 +30,11 @@ export default function VerifyEmail() {
     let active = true;
     authApi
       .verifyEmail({ uid, token })
-      .then(() => active && setState("success"))
+      .then(() => {
+        if (!active) return;
+        setState("success");
+        void refreshUser(); // signed in already → the reminder banner goes away
+      })
       .catch(() => active && setState("error"));
     return () => {
       active = false;

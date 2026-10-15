@@ -132,6 +132,12 @@ class BrokerLicenseUploadView(APIView):
         broker.license_document = upload
         broker.mark_license_submitted()
         broker.save()
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins(
+            "broker_license", obj=broker,
+            summary=f"{broker.contact_name} ({request.user.email}) uploaded a broker licence document for approval.",
+        )
         return Response(
             _profile_payload(broker, request.user), status=status.HTTP_201_CREATED
         )

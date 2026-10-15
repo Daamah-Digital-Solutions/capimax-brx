@@ -35,6 +35,8 @@ def _fmt(template: str, params: dict) -> str:
 
 
 def _abs_url(path: str) -> str:
+    if path.startswith(("http://", "https://")):
+        return path  # already absolute (e.g. a link into the Django admin)
     base = getattr(settings, "FRONTEND_URL", "") or ""
     return f"{base.rstrip('/')}{path}" if base else path
 
@@ -106,6 +108,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_label": "View the property",
         "cta_path": "/marketplace",
         "outro": "Prices can go down as well as up.",
+    },
+    "admin_review_needed": {
+        "subject": "Review needed: {kind}",
+        "heading": "Waiting for your review",
+        "intro": "{summary}",
+        "cta_label": "Open in the admin",
+        "cta_path": "{admin_url}",
+        "outro": "You get this because you are an administrator of Capimax BRX.",
     },
     "lp_exit_closed": {
         "subject": "Your liquidity exit request for {property} was closed",
@@ -280,7 +290,7 @@ def send_event_email(user, notif_type, params: dict | None = None) -> bool:
             heading=_fmt(copy.get("heading", ""), params),
             intro=_fmt(copy.get("intro", ""), params),
             cta_label=copy.get("cta_label", "") if has_cta else "",
-            cta_url=_abs_url(copy.get("cta_path", "/dashboard")) if has_cta else "",
+            cta_url=_abs_url(_fmt(copy.get("cta_path", "/dashboard"), params)) if has_cta else "",
             outro=_fmt(copy.get("outro", ""), params),
         )
         send_mail(

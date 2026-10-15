@@ -24,6 +24,10 @@ const OFFPLAN_CODE_MESSAGES: Record<string, { en: string; ar: string }> = {
     en: "This property is sold by full payment only.",
     ar: "هذا العقار متاح بالدفع الكامل فقط.",
   },
+  email_unverified: {
+    en: "Please confirm your email address first, using the link we emailed you.",
+    ar: "يرجى تأكيد بريدك الإلكتروني أولًا من الرابط الذي أرسلناه إليك.",
+  },
 };
 
 // Phase 3 Wave 2: investments now talk to the Django backend (SPEC §4.1) instead of

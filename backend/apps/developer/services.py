@@ -111,6 +111,13 @@ def submit_kyb(developer: DeveloperProfile, *, business_info: dict | None = None
 
     developer.mark_kyb_submitted()
     developer.save()
+    from apps.notifications.admin_alerts import notify_admins
+
+    name = developer.company_name or developer.contact_name or developer.user.email
+    notify_admins(
+        "developer_kyb", obj=developer,
+        summary=f"{name} ({developer.user.email}) submitted developer verification (KYB) for review.",
+    )
     return developer
 
 

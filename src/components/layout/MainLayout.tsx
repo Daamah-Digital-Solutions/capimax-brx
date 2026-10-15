@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { EmailVerifyBanner } from "./EmailVerifyBanner";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -36,6 +37,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           : sidebarOpen ? "lg:ml-72" : "lg:ml-16"
       )}>
         <Header onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+        <EmailVerifyBanner />
         <main className="flex-1 pb-16 lg:pb-0">
           {children}
         </main>

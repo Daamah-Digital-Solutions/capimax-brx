@@ -127,6 +127,13 @@ def submit_kyb(owner: OwnerProfile, *, business_info: dict | None = None) -> Own
 
     owner.mark_kyb_submitted()
     owner.save()
+    from apps.notifications.admin_alerts import notify_admins
+
+    name = owner.company_name or owner.contact_name or owner.user.email
+    notify_admins(
+        "owner_kyb", obj=owner,
+        summary=f"{name} ({owner.user.email}) submitted property owner verification (KYB) for review.",
+    )
     return owner
 
 
@@ -212,6 +219,12 @@ def submit_submission(submission: PropertySubmission) -> PropertySubmission:
     submission.submitted_at = timezone.now()
     submission.save(update_fields=["status", "submitted_at", "updated_at"])
     log.info("Property submission %s submitted by user %s", submission.id, submission.submitter_id)
+    from apps.notifications.admin_alerts import notify_admins
+
+    notify_admins(
+        "property_submission", obj=submission,
+        summary=f"{submission.submitter.email} submitted a property for review: {getattr(submission, 'name', '') or submission.pk}.",
+    )
     return submission
 
 

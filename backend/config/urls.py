@@ -7,6 +7,8 @@ Phase 1 wires only the admin and the auth foundation. Domain routers
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.core.monitoring import ClientErrorView
+
 # Brand the admin so it reads as the Capimax BRX console, not the generic
 # "Django site administration" (client-facing admin tool).
 admin.site.site_header = "Capimax BRX Administration"
@@ -18,6 +20,8 @@ urlpatterns = [
     # Auth foundation: register / login / refresh / logout / session / me + OAuth.
     # SPEC §5.2.
     path("api/auth/", include("apps.core.urls")),
+    # Browser error reports → logs + alert email (apps/core/monitoring.py).
+    path("api/monitoring/client-errors/", ClientErrorView.as_view(), name="client-errors"),
     # Property read API (Phase 2): list / detail / featured / funded / stats. SPEC §2.12.
     path("api/", include("apps.properties.urls")),
     # Custodial wallets (Phase 3 Wave 1): create (KYC-gated) + me + tokens. SPEC §3.2.

@@ -695,6 +695,15 @@ class CreateBankDepositView(APIView):
         # Human reference the user quotes in the transfer so the admin can match it.
         deposit.reference = f"DEP-{str(deposit.id).split('-')[0].upper()}"
         deposit.save(update_fields=["reference", "updated_at"])
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins(
+            "bank_deposit", obj=deposit,
+            summary=(
+                f"{request.user.email} uploaded a bank transfer proof for ${deposit.amount} "
+                f"(reference {deposit.reference}). Match it with the bank statement, then approve."
+            ),
+        )
         return Response(
             {"deposit_id": str(deposit.id), "reference": deposit.reference, "status": deposit.status},
             status=status.HTTP_201_CREATED,
@@ -833,6 +842,16 @@ class SukukCertificateUploadView(APIView):
             issuer=(request.data.get("issuer") or "")[:200],
             claimed_value=claimed,
             validity_date=validity if validity else None,
+        )
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins(
+            "sukuk_certificate", obj=cert,
+            summary=(
+                f"{request.user.email} uploaded a Nova certificate to pay for "
+                f"{investment.token_amount} unit(s) of {investment.property_name} "
+                f"(${investment.amount_invested})."
+            ),
         )
         return Response(
             {"id": str(cert.id), "investment_id": str(investment.id), "status": cert.status},

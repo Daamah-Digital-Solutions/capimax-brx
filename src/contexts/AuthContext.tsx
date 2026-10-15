@@ -9,6 +9,8 @@ import { authApi, tokenStore, type ApiUser } from "@/integrations/api/client";
 interface AuthUser {
   id: string;
   email: string;
+  // A confirmed email is required before KYC and money actions (Google sign-ins count).
+  is_email_verified: boolean;
   profile?: ApiUser["profile"];
 }
 interface AuthSession {
@@ -32,12 +34,14 @@ interface AuthContextType {
   loginWithGoogle: (idToken: string) => Promise<{ error: Error | null }>;
   signInWithApple: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  /** Re-read the current user (e.g. after the email was confirmed in another tab). */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function toAuthUser(u: ApiUser): AuthUser {
-  return { id: u.id, email: u.email, profile: u.profile };
+  return { id: u.id, email: u.email, is_email_verified: !!u.is_email_verified, profile: u.profile };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -128,6 +132,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error: new Error("Apple sign-in isn't enabled yet. Please use email and password."),
   });
 
+  const refreshUser = async () => {
+    if (!tokenStore.access) return;
+    try {
+      setUser(toAuthUser(await authApi.me()));
+    } catch {
+      /* keep the current state; the next request will refresh or log out */
+    }
+  };
+
   const signOut = async () => {
     try {
       await authApi.logout();
@@ -139,7 +152,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, loading, signUp, signIn, loginWithGoogle, signInWithApple, signOut }}
+      value={{
+        user, session, loading, signUp, signIn, loginWithGoogle, signInWithApple, signOut,
+        refreshUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

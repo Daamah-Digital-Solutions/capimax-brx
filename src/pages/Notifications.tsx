@@ -205,7 +205,12 @@ export default function Notifications() {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         markRead(notif.id);
-                                        navigate(notif.action_url);
+                                        // Links into the Django admin are absolute → new tab.
+                                        if (/^https?:\/\//.test(notif.action_url)) {
+                                          window.open(notif.action_url, "_blank", "noopener");
+                                        } else {
+                                          navigate(notif.action_url);
+                                        }
                                       }}
                                     >
                                       {copy.actionLabel}

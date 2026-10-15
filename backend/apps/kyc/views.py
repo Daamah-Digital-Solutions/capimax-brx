@@ -21,6 +21,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.permissions import EmailVerifiedPermission
+
 from . import sumsub
 from .models import UserKYC
 from .serializers import KYCStatusSerializer, KYCSubmitSerializer
@@ -42,7 +44,7 @@ class KYCMeView(APIView):
 class KYCSubmitView(APIView):
     """Persist personal info + advance to `submitted` (idempotent)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, EmailVerifiedPermission]
 
     def post(self, request):
         serializer = KYCSubmitSerializer(data=request.data or {})
@@ -57,7 +59,7 @@ class KYCAccessTokenView(APIView):
     returns 503 with a machine-readable code so the frontend shows the dev path.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, EmailVerifiedPermission]
 
     def post(self, request):
         if not sumsub.is_configured():

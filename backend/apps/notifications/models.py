@@ -39,6 +39,9 @@ class Notification(models.Model):
         # Off-plan decision 6: a platform-priced LP exit request was closed because the unit
         # price changed (it is never funded at the old price). params.property/tokens.
         LP_EXIT_CLOSED = "lp_exit_closed", _("Liquidity exit request closed")
+        # To every active admin: something is waiting for review in the Django admin
+        # (apps/notifications/admin_alerts.py). params.kind/summary/admin_url.
+        ADMIN_REVIEW_NEEDED = "admin_review_needed", _("Admin review needed")
         # Off-plan §4 auto-debit: an installment is due but the wallet can't cover it (sent once).
         INSTALLMENT_DUE_UNPAID = "installment_due_unpaid", _("Installment due — top up wallet")
         # Money in.

@@ -17,6 +17,13 @@ PUBLIC_API_ORIGIN = env("PUBLIC_API_ORIGIN", default="https://api.capimaxbrx.com
 # worker count separately).
 REST_FRAMEWORK["NUM_PROXIES"] = env.int("DRF_NUM_PROXIES", default=1)  # noqa: F405
 AUTH_THROTTLE_ENABLED = env.bool("AUTH_THROTTLE_ENABLED", default=True)
+# Error-alert dedupe counters, shared by the gunicorn workers and the cron jobs (both run as
+# user capimax; the service's PrivateTmp hides /tmp, so this lives under /var/cache).
+CACHES["alerts"] = {  # noqa: F405
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": env("ALERT_CACHE_DIR", default="/var/cache/capimax-alerts"),
+    "TIMEOUT": 86400,
+}
 CACHES["throttle"] = {  # noqa: F405
     "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
     "LOCATION": env("THROTTLE_CACHE_DIR", default="/var/tmp/capimax-throttle"),

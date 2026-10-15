@@ -185,6 +185,12 @@ def request_withdrawal(
             params={"amount": str(amount), "reference": wd.reference},
             action_url="/wallet",
         )
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins(
+            "withdrawal", obj=wd,
+            summary=f"{user.email} requested a withdrawal of ${wd.amount} ({wd.method}).",
+        )
         return wd
 
 

@@ -4,9 +4,11 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { installThirdPartyErrorGuards } from "@/lib/thirdPartyErrors";
+import { installErrorReporter } from "@/lib/errorReporter";
 import "./index.css";
 
 installThirdPartyErrorGuards();
+installErrorReporter();
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

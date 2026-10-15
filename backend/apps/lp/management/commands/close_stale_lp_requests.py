@@ -7,12 +7,15 @@ stale request is never funded, so this only keeps the listings tidy and frees th
 """
 from django.core.management.base import BaseCommand
 
+from apps.core.alerts import alert_on_failure
+
 from apps.lp.market_services import close_stale_requests
 
 
 class Command(BaseCommand):
     help = "Close lapsed or re-priced LP exit requests and free their units."
 
+    @alert_on_failure
     def handle(self, *args, **opts):
         closed = close_stale_requests()
         self.stdout.write(f"close_stale_lp_requests: {closed} closed.")

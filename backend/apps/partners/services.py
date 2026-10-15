@@ -129,6 +129,13 @@ def submit_kyb(partner: PartnerProfile, *, business_info: dict | None = None) ->
 
     partner.mark_kyb_submitted()
     partner.save()
+    from apps.notifications.admin_alerts import notify_admins
+
+    name = partner.company_name or partner.contact_name or partner.user.email
+    notify_admins(
+        "partner_kyb", obj=partner,
+        summary=f"{name} ({partner.user.email}) submitted partner verification (KYB) for review.",
+    )
     return partner
 
 
@@ -339,6 +346,12 @@ def submit_assignment(assignment: Assignment, *, actor=None) -> Assignment:
     assignment.status = AssignmentStatus.SUBMITTED
     assignment.submitted_at = assignment.submitted_at or timezone.now()
     assignment.save(update_fields=["status", "submitted_at", "updated_at"])
+    from apps.notifications.admin_alerts import notify_admins
+
+    notify_admins(
+        "partner_deliverable", obj=assignment,
+        summary=f"A partner submitted the deliverables for {assignment.property_name} for review.",
+    )
     _log_event(assignment, AssignmentEvent.EventType.SUBMITTED, actor=actor,
                meta={"property": assignment.property_name})
     return assignment

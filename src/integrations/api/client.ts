@@ -220,6 +220,14 @@ export const authApi = {
     await rawRequest("/auth/password/reset/confirm/", { method: "POST", body: payload });
   },
 
+  /** Email the signed-in user a fresh confirmation link (rate-limited server-side). */
+  async resendVerification(): Promise<{ detail: string; verified: boolean }> {
+    return (await rawRequest("/auth/email/resend/", { method: "POST", auth: true })) as {
+      detail: string;
+      verified: boolean;
+    };
+  },
+
   /** Confirm an email-verification link (uid+token). Throws on an invalid/expired token (400). */
   async verifyEmail(payload: { uid: string; token: string }): Promise<void> {
     await rawRequest("/auth/email/verify/", { method: "POST", body: payload });

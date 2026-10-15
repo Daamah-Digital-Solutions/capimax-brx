@@ -108,6 +108,13 @@ def submit_kyb(lp: LiquidityProvider, *, business_info: dict | None = None) -> L
 
     lp.mark_kyb_submitted()
     lp.save()
+    from apps.notifications.admin_alerts import notify_admins
+
+    name = lp.company_name or lp.contact_name or lp.user.email
+    notify_admins(
+        "lp_kyb", obj=lp,
+        summary=f"{name} ({lp.user.email}) submitted liquidity provider verification (KYB) for review.",
+    )
     return lp
 
 

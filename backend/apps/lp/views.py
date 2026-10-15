@@ -151,6 +151,10 @@ class LPWithdrawalView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        from apps.core.permissions import EMAIL_UNVERIFIED, needs_email_verification
+
+        if needs_email_verification(request.user):
+            return Response(EMAIL_UNVERIFIED, status=status.HTTP_403_FORBIDDEN)
         lp = _get_lp(request.user)
         if lp is None:
             return Response({"detail": "No LP profile."}, status=status.HTTP_404_NOT_FOUND)
@@ -170,6 +174,12 @@ class LPWithdrawalView(APIView):
             status=LPTransaction.TxStatus.PENDING,
             withdrawal_method=serializer.validated_data["withdrawal_method"],
             notes=serializer.validated_data.get("notes") or None,
+        )
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins(
+            "lp_withdrawal", obj=tx,
+            summary=f"Liquidity provider {lp.company_name or lp.contact_name} ({request.user.email}) requested a withdrawal of ${amount}.",
         )
         return Response(
             LPTransactionSerializer(tx).data, status=status.HTTP_201_CREATED

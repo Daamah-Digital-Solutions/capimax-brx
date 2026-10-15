@@ -256,6 +256,10 @@ class WithdrawalsView(APIView):
         return Response(WithdrawalSerializer(items, many=True).data)
 
     def post(self, request):
+        from apps.core.permissions import EMAIL_UNVERIFIED, needs_email_verification
+
+        if needs_email_verification(request.user):
+            return Response(EMAIL_UNVERIFIED, status=status.HTTP_403_FORBIDDEN)
         serializer = WithdrawalCreateSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         method = serializer.validated_data["method"]

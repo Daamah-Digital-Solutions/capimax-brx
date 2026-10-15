@@ -2,6 +2,7 @@ import { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { isThirdPartyExtensionError } from "@/lib/thirdPartyErrors";
+import { reportError } from "@/lib/errorReporter";
 
 interface Props {
   children: ReactNode;
@@ -34,6 +35,7 @@ class ErrorBoundary extends Component<Props, State> {
       return;
     }
     console.error("Uncaught error:", error, errorInfo);
+    reportError(error, "boundary", errorInfo.componentStack ?? undefined);
   }
 
   private handleRefresh = () => {

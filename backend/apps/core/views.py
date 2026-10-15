@@ -148,7 +148,10 @@ class SessionView(APIView):
 
         return Response(
             {
-                "user": {"id": str(user.id), "email": user.email},
+                "user": {
+                    "id": str(user.id), "email": user.email,
+                    "is_email_verified": user.is_email_verified,
+                },
                 "session": {"access_token": access_token},
                 "profile": ProfileSerializer(profile).data if profile else None,
             }
@@ -203,6 +206,21 @@ class PasswordResetConfirmView(APIView):
         user.set_password(serializer.validated_data["new_password"])
         user.save(update_fields=["password"])
         return Response({"detail": "Password updated."})
+
+
+class EmailVerifyResendView(APIView):
+    """POST /api/auth/email/resend/ — email the caller a fresh confirmation link."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthIPThrottle]
+    throttle_scope = "auth_email_resend"
+
+    def post(self, request):
+        user = request.user
+        if user.is_email_verified:
+            return Response({"detail": "Your email is already confirmed.", "verified": True})
+        send_verification_email(user)
+        return Response({"detail": "A new confirmation link is on its way.", "verified": False})
 
 
 class EmailVerifyConfirmView(APIView):

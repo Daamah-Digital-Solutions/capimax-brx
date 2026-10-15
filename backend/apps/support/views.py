@@ -68,6 +68,12 @@ class SupportTicketsView(APIView):
             details=data["details"],
             # status defaults to OPEN on the model.
         )
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins(
+            "support_ticket", obj=ticket,
+            summary=f"{request.user.email} opened a {ticket.priority}-priority support ticket: {ticket.subject}",
+        )
         return Response(_ticket_dict(ticket), status=status.HTTP_201_CREATED)
 
 

@@ -27,6 +27,12 @@ class InvestmentCreateView(APIView):
         # on (routes to the KYC flow) rather than a raw error. Because approval
         # auto-creates the wallet, an approved user always has a wallet by here — so
         # there is no pre-wallet "tokens_minted=false" backlog in the happy path.
+        from apps.core.permissions import EMAIL_UNVERIFIED, needs_email_verification
+
+        if needs_email_verification(request.user):
+            return Response(
+                {"success": False, **EMAIL_UNVERIFIED}, status=status.HTTP_403_FORBIDDEN
+            )
         kyc = getattr(request.user, "kyc", None)
         if not (kyc and kyc.status == "approved"):
             return Response(

@@ -13,6 +13,8 @@ from datetime import date
 
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.core.alerts import alert_on_failure
+
 from apps.installments.services import collect_due_installments, mark_overdue_missed
 
 
@@ -22,6 +24,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--today", default=None, help="Collect as of this ISO date (YYYY-MM-DD).")
 
+    @alert_on_failure
     def handle(self, *args, **opts):
         today = None
         if opts["today"]:

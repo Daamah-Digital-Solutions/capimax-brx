@@ -203,6 +203,34 @@ class HasActivatedPropertySubmitter(BasePermission):
         return bool(developer and developer.status == "approved")
 
 
+EMAIL_UNVERIFIED = {
+    "code": "email_unverified",
+    "detail": "Please confirm your email address first, using the link we emailed you.",
+}
+
+
+def needs_email_verification(user) -> bool:
+    """True when `user` still has to confirm their email before KYC / money actions."""
+    from django.conf import settings
+
+    return bool(
+        getattr(settings, "EMAIL_VERIFICATION_REQUIRED", True)
+        and user is not None
+        and getattr(user, "is_authenticated", False)
+        and not getattr(user, "is_email_verified", False)
+        and not getattr(user, "is_staff", False)
+    )
+
+
+class EmailVerifiedPermission(BasePermission):
+    """A confirmed email address (answers 403 {code: "email_unverified"} otherwise)."""
+
+    message = EMAIL_UNVERIFIED
+
+    def has_permission(self, request, view):
+        return not needs_email_verification(request.user)
+
+
 class KYCApprovedPermission(BasePermission):
     """
     Gate requiring an APPROVED KYC record before sensitive actions (wallet creation,
@@ -219,5 +247,8 @@ class KYCApprovedPermission(BasePermission):
     message = "KYC approval is required for this action."
 
     def has_permission(self, request, view):
+        if needs_email_verification(request.user):
+            self.message = EMAIL_UNVERIFIED  # a confirmed email comes first
+            return False
         kyc = getattr(request.user, "kyc", None)
         return bool(kyc and kyc.status == "approved")

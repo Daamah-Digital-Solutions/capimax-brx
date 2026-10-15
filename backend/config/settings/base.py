@@ -238,9 +238,13 @@ AUTH_THROTTLE_RATES = {
     "auth_oauth": "30/min",
     "auth_email_verify": "30/hour",
     "admin_login": "10/min",
+    "client_errors": "30/hour",  # browser error reports (apps/core/monitoring.py)
+    "auth_email_resend": "5/hour",
 }
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    # Error-alert dedupe counters (prod: a file cache shared by workers and cron jobs).
+    "alerts": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "alerts"},
     # Throttle counters (prod overrides with a cache shared by all gunicorn workers).
     "throttle": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -444,3 +448,47 @@ MEDIA_ROOT = BASE_DIR / "media"
 PUBLIC_API_ORIGIN = env("PUBLIC_API_ORIGIN", default="")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# --------------------------------------------------------------------------- #
+# Error monitoring (apps/core/alerts.py, apps/core/monitoring.py). Server errors, failures in our apps and
+# scheduled jobs, and browser crashes are logged to stdout (journald) and emailed to
+# ERROR_ALERT_EMAILS — each distinct error once per ALERT_DEDUPE_SECONDS. Stack-frame locals
+# and request bodies are left out of the emails.
+# --------------------------------------------------------------------------- #
+ADMINS = [(e, e) for e in env.list("ERROR_ALERT_EMAILS", default=[])]
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+EMAIL_SUBJECT_PREFIX = "[Capimax BRX alert] "
+ALERT_DEDUPE_SECONDS = env.int("ALERT_DEDUPE_SECONDS", default=900)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+    },
+    "formatters": {
+        "plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "plain"},
+        "alert_email": {
+            "level": "ERROR",
+            "filters": ["require_debug_false"],
+            "class": "apps.core.alerts.AlertEmailHandler",
+            "reporter_class": "apps.core.alerts.NoLocalsExceptionReporter",
+        },
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    "loggers": {
+        "django.request": {"handlers": ["console", "alert_email"], "level": "ERROR", "propagate": False},
+        "apps": {"handlers": ["console", "alert_email"], "level": "INFO", "propagate": False},
+        "client": {"handlers": ["console", "alert_email"], "level": "WARNING", "propagate": False},
+    },
+}
+
+# A confirmed email address is required before identity verification (KYC) and every money
+# action (investing, deposits, withdrawals, markets). Google sign-ins count as confirmed.
+# Off by default in dev (like the auth throttles) so local work and the test suite don't need
+# the link; the gate's own tests switch it on.
+EMAIL_VERIFICATION_REQUIRED = env.bool("EMAIL_VERIFICATION_REQUIRED", default=True)
