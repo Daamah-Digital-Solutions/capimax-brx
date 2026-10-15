@@ -20,7 +20,7 @@ import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserWallet } from "@/hooks/useUserWallet";
-import { useOwnershipTokens } from "@/hooks/useOwnershipTokens";
+import { positionCost, positionValue, useOwnershipTokens } from "@/hooks/useOwnershipTokens";
 import { useDistributions } from "@/hooks/useDistributions";
 import { useReinvestments } from "@/hooks/useReinvestments";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -65,6 +65,8 @@ export default function Dashboard() {
       {
         propertyId: string; name: string; units: number; value: number;
         ownership: number; invested: number; hasCost: boolean;
+        unitPrice: number | null; changePct: number | null; updatedAt: string | null;
+        planUnits: number; avgCost: number | null;
       }
     >();
     for (const tk of tokens) {
@@ -76,12 +78,20 @@ export default function Dashboard() {
         ownership: 0,
         invested: 0,
         hasCost: false,
+        unitPrice: tk.unit_price ?? null,
+        changePct: tk.price_change_pct ?? null,
+        updatedAt: tk.price_updated_at ?? null,
+        planUnits: 0,
+        avgCost: tk.avg_cost_per_token ?? null,
       };
       cur.units += Number(tk.token_amount) || 0;
-      cur.value += Number(tk.token_value_usd) || 0;
+      // A running installment plan counts as a position (units × price − still owed).
+      cur.value += positionValue(tk);
       cur.ownership += Number(tk.ownership_percentage) || 0;
-      if (tk.invested_usd != null) {
-        cur.invested += Number(tk.invested_usd) || 0;
+      cur.planUnits += Number(tk.plan_units) || 0;
+      const cost = positionCost(tk);
+      if (cost != null) {
+        cur.invested += cost;
         cur.hasCost = true;
       }
       map.set(tk.property_id, cur);
@@ -249,10 +259,40 @@ export default function Dashboard() {
                               {holding.units.toLocaleString()} {t("dashboard.units")} •{" "}
                               {holding.ownership.toFixed(2)}% {isAr ? "ملكية" : "ownership"}
                             </div>
+                            {/* Off-plan §7: today's unit price, change since launch, last
+                                change, average cost and gain — real data only. */}
+                            {holding.unitPrice != null && (
+                              <div className="text-xs text-muted-foreground mt-0.5" dir="auto">
+                                {isAr ? "سعر الوحدة" : "Unit"} ${holding.unitPrice.toLocaleString()}
+                                {holding.changePct != null && holding.changePct !== 0 && (
+                                  <span className={holding.changePct > 0 ? "text-success" : "text-destructive"}>
+                                    {" "}({holding.changePct > 0 ? "+" : ""}{holding.changePct.toFixed(1)}% {isAr ? "منذ الإطلاق" : "since launch"})
+                                  </span>
+                                )}
+                                {holding.updatedAt && (
+                                  <> · {isAr ? "آخر تحديث" : "updated"} {new Date(holding.updatedAt).toLocaleDateString(isAr ? "ar-EG" : "en-GB")}</>
+                                )}
+                                {holding.avgCost != null && (
+                                  <> · {isAr ? "متوسط شرائك" : "your avg"} ${holding.avgCost.toFixed(2)}</>
+                                )}
+                              </div>
+                            )}
+                            {holding.planUnits > 0 && (
+                              <div className="text-xs text-primary mt-0.5">
+                                {isAr
+                                  ? `${holding.planUnits} وحدة على خطة تقسيط — تُباع مع الخطة كمركز واحد`
+                                  : `${holding.planUnits} units on an installment plan — sold with the plan as one position`}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="text-end">
-                          <div className="font-semibold text-foreground">${holding.value.toLocaleString()}</div>
+                          <div className="font-semibold text-foreground">${holding.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                          {holding.hasCost && (
+                            <div className={cn("text-xs", holding.value - holding.invested >= 0 ? "text-success" : "text-destructive")} dir="ltr">
+                              {holding.value - holding.invested >= 0 ? "+" : "−"}${Math.abs(holding.value - holding.invested).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </div>
+                          )}
                           {/* Per-holding return% from real cost basis; "—" when no cost record yet. */}
                           <div className={cn(
                             "text-sm flex items-center gap-1 justify-end",
@@ -400,6 +440,7 @@ export default function Dashboard() {
               {/* Exit Options Card */}
               <ExitOptionsCard
                 compact
+                planUnits={holdings.reduce((sum, h) => sum + h.planUnits, 0)}
                 className="bg-card rounded-2xl border border-border p-6 animate-fade-in"
                 style={{ animationDelay: "0.42s" }}
               />

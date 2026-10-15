@@ -125,6 +125,38 @@ class WalletTokensView(APIView):
             if r["toks"]:
                 avg_cost[r["property__slug"]] = Decimal(r["amt"]) / Decimal(r["toks"])
 
+        # --- Off-plan §7: the unit price (launch, now, % change, last change) and, for units
+        # on a running installment plan, the plan's units + remaining principal — the plan
+        # is valued as a position (units × price − remaining) and sold only as a whole. ---
+        from django.db.models import Max
+
+        from apps.installments.models import InstallmentPlan, InstallmentPlanStatus
+        from apps.installments.position import plan_units, remaining_principal
+        from apps.properties.models import PropertyPrice
+        from apps.properties.pricing import change_since_launch_pct
+
+        last_change = dict(
+            PropertyPrice.objects.filter(property__slug__in=slugs)
+            .values("property__slug")
+            .annotate(at=Max("created_at"))
+            .values_list("property__slug", "at")
+        ) if slugs else {}
+        plan_totals = {}
+        active_plans = (
+            InstallmentPlan.objects.filter(
+                investor=request.user, status=InstallmentPlanStatus.ACTIVE,
+                property__slug__in=slugs,
+            )
+            .select_related("property")
+            .prefetch_related("payments", "investments")
+        ) if slugs else []
+        for plan in active_plans:
+            inv = next(iter(sorted(plan.investments.all(), key=lambda i: i.created_at)), None)
+            units, owed = plan_totals.get(plan.property.slug, (0, Decimal("0")))
+            plan_totals[plan.property.slug] = (
+                units + plan_units(plan, inv), owed + remaining_principal(plan)
+            )
+
         for d, tok in zip(data, tokens):
             p = props.get(tok.property_id)
             d["city"] = p.city if p else None
@@ -142,6 +174,14 @@ class WalletTokensView(APIView):
             d["images"] = p.gallery_urls(request) if p else []
             d["construction_progress"] = p.construction_progress if p else None
             d["exit_eligible"] = bool(p.exit_eligible) if p else False
+            d["unit_price"] = float(p.token_price) if p else None
+            d["launch_price"] = float(p.launch_price or p.token_price) if p else None
+            d["price_change_pct"] = float(change_since_launch_pct(p)) if p else None
+            at = last_change.get(tok.property_id)
+            d["price_updated_at"] = at.isoformat() if at else None
+            units, owed = plan_totals.get(tok.property_id, (0, Decimal("0")))
+            d["plan_units"] = units
+            d["remaining_principal"] = float(owed)
             ac = avg_cost.get(tok.property_id)
             if ac is not None:
                 d["avg_cost_per_token"] = float(ac)

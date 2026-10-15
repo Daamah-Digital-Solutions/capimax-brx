@@ -44,7 +44,7 @@ import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard"
 import { ExitOptionsCard } from "@/components/portfolio/ExitOptionsCard";
 import { SukukReviewCard } from "@/components/portfolio/SukukReviewCard";
 import { useUserWallet } from "@/hooks/useUserWallet";
-import { useOwnershipTokens } from "@/hooks/useOwnershipTokens";
+import { positionCost, positionValue, useOwnershipTokens } from "@/hooks/useOwnershipTokens";
 import { useDistributions } from "@/hooks/useDistributions";
 import { useReinvestments } from "@/hooks/useReinvestments";
 import { reportsApi } from "@/integrations/api/client";
@@ -74,8 +74,10 @@ export default function Portfolio() {
   const holdings = useMemo(
     () =>
       tokens.map((tk) => {
-        const invested = tk.invested_usd ?? null;
-        const value = Number(tk.token_value_usd) || 0;
+        // Off-plan §7: a running installment plan counts as a position (units × price −
+        // still owed), on both the value and the cost side.
+        const invested = positionCost(tk);
+        const value = positionValue(tk);
         const yieldPct =
           invested && invested > 0 ? ((value - invested) / invested) * 100 : null;
         const underConstruction =
@@ -94,6 +96,10 @@ export default function Portfolio() {
           status: underConstruction ? "construction" : "active",
           constructionProgress: tk.construction_progress ?? null,
           exitEligible: !!tk.exit_eligible,
+          unitPrice: tk.unit_price ?? null,
+          changePct: tk.price_change_pct ?? null,
+          avgCost: tk.avg_cost_per_token ?? null,
+          planUnits: Number(tk.plan_units) || 0,
         };
       }),
     [tokens, isAr],
@@ -114,9 +120,15 @@ export default function Portfolio() {
     0,
   );
   const hasCostBasis = holdings.some((h) => h.invested != null);
-  const totalReturn = hasCostBasis ? totalValue - totalInvested : null;
+  // Return is measured only over holdings that HAVE a cost record (value and cost on the
+  // same set), so a holding without one can't inflate it.
+  const costedValue = holdings.reduce(
+    (sum, h) => (h.invested != null ? sum + h.currentValue : sum),
+    0,
+  );
+  const totalReturn = hasCostBasis ? costedValue - totalInvested : null;
   const returnPercent =
-    hasCostBasis && totalInvested > 0 ? (totalValue / totalInvested - 1) * 100 : null;
+    hasCostBasis && totalInvested > 0 ? (costedValue / totalInvested - 1) * 100 : null;
   const propertiesCount = holdings.length;
   const pendingDistributions = distributionStats.pendingAmount;
   const exitableAssets = holdings.filter((h) => h.exitEligible).length;
@@ -172,8 +184,13 @@ export default function Portfolio() {
                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                   <Wallet className="w-6 h-6 text-primary" />
                 </div>
-                <Badge variant="success" className="gap-1">
-                  <ArrowUpRight className="w-3 h-3" />
+                <Badge
+                  variant={returnPercent != null && returnPercent < 0 ? "destructive" : "success"}
+                  className="gap-1"
+                >
+                  <ArrowUpRight
+                    className={cn("w-3 h-3", returnPercent != null && returnPercent < 0 && "rotate-90")}
+                  />
                   {fmtPct(returnPercent)}
                 </Badge>
               </div>
@@ -259,8 +276,11 @@ export default function Portfolio() {
               <SukukReviewCard />
 
               {/* Exit Options Card - Prominent display for eligible assets */}
-              {filteredHoldings.some(h => h.exitEligible) && (
-                <ExitOptionsCard className="animate-fade-in" />
+              {filteredHoldings.some(h => h.exitEligible || h.planUnits > 0) && (
+                <ExitOptionsCard
+                  className="animate-fade-in"
+                  planUnits={holdings.reduce((sum, h) => sum + h.planUnits, 0)}
+                />
               )}
 
               {tokensLoading ? (
@@ -347,6 +367,17 @@ export default function Portfolio() {
                                       <FileText className="w-4 h-4 mr-2" />
                                       {t("portfolio.reports")}
                                     </DropdownMenuItem>
+                                    {holding.planUnits > 0 && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem asChild>
+                                          <Link to="/installments">
+                                            <TrendingUp className="w-4 h-4 mr-2" />
+                                            {language === "ar" ? "بيع مركز التقسيط" : "Sell installment position"}
+                                          </Link>
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
                                     {holding.exitEligible && (
                                       <>
                                         <DropdownMenuSeparator />
@@ -400,6 +431,49 @@ export default function Portfolio() {
                                   </div>
                                 </div>
                               </div>
+                              {/* Off-plan §7: today's unit price + change since launch, the
+                                  holder's average cost and gain — real data only. */}
+                              {holding.unitPrice != null && (
+                                <div className="mt-3 text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+                                  <span>
+                                    {language === "ar" ? "سعر الوحدة الآن" : "Unit price now"}{" "}
+                                    <span className="text-foreground font-medium">${holding.unitPrice.toLocaleString()}</span>
+                                    {holding.changePct != null && holding.changePct !== 0 && (
+                                      <span className={holding.changePct > 0 ? "text-success" : "text-destructive"}>
+                                        {" "}({holding.changePct > 0 ? "+" : ""}{holding.changePct.toFixed(1)}% {language === "ar" ? "منذ الإطلاق" : "since launch"})
+                                      </span>
+                                    )}
+                                  </span>
+                                  {holding.avgCost != null && (
+                                    <span>
+                                      {language === "ar" ? "متوسط سعر شرائك" : "Your avg price"}{" "}
+                                      <span className="text-foreground font-medium">${holding.avgCost.toFixed(2)}</span>
+                                    </span>
+                                  )}
+                                  {holding.invested != null && (
+                                    <span>
+                                      {language === "ar" ? "الربح / الخسارة" : "Gain / loss"}{" "}
+                                      <span
+                                        className={cn(
+                                          "font-medium",
+                                          holding.currentValue - holding.invested >= 0 ? "text-success" : "text-destructive",
+                                        )}
+                                        dir="ltr"
+                                      >
+                                        {holding.currentValue - holding.invested >= 0 ? "+" : "−"}$
+                                        {Math.abs(holding.currentValue - holding.invested).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {holding.planUnits > 0 && (
+                                <div className="mt-1 text-xs text-primary">
+                                  {language === "ar"
+                                    ? `${holding.planUnits} وحدة على خطة تقسيط — القيمة = كل الوحدات بسعر اليوم ناقص الأقساط المتبقية، وتُباع مع الخطة كمركز واحد.`
+                                    : `${holding.planUnits} units on an installment plan — valued as all units at today's price minus the installments still owed, and sold with the plan as one position.`}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

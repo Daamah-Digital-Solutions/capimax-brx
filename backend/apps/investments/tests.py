@@ -434,6 +434,9 @@ class InvestmentApiTests(APITestCase):
                 "expected_yield",
                 "image", "images", "construction_progress", "exit_eligible",
                 "avg_cost_per_token", "invested_usd",
+                # Off-plan §7: unit price + the units/principal of running installment plans.
+                "unit_price", "launch_price", "price_change_pct", "price_updated_at",
+                "plan_units", "remaining_principal",
             },
         )
         # The enriched expected_yield mirrors the Property's value (Reports avg-yield source).

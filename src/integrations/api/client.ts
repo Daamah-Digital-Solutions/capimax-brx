@@ -252,6 +252,23 @@ async function publicGet(path: string): Promise<unknown> {
   return data;
 }
 
+export interface UnitPricePoint {
+  date: string;
+  price: string;
+  previousPrice?: string;
+  label: string;
+  note: string;
+}
+
+export interface UnitPriceSummary {
+  launchPrice: string;
+  currentPrice: string;
+  changePct: string;
+  label: string;           // current phase name ("" when none)
+  updatedAt: string | null; // last recorded change (null = unchanged since launch)
+  points: UnitPricePoint[];
+}
+
 export const propertiesApi = {
   /** Full catalogue (bare array) — Marketplace filters this client-side. */
   list: () => publicGet("/properties/") as Promise<any[]>,
@@ -261,6 +278,10 @@ export const propertiesApi = {
   featured: () => publicGet("/properties/featured/") as Promise<any[]>,
   /** Closed deals for FundedProperties. */
   funded: () => publicGet("/properties/funded/") as Promise<any[]>,
+  /** Off-plan unit price: launch, current, % change since launch, phase name and every
+   *  recorded change (oldest first; the first point is the launch price). */
+  prices: (idOrSlug: string) =>
+    publicGet(`/properties/${idOrSlug}/prices/`) as Promise<UnitPriceSummary>,
   /** Real aggregate platform stats for the Marketplace GlobalStats band (all 0 on an empty catalogue). */
   stats: () =>
     publicGet("/properties/stats/") as Promise<{
@@ -1436,6 +1457,9 @@ export interface InstallmentSchedulePayment {
   type: "down_payment" | "installment";
   date: string;                     // ISO date
   amount: number;
+  // Off-plan §4: installment fee on the row (0 on older plans) and what is charged (amount + fee).
+  fee?: number;
+  charge?: number;
   status: "pending" | "paid" | "missed";
 }
 
@@ -1465,6 +1489,14 @@ export interface InstallmentPlanRow {
   forfeitedTokens: number;          // unpaid tokens forfeited on default (0 otherwise)
   defaultedAt: string | null;       // ISO when the plan defaulted (null otherwise)
   payments: InstallmentSchedulePayment[];
+  // Off-plan §4 (absent on older API responses): next charge incl. its fee, overdue rows
+  // (no penalty — debited from the wallet once it holds enough), the term and fee rate.
+  nextPaymentAmount?: number;
+  overdueInstallments?: number;
+  termMonths?: number | null;
+  unitPrice?: number | null;
+  feeRate?: number;
+  installmentFee?: number;
   // Off-plan §6: the active plan as a sellable position (null when not active).
   position?: PlanPosition | null;
 }
@@ -1591,7 +1623,7 @@ export const installmentsApi = {
    * confirmed webhook/IPN the server progressively releases locked→released tokens + credits
    * the owner/broker on that installment — there is NO new mint.
    */
-  payNext: (planId: string, provider: "stripe" | "nowpayments", payCurrency?: string) =>
+  payNext: (planId: string, provider: "stripe" | "nowpayments" | "balance", payCurrency?: string) =>
     rawRequest(`/installments/plans/${planId}/pay-next/`, {
       method: "POST",
       auth: true,
@@ -1603,7 +1635,7 @@ export const installmentsApi = {
    * webhook/IPN the server settles every remaining row → full unlock + completes the plan;
    * there is NO new mint.
    */
-  payoff: (planId: string, provider: "stripe" | "nowpayments", payCurrency?: string) =>
+  payoff: (planId: string, provider: "stripe" | "nowpayments" | "balance", payCurrency?: string) =>
     rawRequest(`/installments/plans/${planId}/pay-off/`, {
       method: "POST",
       auth: true,

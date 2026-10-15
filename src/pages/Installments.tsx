@@ -68,12 +68,14 @@ export default function Installments() {
   // Download THIS plan's schedule (dates + amounts + status) as a CSV — no backend round-trip.
   // A UTF-8 BOM keeps Arabic property names intact when opened in Excel.
   const downloadSchedule = (plan: InstallmentPlanRow) => {
-    const head = ["#", "Type", "Date", "Amount (USD)", "Status"];
+    const head = ["#", "Type", "Date", "Amount (USD)", "Installment fee (USD)", "Total (USD)", "Status"];
     const rows = plan.payments.map((p) => [
       p.type === "down_payment" ? "" : String(p.sequence),
       p.type === "down_payment" ? "Down payment" : `Installment ${p.sequence}`,
       p.date,
       String(p.amount),
+      String(p.fee ?? 0),
+      String(p.charge ?? p.amount),
       p.status,
     ]);
     const esc = (c: string) => `"${c.replace(/"/g, '""')}"`;
@@ -282,6 +284,29 @@ export default function Installments() {
                             </div>
                           </div>
 
+                          {/* Off-plan §4: an overdue installment carries no penalty and is never
+                              forfeited — it is debited from the wallet as soon as it holds enough. */}
+                          {!plan.defaultedAt && (plan.overdueInstallments ?? 0) > 0 && (
+                            <div className="flex items-start gap-3 mb-4 p-3 rounded-xl bg-warning/10 border border-warning/30">
+                              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                              <div className="text-sm">
+                                <span className="font-semibold text-foreground">
+                                  {language === "ar"
+                                    ? `${plan.overdueInstallments} قسط متأخر`
+                                    : `${plan.overdueInstallments} overdue installment(s)`}
+                                </span>{" "}
+                                <span className="text-muted-foreground">
+                                  {language === "ar"
+                                    ? "— بدون غرامة. سيُخصم تلقائيًا من محفظتك فور توفّر الرصيد، أو ادفعه الآن."
+                                    : "— no penalty. It is debited from your wallet automatically once it holds enough, or pay it now."}
+                                </span>
+                                <Link to="/wallet" className="ms-1 text-primary hover:underline">
+                                  {language === "ar" ? "اشحن المحفظة" : "Top up wallet"}
+                                </Link>
+                              </div>
+                            </div>
+                          )}
+
                           {/* DEFAULTED (Wave D): honest forfeiture state — kept paid tokens,
                               forfeited unpaid tokens, voided remaining schedule. */}
                           {plan.defaultedAt ? (
@@ -407,6 +432,16 @@ export default function Installments() {
                                       <th className="text-end font-medium px-4 py-2">
                                         {language === "ar" ? "المبلغ" : "Amount"}
                                       </th>
+                                      {(plan.feeRate ?? 0) > 0 && (
+                                        <>
+                                          <th className="text-end font-medium px-4 py-2">
+                                            {language === "ar" ? `رسوم التقسيط (${plan.feeRate}%)` : `Fee (${plan.feeRate}%)`}
+                                          </th>
+                                          <th className="text-end font-medium px-4 py-2">
+                                            {language === "ar" ? "الإجمالي" : "Total"}
+                                          </th>
+                                        </>
+                                      )}
                                       <th className="text-end font-medium px-4 py-2">
                                         {language === "ar" ? "الحالة" : "Status"}
                                       </th>
@@ -423,6 +458,16 @@ export default function Installments() {
                                         <td className="px-4 py-2 text-end font-medium text-foreground whitespace-nowrap">
                                           ${p.amount.toLocaleString()}
                                         </td>
+                                        {(plan.feeRate ?? 0) > 0 && (
+                                          <>
+                                            <td className="px-4 py-2 text-end text-muted-foreground whitespace-nowrap">
+                                              ${(p.fee ?? 0).toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-2 text-end font-medium text-foreground whitespace-nowrap">
+                                              ${(p.charge ?? p.amount).toLocaleString()}
+                                            </td>
+                                          </>
+                                        )}
                                         <td className="px-4 py-2 text-end">
                                           <span
                                             className={cn(
@@ -459,7 +504,16 @@ export default function Installments() {
                               </div>
                               <div className="flex items-center gap-3">
                                 <div className="text-right">
-                                  <div className="text-xl font-bold text-foreground">${plan.installmentAmount.toLocaleString()}</div>
+                                  <div className="text-xl font-bold text-foreground">
+                                    ${(plan.nextPaymentAmount || plan.installmentAmount).toLocaleString()}
+                                  </div>
+                                  {(plan.feeRate ?? 0) > 0 && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {language === "ar"
+                                        ? `شامل رسوم التقسيط ${plan.feeRate}%`
+                                        : `incl. ${plan.feeRate}% installment fee`}
+                                    </div>
+                                  )}
                                 </div>
                                 {/* Early payoff: clear ALL remaining installments in one charge
                                     (only worth showing when more than one remains). */}

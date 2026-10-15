@@ -1,4 +1,4 @@
-import { TrendingUp, Coins, ArrowRight, Clock, Zap } from "lucide-react";
+import { TrendingUp, Coins, ArrowRight, Clock, Zap, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ interface ExitOptionsCardProps {
   className?: string;
   style?: React.CSSProperties;
   compact?: boolean;
+  /** Units the investor holds on running installment plans (sold only as whole positions). */
+  planUnits?: number;
 }
 
 export function ExitOptionsCard({ 
@@ -18,9 +20,36 @@ export function ExitOptionsCard({
   assetName,
   className,
   style,
-  compact = false
+  compact = false,
+  planUnits = 0,
 }: ExitOptionsCardProps) {
   const { language } = useLanguage();
+
+  // Off-plan §7: an installment plan's units can't be listed one by one — point the holder
+  // to selling the whole position from the Installments page instead.
+  const positionNote = planUnits > 0 && (
+    <Link
+      to="/installments"
+      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors group"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary/10 shrink-0">
+          <Layers className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <div className="font-medium text-foreground text-sm">
+            {language === "ar" ? "بيع مركز التقسيط" : "Sell your installment position"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {language === "ar"
+              ? `${planUnits} وحدة على خطة تقسيط تُباع مع الخطة كمركز واحد، والمشتري يكمّل الأقساط.`
+              : `${planUnits} units on an installment plan are sold with the plan as one position; the buyer takes over the installments.`}
+          </div>
+        </div>
+      </div>
+      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+    </Link>
+  );
 
   const exitOptions = [
     {
@@ -69,6 +98,7 @@ export function ExitOptionsCard({
         <h3 className="font-semibold text-foreground text-sm mb-3">
           {language === "ar" ? "خيارات البيع" : "Exit Options"}
         </h3>
+        {positionNote}
         {exitOptions.map((option) => (
           <Link
             key={option.id}
@@ -105,6 +135,8 @@ export function ExitOptionsCard({
           </Badge>
         )}
       </div>
+
+      {positionNote && <div className="mb-4">{positionNote}</div>}
 
       <div className="grid md:grid-cols-2 gap-4">
         {exitOptions.map((option) => (

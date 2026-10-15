@@ -45,6 +45,7 @@ import { InstallmentCalculator } from "@/components/property/InstallmentCalculat
 import { PropertyModelSection } from "@/components/property/PropertyModelSection";
 import { OnChainContractCard, type OnChainDeployment } from "@/components/property/OnChainContractCard";
 import { PropertyDataRoom } from "@/components/property/PropertyDataRoom";
+import { UnitPriceHistory } from "@/components/property/UnitPriceHistory";
 import {
   useInstallmentPreview,
   DEFAULT_INSTALLMENT_TERMS,
@@ -251,6 +252,8 @@ export default function PropertyDetail() {
   // falls back to a clearly-labelled example). Declared before any early return (hook rules).
   const [installmentTerms, setInstallmentTerms] =
     useState<InstallmentTerms>(DEFAULT_INSTALLMENT_TERMS);
+  // Off-plan §4: on a property sold both ways the investor picks installments or full payment.
+  const [payMode, setPayMode] = useState<"installments" | "full">("installments");
   // Off-plan §4: the plans this property offers (empty = it doesn't sell by installments).
   // Older API responses don't carry the field → keep the old "installment model" rule.
   const offeredTerms = catalogueProperty?.installmentTerms;
@@ -296,10 +299,14 @@ export default function PropertyDetail() {
     // outright "Own Now". Surface the down-payment + installment count in the sidebar and route
     // its CTA to the installment checkout (the SHARED terms the calculator on this page drives).
     // Off-plan §4: installment UI when the property sells by installment plans (payment mode
-    // "installments", or "both" until the investor-choice toggle lands); old rule otherwise.
+    // "installments", or "both" with the investor choosing installments); old rule otherwise.
+    const cpPaysBothWays = cp.offplanPayment === "both" && sellsByInstallments;
     const cpIsInstallment = cp.offplanPayment
-      ? sellsByInstallments && cp.offplanPayment !== "full"
+      ? sellsByInstallments &&
+        cp.offplanPayment !== "full" &&
+        (cp.offplanPayment !== "both" || payMode === "installments")
       : cp.model === "installment";
+    const cpFeeRate = Number(cp.installmentFeeRate ?? 0);
     // The API property carries token metadata incl. the REAL on-chain deployment (or null).
     const cpTokenMeta = (cp as unknown as {
       tokenMetadata?: {
@@ -429,6 +436,10 @@ export default function PropertyDetail() {
               totalSupply={cpTokenMeta?.totalSupply}
               tokenPrice={cpTokenMeta?.tokenPrice}
             />
+
+            {/* Off-plan §7: launch price, today's price, phase and every recorded change. A
+                ready property shows it only once its price has actually changed. */}
+            <UnitPriceHistory slug={cp.id} hideIfUnchanged={cp.status === "ready"} />
 
             {/* Installment purchase entry — real per-investor plan builder → Checkout charges
                 the down-payment + buyer-borne fee, mints-then-locks the full position. Only
@@ -604,6 +615,35 @@ export default function PropertyDetail() {
                     </div>
                   </div>
 
+                  {cpPaysBothWays && (
+                    <div className="mb-4">
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {language === "ar" ? "طريقة الشراء" : "How you pay"}
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-lg" role="radiogroup">
+                        {(["installments", "full"] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            role="radio"
+                            aria-checked={payMode === m}
+                            onClick={() => setPayMode(m)}
+                            className={cn(
+                              "py-2 rounded-md text-sm font-medium transition-colors",
+                              payMode === m
+                                ? "bg-card text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {m === "installments"
+                              ? language === "ar" ? "تقسيط" : "Installments"
+                              : language === "ar" ? "دفع كامل" : "Full payment"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {cpIsInstallment ? (
                     <>
                       {/* Installment (under-construction) purchase — the DOWN-PAYMENT is what's
@@ -624,9 +664,13 @@ export default function PropertyDetail() {
                           ${cpDownPayment.toLocaleString()}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {language === "ar"
-                            ? `ثم ${cpInstallmentCount} قسط · تُضاف رسوم المنصة عند الدفع`
-                            : `then ${cpInstallmentCount} installments · platform fee added at checkout`}
+                          {cpFeeRate > 0
+                            ? language === "ar"
+                              ? `ثم ${cpInstallmentCount} قسطًا · تُضاف رسوم التقسيط ${cpFeeRate}% على كل دفعة`
+                              : `then ${cpInstallmentCount} installments · ${cpFeeRate}% installment fee added to each payment`
+                            : language === "ar"
+                              ? `ثم ${cpInstallmentCount} قسط · تُضاف رسوم المنصة عند الدفع`
+                              : `then ${cpInstallmentCount} installments · platform fee added at checkout`}
                         </p>
                       </div>
 

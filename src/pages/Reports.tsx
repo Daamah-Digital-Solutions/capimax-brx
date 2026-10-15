@@ -19,7 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useUserWallet } from "@/hooks/useUserWallet";
-import { useOwnershipTokens } from "@/hooks/useOwnershipTokens";
+import { positionCost, positionValue, useOwnershipTokens } from "@/hooks/useOwnershipTokens";
+import { UnitPriceHistory } from "@/components/property/UnitPriceHistory";
 import { useDistributions } from "@/hooks/useDistributions";
 import { useExport } from "@/hooks/useExport";
 import { reportsApi } from "@/integrations/api/client";
@@ -76,10 +77,16 @@ export default function Reports() {
 
   // --- Portfolio overview (real, derived) --------------------------------- //
   const propertiesCount = tokens.length;
-  const totalInvested = tokens.reduce((s, t) => (t.invested_usd != null ? s + t.invested_usd : s), 0);
+  // Off-plan §7: a running installment plan counts as a position (value and cost both net
+  // of the installments still owed); the return is measured over holdings with a cost record.
+  const totalInvested = tokens.reduce((s, t) => {
+    const c = positionCost(t);
+    return c != null ? s + c : s;
+  }, 0);
   const hasCostBasis = tokens.some((t) => t.invested_usd != null);
+  const costedValue = tokens.reduce((s, t) => (t.invested_usd != null ? s + positionValue(t) : s), 0);
   const returnPercent =
-    hasCostBasis && totalInvested > 0 ? (totalValue / totalInvested - 1) * 100 : null;
+    hasCostBasis && totalInvested > 0 ? (costedValue / totalInvested - 1) * 100 : null;
   // Value-weighted average expected yield over holdings that carry a Property yield.
   const avgYield = useMemo(() => {
     const withYield = tokens.filter((t) => t.expected_yield != null && Number(t.token_value_usd) > 0);
@@ -95,8 +102,8 @@ export default function Reports() {
   const perfRows = useMemo(
     () =>
       tokens.map((t) => {
-        const value = Number(t.token_value_usd) || 0;
-        const invested = t.invested_usd ?? null;
+        const value = positionValue(t);
+        const invested = positionCost(t);
         const change = invested && invested > 0 ? ((value - invested) / invested) * 100 : null;
         return {
           id: t.property_id,
@@ -386,6 +393,20 @@ export default function Reports() {
                   )}
                 </div>
               </div>
+
+              {/* Off-plan §7: the unit price over time for each property held (or paid by
+                  installments), with the holder's average cost as a dashed line. */}
+              {tokens
+                .filter((t) => property === "all" || t.property_id === property)
+                .map((t) => (
+                  <UnitPriceHistory
+                    key={t.property_id}
+                    slug={t.property_id}
+                    avgCost={t.avg_cost_per_token ?? null}
+                    compact
+                    title={`${isAr ? "سعر الوحدة عبر الزمن" : "Unit price over time"} — ${t.property_name}`}
+                  />
+                ))}
             </TabsContent>
 
             {/* Reports Tab */}

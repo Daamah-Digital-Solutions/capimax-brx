@@ -37,7 +37,25 @@ export interface OwnershipToken {
   exit_eligible?: boolean;
   avg_cost_per_token?: number | null;
   invested_usd?: number | null;
+  // Off-plan §7: the unit price (launch, now, % change since launch, last recorded change)
+  // and, for units on a running installment plan, the plan's units + remaining principal.
+  unit_price?: number | null;
+  launch_price?: number | null;
+  price_change_pct?: number | null;
+  price_updated_at?: string | null;
+  plan_units?: number;
+  remaining_principal?: number;
 }
+
+/**
+ * Off-plan §7: a running installment plan counts as a POSITION — all its units at today's
+ * price minus the installments still owed — so value and cost both net out the remaining
+ * principal (the gain is unchanged; the return % is measured on what was actually put in).
+ */
+export const positionValue = (t: OwnershipToken) =>
+  (Number(t.token_value_usd) || 0) - (Number(t.remaining_principal) || 0);
+export const positionCost = (t: OwnershipToken) =>
+  t.invested_usd == null ? null : Number(t.invested_usd) - (Number(t.remaining_principal) || 0);
 
 export function useOwnershipTokens(walletId: string | null) {
   const { user } = useAuth();
@@ -73,7 +91,7 @@ export function useOwnershipTokens(walletId: string | null) {
 
   // Calculate totals when tokens change
   useEffect(() => {
-    const value = tokens.reduce((sum, token) => sum + Number(token.token_value_usd), 0);
+    const value = tokens.reduce((sum, token) => sum + positionValue(token), 0);
     const count = tokens.reduce((sum, token) => sum + Number(token.token_amount), 0);
     setTotalValue(value);
     setTotalTokens(count);

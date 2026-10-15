@@ -24,10 +24,13 @@ import {
   CheckCircle2,
   ExternalLink,
   ShieldCheck,
+  Wallet,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   installmentsApi,
   paymentsApi,
+  walletsApi,
   type ApiError,
   type InstallmentPlanRow,
 } from "@/integrations/api/client";
@@ -53,17 +56,80 @@ export interface InstallmentPayDialogProps {
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_TRIES = 20; // ~60s for the webhook/IPN to confirm + settle
 
-/** First pending installment row's amount (the final row may differ by the rounding cent). */
+/** What the server charges for one row: its amount + installment fee (fee 0 on older plans). */
+const rowCharge = (p: InstallmentPlanRow["payments"][number]) => p.charge ?? p.amount;
+
+/** The earliest unpaid row (an overdue one first) — the one the server charges next. */
 function nextDueAmount(plan: InstallmentPlanRow): number {
-  const row = plan.payments.find((p) => p.type === "installment" && p.status === "pending");
-  return row ? row.amount : plan.installmentAmount;
+  const row = plan.payments.find(
+    (p) => p.type === "installment" && (p.status === "pending" || p.status === "missed"),
+  );
+  return row ? rowCharge(row) : plan.nextPaymentAmount || plan.installmentAmount;
 }
 
-/** Early payoff total = the sum of every still-unpaid installment row. */
+/** Early payoff total = the sum of every still-unpaid installment row (incl. their fees). */
 function remainingInstallmentTotal(plan: InstallmentPlanRow): number {
   return plan.payments
     .filter((p) => p.type === "installment" && (p.status === "pending" || p.status === "missed"))
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p) => sum + rowCharge(p), 0);
+}
+
+// --- Wallet balance (settles at once; off-plan §4) ---------------------------- //
+function WalletTab(props: InstallmentPayDialogProps & { amount: number }) {
+  const { language, isRTL } = useLanguage();
+  const isArabic = language === "ar";
+  const [balance, setBalance] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    walletsApi
+      .balance()
+      .then((b) => setBalance(Number(b.current_balance) || 0))
+      .catch(() => setBalance(0));
+  }, []);
+
+  const enough = balance != null && balance + 1e-9 >= props.amount;
+
+  const handlePay = async () => {
+    setBusy(true);
+    try {
+      await (props.mode === "payoff"
+        ? installmentsApi.payoff(props.plan.id, "balance")
+        : installmentsApi.payNext(props.plan.id, "balance"));
+      toast.success(isArabic ? "تم السداد من المحفظة" : "Paid from your wallet");
+      props.onPaid();
+      props.onOpenChange(false);
+    } catch (err) {
+      toast.error((err as ApiError)?.message || (isArabic ? "تعذّر الدفع" : "Payment failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="flex justify-between p-3 rounded-lg bg-muted text-sm">
+        <span className="text-muted-foreground">{isArabic ? "رصيد المحفظة" : "Wallet balance"}</span>
+        <span className="font-semibold" dir="ltr">
+          {balance == null ? "…" : `$${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+        </span>
+      </div>
+      {balance != null && !enough && (
+        <p className="text-sm text-muted-foreground">
+          {isArabic
+            ? "الرصيد لا يكفي. اشحن المحفظة وسيُخصم القسط المستحق تلقائيًا، أو ادفع بالبطاقة أو العملات الرقمية."
+            : "Not enough balance. Top up your wallet and the due installment is debited automatically, or pay by card or crypto."}{" "}
+          <Link to="/wallet" className="text-primary hover:underline">
+            {isArabic ? "اشحن المحفظة" : "Top up wallet"}
+          </Link>
+        </p>
+      )}
+      <Button variant="hero" size="xl" className="w-full" disabled={busy || !enough} onClick={handlePay}>
+        {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5" />}
+        {isArabic ? "ادفع من المحفظة" : "Pay from wallet"} ${props.amount.toLocaleString()}
+      </Button>
+    </div>
+  );
 }
 
 /** Poll the plans list until THIS plan's paid-installment count grows past `startPaid`. */
@@ -413,6 +479,10 @@ export function InstallmentPayDialog(props: InstallmentPayDialogProps) {
           </DialogTitle>
           <DialogDescription>
             {isArabic ? props.plan.property : props.plan.propertyEn} — ${amount.toLocaleString()}
+            {(props.plan.feeRate ?? 0) > 0 &&
+              (isArabic
+                ? ` (شامل رسوم التقسيط ${props.plan.feeRate}%)`
+                : ` (incl. ${props.plan.feeRate}% installment fee)`)}
           </DialogDescription>
         </DialogHeader>
 
@@ -428,11 +498,15 @@ export function InstallmentPayDialog(props: InstallmentPayDialogProps) {
           </div>
         )}
 
-        <Tabs defaultValue="card" className="mt-2">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="wallet" className="mt-2">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="wallet">{isArabic ? "المحفظة" : "Wallet"}</TabsTrigger>
             <TabsTrigger value="card">{isArabic ? "بطاقة" : "Card"}</TabsTrigger>
             <TabsTrigger value="crypto">{isArabic ? "عملات رقمية" : "Crypto"}</TabsTrigger>
           </TabsList>
+          <TabsContent value="wallet" className="mt-4">
+            <WalletTab {...props} amount={amount} />
+          </TabsContent>
           <TabsContent value="card" className="mt-4">
             <CardTab {...props} amount={amount} />
           </TabsContent>

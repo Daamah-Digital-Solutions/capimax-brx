@@ -300,3 +300,11 @@ class PositionApiTests(APITestCase):
         mine = self.client.get("/api/installments/plans/").data["plans"]
         self.assertEqual(len(mine), 1)
         self.assertEqual(mine[0]["position"]["entryPrice"], 110.0)
+
+        # Off-plan §7: the holdings carry the unit price and the plan's units + what is
+        # still owed, so the portfolio values the plan as a position (units × price − owed).
+        holding = self.client.get(f"/api/wallets/{self.buyer.wallet.pk}/tokens/").data[0]
+        self.assertEqual(holding["unit_price"], 110.0)
+        self.assertEqual(holding["plan_units"], 10)
+        self.assertEqual(holding["remaining_principal"], 800.0)
+        self.assertEqual(float(holding["token_value_usd"]) - holding["remaining_principal"], 300.0)
