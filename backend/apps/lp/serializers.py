@@ -156,13 +156,18 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
     platform_fee_percent = serializers.FloatField(read_only=True)
     platform_fee_amount = _Money(read_only=True)
     net_amount = _Money(read_only=True)
+    # Decision 6: platform-priced exit request — the unit price it was quoted at, the
+    # discount applied, and when it lapses ("seller" = a listing from before the rule).
+    reference_price = _Money(read_only=True, allow_null=True)
+    discount_percent = serializers.FloatField(read_only=True)
 
     class Meta:
         model = LPMarketListing
         fields = (
             "id", "investor_id", "lp_id", "property_id", "property_name",
             "token_symbol", "token_amount", "unit_price", "total_value",
-            "platform_fee_percent", "platform_fee_amount", "net_amount", "status",
+            "platform_fee_percent", "platform_fee_amount", "net_amount",
+            "pricing", "reference_price", "discount_percent", "expires_at", "status",
             "listed_at", "purchased_at", "completed_at", "cancelled_at", "notes",
             "created_at", "updated_at",
         )

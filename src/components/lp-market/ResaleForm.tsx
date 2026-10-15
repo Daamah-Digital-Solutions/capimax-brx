@@ -46,16 +46,23 @@ export function ResaleForm({
   const [tokenAmount, setTokenAmount] = useState(holding.token_amount.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const price = parseFloat(salePrice) || 0;
   const tokens = parseFloat(tokenAmount) || 0;
+
+  // Display only — the server computes the real figures (same defaults as the backend).
+  // LP market (decision 6): priced by the platform at today's unit price − 3%, then a 2%
+  // liquidity fee is deducted; the seller's own price doesn't apply.
+  // Secondary market (decision 5): the seller's price, received in full; the buyer pays 1% on top.
+  const lpDiscountPercent = 3;
+  const lpFeePercent = 2;
+  const secondaryFeePercent = 1;
+  const unitNow = holding.token_amount > 0 ? holding.current_value / holding.token_amount : 0;
+  const lpPrice = Math.round(unitNow * tokens * (100 - lpDiscountPercent)) / 100;
+  const price = targetMarket === "lp" ? lpPrice : parseFloat(salePrice) || 0;
   const totalValue = price;
-  
-  // Fee calculations
-  const lpFeePercent = 1;
-  const secondaryFeePercent = 0.5;
   const feePercent = targetMarket === "lp" ? lpFeePercent : secondaryFeePercent;
-  const feeAmount = totalValue * (feePercent / 100);
-  const netAmount = totalValue - feeAmount;
+  const feeAmount = Math.round(totalValue * feePercent) / 100;
+  // LP: the fee comes out of the proceeds; secondary: the buyer pays it on top.
+  const netAmount = targetMarket === "lp" ? totalValue - feeAmount : totalValue;
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
@@ -127,7 +134,7 @@ export function ResaleForm({
                   <div className="text-center">
                     <p className="font-medium">{language === "ar" ? "سوق LP" : "LP Market"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {language === "ar" ? "رسوم 1%" : "1% Fee"}
+                      {language === "ar" ? `سعر المنصة −${lpDiscountPercent}% · رسوم ${lpFeePercent}%` : `Platform price −${lpDiscountPercent}% · ${lpFeePercent}% fee`}
                     </p>
                   </div>
                   {targetMarket === "lp" && (
@@ -145,7 +152,7 @@ export function ResaleForm({
                   <div className="text-center">
                     <p className="font-medium">{language === "ar" ? "السوق الثانوي" : "Secondary Market"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {language === "ar" ? "رسوم 0.5%" : "0.5% Fee"}
+                      {language === "ar" ? `رسوم ${secondaryFeePercent}% على المشتري` : `${secondaryFeePercent}% fee paid by the buyer`}
                     </p>
                   </div>
                   {targetMarket === "secondary" && (
@@ -170,16 +177,22 @@ export function ResaleForm({
             </div>
             <div className="space-y-2">
               <Label>{language === "ar" ? "سعر البيع" : "Sale Price"}</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="number"
-                  value={salePrice}
-                  onChange={(e) => setSalePrice(e.target.value)}
-                  className="pl-9"
-                  min={0}
-                />
-              </div>
+              {targetMarket === "lp" ? (
+                <p className="h-10 flex items-center text-sm text-muted-foreground">
+                  {language === "ar" ? "تحدده المنصة" : "Set by the platform"}
+                </p>
+              ) : (
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(e.target.value)}
+                    className="pl-9"
+                    min={0}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -197,9 +210,13 @@ export function ResaleForm({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
-                    {language === "ar" ? `رسوم المنصة (${feePercent}%)` : `Platform Fee (${feePercent}%)`}
+                    {targetMarket === "lp"
+                      ? language === "ar" ? `رسوم السيولة (${feePercent}%)` : `Liquidity fee (${feePercent}%)`
+                      : language === "ar" ? `رسوم إعادة البيع (${feePercent}%) — على المشتري` : `Resale fee (${feePercent}%) — paid by the buyer`}
                   </span>
-                  <span className="text-destructive">-${feeAmount.toLocaleString()}</span>
+                  <span className={targetMarket === "lp" ? "text-destructive" : "text-muted-foreground"}>
+                    {targetMarket === "lp" ? "-" : ""}${feeAmount.toLocaleString()}
+                  </span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="font-medium">{language === "ar" ? "المبلغ الصافي" : "Net Amount"}</span>

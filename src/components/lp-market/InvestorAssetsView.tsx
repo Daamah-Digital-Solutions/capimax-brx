@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { OwnershipToken } from "@/hooks/useOwnershipTokens";
-import { LPMarketListing } from "@/hooks/useLPMarket";
+import { LPMarketListing, type LPExitTerms } from "@/hooks/useLPMarket";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { 
   Package, 
@@ -39,6 +39,8 @@ import {
 import { format } from "date-fns";
 
 interface InvestorAssetsViewProps {
+  /** Decision 6: the platform's exit terms (discount, liquidity fee, validity). */
+  exitTerms?: LPExitTerms | null;
   tokens: OwnershipToken[];
   myListings: LPMarketListing[];
   loading: boolean;
@@ -54,6 +56,7 @@ interface InvestorAssetsViewProps {
 }
 
 export function InvestorAssetsView({
+  exitTerms,
   tokens,
   myListings,
   loading,
@@ -107,8 +110,18 @@ export function InvestorAssetsView({
   // zero/empty token_amount so we never divide by zero.
   const unitPrice =
     selectedAsset && selectedAsset.token_amount > 0
-      ? selectedAsset.token_value_usd / selectedAsset.token_amount
+      ? selectedAsset.unit_price ?? selectedAsset.token_value_usd / selectedAsset.token_amount
       : 0;
+  // Decision 6: the platform quotes the exit — today's unit price minus the discount, then
+  // the liquidity fee is deducted (the server recomputes the same figures).
+  const discountPct = exitTerms?.discount_percent ?? 3;
+  const liquidityFeePct = exitTerms?.fee_percent ?? 2;
+  const ttlHours = Math.round((exitTerms?.ttl_minutes ?? 1440) / 60);
+  const quotePrice = Math.round(unitPrice * (100 - discountPct)) / 100;
+  const sellUnits = parseFloat(sellAmount) || 0;
+  const quoteTotal = Math.round(sellUnits * quotePrice * 100) / 100;
+  const quoteFee = Math.round(quoteTotal * liquidityFeePct) / 100;
+  const quoteNet = Math.round((quoteTotal - quoteFee) * 100) / 100;
 
   const handleListAsset = async () => {
     if (!selectedAsset || !sellAmount) return;
@@ -379,7 +392,22 @@ export function InvestorAssetsView({
                     <TableCell className="text-right text-success font-medium">
                       ${listing.net_amount.toLocaleString()}
                     </TableCell>
-                    <TableCell>{getStatusBadge(listing.status)}</TableCell>
+                    <TableCell>
+                      {getStatusBadge(listing.status)}
+                      {/* Decision 6: when an open request lapses, or why it was closed. */}
+                      {listing.status === "listed" && listing.expires_at && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {language === "ar" ? "ينتهي" : "Expires"} {format(new Date(listing.expires_at), "MMM d, HH:mm")}
+                        </div>
+                      )}
+                      {listing.status === "expired" && listing.notes && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {listing.notes.startsWith("Closed")
+                            ? language === "ar" ? "أُغلق: تغيّر سعر الوحدة" : "Closed: unit price changed"
+                            : language === "ar" ? "انتهت صلاحية العرض" : "Quote lapsed"}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
                       {format(new Date(listing.listed_at), "MMM d, yyyy")}
                     </TableCell>
@@ -454,34 +482,47 @@ export function InvestorAssetsView({
                 </p>
               </div>
 
-              {sellAmount && parseFloat(sellAmount) > 0 && (
+              {sellUnits > 0 && (
                 <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3">
                   <h4 className="font-medium text-sm">
-                    {language === "ar" ? "ملخص البيع" : "Sale Summary"}
+                    {language === "ar" ? "عرض سعر المنصة" : "Platform quote"}
                   </h4>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
-                        {language === "ar" ? "القيمة الإجمالية" : "Total Value"}
+                        {language === "ar" ? "سعر الوحدة الحالي" : "Current unit price"}
                       </span>
-                      <span className="font-medium">${(parseFloat(sellAmount) * unitPrice).toLocaleString()}</span>
+                      <span className="font-medium">${unitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {language === "ar"
+                          ? `سعر السيولة (خصم ${discountPct}%) × ${sellUnits}`
+                          : `Liquidity price (−${discountPct}%) × ${sellUnits}`}
+                      </span>
+                      <span className="font-medium">${quoteTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <Percent className="h-3 w-3" />
-                        {language === "ar" ? "رسوم المنصة (1%)" : "Platform Fee (1%)"}
+                        {language === "ar" ? `رسوم السيولة (${liquidityFeePct}%)` : `Liquidity fee (${liquidityFeePct}%)`}
                       </span>
                       <span className="text-destructive">
-                        -${(parseFloat(sellAmount) * unitPrice * 0.01).toLocaleString()}
+                        -${quoteFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="border-t pt-2 flex justify-between">
                       <span className="font-medium">{language === "ar" ? "المبلغ الصافي" : "You Receive"}</span>
                       <span className="text-lg font-bold text-success">
-                        ${(parseFloat(sellAmount) * unitPrice * 0.99).toLocaleString()}
+                        ${quoteNet.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === "ar"
+                      ? `السعر تحدده المنصة. يبقى الطلب مفتوحًا ${ttlHours} ساعة، ويُغلق تلقائيًا إذا تغيّر سعر الوحدة، ولا يُنفَّذ أبدًا بسعر قديم.`
+                      : `The platform sets the price. The request stays open ${ttlHours} hours and closes automatically if the unit price changes — it is never funded at an old price.`}
+                  </p>
                 </div>
               )}
             </div>

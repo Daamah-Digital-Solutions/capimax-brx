@@ -355,6 +355,8 @@ class LPMarketView(APIView):
         return Response({
             "my_listings": LPMarketListingSerializer(mine, many=True).data,
             "listings": LPMarketListingSerializer(market, many=True).data,
+            # Decision 6: how the platform prices an exit request (discount, fee, validity).
+            "exit_terms": market_services.exit_terms(),
         })
 
     def post(self, request):
@@ -387,6 +389,9 @@ class LPMarketPurchaseView(APIView):
         result = market_services.purchase_listing(
             buyer_user=request.user, listing_id=listing_id
         )
+        if result.get("closed"):
+            # The request was quoted at an older price (or lapsed) and has just been closed.
+            raise market_services.RequestClosedError(result["reason"])
         return Response(result, status=status.HTTP_200_OK)
 
 

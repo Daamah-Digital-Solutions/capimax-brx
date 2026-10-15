@@ -36,6 +36,9 @@ class Notification(models.Model):
         # Off-plan §3.3.4: a new unit price was recorded for a property the user holds or
         # is paying off in installments.
         UNIT_PRICE_CHANGED = "unit_price_changed", _("Unit price changed")
+        # Off-plan decision 6: a platform-priced LP exit request was closed because the unit
+        # price changed (it is never funded at the old price). params.property/tokens.
+        LP_EXIT_CLOSED = "lp_exit_closed", _("Liquidity exit request closed")
         # Off-plan §4 auto-debit: an installment is due but the wallet can't cover it (sent once).
         INSTALLMENT_DUE_UNPAID = "installment_due_unpaid", _("Installment due — top up wallet")
         # Money in.

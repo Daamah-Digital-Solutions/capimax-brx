@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { lpApi } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useLiquidityProvider } from "@/hooks/useLiquidityProvider";
 import { toast } from "sonner";
 
@@ -23,6 +24,12 @@ export interface LPMarketListing {
   platform_fee_percent: number;
   platform_fee_amount: number;
   net_amount: number;
+  // Decision 6: "platform" = an exit request priced by the platform (current unit price
+  // minus the discount) that lapses at expires_at; "seller" = a listing from before the rule.
+  pricing?: "platform" | "seller";
+  reference_price?: number | null;
+  discount_percent?: number;
+  expires_at?: string | null;
   status: "listed" | "pending" | "completed" | "cancelled" | "expired";
   listed_at: string;
   purchased_at: string | null;
@@ -31,6 +38,13 @@ export interface LPMarketListing {
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** The platform's LP exit terms (decision 6). */
+export interface LPExitTerms {
+  discount_percent: number;
+  fee_percent: number;
+  ttl_minutes: number;
 }
 
 interface ListAssetData {
@@ -43,7 +57,10 @@ interface ListAssetData {
 
 export function useLPMarket() {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const isAr = language === "ar";
   const { lpProfile } = useLiquidityProvider();
+  const [exitTerms, setExitTerms] = useState<LPExitTerms | null>(null);
   const [listings, setListings] = useState<LPMarketListing[]>([]);
   const [myListings, setMyListings] = useState<LPMarketListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +102,7 @@ export function useLPMarket() {
       const data = await lpApi.market();
       setMyListings((data.my_listings as LPMarketListing[]) || []);
       setListings((data.listings as LPMarketListing[]) || []);
+      if (data.exit_terms) setExitTerms(data.exit_terms);
     } catch (err: any) {
       setError(err.message || "Failed to load listings");
     } finally {
@@ -162,6 +180,20 @@ export function useLPMarket() {
       toast.success("Asset purchased successfully!");
       return { success: true };
     } catch (err: any) {
+      if (err?.data?.code === "REQUEST_CLOSED") {
+        // Decision 6: quoted at an older price (or lapsed) — the server closed it instead.
+        toast.error(
+          err.data.reason === "price_changed"
+            ? isAr
+              ? "تغيّر سعر الوحدة، فأُغلق هذا الطلب ولن يُنفَّذ بالسعر القديم."
+              : "The unit price changed, so this request was closed — it is never funded at the old price."
+            : isAr
+              ? "انتهت صلاحية هذا الطلب."
+              : "This request has expired.",
+        );
+        await fetchListings();
+        return { success: false, error: err.message };
+      }
       toast.error(err.message || "Failed to purchase asset");
       return { success: false, error: err.message };
     }
@@ -173,6 +205,7 @@ export function useLPMarket() {
     loading,
     error,
     isApprovedLP,
+    exitTerms,
     listAssetForSale,
     cancelListing,
     purchaseAsset,

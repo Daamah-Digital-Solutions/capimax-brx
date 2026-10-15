@@ -107,6 +107,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_path": "/marketplace",
         "outro": "Prices can go down as well as up.",
     },
+    "lp_exit_closed": {
+        "subject": "Your liquidity exit request for {property} was closed",
+        "heading": "Exit request closed",
+        "intro": "The unit price of {property} changed, so your request to sell {tokens} unit(s) to a liquidity provider was closed and your units are free again. A request is only ever funded at the price it was quoted at.",
+        "cta_label": "Request a new quote",
+        "cta_path": "/lp-market",
+        "outro": "Your new quote will use the current unit price.",
+    },
     "purchase_refunded": {
         "subject": "Your payment was refunded to your wallet",
         "heading": "Payment refunded",

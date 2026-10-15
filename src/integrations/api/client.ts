@@ -1102,6 +1102,8 @@ export const lpApi = {
     rawRequest("/lp/market/", { auth: true }) as Promise<{
       my_listings: any[];
       listings: any[];
+      // Decision 6: how the platform prices an exit request.
+      exit_terms?: { discount_percent: number; fee_percent: number; ttl_minutes: number };
     }>,
   /** List your UNLOCKED tokens for sale (server escrow-locks them + computes fees). */
   listAsset: (payload: Record<string, unknown>) =>

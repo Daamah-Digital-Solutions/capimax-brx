@@ -17,6 +17,13 @@ call happens under a row lock inside transaction.atomic(), DB state is written o
 after a confirmed receipt, and we NEVER fabricate a tx hash.
 
 Fee is BACKEND-CONFIGURABLE via settings.LP_MARKET_FEE_PERCENT (locked decision #3).
+
+Off-plan decision 6 — the LP exit is PLATFORM-PRICED: the seller can't set a price. The
+request is quoted at the current unit price minus LP_EXIT_DISCOUNT_PERCENT, the liquidity
+fee (LP_MARKET_FEE_PERCENT) is deducted from it, and it stays open LP_EXIT_TTL_MINUTES. A unit
+price change closes every open request on that property, and a request quoted at an older
+price is never funded, even one that slipped past the closing. Listings from before the rule
+(pricing="seller") keep the terms they were listed with.
 """
 from __future__ import annotations
 
@@ -79,6 +86,127 @@ def compute_fees(total_value: Decimal) -> tuple[Decimal, Decimal, Decimal]:
     return pct, fee, net
 
 
+def exit_terms() -> dict:
+    """The platform's LP exit terms (decision 6), for the API and the UI."""
+    return {
+        "discount_percent": float(settings.LP_EXIT_DISCOUNT_PERCENT),
+        "fee_percent": float(settings.LP_MARKET_FEE_PERCENT),
+        "ttl_minutes": int(settings.LP_EXIT_TTL_MINUTES),
+    }
+
+
+def quote(prop: Property, token_amount: int) -> dict:
+    """The platform price for selling `token_amount` units of `prop` to an LP right now."""
+    reference = Decimal(prop.token_price)
+    discount = Decimal(str(settings.LP_EXIT_DISCOUNT_PERCENT))
+    unit_price = (reference * (Decimal("100") - discount) / Decimal("100")).quantize(
+        Decimal("0.01"), ROUND_HALF_UP
+    )
+    total = (Decimal(token_amount) * unit_price).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    fee_pct, fee, net = compute_fees(total)
+    return {
+        "reference_price": reference,
+        "discount_percent": discount,
+        "unit_price": unit_price,
+        "total_value": total,
+        "fee_percent": fee_pct,
+        "fee": fee,
+        "net": net,
+    }
+
+
+def stale_reason(listing: LPMarketListing, now=None) -> str | None:
+    """Why an open platform-priced request can no longer be funded (None = it can)."""
+    if listing.pricing != LPMarketListing.Pricing.PLATFORM:
+        return None
+    if listing.expires_at and listing.expires_at <= (now or timezone.now()):
+        return "expired"
+    current = Property.objects.filter(slug=listing.property_id).values_list(
+        "token_price", flat=True
+    ).first()
+    if current is None or Decimal(current) != Decimal(listing.reference_price or 0):
+        return "price_changed"
+    return None
+
+
+def close_request(listing: LPMarketListing, reason: str) -> None:
+    """
+    Close an open exit request (caller holds its row lock): free the escrowed units, mark it
+    expired with the reason, and tell the seller when a price change closed it.
+    """
+    _release_escrow(listing)
+    listing.status = LPMarketListing.Status.EXPIRED
+    listing.cancelled_at = timezone.now()
+    listing.notes = (
+        "Closed: the unit price changed." if reason == "price_changed"
+        else "Expired: the quote lapsed."
+    )
+    listing.save(update_fields=["status", "cancelled_at", "notes", "updated_at"])
+    if reason == "price_changed":
+        notify(
+            listing.seller, NotificationType.LP_EXIT_CLOSED,
+            params={"property": listing.property_name, "tokens": listing.token_amount},
+            action_url="/lp-market",
+        )
+
+
+def close_stale_requests(*, property_slug=None) -> int:
+    """Close every open platform-priced request that expired or whose price moved."""
+    open_ids = LPMarketListing.objects.filter(
+        status=LPMarketListing.Status.LISTED, pricing=LPMarketListing.Pricing.PLATFORM,
+    )
+    if property_slug is not None:
+        open_ids = open_ids.filter(property_id=property_slug)
+    closed = 0
+    for pk in list(open_ids.values_list("pk", flat=True)):
+        with transaction.atomic():
+            listing = (
+                LPMarketListing.objects.select_for_update()
+                .filter(pk=pk, status=LPMarketListing.Status.LISTED).first()
+            )
+            reason = stale_reason(listing) if listing else None
+            if reason:
+                close_request(listing, reason)
+                closed += 1
+    return closed
+
+
+def close_requests_for_price_change(prop: Property) -> int:
+    """
+    Called by record_price inside its transaction, BEFORE it locks the property (lock order:
+    open liquidity requests → property): every open platform-priced request on the property
+    is closed, since it was quoted at the price that is being replaced.
+    """
+    closed = 0
+    for listing in (
+        LPMarketListing.objects.select_for_update()
+        .filter(
+            property_id=prop.slug, status=LPMarketListing.Status.LISTED,
+            pricing=LPMarketListing.Pricing.PLATFORM,
+        )
+        .order_by("pk")
+    ):
+        close_request(listing, "price_changed")
+        closed += 1
+    return closed
+
+
+class RequestClosedError(APIException):
+    status_code = 409
+    default_code = "REQUEST_CLOSED"
+
+    def __init__(self, reason: str):
+        super().__init__(detail={
+            "code": "REQUEST_CLOSED",
+            "reason": reason,
+            "detail": (
+                "This exit request was closed because the unit price changed."
+                if reason == "price_changed"
+                else "This exit request has expired."
+            ),
+        })
+
+
 def _deployed_contract(property_slug: str) -> str:
     """The deployed PropertyToken address for a slug on THIS chain, or raise."""
     prop = Property.objects.filter(slug=property_slug).select_related("token_metadata").first()
@@ -122,7 +250,10 @@ def create_listing(*, user, data: dict) -> LPMarketListing:
     token_amount = int(data["token_amount"])
     if token_amount < 1:
         raise ValidationError({"token_amount": "Must list at least 1 token."})
-    unit_price = Decimal(str(data.get("unit_price") or 100))
+    # Decision 6: the platform prices the request; any price sent by the client is ignored.
+    prop = Property.objects.filter(slug=property_id).first()
+    if prop is None:
+        raise ValidationError({"property_id": "Property not found."})
 
     with transaction.atomic():
         wallet = UserWallet.objects.filter(user=user).first()
@@ -146,10 +277,7 @@ def create_listing(*, user, data: dict) -> LPMarketListing:
                 detail=f"Only {available} unlocked token(s) available to list."
             )
 
-        total_value = (Decimal(token_amount) * unit_price).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
-        fee_pct, fee_amount, net_amount = compute_fees(total_value)
+        q = quote(prop, token_amount)
 
         # Escrow-lock the listed amount.
         position.locked_amount = int(position.locked_amount) + token_amount
@@ -161,11 +289,15 @@ def create_listing(*, user, data: dict) -> LPMarketListing:
             property_name=data.get("property_name") or position.property_name,
             token_symbol=data.get("token_symbol") or position.token_symbol,
             token_amount=token_amount,
-            unit_price=unit_price,
-            total_value=total_value,
-            platform_fee_percent=fee_pct,
-            platform_fee_amount=fee_amount,
-            net_amount=net_amount,
+            unit_price=q["unit_price"],
+            total_value=q["total_value"],
+            platform_fee_percent=q["fee_percent"],
+            platform_fee_amount=q["fee"],
+            net_amount=q["net"],
+            pricing=LPMarketListing.Pricing.PLATFORM,
+            reference_price=q["reference_price"],
+            discount_percent=q["discount_percent"],
+            expires_at=timezone.now() + timezone.timedelta(minutes=int(settings.LP_EXIT_TTL_MINUTES)),
             status=LPMarketListing.Status.LISTED,
             notes=data.get("notes") or None,
         )
@@ -237,6 +369,12 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
                     "tx_hash": listing.settlement_tx_hash}
         if listing.status != LPMarketListing.Status.LISTED:
             raise ListingUnavailableError()
+        # Decision 6: a request quoted at an older price (or lapsed) is never funded — it is
+        # closed here instead, and the closing commits.
+        reason = stale_reason(listing)
+        if reason:
+            close_request(listing, reason)
+            return {"completed": False, "closed": True, "reason": reason}
 
         # Buyer must be an APPROVED LP (also gated by HasActivatedLP at the view).
         lp = (
@@ -400,6 +538,7 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
 # --------------------------------------------------------------------------- #
 def listings_for(user, *, is_approved_lp: bool):
     """(my_listings, market_listings) — market inventory only visible to approved LPs."""
+    close_stale_requests()  # lapsed / re-priced requests never show as available
     mine = LPMarketListing.objects.filter(seller=user)
     market = (
         LPMarketListing.objects.filter(status=LPMarketListing.Status.LISTED)

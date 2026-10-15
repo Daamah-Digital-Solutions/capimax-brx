@@ -85,7 +85,13 @@ def record_price(
     from apps.investments.services import sold_tokens
     from apps.wallets.models import OwnershipToken
 
+    from apps.lp.market_services import close_requests_for_price_change
+
     with transaction.atomic():
+        # Decision 6: open LP exit requests were quoted at the price being replaced — close
+        # them first (lock order: open liquidity requests → property). A refused change
+        # rolls this back with everything else.
+        close_requests_for_price_change(prop)
         p = Property.objects.select_for_update().get(pk=prop.pk)
         new = validate_new_price(p, new_price, by=by, confirm_large=confirm_large)
         old = Decimal(p.token_price)

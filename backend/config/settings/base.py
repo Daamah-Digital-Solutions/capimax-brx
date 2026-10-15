@@ -359,7 +359,13 @@ KYC_AUTO_APPROVE = env.bool("KYC_AUTO_APPROVE", default=False)
 # server-side from this percent. Frontend default was 1% (useLPMarket.ts) — kept,
 # but now changeable here without a frontend deploy. SPEC §3.8; SECONDARY_MARKET_SURFACE.md.
 # --------------------------------------------------------------------------- #
-LP_MARKET_FEE_PERCENT = env.float("LP_MARKET_FEE_PERCENT", default=1.0)
+LP_MARKET_FEE_PERCENT = env.float("LP_MARKET_FEE_PERCENT", default=2.0)
+# Off-plan decision 6 — the LP exit is PLATFORM-PRICED: the seller gets a quote at the
+# current unit price minus this discount, the liquidity fee above is deducted from it, and
+# the request stays open this long; a unit price change closes it (never funded at an old
+# price).
+LP_EXIT_DISCOUNT_PERCENT = env.float("LP_EXIT_DISCOUNT_PERCENT", default=3.0)
+LP_EXIT_TTL_MINUTES = env.int("LP_EXIT_TTL_MINUTES", default=1440)
 
 # Investor PEER secondary market (Phase 6 Wave 3). Separate, backend-configurable resale
 # fee, computed server-side. Off-plan decision 5: the BUYER pays it on top of the price and

@@ -289,6 +289,13 @@ class LPMarketListing(models.Model):
         CANCELLED = "cancelled", _("Cancelled")
         EXPIRED = "expired", _("Expired")
 
+    class Pricing(models.TextChoices):
+        # Off-plan decision 6: the platform quotes the price (current unit price minus the
+        # exit discount), the request expires, and a price change closes it.
+        PLATFORM = "platform", _("Platform-priced exit request")
+        # Listings made before that rule: the seller's own price, no expiry.
+        SELLER = "seller", _("Seller-priced (legacy)")
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # The SELLER (frontend `investor_id`). Any token holder may list; usually an investor.
     seller = models.ForeignKey(
@@ -309,6 +316,11 @@ class LPMarketListing(models.Model):
     platform_fee_percent = models.DecimalField(max_digits=6, decimal_places=3, default=1)
     platform_fee_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     net_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    pricing = models.CharField(max_length=10, choices=Pricing.choices, default=Pricing.PLATFORM)
+    # The unit price the quote was made at, the discount applied, and when it lapses.
+    reference_price = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
+    discount_percent = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.LISTED, db_index=True

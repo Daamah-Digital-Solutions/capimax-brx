@@ -39,6 +39,7 @@ export default function LPMarket() {
     myListings, 
     loading, 
     isApprovedLP, 
+    exitTerms,
     listAssetForSale, 
     cancelListing, 
     purchaseAsset 
@@ -255,6 +256,7 @@ export default function LPMarket() {
             <>
               <TabsContent value="investor" className="mt-4">
                 <InvestorAssetsView
+                  exitTerms={exitTerms}
                   tokens={tokens}
                   myListings={myListings}
                   loading={loading}

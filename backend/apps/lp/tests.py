@@ -437,7 +437,14 @@ class LPMarketListingEscrowTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["status"], "listed")
-        self.assertEqual(resp.data["total_value"], 400.0)
+        # Decision 6: platform-priced — the $100 sent is ignored; 4 × ($100 − 3%) = $388.
+        body = resp.json()
+        self.assertEqual(body["pricing"], "platform")
+        self.assertEqual(body["unit_price"], 97.0)
+        self.assertEqual(body["total_value"], 388.0)
+        self.assertEqual(body["platform_fee_amount"], 7.76)  # 2% liquidity fee
+        self.assertEqual(body["net_amount"], 380.24)
+        self.assertIsNotNone(body["expires_at"])
         pos = OwnershipToken.objects.get(wallet=self.wallet, property_id=self.prop.slug)
         self.assertEqual(pos.locked_amount, 4)
         self.assertEqual(pos.available_amount, 6)
@@ -475,17 +482,17 @@ class LPMarketListingEscrowTests(APITestCase):
         pos = OwnershipToken.objects.get(wallet=self.wallet, property_id=self.prop.slug)
         self.assertEqual(pos.locked_amount, 0)
 
-    @override_settings(LP_MARKET_FEE_PERCENT=2.0)
+    @override_settings(LP_MARKET_FEE_PERCENT=1.0, LP_EXIT_DISCOUNT_PERCENT=0)
     def test_fee_is_backend_configurable(self):
         resp = self.client.post(
             "/api/lp/market/",
             {"property_id": self.prop.slug, "token_amount": 5, "unit_price": "100"},
             format="json",
         )
-        # total 500 → 2% fee = 10, net 490
-        self.assertEqual(resp.data["platform_fee_percent"], 2.0)
-        self.assertEqual(resp.data["platform_fee_amount"], 10.0)
-        self.assertEqual(resp.data["net_amount"], 490.0)
+        # no discount → total 500 → 1% fee = 5, net 495
+        self.assertEqual(resp.data["platform_fee_percent"], 1.0)
+        self.assertEqual(resp.data["platform_fee_amount"], 5.0)
+        self.assertEqual(resp.data["net_amount"], 495.0)
 
 
 @mock.patch("apps.lp.market_services.chain_service.transfer", return_value=_FAKE_TRANSFER)
@@ -513,11 +520,11 @@ class LPMarketPurchaseTests(APITestCase):
         self.assertEqual(resp.data["tx_hash"], _FAKE_TRANSFER["tx_hash"])
         m_transfer.assert_called_once()
 
-        # LP balance debited by total (400); seller credited net (400 - 1% = 396).
+        # LP debited the platform price (4 × $97 = 388); seller credited net of the 2% fee.
         lp.refresh_from_db()
-        self.assertEqual(lp.current_balance, _D("600.00"))
+        self.assertEqual(lp.current_balance, _D("612.00"))
         seller_balance = UserBalance.objects.get(user=self.seller)
-        self.assertEqual(seller_balance.current_balance, _D("396.00"))
+        self.assertEqual(seller_balance.current_balance, _D("380.24"))
 
         # BUG FIX: seller's on-chain position decreases, buyer's increases.
         seller_pos = OwnershipToken.objects.get(
@@ -553,7 +560,7 @@ class LPMarketPurchaseTests(APITestCase):
         self.assertTrue(second.data.get("already"))
         m_transfer.assert_called_once()
         lp.refresh_from_db()
-        self.assertEqual(lp.current_balance, _D("600.00"))  # debited once
+        self.assertEqual(lp.current_balance, _D("612.00"))  # debited once
 
     def test_insufficient_lp_balance_rejected_no_transfer(self, m_transfer):
         buyer_user, lp = _approved_lp_buyer("poor@ex.com", 100)  # < 400
