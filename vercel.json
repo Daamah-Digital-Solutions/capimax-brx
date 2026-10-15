@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    {
+      "source": "/.well-known/acme-challenge/:path*",
+      "destination": "http://148.230.125.240/.well-known/acme-challenge/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
