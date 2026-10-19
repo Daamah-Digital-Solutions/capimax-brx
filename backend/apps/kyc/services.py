@@ -55,6 +55,10 @@ def approve_kyc(kyc: UserKYC, *, review_answer: str = "", source: str = "webhook
         log.info("KYC approved (source=%s) for user %s", source, kyc.user_id)
         # Emit only on the state-changing path → no duplicate on webhook replay.
         notify(kyc.user, NotificationType.KYC_APPROVED, action_url="/wallet")
+        # Gifts / family transfers / inheritance waiting for this user (apps/transfers).
+        from apps.transfers.services import release_waiting_on_commit
+
+        release_waiting_on_commit(kyc.user)
     return kyc
 
 

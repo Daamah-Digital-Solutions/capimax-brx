@@ -46,6 +46,15 @@ class Notification(models.Model):
         INSTALLMENT_DUE_UNPAID = "installment_due_unpaid", _("Installment due — top up wallet")
         # Sent once, a few days before an installment is due (it is then debited from the wallet).
         INSTALLMENT_DUE_SOON = "installment_due_soon", _("Installment due soon")
+        # Gifts / family transfers / inheritance (apps/transfers). params.what/kind/sender/
+        # recipient(/message/reason/days/date).
+        TRANSFER_RECEIVED = "transfer_received", _("You received a transfer")
+        TRANSFER_DELIVERED = "transfer_delivered", _("Your transfer was delivered")
+        TRANSFER_WAITING = "transfer_waiting", _("Transfer waiting for the recipient")
+        TRANSFER_RETURNED = "transfer_returned", _("Transfer returned to you")
+        GIFT_REMINDER = "gift_reminder", _("Scheduled gift reminder")
+        # params.decision (approved|rejected)/number/note.
+        ESTATE_CLAIM_DECIDED = "estate_claim_decided", _("Inheritance claim decided")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

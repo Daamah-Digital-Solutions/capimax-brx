@@ -29,6 +29,7 @@ KINDS = {
     "lp_withdrawal": "Liquidity provider withdrawal",
     "support_ticket": "Support ticket",
     "partner_deliverable": "Partner deliverable",
+    "estate_claim": "Inheritance claim",
 }
 
 

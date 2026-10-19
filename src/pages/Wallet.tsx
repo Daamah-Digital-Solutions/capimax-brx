@@ -66,6 +66,14 @@ const SOURCE_LABEL: Record<string, { en: string; ar: string }> = {
   withdrawal: { en: "Withdrawal", ar: "سحب" },
   withdrawal_refund: { en: "Withdrawal returned", ar: "استرداد سحب" },
   instant_fee_refund: { en: "Instant fee returned", ar: "استرداد رسوم السحب الفوري" },
+  gift_sent: { en: "Gift sent", ar: "هدية مُرسلة" },
+  gift_received: { en: "Gift received", ar: "هدية مُستلمة" },
+  gift_returned: { en: "Gift returned", ar: "هدية مُعادة" },
+  family_sent: { en: "Family transfer", ar: "تحويل عائلي" },
+  family_received: { en: "Family transfer received", ar: "تحويل عائلي مُستلم" },
+  family_returned: { en: "Family transfer returned", ar: "تحويل عائلي مُعاد" },
+  estate_sent: { en: "Inheritance distributed", ar: "توزيع ميراث" },
+  estate_received: { en: "Inheritance received", ar: "ميراث مُستلم" },
 };
 
 // Deposit methods. ONLY card + crypto have a real gated rail (Stripe / NOW). The others

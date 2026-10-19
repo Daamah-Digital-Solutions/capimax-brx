@@ -245,6 +245,9 @@ class EmailVerifyConfirmView(APIView):
         if not user.is_email_verified:
             user.is_email_verified = True
             user.save(update_fields=["is_email_verified"])
+            from apps.transfers.services import release_waiting_on_commit
+
+            release_waiting_on_commit(user)
         return Response({"detail": "Email verified."})
 
 
@@ -283,6 +286,9 @@ class GoogleOAuthView(APIView):
         if not user.is_email_verified:
             user.is_email_verified = True
             user.save(update_fields=["is_email_verified"])
+            from apps.transfers.services import release_waiting_on_commit
+
+            release_waiting_on_commit(user)
 
         if created:
             # Set the display name on first sight (never overwrite a later edit).

@@ -28,7 +28,9 @@ class PaymentStatus(models.TextChoices):
 # (investments.services.record_acquisition_cost). Those are resales of tokens that were
 # already sold once, so they must never count as primary sales, availability, funding or
 # owner proceeds — only as the buyer's cost basis.
-RESALE_PAYMENT_METHODS = ("secondary_market", "lp_market")
+# Units received as a gift, family transfer or inheritance (apps/transfers) were also sold
+# once already — their rows are the recipient's cost basis only.
+RESALE_PAYMENT_METHODS = ("secondary_market", "lp_market", "gift", "family_transfer", "estate")
 
 
 class Investment(models.Model):

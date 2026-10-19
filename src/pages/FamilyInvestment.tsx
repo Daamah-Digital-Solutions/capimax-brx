@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFamilyAccounts } from "@/hooks/useFamilyAccounts";
 import { FamilyMemberCard } from "@/components/family/FamilyMemberCard";
 import { TransactionHistory } from "@/components/family/TransactionHistory";
+import { GiftDialog } from "@/components/transfers/GiftDialog";
+import { BeneficiariesDialog } from "@/components/transfers/BeneficiariesDialog";
+import { EstateClaimDialog } from "@/components/transfers/EstateClaimDialog";
+import { TransfersList } from "@/components/transfers/TransfersList";
+import { transfersApi, type Giftable } from "@/integrations/api/client";
 import { 
   Users, 
   UserPlus, 
@@ -108,6 +114,25 @@ const FamilyInvestment = () => {
   // Allocation drafts (per member) + the Transfers-tab form (Wave A: record-only).
   const [allocDraft, setAllocDraft] = useState<Record<string, number>>({});
   const [transferForm, setTransferForm] = useState({ recipient: "", type: "returns", amount: "" });
+  // Gifts / family transfers / inheritance (apps/transfers): units or wallet money really move.
+  const queryClient = useQueryClient();
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [beneficiariesOpen, setBeneficiariesOpen] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [transfersKey, setTransfersKey] = useState(0);
+  const [giftable, setGiftable] = useState<Giftable | null>(null);
+  const [transferSlug, setTransferSlug] = useState("");
+  const [isMovingFamily, setIsMovingFamily] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    transfersApi
+      .giftable()
+      .then((g) => {
+        setGiftable(g);
+        if (g.positions.length) setTransferSlug((s) => s || g.positions[0].property_slug);
+      })
+      .catch(() => setGiftable(null));
+  }, [user, transfersKey]);
 
   // Demo data for non-authenticated users
   const [demoFamilyMembers] = useState<DemoFamilyMember[]>([
@@ -322,6 +347,38 @@ const FamilyInvestment = () => {
       return;
     }
     const isReal = user && familyAccounts.some((m) => m.id === transferForm.recipient);
+    if (isReal && (transferForm.type === "tokens" || transferForm.type === "balance")) {
+      // Units / wallet money really move to the member (once they're verified).
+      const asUnits = transferForm.type === "tokens";
+      if (asUnits && (!transferSlug || !Number.isInteger(amt))) {
+        toast.error(isRTL ? "اختر العقار وعدداً صحيحاً من الوحدات" : "Pick a property and a whole number of units");
+        return;
+      }
+      setIsMovingFamily(true);
+      try {
+        const t = await transfersApi.family({
+          family_account_id: transferForm.recipient,
+          asset: asUnits ? "units" : "cash",
+          ...(asUnits ? { property_slug: transferSlug, units: amt } : { amount: amt }),
+        });
+        toast.success(
+          t.status === "delivered"
+            ? isRTL ? "تم التحويل" : "Transfer delivered"
+            : isRTL
+              ? "التحويل محجوز بانتظار تأكيد بريد العضو وتوثيق هويته — أرسلنا له دعوة"
+              : "Held until the member confirms their email and verifies their identity — we invited them",
+        );
+        setTransferForm({ recipient: "", type: "returns", amount: "" });
+        setTransfersKey((k) => k + 1);
+        queryClient.invalidateQueries({ queryKey: ["family-transactions"] });
+        queryClient.invalidateQueries({ queryKey: ["family-accounts"] });
+      } catch (e: any) {
+        toast.error(e?.message || (isRTL ? "تعذّر التحويل" : "Could not transfer"));
+      } finally {
+        setIsMovingFamily(false);
+      }
+      return;
+    }
     if (isReal) {
       try {
         await initiateTransfer({
@@ -971,11 +1028,37 @@ const FamilyInvestment = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {transferForm.type === "tokens" && user && (
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "العقار" : "Property"}</Label>
+                      <Select value={transferSlug} onValueChange={setTransferSlug}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={isRTL ? "لا توجد وحدات حرة" : "No free units"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(giftable?.positions || []).map((p) => (
+                            <SelectItem key={p.property_slug} value={p.property_slug}>
+                              {p.property_name} ({p.free_units})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <Label>{isRTL ? "المبلغ" : "Amount"}</Label>
+                    <Label>
+                      {transferForm.type === "tokens" && user
+                        ? (isRTL ? "عدد الوحدات" : "Units")
+                        : (isRTL ? "المبلغ" : "Amount")}
+                      {transferForm.type === "balance" && giftable && (
+                        <span className="text-xs text-muted-foreground ms-2">
+                          {isRTL ? "الرصيد" : "Balance"}: ${giftable.balance.toLocaleString()}
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       type="number"
-                      placeholder="0.00"
+                      placeholder={transferForm.type === "tokens" && user ? "0" : "0.00"}
                       value={transferForm.amount}
                       onChange={(e) => setTransferForm((f) => ({ ...f, amount: e.target.value }))}
                     />
@@ -983,19 +1066,31 @@ const FamilyInvestment = () => {
 
                   {/* Wave A: a transfer is RECORDED only — execution (real money/token movement)
                       is a later release. Honest, not a faked "instant free transfer". */}
-                  <div className="p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                    <p className="text-xs text-amber-700">
-                      {isRTL
-                        ? "سيتم تسجيل التحويل في السجل الآن — التنفيذ الفعلي (نقل الأموال/الرموز) يأتي في إصدار لاحق."
-                        : "The transfer will be recorded now — actual execution (moving money/tokens) comes in a later release."}
-                    </p>
-                  </div>
+                  {transferForm.type === "returns" || !user ? (
+                    <div className="p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                      <p className="text-xs text-amber-700">
+                        {isRTL
+                          ? "سيتم تسجيل التحويل في السجل الآن — التنفيذ الفعلي (نقل الأموال/الرموز) يأتي في إصدار لاحق."
+                          : "The transfer will be recorded now — actual execution (moving money/tokens) comes in a later release."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                      <p className="text-xs text-purple-700">
+                        {isRTL
+                          ? "يُنقل التحويل فوراً بدون رسوم إذا كان بريد العضو موثّقاً وهويته مُعتمدة؛ وإلا يُحجز له ويصله تلقائياً بعد التوثيق، ويمكنك إلغاؤه قبل ذلك."
+                          : "Moves at once, with no fee, if the member's email and identity are verified; otherwise it's held for them and delivered automatically once they verify — you can cancel before then."}
+                      </p>
+                    </div>
+                  )}
 
-                  <Button className="w-full" size="lg" onClick={handleRecordTransfer} disabled={isTransferring}>
+                  <Button className="w-full" size="lg" onClick={handleRecordTransfer} disabled={isTransferring || isMovingFamily}>
                     <ArrowRightLeft className="w-4 h-4 mr-2" />
-                    {isTransferring
-                      ? (isRTL ? "جاري التسجيل..." : "Recording...")
-                      : (isRTL ? "تسجيل التحويل" : "Record Transfer")}
+                    {isTransferring || isMovingFamily
+                      ? (isRTL ? "جاري التنفيذ..." : "Working...")
+                      : transferForm.type === "returns" || !user
+                        ? (isRTL ? "تسجيل التحويل" : "Record Transfer")
+                        : (isRTL ? "تحويل الآن" : "Transfer now")}
                   </Button>
                 </CardContent>
               </Card>
@@ -1629,7 +1724,7 @@ const FamilyInvestment = () => {
                 <p className="text-sm text-muted-foreground mb-3">
                   {isRTL ? "حدّد المستفيدين وحصصهم — سينفذ النقل تلقائياً عند التفعيل." : "Set beneficiaries & shares — transfer executes automatically when triggered."}
                 </p>
-                <Button size="sm" variant="outline" onClick={() => toast.success(isRTL ? "تم فتح إعدادات المستفيدين" : "Beneficiaries setup opened")}>
+                <Button size="sm" variant="outline" onClick={() => (user ? setBeneficiariesOpen(true) : toast.success(isRTL ? "تم فتح إعدادات المستفيدين" : "Beneficiaries setup opened"))}>
                   {isRTL ? "إعداد المستفيدين" : "Setup Beneficiaries"}
                 </Button>
               </CardContent>
@@ -1659,6 +1754,15 @@ const FamilyInvestment = () => {
               </CardContent>
             </Card>
           </div>
+          {user && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span>{isRTL ? "مستفيد من شخص متوفّى؟" : "Named as a beneficiary by someone who passed away?"}</span>
+              <Button size="sm" variant="ghost" className="gap-1" onClick={() => setClaimOpen(true)}>
+                <FileText className="w-4 h-4" />
+                {isRTL ? "تقديم طلب ميراث" : "Submit an inheritance claim"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* ───────────── C) Real Estate Gifts ───────────── */}
@@ -1701,12 +1805,21 @@ const FamilyInvestment = () => {
                   </div>
                 </div>
               </div>
-              <Button onClick={() => toast.success(isRTL ? "تم فتح جدولة الهدية" : "Gift scheduling opened")} className="gap-2">
+              <Button onClick={() => (user ? setGiftOpen(true) : toast.success(isRTL ? "تم فتح جدولة الهدية" : "Gift scheduling opened"))} className="gap-2">
                 <Gift className="w-4 h-4" />
                 {isRTL ? "جدولة هدية عقارية جديدة" : "Schedule New Property Gift"}
               </Button>
+              {user && (
+                <div className="mt-6">
+                  <h3 className="font-semibold text-sm mb-3">{isRTL ? "هداياك وتحويلاتك" : "Your gifts and transfers"}</h3>
+                  <TransfersList refreshKey={transfersKey} />
+                </div>
+              )}
             </CardContent>
           </Card>
+          <GiftDialog open={giftOpen} onOpenChange={setGiftOpen} onDone={() => setTransfersKey((k) => k + 1)} />
+          <BeneficiariesDialog open={beneficiariesOpen} onOpenChange={setBeneficiariesOpen} />
+          <EstateClaimDialog open={claimOpen} onOpenChange={setClaimOpen} />
         </div>
 
         {/* ───────────── D) Family Collaboration Incentives ───────────── */}

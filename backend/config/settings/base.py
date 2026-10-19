@@ -90,6 +90,7 @@ DOMAIN_STUB_APPS = [
     "apps.partners",
     "apps.onboarding",
     "apps.kyc",
+    "apps.transfers",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS + DOMAIN_STUB_APPS
@@ -517,3 +518,12 @@ PAYOUT_AUTO_METHODS = env.list("PAYOUT_AUTO_METHODS", default=[])
 PAYOUT_INSTANT_ENABLED = env.bool("PAYOUT_INSTANT_ENABLED", default=False)
 PAYOUT_INSTANT_FEE_PERCENT = env.float("PAYOUT_INSTANT_FEE_PERCENT", default=1.0)
 PAYOUT_INSTANT_MAX = env.float("PAYOUT_INSTANT_MAX", default=9999.0)
+
+# Gifts, family transfers and inheritance (apps/transfers). A recipient who isn't verified
+# yet has TRANSFER_CLAIM_DAYS to sign up + verify before a gift / family transfer returns
+# to the sender (inheritance waits indefinitely). Fees are a % of the value, 0 by default.
+GIFT_FEE_PERCENT = env.float("GIFT_FEE_PERCENT", default=0.0)
+FAMILY_TRANSFER_FEE_PERCENT = env.float("FAMILY_TRANSFER_FEE_PERCENT", default=0.0)
+TRANSFER_CLAIM_DAYS = env.int("TRANSFER_CLAIM_DAYS", default=30)
+GIFT_REMINDER_DAYS = env.int("GIFT_REMINDER_DAYS", default=7)
+GIFT_MAX_DAYS_AHEAD = env.int("GIFT_MAX_DAYS_AHEAD", default=365)

@@ -45,6 +45,63 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    # Gifts / family transfers / inheritance (apps/transfers).
+    "transfer_invite": {
+        "subject": "{sender} sent you {what} on CapiMax BRX",
+        "heading": "Something is waiting for you",
+        "intro": "{sender} sent you {what} as a {kind}. To receive it, sign in (or create your account) with this email address, confirm your email and complete identity verification — it is handed over automatically right after.",
+        "cta_label": "Receive it",
+        "cta_path": "/auth",
+        "outro": "",
+    },
+    "transfer_received": {
+        "subject": "You received {what}",
+        "heading": "You received a {kind}",
+        "intro": "{sender} sent you {what}. It is now in your account. {message}",
+        "cta_label": "View your account",
+        "cta_path": "/portfolio",
+        "outro": "",
+    },
+    "transfer_delivered": {
+        "subject": "Your {kind} was delivered",
+        "heading": "Delivered",
+        "intro": "{what} reached {recipient}.",
+        "cta_label": "View transfers",
+        "cta_path": "/family-investment",
+        "outro": "",
+    },
+    "transfer_waiting": {
+        "subject": "Your {kind} is waiting for {recipient}",
+        "heading": "Waiting for the recipient",
+        "intro": "{recipient} needs to sign up, confirm their email and verify their identity to receive {what}. We emailed them. If they don't within {days} days, it comes back to you — you can also cancel it any time before.",
+        "cta_label": "View transfers",
+        "cta_path": "/family-investment",
+        "outro": "",
+    },
+    "transfer_returned": {
+        "subject": "Your {kind} came back to you",
+        "heading": "Returned to you",
+        "intro": "{what} to {recipient} was not delivered and is back in your account. {reason}",
+        "cta_label": "View your wallet",
+        "cta_path": "/wallet",
+        "outro": "",
+    },
+    "gift_reminder": {
+        "subject": "Your gift goes out on {date}",
+        "heading": "Gift reminder",
+        "intro": "Your gift of {what} to {recipient} will be delivered on {date}. You can still cancel it before then.",
+        "cta_label": "View gifts",
+        "cta_path": "/family-investment",
+        "outro": "",
+    },
+    "estate_claim_decided": {
+        "subject": "Your inheritance claim was {decision}",
+        "heading": "Inheritance claim {decision}",
+        "intro": "Your claim on certificate {number} was {decision}. {note}",
+        "cta_label": "Open your account",
+        "cta_path": "/portfolio",
+        "outro": "",
+    },
     "kyc_approved": {
         "subject": "Your identity verification is approved",
         "heading": "You're verified",

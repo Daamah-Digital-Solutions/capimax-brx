@@ -2133,3 +2133,96 @@ export const reportsApi = {
 };
 
 export { API_BASE_URL };
+
+// --------------------------------------------------------------------------- //
+// Gifts, family transfers and inheritance (/api/transfers/, apps/transfers). What is given
+// is held at once and reaches the recipient once they have a verified email + approved KYC.
+// --------------------------------------------------------------------------- //
+export interface TransferRow {
+  id: string;
+  reference: string;
+  kind: "gift" | "family" | "estate";
+  asset: "units" | "cash";
+  status: "scheduled" | "waiting" | "delivered" | "cancelled" | "expired" | "failed";
+  direction: "sent" | "received";
+  counterparty: string;
+  recipient_email: string;
+  recipient_name: string;
+  property_slug: string;
+  property_name: string;
+  units: number;
+  amount: number;
+  fee_amount: number;
+  message: string;
+  occasion: string;
+  deliver_on: string;
+  expires_at: string | null;
+  delivered_at: string | null;
+  closed_reason: string;
+  created_at: string;
+}
+
+export interface Giftable {
+  positions: { property_slug: string; property_name: string; free_units: number; unit_value: number }[];
+  balance: number;
+  gift_fee_percent: number;
+  family_fee_percent: number;
+  claim_days: number;
+}
+
+export interface BeneficiaryRow {
+  id?: string;
+  full_name: string;
+  email: string;
+  relationship: string;
+  percent: number;
+}
+
+export interface BeneficiariesPayload {
+  beneficiaries: BeneficiaryRow[];
+  certificate_number: string | null;
+  certificate_updated_at: string | null;
+}
+
+export const transfersApi = {
+  list: () => rawRequest("/transfers/", { auth: true }) as Promise<TransferRow[]>,
+  giftable: () => rawRequest("/transfers/giftable/", { auth: true }) as Promise<Giftable>,
+  gift: (body: {
+    recipient_email: string;
+    recipient_name?: string;
+    asset: "units" | "cash";
+    property_slug?: string;
+    units?: number;
+    amount?: number;
+    deliver_on?: string | null;
+    occasion?: string;
+    message?: string;
+  }) => rawRequest("/transfers/gifts/", { method: "POST", auth: true, body }) as Promise<TransferRow>,
+  family: (body: {
+    family_account_id: string;
+    asset: "units" | "cash";
+    property_slug?: string;
+    units?: number;
+    amount?: number;
+    message?: string;
+  }) => rawRequest("/transfers/family/", { method: "POST", auth: true, body }) as Promise<TransferRow>,
+  cancel: (id: string) =>
+    rawRequest(`/transfers/${id}/cancel/`, { method: "POST", auth: true }) as Promise<TransferRow>,
+  beneficiaries: () =>
+    rawRequest("/transfers/estate/beneficiaries/", { auth: true }) as Promise<BeneficiariesPayload>,
+  saveBeneficiaries: (beneficiaries: BeneficiaryRow[]) =>
+    rawRequest("/transfers/estate/beneficiaries/", {
+      method: "PUT",
+      auth: true,
+      body: { beneficiaries },
+    }) as Promise<BeneficiariesPayload>,
+  certificatePdf: () => downloadKybDocumentBlob("/transfers/estate/certificate/pdf/", "beneficiary-certificate.pdf"),
+  submitClaim: (fields: { certificate_number: string; date_of_death?: string; notes?: string; file: File }) => {
+    const form = new FormData();
+    form.append("certificate_number", fields.certificate_number);
+    if (fields.date_of_death) form.append("date_of_death", fields.date_of_death);
+    if (fields.notes) form.append("notes", fields.notes);
+    form.append("death_certificate", fields.file);
+    return rawUpload("/transfers/estate/claims/", form);
+  },
+};

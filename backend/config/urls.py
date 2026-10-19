@@ -63,6 +63,7 @@ urlpatterns = [
     # Family accounts (Wave A): self-scoped records + allocation config (members + banks +
     # schedules + record-only activity log). NO money/tokens/payout this wave. FAMILY_SURFACE.md.
     path("api/family/", include("apps.family.urls")),
+    path("api/transfers/", include("apps.transfers.urls")),
     # Owner-documents: a self-scoped personal document VAULT (FileField under the gitignored
     # backend/media/), repointed off Supabase. Mirrors the LP document pattern + adds server-side
     # type/size validation. NO Property FK; the PropertyDetail data-room is a separate surface.
