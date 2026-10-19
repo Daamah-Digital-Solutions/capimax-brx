@@ -5,9 +5,10 @@ Phase 1 wires only the admin and the auth foundation. Domain routers
 (properties, investments, wallets, …) are added in later phases. SPEC §2.
 """
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from apps.core.monitoring import ClientErrorView
+from apps.core.private_media import PRIVATE_PREFIXES, private_media
 
 # Brand the admin so it reads as the Capimax BRX console, not the generic
 # "Django site administration" (client-facing admin tool).
@@ -17,6 +18,8 @@ admin.site.index_title = "Administration"
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Private uploads, for signed-in admins only (nginx passes these folders to Django).
+    re_path(rf"^media/(?P<path>(?:{'|'.join(PRIVATE_PREFIXES)})/.+)$", private_media, name="private-media"),
     # Auth foundation: register / login / refresh / logout / session / me + OAuth.
     # SPEC §5.2.
     path("api/auth/", include("apps.core.urls")),

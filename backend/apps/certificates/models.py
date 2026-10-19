@@ -13,6 +13,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class CertificateStatus(models.TextChoices):
     PROVISIONAL = "provisional", _("Provisional")
@@ -67,7 +69,7 @@ class Certificate(models.Model):
     qr_code_data = models.TextField(blank=True)  # the URL encoded in the QR
     verification_code = models.CharField(max_length=64, unique=True, db_index=True)
     verification_url = models.CharField(max_length=300, blank=True)
-    pdf_file = models.FileField(upload_to="certificates/%Y/%m/", null=True, blank=True)
+    pdf_file = models.FileField(upload_to=PrivateUpload("certificates"), null=True, blank=True)
     pdf_url = models.CharField(max_length=500, blank=True)  # API download path
     pdf_path = models.CharField(max_length=500, blank=True)  # storage-relative path
 

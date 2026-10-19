@@ -20,10 +20,11 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
+from apps.core.private_media import PrivateUpload
+
 
 def _claim_upload_to(instance, filename):
-    # Uploaded files are served under /media/: an unguessable name keeps a death
-    # certificate private (its link appears only in the Django admin).
+    # Kept for migration 0002; new uploads use PrivateUpload (apps/core/private_media.py).
     import os
 
     ext = os.path.splitext(filename or "")[1].lower()[:8]
@@ -156,7 +157,7 @@ class EstateClaim(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="estate_claims_made"
     )
     certificate_number = models.CharField(max_length=20)
-    death_certificate = models.FileField(upload_to=_claim_upload_to)
+    death_certificate = models.FileField(upload_to=PrivateUpload("estate_claims"))
     date_of_death = models.DateField(null=True, blank=True)
     notes = models.CharField(max_length=1000, blank=True, default="")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.SUBMITTED)

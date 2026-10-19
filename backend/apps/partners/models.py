@@ -31,6 +31,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class PartnerStatus(models.TextChoices):
     # Mirrors DeveloperStatus — the authoritative partner VERIFICATION gate
@@ -353,7 +355,7 @@ class DeliverableDocument(models.Model):
     assignment = models.ForeignKey(
         Assignment, on_delete=models.CASCADE, related_name="documents"
     )
-    file = models.FileField(upload_to="deliverable_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("deliverable_documents"), null=True, blank=True)
     original_filename = models.CharField(max_length=255)
     file_size = models.BigIntegerField(null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -432,7 +434,7 @@ class PartnerKYBDocument(models.Model):
     )
     document_name = models.CharField(max_length=255)
     document_type = models.CharField(max_length=64)
-    file = models.FileField(upload_to="partner_kyb_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("partner_kyb_documents"), null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     status = models.CharField(
         max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING

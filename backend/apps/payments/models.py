@@ -17,6 +17,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class PaymentProvider(models.TextChoices):
     STRIPE = "stripe", _("Stripe")
@@ -144,7 +146,7 @@ class SukukCertificate(models.Model):
     investment = models.OneToOneField(
         "investments.Investment", on_delete=models.CASCADE, related_name="sukuk_certificate"
     )
-    file = models.FileField(upload_to="sukuk_certificates/%Y/%m/")
+    file = models.FileField(upload_to=PrivateUpload("sukuk_certificates"))
     file_size = models.PositiveIntegerField(null=True, blank=True)
     file_type = models.CharField(max_length=100, blank=True, default="")
 

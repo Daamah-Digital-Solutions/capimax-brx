@@ -21,6 +21,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class OwnerDocument(models.Model):
     """One file in an owner's personal vault. Mirrors `apps.lp.LPDocument`."""
@@ -46,7 +48,7 @@ class OwnerDocument(models.Model):
         max_length=32, choices=DocType.choices, default=DocType.OTHER
     )
     # Stored under the gitignored backend/media/ — same convention as kyc/lp/submission docs.
-    file = models.FileField(upload_to="owner_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("owner_documents"), null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     file_type = models.CharField(max_length=128, blank=True, null=True)
     description = models.CharField(max_length=1000, blank=True, null=True)

@@ -27,6 +27,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class OwnerStatus(models.TextChoices):
     # Mirrors LPStatus — the authoritative owner capability gate (HasActivatedOwner).
@@ -271,7 +273,7 @@ class SubmissionDocument(models.Model):
         max_length=32, choices=DocType.choices, default=DocType.OTHER
     )
     document_name = models.CharField(max_length=255)
-    file = models.FileField(upload_to="submission_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("submission_documents"), null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -320,7 +322,7 @@ class OwnerKYBDocument(models.Model):
     )
     document_name = models.CharField(max_length=255)
     document_type = models.CharField(max_length=64)
-    file = models.FileField(upload_to="owner_kyb_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("owner_kyb_documents"), null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     status = models.CharField(
         max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING

@@ -22,6 +22,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class LPStatus(models.TextChoices):
     # Matches the frontend `LiquidityProvider.status` union + SPEC §3.8.
@@ -219,7 +221,7 @@ class LPDocument(models.Model):
     )
     document_name = models.CharField(max_length=255)
     document_type = models.CharField(max_length=64)
-    file = models.FileField(upload_to="lp_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("lp_documents"), null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     is_template = models.BooleanField(default=False)
     uploaded_by = models.CharField(max_length=32, default="user")
@@ -253,7 +255,7 @@ class LPKYBDocument(models.Model):
     )
     document_name = models.CharField(max_length=255)
     document_type = models.CharField(max_length=64)
-    file = models.FileField(upload_to="lp_kyb_documents/%Y/%m/", null=True, blank=True)
+    file = models.FileField(upload_to=PrivateUpload("lp_kyb_documents"), null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     status = models.CharField(
         max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING

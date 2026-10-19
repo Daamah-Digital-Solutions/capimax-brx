@@ -30,6 +30,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class BrokerStatus(models.TextChoices):
     # The broker's overall approval state, driven by the LICENCE-approval hinge (the
@@ -89,7 +91,7 @@ class BrokerProfile(models.Model):
     license_authority = models.CharField(max_length=255, blank=True, null=True)
     license_expiry = models.DateField(null=True, blank=True)
     license_document = models.FileField(
-        upload_to="broker_licenses/%Y/%m/", null=True, blank=True
+        upload_to=PrivateUpload("broker_licenses"), null=True, blank=True
     )
     license_submitted_at = models.DateTimeField(null=True, blank=True)
     license_reviewed_at = models.DateTimeField(null=True, blank=True)

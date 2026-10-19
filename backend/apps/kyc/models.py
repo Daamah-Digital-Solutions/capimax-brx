@@ -23,6 +23,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class KYCStatus(models.TextChoices):
     # Canonical 4-value machine the frontend expects (Supabase kyc_status enum).
@@ -135,7 +137,7 @@ class KYCDocument(models.Model):
         UserKYC, on_delete=models.CASCADE, related_name="documents"
     )
     document_type = models.CharField(max_length=24, choices=DocumentType.choices)
-    file = models.FileField(upload_to="kyc_documents/%Y/%m/")
+    file = models.FileField(upload_to=PrivateUpload("kyc_documents"))
     status = models.CharField(
         max_length=12, choices=DocStatus.choices, default=DocStatus.PENDING
     )

@@ -17,6 +17,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.private_media import PrivateUpload
+
 
 class WalletNetwork(models.TextChoices):
     # TESTNET ONLY for Wave 1. Mainnet is a separate, audited cutover.
@@ -351,7 +353,7 @@ class Deposit(models.Model):
     # reviews the proof and approves → the balance is credited via the SAME `_credit_deposit`
     # path the Stripe/NOW webhook uses (settlement-gated, idempotent). Blank/null for card/crypto.
     reference = models.CharField(max_length=32, blank=True, default="")
-    proof_file = models.FileField(upload_to="deposit_proofs/", null=True, blank=True)
+    proof_file = models.FileField(upload_to=PrivateUpload("deposit_proofs"), null=True, blank=True)
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
     )
