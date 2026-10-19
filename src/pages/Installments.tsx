@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Receipt,
 } from "lucide-react";
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -481,6 +482,18 @@ export default function Installments() {
                                           >
                                             {scheduleStatusLabel(p.status)}
                                           </span>
+                                          {/* Paid installment → its PDF receipt. */}
+                                          {p.status === "paid" && p.id && (
+                                            <button
+                                              type="button"
+                                              className="ms-2 inline-flex align-middle text-muted-foreground hover:text-primary disabled:opacity-50"
+                                              title={language === "ar" ? "تحميل الإيصال" : "Download receipt"}
+                                              disabled={exporting === `rcpt-${p.id}`}
+                                              onClick={() => run(`rcpt-${p.id}`, () => reportsApi.receipt("installment", p.id!))}
+                                            >
+                                              <Receipt className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
                                         </td>
                                       </tr>
                                     ))}

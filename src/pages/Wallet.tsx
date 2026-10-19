@@ -50,6 +50,7 @@ import { OwnerWithdrawDialog } from "@/components/owner/OwnerWithdrawDialog";
 import { DepositPayStep } from "@/components/wallet/DepositPayStep";
 import { walletsApi, reportsApi, type BalanceTransactionRow } from "@/integrations/api/client";
 import { useExport } from "@/hooks/useExport";
+import { PaymentReceipts } from "@/components/wallet/PaymentReceipts";
 import { toast } from "sonner";
 
 // Internal-balance ledger source → bilingual label (rendered by source, NOT a stored
@@ -326,13 +327,15 @@ export default function Wallet() {
                           <Badge variant="success">
                             {t("wallet.completed")}
                           </Badge>
-                          {/* Per-transaction receipt is a deferred enhancement (no receipt
-                              endpoint yet) — kept, disabled, not a silent no-op. */}
+                          {/* PDF receipt for this wallet movement (numbered, owner-only). */}
                           <Button
                             variant="ghost"
                             size="icon"
-                            disabled
-                            title={isAr ? "قريباً" : "Coming soon"}
+                            disabled={exporting === `rcpt-${transaction.id}`}
+                            title={isAr ? "تحميل الإيصال" : "Download receipt"}
+                            onClick={() =>
+                              runExport(`rcpt-${transaction.id}`, () => reportsApi.receipt("ledger", transaction.id))
+                            }
                           >
                             <Receipt className="w-4 h-4" />
                           </Button>
@@ -343,6 +346,9 @@ export default function Wallet() {
                   )}
                 </div>
               </div>
+
+              {/* Receipts for purchases / installments paid directly by card or crypto. */}
+              <PaymentReceipts />
             </div>
 
             {/* Sidebar */}

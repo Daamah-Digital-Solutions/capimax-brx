@@ -104,6 +104,7 @@ class InstallmentPlansView(APIView):
                 }
             ] + [
                 {
+                    "id": str(p.id),
                     "sequence": p.sequence,
                     "type": "installment",
                     "date": p.due_date.isoformat(),

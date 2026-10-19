@@ -10,7 +10,7 @@ the file. Reuses the certificate `FileResponse` download pattern.
 """
 import io
 
-from django.http import FileResponse
+from django.http import FileResponse, Http404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -86,3 +86,33 @@ class DistributionsTaxView(APIView):
             meta=payload.get("meta"), disclaimer=payload["disclaimer"],
         )
         return _stream(pdf, _filename("distributions-tax", "pdf"), "application/pdf")
+
+
+class ReceiptListView(APIView):
+    """GET /api/reports/receipts/ — every receipt the caller can download (newest first)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .receipts import list_receipts
+
+        return Response(list_receipts(request.user))
+
+
+class ReceiptPdfView(APIView):
+    """GET /api/reports/receipts/<ledger|payment|installment>/<id>/ — the receipt PDF (owner only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, kind, obj_id):
+        from . import receipts
+
+        builder = {
+            "ledger": receipts.ledger_receipt,
+            "payment": receipts.payment_receipt,
+            "installment": receipts.installment_receipt,
+        }.get(kind)
+        if builder is None:
+            raise Http404
+        filename, pdf = builder(request.user, obj_id)
+        return _stream(pdf, filename, "application/pdf")

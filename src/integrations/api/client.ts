@@ -1467,6 +1467,8 @@ export interface InstallmentSchedulePayment {
   type: "down_payment" | "installment";
   date: string;                     // ISO date
   amount: number;
+  // The installment row id (absent on the synthesized down-payment row) — for its receipt.
+  id?: string;
   // Off-plan §4: installment fee on the row (0 on older plans) and what is charged (amount + fee).
   fee?: number;
   charge?: number;
@@ -2021,6 +2023,17 @@ export interface BrokerPropertyStats {
 // download (filename comes from Content-Disposition). NB: the format param is `fmt`
 // (not `format`, which DRF reserves for content negotiation).
 // --------------------------------------------------------------------------- //
+export interface ReceiptRow {
+  kind: "ledger" | "payment";
+  id: string;
+  number: string;
+  date: string;
+  title: string;
+  amount: number;
+  direction: "credit" | "debit";
+  method?: string;
+}
+
 export const reportsApi = {
   async download(path: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -2041,6 +2054,12 @@ export const reportsApi = {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  },
+  /** Every receipt the caller can download (wallet movements + card/crypto payments). */
+  receipts: () => rawRequest("/reports/receipts/", { auth: true }) as Promise<ReceiptRow[]>,
+  /** Download one receipt PDF. */
+  receipt(kind: "ledger" | "payment" | "installment", id: string): Promise<void> {
+    return reportsApi.download(`/reports/receipts/${kind}/${id}/`);
   },
   /** Export a report context as csv|pdf (optional year/period filter). */
   export(
