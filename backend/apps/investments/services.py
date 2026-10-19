@@ -171,6 +171,33 @@ def pronova_discount_for(prop: Property, base_amount) -> Decimal:
     return (base * rate / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def family_reinvest_eligible(user) -> bool:
+    """A family-account owner (at least one active member) may reinvest at the family rate."""
+    from apps.family.models import FamilyAccount
+
+    return FamilyAccount.objects.filter(investor=user, status="active").exists()
+
+
+def reinvest_discount_for(user, value, *, family: bool) -> tuple[Decimal, Decimal]:
+    """
+    (rate %, discount) for a full purchase paid from the wallet: REINVEST_DISCOUNT_PERCENT on
+    the unit value, or FAMILY_REINVEST_DISCOUNT_PERCENT for a family-account owner who asks
+    for it. Platform-absorbed like the Pronova discount (the owner still gets the full value).
+    """
+    if family:
+        if not family_reinvest_eligible(user):
+            raise ValidationError(
+                {"reinvest_mode": "The family rate needs a family account with an active member."}
+            )
+        rate = Decimal(str(settings.FAMILY_REINVEST_DISCOUNT_PERCENT))
+    else:
+        rate = Decimal(str(settings.REINVEST_DISCOUNT_PERCENT))
+    discount = (Decimal(str(value)) * rate / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return rate, discount
+
+
 # --------------------------------------------------------------------------- #
 # Availability
 # --------------------------------------------------------------------------- #
@@ -236,6 +263,7 @@ def create_investment(
     frequency="monthly",
     expected_unit_price=None,
     term_months=None,
+    reinvest_mode: str = "standard",
 ) -> dict:
     """
     Create an investment per the LOCKED token-economics policy, simulate payment,
@@ -355,6 +383,11 @@ def create_investment(
                 down_payment_amount if is_installment and down_payment_amount is not None else amount
             )
             discount_amount = pronova_discount_for(locked_prop, charged_basis + fee_amount)
+        # Reinvestment: a full purchase paid from the wallet is discounted on its unit value.
+        if payment_method == BALANCE_METHOD and not is_installment:
+            _rate, discount_amount = reinvest_discount_for(
+                user, amount, family=(reinvest_mode == "family"),
+            )
 
         # One-active-per-property. First EXPIRE a genuinely-abandoned webhook-gated
         # (card/crypto/Pronova) attempt that never confirmed, so a retry can proceed; sukuk

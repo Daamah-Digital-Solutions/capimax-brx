@@ -46,6 +46,8 @@ interface InvestmentData {
   frequency?: "monthly" | "quarterly";
   // Off-plan §3.4.1: the unit price shown to the buyer (server refuses if it changed).
   expected_unit_price?: number;
+  // Wallet purchase at the family reinvestment rate (eligible family-account owners).
+  reinvest_mode?: "standard" | "family";
 }
 
 interface InvestmentResult {

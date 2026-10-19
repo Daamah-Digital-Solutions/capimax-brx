@@ -395,9 +395,9 @@ class FeesBuyerBorneTests(TestCase):
             user=self.investor, prop=ledger, token_amount=10, payment_method="balance",
         )
         inv = res["investment"]
-        # Buyer pays value + fee (1000 + 20) from balance.
+        # Buyer pays value + fee − 5% reinvestment discount (1000 + 20 − 50) from balance.
         debit = BalanceTransaction.objects.get(source="reinvestment", reference=str(inv.id))
-        self.assertEqual(debit.amount, Decimal("1020.00"))
+        self.assertEqual(debit.amount, Decimal("970.00"))
         # Owner still credited the FULL token value.
         bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
         self.assertEqual(bt.amount, Decimal("1000.00"))

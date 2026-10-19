@@ -7,6 +7,7 @@ from .views import (
     InvestmentMintView,
     ReinvestmentHistoryView,
     SukukInvestmentsView,
+    ReinvestSettingsView,
 )
 
 app_name = "investments"
@@ -16,6 +17,7 @@ urlpatterns = [
     # Literal segments BEFORE <uuid:pk> so they aren't captured as a pk.
     # Reinvestment history (balance-funded buys) — self-scoped.
     path("reinvestments/", ReinvestmentHistoryView.as_view(), name="reinvestment-history"),
+    path("reinvest-settings/", ReinvestSettingsView.as_view(), name="reinvest-settings"),
     # Nova certificate (sukuk) investments awaiting review / rejected — self-scoped.
     path("sukuk/", SukukInvestmentsView.as_view(), name="sukuk-investments"),
     path("<uuid:pk>/", InvestmentDetailView.as_view(), name="investment-detail"),

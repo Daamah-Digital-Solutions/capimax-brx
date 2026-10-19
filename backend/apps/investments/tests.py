@@ -501,13 +501,14 @@ class ReinvestmentTests(TestCase):
         self.assertEqual(inv.payment_method, "balance")
         self.assertEqual(inv.payment_status, PaymentStatus.COMPLETED)
         self.assertEqual(inv.amount_invested, Decimal("500.00"))
-        # Balance debited EXACTLY $500 (1000 -> 500), with a keyed DEBIT ledger entry.
-        self.assertEqual(self._balance(), Decimal("500.00"))
+        # Balance debited $500 less the 5% reinvestment discount = $475 (1000 -> 525), with a
+        # keyed DEBIT ledger entry.
+        self.assertEqual(self._balance(), Decimal("525.00"))
         debit = BalanceTransaction.objects.get(
             balance__user=self.investor, source="reinvestment", reference=str(inv.id)
         )
         self.assertEqual(debit.entry_type, BalanceTransaction.EntryType.DEBIT)
-        self.assertEqual(debit.amount, Decimal("500.00"))
+        self.assertEqual(debit.amount, Decimal("475.00"))
         # Real on-chain mint (mocked): 5 tokens, fully unlocked.
         token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
         self.assertEqual(token.token_amount, 5)
@@ -538,26 +539,28 @@ class ReinvestmentTests(TestCase):
         credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
         res = self._reinvest(5)
         inv = res["investment"]
-        self.assertEqual(self._balance(), Decimal("500.00"))
+        self.assertEqual(self._balance(), Decimal("525.00"))
         # Replay the mint -> already minted; NO second debit, NO second mint.
         with mock.patch("apps.investments.services.chain_service.mint", side_effect=_fake_mint) as m:
             res2 = mint_investment(inv)
         self.assertTrue(res2.get("already"))
         self.assertEqual(m.call_count, 0)
-        self.assertEqual(self._balance(), Decimal("500.00"))
+        self.assertEqual(self._balance(), Decimal("525.00"))
         self.assertEqual(
             BalanceTransaction.objects.filter(source="reinvestment", reference=str(inv.id)).count(), 1
         )
         token = OwnershipToken.objects.get(wallet__user=self.investor, property_id=self.prop.slug)
         self.assertEqual(token.token_amount, 5)
 
-    def test_no_bonus_same_price_as_normal_buy(self):
+    def test_reinvest_discount_on_the_unit_value(self):
         credit_user_balance(self.investor, Decimal("1000.00"), source="distribution")
         inv = self._reinvest(5)["investment"]
-        # 5 x $100 = exactly $500 charged - NOT a discounted $475 (no 5% reinvest bonus).
+        # Same units and price as a normal buy; the 5% reinvestment discount ($25) is taken off
+        # what the wallet pays (platform-absorbed).
         self.assertEqual(inv.amount_invested, Decimal("500.00"))
         self.assertEqual(inv.price_per_token, Decimal("100.00"))
-        self.assertEqual(self._balance(), Decimal("500.00"))
+        self.assertEqual(inv.discount_amount, Decimal("25.00"))
+        self.assertEqual(self._balance(), Decimal("525.00"))
 
     def test_funding_is_internal_no_psp_payment_row(self):
         from apps.payments.models import Payment

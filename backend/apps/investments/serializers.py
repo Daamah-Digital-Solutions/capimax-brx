@@ -51,6 +51,11 @@ class InvestmentCreateSerializer(serializers.Serializer):
     # Off-plan §4: the installment term in months (down payment + term-1 monthly
     # installments). Alternative to n_installments; the server checks it is offered.
     term_months = serializers.IntegerField(min_value=2, required=False, allow_null=True)
+    # Reinvestment (payment_method "balance", full purchase): "family" asks for the family
+    # rate (family-account owners only); anything else gets the standard rate.
+    reinvest_mode = serializers.ChoiceField(
+        choices=["standard", "family"], required=False, default="standard"
+    )
 
     def validate(self, attrs):
         try:

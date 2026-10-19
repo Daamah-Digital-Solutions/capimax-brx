@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   RefreshCw,
@@ -20,9 +20,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useReinvestments } from "@/hooks/useReinvestments";
+import { investmentsApi } from "@/integrations/api/client";
 import { cn } from "@/lib/utils";
 
 export default function Reinvestment() {
+  // Reinvestment discount rates from the server (wallet purchases).
+  const [rates, setRates] = useState<{
+    discount_percent: number;
+    family_discount_percent: number;
+    family_eligible: boolean;
+  } | null>(null);
+  useEffect(() => {
+    investmentsApi.reinvestSettings().then(setRates).catch(() => setRates(null));
+  }, []);
   const { language, isRTL } = useLanguage();
   const { reinvestments, isLoading, availableBalance, totalReinvested, pendingReinvestments } =
     useReinvestments();
@@ -153,13 +163,16 @@ export default function Reinvestment() {
                     </p>
                   </div>
 
-                  {/* Bonuses (5% / Pronova / reduced fees) are a future product decision —
-                      flagged clearly rather than shown as if active. */}
-                  <div className="flex items-center justify-between p-3 bg-muted/40 border border-border rounded-lg">
+                  {/* Reinvestment discount (server rates): a full purchase paid from the wallet. */}
+                  <div className="flex items-center justify-between p-3 bg-success/5 border border-success/20 rounded-lg">
                     <span className="text-sm text-muted-foreground">
-                      {language === "ar" ? "مكافآت إعادة الاستثمار" : "Reinvestment bonuses"}
+                      {language === "ar" ? "خصم إعادة الاستثمار" : "Reinvestment discount"}
                     </span>
-                    <Badge variant="secondary">{language === "ar" ? "قريباً" : "Coming soon"}</Badge>
+                    <Badge variant="success">
+                      {rates
+                        ? `${rates.discount_percent}%` + (rates.family_eligible ? ` · ${rates.family_discount_percent}% ${language === "ar" ? "عائلي" : "family"}` : "")
+                        : "…"}
+                    </Badge>
                   </div>
 
                   <Link to="/marketplace?reinvest=true">
@@ -235,21 +248,19 @@ export default function Reinvestment() {
             </div>
           </TabsContent>
 
-          {/* Bonuses Tab — DEFERRED. The 5% / 2% Pronova / reduced-fee mechanics are an
-              undefined product decision (no backend, no Pronova integration). We flag this
-              honestly instead of advertising bonuses that don't apply. */}
+          {/* Bonuses Tab — the reinvestment discount (server rates); Pronova-token integration
+              is still planned. */}
           <TabsContent value="bonuses" className="space-y-6">
             <Card className="border-border">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Percent className="w-5 h-5 text-muted-foreground" />
                   {language === "ar" ? "مكافآت إعادة الاستثمار" : "Reinvestment Bonuses"}
-                  <Badge variant="secondary">{language === "ar" ? "قريباً" : "Coming soon"}</Badge>
                 </CardTitle>
                 <CardDescription>
                   {language === "ar"
-                    ? "إعادة الاستثمار اليوم تتم بنفس السعر والرسوم كأي شراء عادي."
-                    : "Reinvesting today happens at the same price and fees as any normal purchase."}
+                    ? `عند شراء وحدات كاملة من رصيد محفظتك تحصل على خصم ${rates?.discount_percent ?? "…"}% على قيمة الوحدات${rates?.family_eligible ? `، أو ${rates.family_discount_percent}% كإعادة استثمار عائلية` : ""}.`
+                    : `Buy units in full from your wallet balance and get ${rates?.discount_percent ?? "…"}% off their value${rates?.family_eligible ? `, or ${rates.family_discount_percent}% as a family reinvestment` : ""}.`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -275,8 +286,8 @@ export default function Reinvestment() {
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {language === "ar"
-                      ? "خصومات/مكافآت إعادة الاستثمار وتكامل توكن برونوفا — قيد التحديد، وستُعلن لاحقاً."
-                      : "Reinvestment discounts/bonuses and Pronova-token integration — to be defined and announced later."}
+                      ? "تكامل توكن برونوفا مع إعادة الاستثمار — قيد التحديد، وسيُعلن لاحقاً."
+                      : "Pronova-token integration with reinvestment — to be defined and announced later."}
                   </p>
                 </div>
                 <Link to="/marketplace?reinvest=true">

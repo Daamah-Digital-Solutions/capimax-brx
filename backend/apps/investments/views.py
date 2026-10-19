@@ -63,6 +63,7 @@ class InvestmentCreateView(APIView):
             frequency=data.get("frequency", "monthly"),
             expected_unit_price=data.get("expected_unit_price"),
             term_months=data.get("term_months"),
+            reinvest_mode=data.get("reinvest_mode", "standard"),
         )
         investment = result["investment"]
         return Response(
@@ -217,3 +218,20 @@ class InvestmentMintView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ReinvestSettingsView(APIView):
+    """GET /api/investments/reinvest-settings/ — the reinvestment discount rates for the caller."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.conf import settings
+
+        from .services import family_reinvest_eligible
+
+        return Response({
+            "discount_percent": float(settings.REINVEST_DISCOUNT_PERCENT),
+            "family_discount_percent": float(settings.FAMILY_REINVEST_DISCOUNT_PERCENT),
+            "family_eligible": family_reinvest_eligible(request.user),
+        })

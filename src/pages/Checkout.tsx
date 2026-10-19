@@ -18,7 +18,7 @@ import { Lock, Shield, ArrowLeft, ArrowRight, Plus, Minus, LogIn, UserPlus } fro
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useInvestment, PRICE_CHANGED_EVENT } from "@/hooks/useInvestment";
 import { useAuth } from "@/contexts/AuthContext";
-import { propertiesApi, kycApi, walletsApi } from "@/integrations/api/client";
+import { propertiesApi, kycApi, walletsApi, investmentsApi } from "@/integrations/api/client";
 import { toast } from "sonner";
 
 export type PaymentMethod = "card" | "apple_pay" | "google_pay" | "crypto" | "pronova" | "sukuk" | "balance";
@@ -117,6 +117,17 @@ export default function Checkout() {
   // Available internal balance (distribution/sale yield) → funds a "Pay from balance"
   // reinvestment. null = unknown/not-logged-in.
   const [availableBalance, setAvailableBalance] = useState<number | null>(null);
+  // Reinvestment discount rates (wallet purchases) + the family-rate choice.
+  const [reinvestSettings, setReinvestSettings] = useState<{
+    discount_percent: number;
+    family_discount_percent: number;
+    family_eligible: boolean;
+  } | null>(null);
+  const [familyReinvest, setFamilyReinvest] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    investmentsApi.reinvestSettings().then(setReinvestSettings).catch(() => setReinvestSettings(null));
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -299,8 +310,18 @@ export default function Checkout() {
     selectedMethod === "pronova"
       ? Math.round(chargedSubtotal * pronovaRate * 100) / 100
       : 0;
-  // The amount CHARGED now = the charged subtotal LESS any Pronova discount (installment or full).
-  const finalAmount = chargedSubtotal - pronovaDiscount;
+  // Reinvestment: a FULL purchase paid from the wallet is discounted on its unit value (the
+  // server's reinvest_discount_for) — 5%, or the family rate for a family-account owner who
+  // picks it. Mirrored here so the total shown is what the wallet is charged.
+  const reinvestRate =
+    selectedMethod === "balance" && !installmentTerms && reinvestSettings
+      ? familyReinvest && reinvestSettings.family_eligible
+        ? reinvestSettings.family_discount_percent
+        : reinvestSettings.discount_percent
+      : 0;
+  const reinvestDiscount = Math.round(investment.investmentAmount * reinvestRate) / 100;
+  // The amount CHARGED now = the charged subtotal LESS any Pronova / reinvestment discount.
+  const finalAmount = chargedSubtotal - pronovaDiscount - reinvestDiscount;
 
   const handleUnitsChange = (newUnits: number) => {
     const clamped = Math.min(maxUnits, Math.max(MIN_UNITS, newUnits));
@@ -313,7 +334,7 @@ export default function Checkout() {
   const balanceInsufficient =
     selectedMethod === "balance" &&
     availableBalance !== null &&
-    availableBalance < chargedSubtotal;
+    availableBalance < finalAmount;
   const canProceed =
     selectedMethod && termsAccepted && riskAccepted && !!property && !balanceInsufficient;
 
@@ -354,6 +375,9 @@ export default function Checkout() {
         token_amount: units,
         payment_method: selectedMethod || "card",
         expected_unit_price: unitPrice || undefined,
+        ...(selectedMethod === "balance" && !installmentTerms && familyReinvest
+          ? { reinvest_mode: "family" as const }
+          : {}),
         ...(installmentTerms
           ? {
               is_installment: true,
@@ -790,6 +814,18 @@ export default function Checkout() {
               <InvestmentSummaryPanel
                 investment={investment}
                 pronovaDiscount={pronovaDiscount}
+                reinvest={
+                  reinvestDiscount > 0
+                    ? {
+                        amount: reinvestDiscount,
+                        rate: reinvestRate,
+                        familyEligible: !!reinvestSettings?.family_eligible,
+                        family: familyReinvest,
+                        familyRate: reinvestSettings?.family_discount_percent ?? 0,
+                        onFamilyChange: setFamilyReinvest,
+                      }
+                    : undefined
+                }
                 finalAmount={finalAmount}
                 onEdit={() => navigate(-1)}
                 installment={

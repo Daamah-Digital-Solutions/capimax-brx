@@ -501,3 +501,9 @@ CRYPTO_UNDERPAY_TOLERANCE_USD = env.float("CRYPTO_UNDERPAY_TOLERANCE_USD", defau
 
 # Installments: one reminder this many days before each installment is due.
 INSTALLMENT_REMINDER_DAYS = env.int("INSTALLMENT_REMINDER_DAYS", default=3)
+
+# Reinvestment: a full purchase paid from the wallet gets this discount on the unit value
+# (the platform absorbs it; the owner receives the full price). A family-account owner can
+# reinvest at the family rate instead.
+REINVEST_DISCOUNT_PERCENT = env.float("REINVEST_DISCOUNT_PERCENT", default=5.0)
+FAMILY_REINVEST_DISCOUNT_PERCENT = env.float("FAMILY_REINVEST_DISCOUNT_PERCENT", default=7.5)

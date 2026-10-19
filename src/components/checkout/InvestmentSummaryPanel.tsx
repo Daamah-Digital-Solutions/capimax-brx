@@ -7,6 +7,15 @@ import { useLanguage } from "@/contexts/LanguageContext";
 interface InvestmentSummaryPanelProps {
   investment: InvestmentData;
   pronovaDiscount: number;
+  // Reinvestment (wallet purchase) discount, and the family-rate switch when eligible.
+  reinvest?: {
+    amount: number;
+    rate: number;
+    familyEligible: boolean;
+    family: boolean;
+    familyRate: number;
+    onFamilyChange: (v: boolean) => void;
+  };
   finalAmount: number;
   onEdit: () => void;
   /**
@@ -19,6 +28,7 @@ interface InvestmentSummaryPanelProps {
 export function InvestmentSummaryPanel({
   investment,
   pronovaDiscount,
+  reinvest,
   finalAmount,
   onEdit,
   installment,
@@ -116,6 +126,32 @@ export function InvestmentSummaryPanel({
           </span>
         </div>
           </>
+        )}
+
+        {reinvest && (
+          <div className="py-2 border-t border-border space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-success flex items-center gap-2">
+                <Percent className="w-4 h-4" />
+                {language === "ar" ? "خصم إعادة الاستثمار" : "Reinvestment discount"} ({reinvest.rate}%)
+              </span>
+              <span className="font-semibold text-success" dir="ltr">
+                -${reinvest.amount.toLocaleString()}
+              </span>
+            </div>
+            {reinvest.familyEligible && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reinvest.family}
+                  onChange={(e) => reinvest.onFamilyChange(e.target.checked)}
+                />
+                {language === "ar"
+                  ? `إعادة استثمار عائلية (خصم ${reinvest.familyRate}%)`
+                  : `Family reinvestment (${reinvest.familyRate}% discount)`}
+              </label>
+            )}
+          </div>
         )}
 
         {pronovaDiscount > 0 && (

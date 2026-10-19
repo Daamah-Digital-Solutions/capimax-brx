@@ -336,12 +336,21 @@ export const investmentsApi = {
     frequency?: "monthly" | "quarterly";
     /** The unit price the buyer saw — the server answers 409 PRICE_CHANGED if it moved. */
     expected_unit_price?: number;
+    /** Wallet purchase: "family" asks for the family reinvestment rate (eligible owners only). */
+    reinvest_mode?: "standard" | "family";
   }) =>
     rawRequest("/investments/", {
       method: "POST",
       auth: true,
       body: payload,
     }) as Promise<CreateInvestmentResult>,
+  /** Reinvestment discount rates for the caller (a full purchase paid from the wallet). */
+  reinvestSettings: () =>
+    rawRequest("/investments/reinvest-settings/", { auth: true }) as Promise<{
+      discount_percent: number;
+      family_discount_percent: number;
+      family_eligible: boolean;
+    }>,
   /** Mint tokens for an already-paid investment (when the wallet came later). */
   mint: (investmentId: string) =>
     rawRequest(`/investments/${investmentId}/mint/`, {
