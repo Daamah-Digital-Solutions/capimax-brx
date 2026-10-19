@@ -492,3 +492,9 @@ LOGGING = {
 # Off by default in dev (like the auth throttles) so local work and the test suite don't need
 # the link; the gate's own tests switch it on.
 EMAIL_VERIFICATION_REQUIRED = env.bool("EMAIL_VERIFICATION_REQUIRED", default=True)
+
+# Crypto purchases settle on what actually arrived (apps/payments/crypto_amounts.py): a payment
+# short by at most max(this %, this many USD) still completes; a bigger shortfall cancels the
+# purchase and returns what arrived to the wallet.
+CRYPTO_UNDERPAY_TOLERANCE_PERCENT = env.float("CRYPTO_UNDERPAY_TOLERANCE_PERCENT", default=0.5)
+CRYPTO_UNDERPAY_TOLERANCE_USD = env.float("CRYPTO_UNDERPAY_TOLERANCE_USD", default=1.0)

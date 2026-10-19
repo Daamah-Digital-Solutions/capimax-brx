@@ -45,6 +45,8 @@ export interface OwnershipToken {
   price_updated_at?: string | null;
   plan_units?: number;
   remaining_principal?: number;
+  // Units bought with a Nova Sukuk certificate: pledged to Nova Finance until its clearance.
+  nova_pledged_units?: number;
 }
 
 /**

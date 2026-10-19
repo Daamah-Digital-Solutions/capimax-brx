@@ -50,6 +50,13 @@ class Notification(models.Model):
         SECONDARY_SALE_BUYER = "secondary_sale_buyer", _("Secondary purchase settled")
         SECONDARY_SALE_SELLER = "secondary_sale_seller", _("Secondary sale settled")
         WITHDRAWAL_REQUESTED = "withdrawal_requested", _("Withdrawal requested")
+        WITHDRAWAL_COMPLETED = "withdrawal_completed", _("Withdrawal paid out")
+        # Crypto: less arrived than due → purchase cancelled, what arrived is in the wallet;
+        # more arrived → the purchase completed and the extra is in the wallet. params.received/due(/extra).
+        CRYPTO_UNDERPAID = "crypto_underpaid", _("Crypto payment short — returned to wallet")
+        CRYPTO_OVERPAID = "crypto_overpaid", _("Crypto payment above amount due — extra to wallet")
+        # Not paid out → the amount is back in the wallet. params.amount/reference/reason.
+        WITHDRAWAL_FAILED = "withdrawal_failed", _("Withdrawal failed (refunded)")
         # Submission review.
         SUBMISSION_PUBLISHED = "submission_published", _("Property submission published")
         SUBMISSION_REJECTED = "submission_rejected", _("Property submission rejected")
@@ -75,6 +82,8 @@ class Notification(models.Model):
         # Nova certificate (sukuk) payment rejected by the admin. params.property/slug/reason.
         # (Approval reuses INVESTMENT_MINTED — the investment settles like any completed buy.)
         SUKUK_REJECTED = "sukuk_rejected", _("Nova certificate rejected")
+        # Nova Finance's clearance arrived: the pledged units are unlocked. params.property/tokens.
+        NOVA_PLEDGE_RELEASED = "nova_pledge_released", _("Nova pledge released")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

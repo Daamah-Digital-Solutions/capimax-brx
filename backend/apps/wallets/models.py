@@ -288,6 +288,10 @@ class Withdrawal(models.Model):
         on_delete=models.SET_NULL, related_name="withdrawals",
     )
     destination_label = models.CharField(max_length=255, blank=True, default="")
+    # Set by the operator when closing it (apps/wallets/payouts.py): the bank / chain
+    # reference of the payout, or why it failed (a failed withdrawal is refunded).
+    payout_reference = models.CharField(max_length=120, blank=True, default="")
+    failure_reason = models.CharField(max_length=300, blank=True, default="")
     processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

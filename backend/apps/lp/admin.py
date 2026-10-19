@@ -63,10 +63,59 @@ class LiquidityProviderAdmin(admin.ModelAdmin):
 
 @admin.register(LPTransaction)
 class LPTransactionAdmin(admin.ModelAdmin):
+    """
+    Withdrawals move only through the actions (apps/lp/payouts.py): "failed" returns the
+    amount to the LP balance, "paid" adds it to total_withdrawn. Status is read-only here.
+    """
+
     list_display = ("lp", "tx_type", "amount", "currency", "status", "created_at")
     list_filter = ("tx_type", "status", "currency")
     search_fields = ("lp__user__email",)
-    readonly_fields = ("id", "lp", "tx_type", "amount", "currency", "created_at")
+    readonly_fields = (
+        "id", "lp", "tx_type", "amount", "currency", "status", "balance_debited",
+        "processed_at", "created_at",
+    )
+    actions = ("action_processing", "action_paid", "action_failed")
+
+    def _run(self, request, queryset, step, done_msg, **kwargs):
+        from django.contrib import messages
+
+        from .payouts import LPWithdrawalError
+
+        ok = 0
+        for tx in queryset.filter(tx_type="withdrawal"):
+            try:
+                step(tx.pk, **{k: (v(tx) if callable(v) else v) for k, v in kwargs.items()})
+                ok += 1
+            except LPWithdrawalError as exc:
+                self.message_user(request, str(exc), level=messages.WARNING)
+        if ok:
+            self.message_user(request, done_msg.format(n=ok), level=messages.SUCCESS)
+
+    @admin.action(description="Withdrawal: mark as processing")
+    def action_processing(self, request, queryset):
+        from .payouts import mark_processing
+
+        self._run(request, queryset, mark_processing, "{n} withdrawal(s) marked processing.")
+
+    @admin.action(description="Withdrawal: mark as PAID (completed)")
+    def action_paid(self, request, queryset):
+        from .payouts import complete_lp_withdrawal
+
+        self._run(
+            request, queryset, complete_lp_withdrawal, "{n} withdrawal(s) marked paid.",
+            payout_reference=lambda tx: tx.bank_reference or "",
+        )
+
+    @admin.action(description="Withdrawal: mark as FAILED and return the amount to the LP balance")
+    def action_failed(self, request, queryset):
+        from .payouts import fail_lp_withdrawal
+
+        self._run(
+            request, queryset, fail_lp_withdrawal,
+            "{n} withdrawal(s) failed; the amounts were returned.",
+            reason=lambda tx: tx.failure_reason,
+        )
 
 
 @admin.register(LPDocument)

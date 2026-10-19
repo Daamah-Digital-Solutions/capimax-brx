@@ -115,10 +115,66 @@ class BalanceTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(Withdrawal)
 class WithdrawalAdmin(admin.ModelAdmin):
-    list_display = ("user", "amount", "currency", "method", "status", "reference", "created_at")
+    """
+    The status moves only through the actions below (apps/wallets/payouts.py): "failed"
+    returns the amount to the investor's wallet, "paid" closes it. Editing it by hand would
+    skip the refund, so it is read-only here.
+    """
+
+    list_display = (
+        "user", "amount", "currency", "method", "destination_label", "status", "reference",
+        "created_at",
+    )
     list_filter = ("status", "method", "currency")
     search_fields = ("user__email", "reference")
-    readonly_fields = ("id", "user", "amount", "currency", "method", "reference", "created_at")
+    fields = (
+        "id", "user", "amount", "currency", "method", "reference", "status",
+        "destination_label", "bank_account", "crypto_wallet", "notes",
+        "payout_reference", "failure_reason", "processed_at", "created_at",
+    )
+    # Only the operator's notes are editable: the payout reference, or why it failed.
+    readonly_fields = tuple(f for f in fields if f not in ("payout_reference", "failure_reason"))
+    actions = ("action_processing", "action_paid", "action_failed")
+
+    def _run(self, request, queryset, step, done_msg, **kwargs):
+        from django.contrib import messages
+
+        from .payouts import WithdrawalStateError
+
+        ok = 0
+        for wd in queryset:
+            try:
+                step(wd.pk, **{k: (v(wd) if callable(v) else v) for k, v in kwargs.items()})
+                ok += 1
+            except WithdrawalStateError as exc:
+                self.message_user(request, str(exc), level=messages.WARNING)
+        if ok:
+            self.message_user(request, done_msg.format(n=ok), level=messages.SUCCESS)
+
+    @admin.action(description="Mark as processing (payout started)")
+    def action_processing(self, request, queryset):
+        from .payouts import mark_processing
+
+        self._run(request, queryset, mark_processing, "{n} withdrawal(s) marked processing.")
+
+    @admin.action(description="Mark as PAID (completed)")
+    def action_paid(self, request, queryset):
+        from .payouts import complete_withdrawal
+
+        self._run(
+            request, queryset, complete_withdrawal, "{n} withdrawal(s) marked paid.",
+            payout_reference=lambda wd: wd.payout_reference,
+        )
+
+    @admin.action(description="Mark as FAILED and return the amount to the wallet")
+    def action_failed(self, request, queryset):
+        from .payouts import fail_withdrawal
+
+        self._run(
+            request, queryset, fail_withdrawal,
+            "{n} withdrawal(s) failed; the amounts were returned to the wallets.",
+            reason=lambda wd: wd.failure_reason,
+        )
 
 
 @admin.register(Deposit)

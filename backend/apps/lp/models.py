@@ -183,6 +183,10 @@ class LPTransaction(models.Model):
     bank_reference = models.CharField(max_length=120, blank=True, null=True)
     crypto_tx_hash = models.CharField(max_length=120, blank=True, null=True)
     notes = models.CharField(max_length=500, blank=True, null=True)
+    # Withdrawals: the amount left current_balance when requested (apps/lp/payouts.py), so a
+    # failed one is given back. False on withdrawals from before that rule.
+    balance_debited = models.BooleanField(default=True)
+    failure_reason = models.CharField(max_length=300, blank=True, default="")
     processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

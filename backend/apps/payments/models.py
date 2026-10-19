@@ -87,6 +87,8 @@ class Payment(models.Model):
         max_length=255, unique=True, null=True, blank=True, db_index=True
     )
     amount = models.DecimalField(max_digits=16, decimal_places=2)  # USD (price) amount
+    # Crypto: the USD value that actually arrived, from NOW's IPN (apps/payments/crypto_amounts.py).
+    received_amount = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=8, default="usd")
     status = models.CharField(
         max_length=16, choices=PaymentState.choices, default=PaymentState.PENDING
@@ -171,3 +173,47 @@ class SukukCertificate(models.Model):
 
     def __str__(self):
         return f"sukuk cert [{self.status}] for investment {self.investment_id}"
+
+
+class NovaPledge(models.Model):
+    """
+    Units bought with a Nova Sukuk certificate stay PLEDGED to Nova Finance until Nova issues
+    a clearance / release letter: they can't be sold, transferred or exited meanwhile (the
+    disclosure in NovaFinancePledgeNotice). Created when the certificate's investment mints;
+    the units are held in OwnershipToken.locked_amount (which every market and the position
+    sale honour). The holder keeps earning distributions on them. Released by an admin with
+    the clearance reference (apps/payments/nova_pledge.py), which unlocks the units.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", _("Pledged to Nova Finance")
+        RELEASED = "released", _("Released (clearance received)")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    investment = models.OneToOneField(
+        "investments.Investment", on_delete=models.PROTECT, related_name="nova_pledge"
+    )
+    wallet = models.ForeignKey("wallets.UserWallet", on_delete=models.PROTECT, related_name="nova_pledges")
+    property_slug = models.CharField(max_length=64, db_index=True)
+    units = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True
+    )
+    release_reference = models.CharField(
+        max_length=120, blank=True, default="",
+        help_text="Nova Finance clearance / release letter reference.",
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    released_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Nova pledge")
+        verbose_name_plural = _("Nova pledges")
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.units} units of {self.property_slug} [{self.status}]"

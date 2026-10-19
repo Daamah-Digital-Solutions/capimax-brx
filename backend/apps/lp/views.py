@@ -161,20 +161,20 @@ class LPWithdrawalView(APIView):
         serializer = LPWithdrawalSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         amount = serializer.validated_data["amount"]
-        if amount > lp.current_balance:
+        from .payouts import LPWithdrawalError, request_lp_withdrawal
+
+        try:
+            # Takes the amount out of the balance now (under a lock), so two requests can't
+            # spend the same money; a failed payout gives it back.
+            tx = request_lp_withdrawal(
+                lp.pk, amount, method=serializer.validated_data["withdrawal_method"],
+                notes=serializer.validated_data.get("notes") or "",
+            )
+        except LPWithdrawalError:
             return Response(
                 {"detail": "Insufficient balance.", "code": "insufficient_balance"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        tx = LPTransaction.objects.create(
-            lp=lp,
-            tx_type="withdrawal",
-            amount=amount,
-            currency="USD",
-            status=LPTransaction.TxStatus.PENDING,
-            withdrawal_method=serializer.validated_data["withdrawal_method"],
-            notes=serializer.validated_data.get("notes") or None,
-        )
         from apps.notifications.admin_alerts import notify_admins
 
         notify_admins(

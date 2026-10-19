@@ -9,6 +9,7 @@ record a tx that didn't happen on a chain.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 from django.conf import settings
@@ -186,8 +187,38 @@ def sold_tokens(prop: Property) -> int:
     return int(agg["total"] or 0)
 
 
-def available_tokens(prop: Property) -> int:
-    return max(0, int(prop.token_supply or 0) - sold_tokens(prop))
+def held_tokens(prop: Property, *, exclude=None) -> int:
+    """
+    Units held for buyers whose payment is still on its way, so nobody else can buy them
+    meanwhile: a card / crypto / Pronova payment for its reservation window, a Nova Sukuk
+    purchase for the same window while the certificate is uploaded and then for as long as
+    the certificate is under review. `exclude` leaves one investment out (its own check).
+    """
+    from django.db.models import Q
+
+    now = timezone.now()
+    window = timedelta(minutes=DEFAULT_RESERVATION_MINUTES)
+    qs = (
+        Investment.objects.filter(
+            property=prop, payment_status__in=[PaymentStatus.PENDING, PaymentStatus.PROCESSING],
+        )
+        .exclude(payment_method__in=RESALE_PAYMENT_METHODS)
+        .filter(
+            Q(reserved_until__gt=now)
+            | Q(payment_method=SUKUK_METHOD, sukuk_certificate__status="pending")
+            | Q(payment_method=SUKUK_METHOD, sukuk_certificate__isnull=True, created_at__gt=now - window)
+        )
+    )
+    if exclude is not None:
+        qs = qs.exclude(pk=getattr(exclude, "pk", exclude))
+    return int(qs.aggregate(total=Sum("token_amount"))["total"] or 0)
+
+
+def available_tokens(prop: Property, *, exclude=None) -> int:
+    """Units anyone can still buy: supply − sold − held for payments on their way."""
+    return max(
+        0, int(prop.token_supply or 0) - sold_tokens(prop) - held_tokens(prop, exclude=exclude)
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -237,7 +268,8 @@ def create_investment(
         if token_amount < 1:
             raise ValidationError({"token_amount": "Minimum investment is 1 token."})
 
-        available = supply - sold_tokens(locked_prop)
+        # Units already sold AND units held for other buyers' payments on their way.
+        available = available_tokens(locked_prop)
         if token_amount > available:
             raise OverPurchaseError(
                 detail=f"Only {available} token(s) remain for this property."
@@ -746,6 +778,16 @@ def mint_investment(investment: Investment) -> dict:
             locked_share = int(inv.token_amount) - released
             token.locked_amount = int(token.locked_amount) + locked_share
 
+        # Nova Sukuk: the units the certificate paid for stay pledged to Nova Finance until
+        # its clearance (the unpaid installment share is already locked above).
+        if inv.payment_method == SUKUK_METHOD:
+            from apps.payments.nova_pledge import pledge_units
+
+            paid_units = int(inv.token_amount) - (
+                locked_share if inv.is_installment and inv.installment_plan_id else 0
+            )
+            pledge_units(inv, wallet, token, paid_units)
+
         token.save()
 
         # Only an on-chain mint records a WalletTransaction — its tx_hash/block are
@@ -838,7 +880,7 @@ def _late_settlement_blocker(inv: Investment):
     prop = Property.objects.select_for_update().get(pk=inv.property_id)
     if Decimal(prop.token_price) != Decimal(inv.price_per_token):
         return "price_changed"
-    if inv.token_amount > int(prop.token_supply or 0) - sold_tokens(prop):
+    if inv.token_amount > available_tokens(prop, exclude=inv):
         return "sold_out"
     return None  # late, but same price and still available → execute normally
 

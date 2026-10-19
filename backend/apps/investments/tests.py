@@ -436,7 +436,7 @@ class InvestmentApiTests(APITestCase):
                 "avg_cost_per_token", "invested_usd",
                 # Off-plan §7: unit price + the units/principal of running installment plans.
                 "unit_price", "launch_price", "price_change_pct", "price_updated_at",
-                "plan_units", "remaining_principal",
+                "plan_units", "remaining_principal", "nova_pledged_units",
             },
         )
         # The enriched expected_yield mirrors the Property's value (Reports avg-yield source).

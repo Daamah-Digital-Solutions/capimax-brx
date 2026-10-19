@@ -32,9 +32,7 @@ from . import nowpayments_service, stripe_service
 from .models import Payment, SukukCertificate
 from .services import (
     get_or_create_payment,
-    mark_nowpayments_failed,
     mark_payment_failed,
-    process_successful_nowpayments,
     process_successful_payment,
 )
 
@@ -746,18 +744,16 @@ class NowPaymentsIpnView(APIView):
             return Response({"ok": True, "handled": False})
 
         order_id = info.get("order_id", "")
-        if state in nowpayments_service.SUCCESS_STATES:
-            try:
-                # order_id lets the hosted-invoice flow match back to its Payment (the bare
-                # payment id isn't known until the customer picks a coin on NOW's page).
-                process_successful_nowpayments(pid, order_id=order_id)
-            except Exception:  # noqa: BLE001 - ack so NOW stops retrying; logged
-                log.exception("Error processing NOW payment %s", pid)
-                return Response({"ok": True, "handled": False})
-        elif state in nowpayments_service.FAILURE_STATES:
-            mark_nowpayments_failed(pid, order_id=order_id, reason=f"NOW status: {state}")
-        # waiting / confirming / sending / partially_paid → no mint, just acknowledge.
+        try:
+            # Settles on the amount that actually ARRIVED (apps/payments/crypto_amounts.py).
+            # order_id lets the hosted-invoice flow match back to its Payment (the bare
+            # payment id isn't known until the customer picks a coin on NOW's page).
+            from .crypto_amounts import handle_now_ipn
 
+            handle_now_ipn(pid, order_id, state, payload)
+        except Exception:  # noqa: BLE001 - ack so NOW stops retrying; logged (→ alert)
+            log.exception("Error processing NOW payment %s", pid)
+            return Response({"ok": True, "handled": False})
         return Response({"ok": True})
 
 
@@ -817,6 +813,16 @@ class SukukCertificateUploadView(APIView):
         if SukukCertificate.objects.filter(investment=investment).exists():
             return Response(
                 {"detail": "A certificate has already been submitted for this investment."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        # The units are held for 30 minutes after the purchase starts; a certificate sent
+        # later is accepted only while they are still available.
+        from apps.investments.services import available_tokens
+
+        if investment.token_amount > available_tokens(investment.property, exclude=investment):
+            return Response(
+                {"code": "sold_out",
+                 "detail": "These units are no longer available. Please start a new purchase."},
                 status=status.HTTP_409_CONFLICT,
             )
 

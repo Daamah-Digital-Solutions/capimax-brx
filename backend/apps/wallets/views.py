@@ -132,6 +132,7 @@ class WalletTokensView(APIView):
 
         from apps.installments.models import InstallmentPlan, InstallmentPlanStatus
         from apps.installments.position import plan_units, remaining_principal
+        from apps.payments.nova_pledge import pledged_units
         from apps.properties.models import PropertyPrice
         from apps.properties.pricing import change_since_launch_pct
 
@@ -182,6 +183,8 @@ class WalletTokensView(APIView):
             units, owed = plan_totals.get(tok.property_id, (0, Decimal("0")))
             d["plan_units"] = units
             d["remaining_principal"] = float(owed)
+            # Units bought with a Nova certificate, pledged to Nova Finance until its clearance.
+            d["nova_pledged_units"] = pledged_units(tok.wallet_id, tok.property_id)
             ac = avg_cost.get(tok.property_id)
             if ac is not None:
                 d["avg_cost_per_token"] = float(ac)

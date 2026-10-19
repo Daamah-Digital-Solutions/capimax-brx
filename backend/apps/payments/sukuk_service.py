@@ -29,6 +29,10 @@ from .models import SukukCertificate
 log = logging.getLogger(__name__)
 
 
+class CertificateError(Exception):
+    """The certificate can't be approved (e.g. its units are no longer available)."""
+
+
 def approve_certificate(cert: SukukCertificate, admin) -> dict:
     """
     Approve a Nova certificate (idempotent) and settle its investment. Returns
@@ -46,6 +50,16 @@ def approve_certificate(cert: SukukCertificate, admin) -> dict:
         )
         if cert.status == SukukCertificate.Status.APPROVED:
             return {"approved": True, "already": True}
+        # The units were held while the certificate was under review; still, never approve
+        # beyond the supply (e.g. the hold lapsed before the certificate arrived).
+        from apps.investments.services import available_tokens
+
+        investment = cert.investment
+        if investment.token_amount > available_tokens(investment.property, exclude=investment):
+            raise CertificateError(
+                f"Only {available_tokens(investment.property, exclude=investment)} unit(s) are "
+                f"available — the certificate covers {investment.token_amount}. Reject it instead."
+            )
         cert.status = SukukCertificate.Status.APPROVED
         cert.reviewed_by = admin
         cert.reviewed_at = timezone.now()

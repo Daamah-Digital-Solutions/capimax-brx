@@ -100,6 +100,7 @@ export default function Portfolio() {
           changePct: tk.price_change_pct ?? null,
           avgCost: tk.avg_cost_per_token ?? null,
           planUnits: Number(tk.plan_units) || 0,
+          pledgedUnits: Number(tk.nova_pledged_units) || 0,
         };
       }),
     [tokens, isAr],
@@ -465,6 +466,13 @@ export default function Portfolio() {
                                       </span>
                                     </span>
                                   )}
+                                </div>
+                              )}
+                              {holding.pledgedUnits > 0 && (
+                                <div className="mt-1 text-xs text-warning">
+                                  {language === "ar"
+                                    ? `${holding.pledgedUnits} وحدة مرهونة لصالح Nova Finance — لا يمكن بيعها أو نقلها حتى صدور خطاب إخلاء الطرف.`
+                                    : `${holding.pledgedUnits} units pledged to Nova Finance — they can't be sold or transferred until its clearance is issued.`}
                                 </div>
                               )}
                               {holding.planUnits > 0 && (

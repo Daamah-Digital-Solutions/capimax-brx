@@ -109,6 +109,10 @@ def block_reason(plan, inv, figures) -> str | None:
         return "not_active"
     if inv is None or not inv.tokens_minted:
         return "not_minted"
+    from apps.payments.nova_pledge import active_pledge
+
+    if active_pledge(inv) is not None:
+        return "pledged"  # Nova Finance holds it until its clearance
     if figures["remaining_principal"] <= 0:
         return "fully_paid"  # plain units now: sold like any other units
     if figures["cash"] <= 0:

@@ -33,6 +33,10 @@ const BLOCKED: Record<string, { en: string; ar: string }> = {
     en: "Only an active plan can be sold.",
     ar: "يمكن بيع الخطط النشطة فقط.",
   },
+  pledged: {
+    en: "This plan's down payment was made with a Nova Sukuk certificate, so its units are pledged to Nova Finance and can't be sold until Nova issues its clearance.",
+    ar: "دُفع مقدّم هذه الخطة بشهادة Nova Sukuk، لذا وحداتها مرهونة لصالح Nova Finance ولا يمكن بيعها حتى صدور خطاب إخلاء الطرف.",
+  },
   fully_paid: {
     en: "All installments are paid — these are regular units now; sell them from the secondary market.",
     ar: "تم سداد كل الأقساط — أصبحت وحدات عادية يمكنك بيعها من السوق الثانوي.",
