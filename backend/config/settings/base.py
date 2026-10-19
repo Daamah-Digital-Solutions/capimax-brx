@@ -498,3 +498,6 @@ EMAIL_VERIFICATION_REQUIRED = env.bool("EMAIL_VERIFICATION_REQUIRED", default=Tr
 # purchase and returns what arrived to the wallet.
 CRYPTO_UNDERPAY_TOLERANCE_PERCENT = env.float("CRYPTO_UNDERPAY_TOLERANCE_PERCENT", default=0.5)
 CRYPTO_UNDERPAY_TOLERANCE_USD = env.float("CRYPTO_UNDERPAY_TOLERANCE_USD", default=1.0)
+
+# Installments: one reminder this many days before each installment is due.
+INSTALLMENT_REMINDER_DAYS = env.int("INSTALLMENT_REMINDER_DAYS", default=3)

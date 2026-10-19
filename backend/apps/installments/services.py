@@ -561,6 +561,57 @@ def _collect_one(ip_id) -> str:
     return "paid"
 
 
+def remind_upcoming_installments(*, today: date | None = None) -> int:
+    """
+    One reminder per installment, INSTALLMENT_REMINDER_DAYS (default 3) before its due date:
+    in-app + email, saying it will be debited from the wallet and how much the wallet needs.
+    Idempotent (due_reminder_sent_at). Returns how many were sent.
+    """
+    from django.conf import settings
+
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify
+    from apps.wallets.models import UserBalance
+
+    today = today or timezone.now().date()
+    days = int(getattr(settings, "INSTALLMENT_REMINDER_DAYS", 3))
+    rows = (
+        InstallmentPayment.objects.filter(
+            plan__status=InstallmentPlanStatus.ACTIVE,
+            status=InstallmentPaymentStatus.PENDING,
+            due_reminder_sent_at__isnull=True,
+            due_date__gte=today, due_date__lte=today + timedelta(days=days),
+        )
+        .select_related("plan", "plan__investor")
+        .order_by("due_date")
+    )
+    sent = 0
+    for ip in rows:
+        with transaction.atomic():
+            locked = InstallmentPayment.objects.select_for_update().get(pk=ip.pk)
+            if locked.due_reminder_sent_at is not None:
+                continue
+            locked.due_reminder_sent_at = timezone.now()
+            locked.save(update_fields=["due_reminder_sent_at"])
+            plan = ip.plan
+            bal = UserBalance.objects.filter(user=plan.investor).first()
+            balance = Decimal(bal.current_balance) if bal else Decimal("0")
+            notify(
+                plan.investor, Notification.Type.INSTALLMENT_DUE_SOON,
+                params={
+                    "property": plan.property_name,
+                    "sequence": ip.sequence,
+                    "total": plan.number_of_installments,
+                    "amount": f"{ip.charge_amount:,.2f}",
+                    "due_date": ip.due_date.isoformat(),
+                    "top_up": f"{max(Decimal('0'), ip.charge_amount - balance):,.2f}",
+                },
+                action_url="/installments",
+            )
+            sent += 1
+    return sent
+
+
 def collect_due_installments(*, today: date | None = None, user_id=None) -> dict:
     """
     Debit every installment that is due (today or overdue) from the investor's wallet, oldest

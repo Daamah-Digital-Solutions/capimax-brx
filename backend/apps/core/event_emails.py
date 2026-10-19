@@ -197,6 +197,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_path": "/wallet",
         "outro": "",
     },
+    "installment_due_soon": {
+        "subject": "Installment {sequence} of {property} is due on {due_date}",
+        "heading": "Your installment is coming up",
+        "intro": "Installment {sequence} of {total} for {property} (${amount}) is due on {due_date}. It will be debited automatically from your wallet. To have it covered, your wallet needs ${top_up} more.",
+        "cta_label": "View your installments",
+        "cta_path": "/installments",
+        "outro": "There's no late fee — if the wallet is short on the day, it is collected as soon as you top up.",
+    },
     "withdrawal_completed": {
         "subject": "Your withdrawal of ${amount} was sent",
         "heading": "Withdrawal sent",

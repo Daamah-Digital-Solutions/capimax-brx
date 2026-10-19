@@ -216,3 +216,29 @@ class NoForfeitureTests(TestCase):
         self.assertEqual(plan.forfeited_tokens, 0)
         with self.assertRaises(RuntimeError):
             default_plan(plan.id)
+
+
+class InstallmentDueSoonReminderTests(TestCase):
+    """One reminder, INSTALLMENT_REMINDER_DAYS (3) before the due date, with the top-up needed."""
+
+    def test_reminds_once_three_days_before(self):
+        from .services import remind_upcoming_installments
+
+        user = _investor("soon@ex.com")
+        plan = _active_plan(user, _prop("soon"), units=10, months=12)
+        first = plan.payments.order_by("sequence").first()
+        today = first.due_date - timedelta(days=4)
+        self.assertEqual(remind_upcoming_installments(today=today), 0)  # too early
+        today = first.due_date - timedelta(days=3)
+        self.assertEqual(remind_upcoming_installments(today=today), 1)
+        self.assertEqual(remind_upcoming_installments(today=today), 0)  # once only
+        note = Notification.objects.get(user=user, type="installment_due_soon")
+        self.assertEqual(note.params["sequence"], 1)
+        self.assertEqual(note.params["top_up"], f"{first.charge_amount:,.2f}")  # empty wallet
+
+    def test_the_command_runs_reminders_too(self):
+        user = _investor("soon2@ex.com")
+        plan = _active_plan(user, _prop("soon2"), units=10, months=12)
+        first = plan.payments.order_by("sequence").first()
+        call_command("collect_due_installments", "--today", (first.due_date - timedelta(days=1)).isoformat())
+        self.assertTrue(Notification.objects.filter(user=user, type="installment_due_soon").exists())

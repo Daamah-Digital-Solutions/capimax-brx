@@ -15,7 +15,11 @@ from django.core.management.base import BaseCommand, CommandError
 
 from apps.core.alerts import alert_on_failure
 
-from apps.installments.services import collect_due_installments, mark_overdue_missed
+from apps.installments.services import (
+    collect_due_installments,
+    mark_overdue_missed,
+    remind_upcoming_installments,
+)
 
 
 class Command(BaseCommand):
@@ -32,9 +36,10 @@ class Command(BaseCommand):
                 today = date.fromisoformat(opts["today"])
             except ValueError:
                 raise CommandError("--today must be an ISO date (YYYY-MM-DD).")
+        reminded = remind_upcoming_installments(today=today)
         marked = mark_overdue_missed(today)
         result = collect_due_installments(today=today)
         self.stdout.write(
-            f"collect_due_installments: {result['collected']} collected, "
+            f"collect_due_installments: {reminded} reminded, {result['collected']} collected, "
             f"{result['insufficient']} waiting for a top-up, {marked} newly marked overdue."
         )

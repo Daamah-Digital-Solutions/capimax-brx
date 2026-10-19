@@ -634,7 +634,9 @@ def buy_position(*, buyer_user, listing_id, expected_cash=None, expected_fee=Non
         # the reminders go to them (fresh — the seller's reminder doesn't carry over).
         plan.investor = buyer_user
         plan.save(update_fields=["investor", "updated_at"])
-        plan.payments.filter(status__in=("pending", "missed")).update(reminder_sent_at=None)
+        plan.payments.filter(status__in=("pending", "missed")).update(
+            reminder_sent_at=None, due_reminder_sent_at=None
+        )
 
         # The buyer's cost basis is their entry price on ALL the units (paid now + assumed).
         record_acquisition_cost(

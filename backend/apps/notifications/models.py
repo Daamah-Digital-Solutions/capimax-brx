@@ -44,6 +44,8 @@ class Notification(models.Model):
         ADMIN_REVIEW_NEEDED = "admin_review_needed", _("Admin review needed")
         # Off-plan §4 auto-debit: an installment is due but the wallet can't cover it (sent once).
         INSTALLMENT_DUE_UNPAID = "installment_due_unpaid", _("Installment due — top up wallet")
+        # Sent once, a few days before an installment is due (it is then debited from the wallet).
+        INSTALLMENT_DUE_SOON = "installment_due_soon", _("Installment due soon")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

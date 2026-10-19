@@ -147,6 +147,8 @@ class InstallmentPayment(models.Model):
     fee_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     # Auto-debit: set when the "top up your wallet" reminder for this row was sent (once).
     reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    # Set when the "due in N days" reminder was sent (once, before the due date).
+    due_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
