@@ -21,6 +21,15 @@ from django.db import models
 from django.db.models import Q
 
 
+def _claim_upload_to(instance, filename):
+    # Uploaded files are served under /media/: an unguessable name keeps a death
+    # certificate private (its link appears only in the Django admin).
+    import os
+
+    ext = os.path.splitext(filename or "")[1].lower()[:8]
+    return f"estate_claims/{uuid.uuid4().hex}{uuid.uuid4().hex}{ext}"
+
+
 class UnitTransfer(models.Model):
     class Kind(models.TextChoices):
         GIFT = "gift", "Gift"
@@ -147,7 +156,7 @@ class EstateClaim(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="estate_claims_made"
     )
     certificate_number = models.CharField(max_length=20)
-    death_certificate = models.FileField(upload_to="estate_claims/")
+    death_certificate = models.FileField(upload_to=_claim_upload_to)
     date_of_death = models.DateField(null=True, blank=True)
     notes = models.CharField(max_length=1000, blank=True, default="")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.SUBMITTED)
