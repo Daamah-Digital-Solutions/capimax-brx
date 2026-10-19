@@ -572,9 +572,19 @@ function DepositBankTab({ amount, onPaid, target = "wallet" }: DepositPayStepPro
         <DetailRow label={isArabic ? "البنك" : "Bank"} value={details.bank_name} />
         <DetailRow label={isArabic ? "اسم الحساب" : "Account name"} value={details.account_name} />
         <DetailRow label={isArabic ? "رقم الحساب" : "Account no."} value={details.account_number} />
+        <DetailRow label={isArabic ? "رقم التوجيه (ABA)" : "Routing no. (ABA)"} value={details.routing_number} />
         <DetailRow label="IBAN" value={details.iban} />
-        <DetailRow label="SWIFT" value={details.swift} />
-        <DetailRow label={isArabic ? "العنوان" : "Address"} value={details.address} />
+        <DetailRow label="SWIFT / BIC" value={details.swift} />
+        <DetailRow
+          label={isArabic ? "البنك الوسيط (SWIFT) — للتحويل الدولي" : "Intermediary bank (SWIFT) — international"}
+          value={details.intermediary_swift}
+        />
+        <DetailRow
+          label={details.beneficiary_address ? (isArabic ? "عنوان البنك" : "Bank address") : (isArabic ? "العنوان" : "Address")}
+          value={details.address}
+        />
+        <DetailRow label={isArabic ? "عنوان المستفيد" : "Beneficiary address"} value={details.beneficiary_address} />
+        {details.note && <p className="text-xs text-muted-foreground pt-2" dir="ltr">{details.note}</p>}
       </div>
 
       <p className="text-xs text-muted-foreground">

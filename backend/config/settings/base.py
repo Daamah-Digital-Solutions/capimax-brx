@@ -430,7 +430,13 @@ BANK_DEPOSIT_ACCOUNT_NAME = env("BANK_DEPOSIT_ACCOUNT_NAME", default="")
 BANK_DEPOSIT_ACCOUNT_NUMBER = env("BANK_DEPOSIT_ACCOUNT_NUMBER", default="")
 BANK_DEPOSIT_IBAN = env("BANK_DEPOSIT_IBAN", default="")
 BANK_DEPOSIT_SWIFT = env("BANK_DEPOSIT_SWIFT", default="")
-BANK_DEPOSIT_ADDRESS = env("BANK_DEPOSIT_ADDRESS", default="")
+BANK_DEPOSIT_ADDRESS = env("BANK_DEPOSIT_ADDRESS", default="")  # the bank's address
+# US accounts: ABA routing number; international wires may need an intermediary bank; the
+# beneficiary (account holder) address avoids rejected wires. NOTE = one extra line of guidance.
+BANK_DEPOSIT_ROUTING_NUMBER = env("BANK_DEPOSIT_ROUTING_NUMBER", default="")
+BANK_DEPOSIT_INTERMEDIARY_SWIFT = env("BANK_DEPOSIT_INTERMEDIARY_SWIFT", default="")
+BANK_DEPOSIT_BENEFICIARY_ADDRESS = env("BANK_DEPOSIT_BENEFICIARY_ADDRESS", default="")
+BANK_DEPOSIT_NOTE = env("BANK_DEPOSIT_NOTE", default="")
 
 # --------------------------------------------------------------------------- #
 # I18N / static / misc

@@ -528,6 +528,10 @@ export const paymentsApi = {
       iban?: string;
       swift?: string;
       address?: string;
+      routing_number?: string;
+      intermediary_swift?: string;
+      beneficiary_address?: string;
+      note?: string;
     }>,
   /**
    * DEPOSIT / top-up (manual bank transfer) — create a PENDING deposit with the uploaded

@@ -626,6 +626,10 @@ def _bank_details():
         "iban": getattr(settings, "BANK_DEPOSIT_IBAN", "") or "",
         "swift": getattr(settings, "BANK_DEPOSIT_SWIFT", "") or "",
         "address": getattr(settings, "BANK_DEPOSIT_ADDRESS", "") or "",
+        "routing_number": getattr(settings, "BANK_DEPOSIT_ROUTING_NUMBER", "") or "",
+        "intermediary_swift": getattr(settings, "BANK_DEPOSIT_INTERMEDIARY_SWIFT", "") or "",
+        "beneficiary_address": getattr(settings, "BANK_DEPOSIT_BENEFICIARY_ADDRESS", "") or "",
+        "note": getattr(settings, "BANK_DEPOSIT_NOTE", "") or "",
     }
 
 
