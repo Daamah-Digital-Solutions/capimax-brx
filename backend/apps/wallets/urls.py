@@ -12,6 +12,7 @@ from .payment_methods import (
     SavedCardDetailView,
     SavedCardListCreateView,
     SavedCardSetDefaultView,
+    SavedCardSetupView,
 )
 from .views import (
     BalanceTransactionsView,
@@ -42,6 +43,7 @@ urlpatterns = [
     path("payment-methods/crypto-wallets/<uuid:pk>/", CryptoWalletDetailView.as_view(), name="pm-crypto-detail"),
     path("payment-methods/crypto-wallets/<uuid:pk>/set-default/", CryptoWalletSetDefaultView.as_view(), name="pm-crypto-default"),
     path("payment-methods/cards/", SavedCardListCreateView.as_view(), name="pm-card-list"),
+    path("payment-methods/cards/setup/", SavedCardSetupView.as_view(), name="pm-card-setup"),
     path("payment-methods/cards/<uuid:pk>/", SavedCardDetailView.as_view(), name="pm-card-detail"),
     path("payment-methods/cards/<uuid:pk>/set-default/", SavedCardSetDefaultView.as_view(), name="pm-card-default"),
     path("payment-methods/audit-log/", PaymentMethodAuditLogView.as_view(), name="pm-audit-log"),

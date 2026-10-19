@@ -12,6 +12,7 @@ import { paymentsApi, investmentsApi, type ApiError } from "@/integrations/api/c
 import { useInvestment } from "@/hooks/useInvestment";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { SavedCardPicker } from "./SavedCardPicker";
 
 // Phase 5 Wave 1 — REAL card payment via Stripe Elements (chosen over the hosted
 // Checkout redirect to PRESERVE the existing in-page checkout UX). The card is
@@ -52,6 +53,7 @@ function CardForm(props: StripeCardCheckoutProps) {
   const { processInvestment } = useInvestment();
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<"idle" | "confirming">("idle");
+  const [savedCardId, setSavedCardId] = useState<string | null>(null);
 
   const pollUntilComplete = async (investmentId: string): Promise<boolean> => {
     for (let i = 0; i < POLL_MAX_TRIES; i++) {
@@ -99,18 +101,19 @@ function CardForm(props: StripeCardCheckoutProps) {
       }
 
       // 2) Create the Stripe PaymentIntent for this investment.
-      const intent = await paymentsApi.createStripeIntent(created.investment_id);
+      const intent = await paymentsApi.createStripeIntent(created.investment_id, savedCardId);
 
-      // 3) Confirm the card DIRECTLY with Stripe (card data never hits our server).
-      const card = elements.getElement(CardElement);
-      if (!card) {
+      // 3) Confirm with Stripe (card data never hits our server). A saved card is already
+      // attached server-side → just confirm (3-D Secure if the bank asks).
+      const card = savedCardId ? null : elements.getElement(CardElement);
+      if (!savedCardId && !card) {
         props.onResult({ status: "failed", tokensMinted: false });
         return;
       }
       setPhase("confirming");
-      const { error } = await stripe.confirmCardPayment(intent.client_secret, {
-        payment_method: { card },
-      });
+      const { error } = savedCardId
+        ? await stripe.confirmCardPayment(intent.client_secret)
+        : await stripe.confirmCardPayment(intent.client_secret, { payment_method: { card: card! } });
       if (error) {
         toast.error(error.message || (isArabic ? "فشل الدفع" : "Payment failed"));
         props.onResult({ status: "failed", tokensMinted: false });
@@ -141,6 +144,8 @@ function CardForm(props: StripeCardCheckoutProps) {
 
   return (
     <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <SavedCardPicker value={savedCardId} onChange={setSavedCardId} />
+      {!savedCardId && (
       <div className="p-4 rounded-xl border border-border bg-card" dir="ltr">
         <CardElement
           options={{
@@ -156,6 +161,7 @@ function CardForm(props: StripeCardCheckoutProps) {
           }}
         />
       </div>
+      )}
 
       {props.declarations}
 

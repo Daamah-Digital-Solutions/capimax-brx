@@ -80,18 +80,17 @@ class PaymentMethodsTests(APITestCase):
         self.assertFalse(InvestorBankAccount.objects.filter(id=a["id"]).exists())
 
     # --- cards: only the non-sensitive reference is stored (no PAN) -------------- #
-    def test_add_card_stores_only_reference_no_pan(self):
+    def test_add_card_needs_a_confirmed_stripe_setup(self):
+        # Cards are saved only from a Stripe SetupIntent (see tests_saved_cards.py); the old
+        # free-form brand/last4 form is gone.
         self.client.force_authenticate(self.user)
         resp = self.client.post(
             CARDS,
             {"card_brand": "visa", "card_last_four": "4242",
-             "card_expiry_month": 12, "card_expiry_year": 2030,
-             "cardholder_name": "Jane Doe"},
+             "card_expiry_month": 12, "card_expiry_year": 2030, "cardholder_name": "Jane Doe"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        card = SavedCard.objects.get(id=resp.json()["id"])
-        self.assertEqual(card.card_last_four, "4242")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         # There is deliberately no field that could hold a full card number.
         field_names = [f.name for f in SavedCard._meta.fields]
         self.assertNotIn("card_number", field_names)

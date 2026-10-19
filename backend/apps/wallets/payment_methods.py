@@ -91,9 +91,12 @@ class SavedCardSerializer(serializers.ModelSerializer):
         model = SavedCard
         fields = (
             "id", "card_brand", "card_last_four", "card_expiry_month",
-            "card_expiry_year", "cardholder_name", "is_default",
+            "card_expiry_year", "cardholder_name", "is_default", "chargeable",
         )
         read_only_fields = fields
+
+    # Usable to pay (saved through Stripe); older label-only cards are not.
+    chargeable = serializers.BooleanField(read_only=True)
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
@@ -256,39 +259,53 @@ class SavedCardListCreateView(APIView):
         return Response(SavedCardSerializer(qs, many=True).data)
 
     def post(self, request):
-        d = request.data
+        """Save a card the browser just confirmed with Stripe: {setup_intent_id}. Everything
+        stored is read from Stripe, never from the request."""
+        from apps.payments import stripe_service
+        from apps.payments.saved_cards import save_from_setup_intent
+
+        setup_intent_id = str((request.data or {}).get("setup_intent_id") or "").strip()
+        if not setup_intent_id:
+            return Response({"detail": "setup_intent_id is required."},
+                            status=status.HTTP_400_BAD_REQUEST)
         try:
-            month = int(d.get("card_expiry_month"))
-            year = int(d.get("card_expiry_year"))
-        except (TypeError, ValueError):
-            return Response({"detail": "Valid expiry month and year are required."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        last4 = "".join(ch for ch in str(d.get("card_last_four") or "") if ch.isdigit())[-4:]
-        if not str(d.get("card_brand") or "").strip() or not last4 or not str(d.get("cardholder_name") or "").strip():
-            return Response({"detail": "card_brand, card_last_four and cardholder_name are required."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        if not 1 <= month <= 12:
-            return Response({"detail": "Invalid expiry month."}, status=status.HTTP_400_BAD_REQUEST)
-        obj = SavedCard.objects.create(
-            user=request.user,
-            card_brand=str(d["card_brand"]).strip(),
-            card_last_four=last4,
-            card_expiry_month=month,
-            card_expiry_year=year,
-            cardholder_name=str(d["cardholder_name"]).strip(),
-            is_default=_first_becomes_default(SavedCard, request.user),
-        )
+            obj = save_from_setup_intent(request.user, setup_intent_id)
+        except stripe_service.StripeNotConfigured:
+            return Response({"code": "stripe_unconfigured", "detail": "Card payments are not configured yet."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except stripe_service.StripeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         _log_audit(request.user, "add", "card", obj.id, {"brand": obj.card_brand})
         return Response(SavedCardSerializer(obj).data, status=status.HTTP_201_CREATED)
+
+
+class SavedCardSetupView(APIView):
+    """POST → a Stripe SetupIntent client secret to confirm a new card in the browser."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.payments import stripe_service
+        from apps.payments.saved_cards import start_setup
+
+        try:
+            return Response(start_setup(request.user))
+        except stripe_service.StripeNotConfigured:
+            return Response({"code": "stripe_unconfigured", "detail": "Card payments are not configured yet."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except stripe_service.StripeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 class SavedCardDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, pk):
+        from apps.payments.saved_cards import remove
+
         obj = get_object_or_404(SavedCard, pk=pk, user=request.user)
         oid = obj.id
-        obj.delete()
+        remove(obj)  # detaches it at Stripe too; the next card becomes the default
         _log_audit(request.user, "delete", "card", oid, {})
         return Response(status=status.HTTP_204_NO_CONTENT)
 

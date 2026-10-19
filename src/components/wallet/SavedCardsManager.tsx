@@ -4,12 +4,9 @@ import {
   Plus,
   Trash2,
   Star,
-  X,
-  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AddCardForm } from "./AddCardForm";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -18,13 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,53 +28,13 @@ import {
 import { useSavedCards } from "@/hooks/useSavedCards";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-const cardBrands = [
-  { id: "visa", name: "Visa" },
-  { id: "mastercard", name: "Mastercard" },
-  { id: "amex", name: "American Express" },
-  { id: "discover", name: "Discover" },
-];
-
-interface NewCardData {
-  card_brand: string;
-  card_last_four: string;
-  card_expiry_month: number;
-  card_expiry_year: number;
-  cardholder_name: string;
-}
-
-const initialFormData: NewCardData = {
-  card_brand: "visa",
-  card_last_four: "",
-  card_expiry_month: 1,
-  card_expiry_year: new Date().getFullYear(),
-  cardholder_name: "",
-};
-
 export function SavedCardsManager() {
   const { language } = useLanguage();
-  const { cards, isLoading, saveCard, deleteCard, setDefaultCard } = useSavedCards();
+  const { cards, isLoading, deleteCard, setDefaultCard, refresh } = useSavedCards();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<NewCardData>(initialFormData);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isAr = language === "ar";
-
-  const handleSubmit = async () => {
-    if (!formData.cardholder_name || !formData.card_last_four) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await saveCard(formData);
-      setShowAddDialog(false);
-      setFormData(initialFormData);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleDelete = async () => {
     if (deleteConfirmId) {
@@ -155,6 +105,11 @@ export function SavedCardsManager() {
                   <div className="text-sm text-muted-foreground">
                     {card.cardholder_name} • {isAr ? "تنتهي" : "Expires"} {card.card_expiry_month.toString().padStart(2, "0")}/{card.card_expiry_year}
                   </div>
+                  {card.chargeable === false && (
+                    <div className="text-xs text-warning">
+                      {isAr ? "محفوظة قبل تفعيل الدفع بالبطاقات — أضفها من جديد لتستخدمها في الدفع." : "Saved before card payments were enabled — add it again to pay with it."}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -182,11 +137,8 @@ export function SavedCardsManager() {
         </div>
       )}
 
-      {/* Add Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={(open) => {
-        setShowAddDialog(open);
-        if (!open) setFormData(initialFormData);
-      }}>
+      {/* Add Dialog — the card is entered and confirmed with Stripe (AddCardForm). */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -196,111 +148,12 @@ export function SavedCardsManager() {
               {isAr ? "أدخل تفاصيل بطاقتك" : "Enter your card details"}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{isAr ? "نوع البطاقة" : "Card Type"}</Label>
-              <Select value={formData.card_brand} onValueChange={(v) => setFormData({ ...formData, card_brand: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {cardBrands.map((brand) => (
-                    <SelectItem key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>{isAr ? "اسم حامل البطاقة" : "Cardholder Name"} *</Label>
-              <Input
-                value={formData.cardholder_name}
-                onChange={(e) => setFormData({ ...formData, cardholder_name: e.target.value })}
-                placeholder={isAr ? "الاسم كما يظهر على البطاقة" : "Name as it appears on card"}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>{isAr ? "آخر 4 أرقام" : "Last 4 Digits"} *</Label>
-              <Input
-                value={formData.card_last_four}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                  setFormData({ ...formData, card_last_four: value });
-                }}
-                placeholder="1234"
-                maxLength={4}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{isAr ? "شهر الانتهاء" : "Expiry Month"}</Label>
-                <Select 
-                  value={formData.card_expiry_month.toString()} 
-                  onValueChange={(v) => setFormData({ ...formData, card_expiry_month: parseInt(v) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((month) => (
-                      <SelectItem key={month} value={month.toString()}>
-                        {month.toString().padStart(2, "0")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>{isAr ? "سنة الانتهاء" : "Expiry Year"}</Label>
-                <Select 
-                  value={formData.card_expiry_year.toString()} 
-                  onValueChange={(v) => setFormData({ ...formData, card_expiry_year: parseInt(v) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowAddDialog(false);
-                  setFormData(initialFormData);
-                }}
-              >
-                <X className="w-4 h-4 mr-1" />
-                {isAr ? "إلغاء" : "Cancel"}
-              </Button>
-              <Button
-                variant="hero"
-                className="flex-1"
-                onClick={handleSubmit}
-                disabled={isSubmitting || !formData.cardholder_name || formData.card_last_four.length !== 4}
-              >
-                <Check className="w-4 h-4 mr-1" />
-                {isSubmitting 
-                  ? (isAr ? "جاري الحفظ..." : "Saving...") 
-                  : (isAr ? "حفظ" : "Save")
-                }
-              </Button>
-            </div>
-          </div>
+          {showAddDialog && (
+            <AddCardForm
+              onSaved={() => { setShowAddDialog(false); refresh(); }}
+              onCancel={() => setShowAddDialog(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

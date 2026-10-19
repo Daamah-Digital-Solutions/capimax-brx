@@ -30,6 +30,7 @@ from apps.investments.models import Investment, PaymentStatus
 
 from . import nowpayments_service, stripe_service
 from .models import Payment, SukukCertificate
+from .saved_cards import charge_kwargs
 from .services import (
     get_or_create_payment,
     mark_payment_failed,
@@ -106,6 +107,7 @@ class CreateStripeIntentView(APIView):
                 amount=investment.settlement_amount,
                 currency=payment.currency,
                 metadata={"investment_id": str(investment.id), "payment_id": str(payment.id)},
+                **charge_kwargs(request.user, (request.data or {}).get("saved_card_id")),
             )
         except stripe_service.StripeError:
             log.warning("Stripe intent creation failed for investment %s", investment.id)
@@ -381,6 +383,7 @@ class CreateDepositStripeIntentView(APIView):
             intent = stripe_service.create_payment_intent(
                 amount=amount, currency=payment.currency,
                 metadata={"deposit_id": str(deposit.id), "payment_id": str(payment.id)},
+                **charge_kwargs(request.user, (request.data or {}).get("saved_card_id")),
             )
         except stripe_service.StripeError:
             log.warning("Stripe deposit intent creation failed for user %s", request.user.id)

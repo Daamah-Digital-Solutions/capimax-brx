@@ -30,6 +30,7 @@ import {
 } from "@/integrations/api/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { SavedCardPicker } from "@/components/checkout/SavedCardPicker";
 
 // Deposit / top-up payment step — reuses the SAME gated Stripe/NOW machinery as the buy
 // flow, but credits the user's internal balance (NO mint). The balance is credited only on
@@ -85,6 +86,7 @@ function DepositCardForm({ amount, onPaid, target = "wallet", pollBalance }: Dep
   const elements = useElements();
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<"idle" | "confirming" | "settling">("idle");
+  const [savedCardId, setSavedCardId] = useState<string | null>(null);
   const readBalance = pollBalance ?? walletBalanceReader;
 
   const handlePay = async () => {
@@ -93,14 +95,15 @@ function DepositCardForm({ amount, onPaid, target = "wallet", pollBalance }: Dep
     try {
       const start = await readBalance().catch(() => 0);
       // 1) Start the gated deposit charge (credits balance on the confirmed webhook).
-      const res = await paymentsApi.createDepositStripe(amount, target);
+      const res = await paymentsApi.createDepositStripe(amount, target, savedCardId);
       // 2) Confirm the card DIRECTLY with Stripe (card data never hits our server).
-      const card = elements.getElement(CardElement);
-      if (!card) return;
       setPhase("confirming");
-      const { error } = await stripe.confirmCardPayment(res.client_secret, {
-        payment_method: { card },
-      });
+      // A saved card is already attached server-side: just confirm (3-D Secure if asked).
+      const card = savedCardId ? null : elements.getElement(CardElement);
+      if (!savedCardId && !card) return;
+      const { error } = savedCardId
+        ? await stripe.confirmCardPayment(res.client_secret)
+        : await stripe.confirmCardPayment(res.client_secret, { payment_method: { card: card! } });
       if (error) {
         toast.error(error.message || (isArabic ? "فشل الدفع" : "Payment failed"));
         return;
@@ -129,6 +132,8 @@ function DepositCardForm({ amount, onPaid, target = "wallet", pollBalance }: Dep
 
   return (
     <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <SavedCardPicker value={savedCardId} onChange={setSavedCardId} />
+      {!savedCardId && (
       <div className="p-4 rounded-xl border border-border bg-card" dir="ltr">
         <CardElement
           options={{
@@ -140,6 +145,7 @@ function DepositCardForm({ amount, onPaid, target = "wallet", pollBalance }: Dep
           }}
         />
       </div>
+      )}
       <Button variant="hero" size="xl" className="w-full" disabled={!stripe || busy} onClick={handlePay}>
         {busy ? (
           <>

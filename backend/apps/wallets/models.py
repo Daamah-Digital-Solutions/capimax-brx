@@ -431,6 +431,19 @@ class InvestorCryptoWallet(models.Model):
         return f"{self.network}:{self.wallet_address[:10]}… ({self.user_id})"
 
 
+class StripeCustomer(models.Model):
+    """The user's Stripe Customer (holds their saved cards)."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="stripe_customer"
+    )
+    customer_id = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.customer_id} ({self.user_id})"
+
+
 class SavedCard(models.Model):
     """
     A user's saved Visa/Mastercard for checkout (frontend `SavedCard`). Stores ONLY
@@ -449,8 +462,18 @@ class SavedCard(models.Model):
     card_expiry_year = models.PositiveSmallIntegerField()
     cardholder_name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
+    # Stripe references (apps/payments/saved_cards.py) — never sent to the browser. Cards
+    # saved before these existed are labels only and can't be charged.
+    provider_customer_id = models.CharField(max_length=64, blank=True, default="")
+    provider_payment_method_id = models.CharField(
+        max_length=64, unique=True, null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def chargeable(self) -> bool:
+        return bool(self.provider_payment_method_id)
 
     class Meta:
         verbose_name = _("saved card")

@@ -15,6 +15,8 @@ export interface SavedCard {
   card_expiry_year: number;
   cardholder_name: string;
   is_default: boolean;
+  /** Saved through Stripe → usable to pay; older label-only cards are not. */
+  chargeable?: boolean;
 }
 
 export function useSavedCards() {
@@ -44,28 +46,6 @@ export function useSavedCards() {
     fetchCards();
   }, [fetchCards]);
 
-  const saveCard = async (cardData: {
-    card_brand: string;
-    card_last_four: string;
-    card_expiry_month: number;
-    card_expiry_year: number;
-    cardholder_name: string;
-  }) => {
-    if (!user) {
-      toast({ title: "يرجى تسجيل الدخول", description: "يجب تسجيل الدخول لحفظ البطاقات", variant: "destructive" });
-      return null;
-    }
-    try {
-      const data = (await paymentMethodsApi.addCard(cardData)) as SavedCard;
-      toast({ title: "تم الحفظ", description: "تم حفظ البطاقة بنجاح" });
-      await fetchCards();
-      return data;
-    } catch {
-      toast({ title: "خطأ", description: "تعذر حفظ البطاقة", variant: "destructive" });
-      return null;
-    }
-  };
-
   const deleteCard = async (cardId: string) => {
     try {
       await paymentMethodsApi.deleteCard(cardId);
@@ -91,9 +71,9 @@ export function useSavedCards() {
     cards,
     isLoading,
     isAuthenticated: !!user,
-    saveCard,
     deleteCard,
     setDefaultCard,
     refetch: fetchCards,
+    refresh: fetchCards,
   };
 }

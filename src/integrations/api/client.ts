@@ -423,11 +423,11 @@ export const paymentsApi = {
       publishable_key: string;
     }>,
   /** Start a card payment for a (pending) investment → returns the client_secret. */
-  createStripeIntent: (investmentId: string) =>
+  createStripeIntent: (investmentId: string, savedCardId?: string | null) =>
     rawRequest("/payments/stripe/create-intent/", {
       method: "POST",
       auth: true,
-      body: { investment_id: investmentId },
+      body: { investment_id: investmentId, ...(savedCardId ? { saved_card_id: savedCardId } : {}) },
     }) as Promise<{
       client_secret: string;
       publishable_key: string;
@@ -472,11 +472,11 @@ export const paymentsApi = {
    * (no investment, no mint). Returns the client_secret to confirm with Elements. The
    * balance is credited only on the confirmed webhook. 503 ⇒ Stripe not configured.
    */
-  createDepositStripe: (amount: number, target: "wallet" | "lp" = "wallet") =>
+  createDepositStripe: (amount: number, target: "wallet" | "lp" = "wallet", savedCardId?: string | null) =>
     rawRequest("/payments/deposit/stripe/", {
       method: "POST",
       auth: true,
-      body: { amount, target },
+      body: { amount, target, ...(savedCardId ? { saved_card_id: savedCardId } : {}) },
     }) as Promise<{
       client_secret: string;
       publishable_key: string;
@@ -579,7 +579,15 @@ export const paymentMethodsApi = {
   // Saved cards (brand/last4/expiry/holder only — never a PAN)
   listCards: () =>
     rawRequest("/wallets/payment-methods/cards/", { auth: true }) as Promise<any[]>,
-  addCard: (body: Record<string, unknown>) =>
+  /** Start saving a card: a Stripe SetupIntent client secret to confirm in the browser. */
+  cardSetup: () =>
+    rawRequest("/wallets/payment-methods/cards/setup/", { method: "POST", auth: true }) as Promise<{
+      client_secret: string;
+      setup_intent_id: string;
+      publishable_key: string;
+    }>,
+  /** Save the card once Stripe confirmed the SetupIntent (details are read from Stripe). */
+  addCard: (body: { setup_intent_id: string }) =>
     rawRequest("/wallets/payment-methods/cards/", { method: "POST", auth: true, body }) as Promise<any>,
   deleteCard: (id: string) =>
     rawRequest(`/wallets/payment-methods/cards/${id}/`, { method: "DELETE", auth: true }) as Promise<void>,
@@ -1644,11 +1652,20 @@ export const installmentsApi = {
    * confirmed webhook/IPN the server progressively releases locked→released tokens + credits
    * the owner/broker on that installment — there is NO new mint.
    */
-  payNext: (planId: string, provider: "stripe" | "nowpayments" | "balance", payCurrency?: string) =>
+  payNext: (
+    planId: string,
+    provider: "stripe" | "nowpayments" | "balance",
+    payCurrency?: string,
+    savedCardId?: string | null,
+  ) =>
     rawRequest(`/installments/plans/${planId}/pay-next/`, {
       method: "POST",
       auth: true,
-      body: { provider, ...(payCurrency ? { pay_currency: payCurrency } : {}) },
+      body: {
+        provider,
+        ...(payCurrency ? { pay_currency: payCurrency } : {}),
+        ...(savedCardId ? { saved_card_id: savedCardId } : {}),
+      },
     }) as Promise<PayNextResult>,
   /**
    * Early payoff: start ONE gated charge for ALL remaining installments of the plan. Same
@@ -1656,11 +1673,20 @@ export const installmentsApi = {
    * webhook/IPN the server settles every remaining row → full unlock + completes the plan;
    * there is NO new mint.
    */
-  payoff: (planId: string, provider: "stripe" | "nowpayments" | "balance", payCurrency?: string) =>
+  payoff: (
+    planId: string,
+    provider: "stripe" | "nowpayments" | "balance",
+    payCurrency?: string,
+    savedCardId?: string | null,
+  ) =>
     rawRequest(`/installments/plans/${planId}/pay-off/`, {
       method: "POST",
       auth: true,
-      body: { provider, ...(payCurrency ? { pay_currency: payCurrency } : {}) },
+      body: {
+        provider,
+        ...(payCurrency ? { pay_currency: payCurrency } : {}),
+        ...(savedCardId ? { saved_card_id: savedCardId } : {}),
+      },
     }) as Promise<PayNextResult>,
 };
 

@@ -28,6 +28,7 @@ from django.urls import reverse
 from apps.core.permissions import KYCApprovedPermission
 from apps.payments import nowpayments_service, stripe_service
 from apps.payments.services import get_or_create_payment
+from apps.payments.saved_cards import charge_kwargs
 from apps.payments.views import crypto_min_amount_block
 
 log = logging.getLogger(__name__)
@@ -298,7 +299,10 @@ class PayNextInstallmentView(APIView):
         if provider == BALANCE_PROVIDER:
             return self._pay_from_balance(request, plan, [ip])
         if provider == "stripe":
-            return self._start_stripe(inv, ip, ip.charge_amount)
+            return self._start_stripe(
+                inv, ip, ip.charge_amount, saved_card_id=request.data.get("saved_card_id"),
+                user=request.user,
+            )
         return self._start_nowpayments(request, inv, ip, ip.charge_amount)
 
     def _pay_from_balance(self, request, plan, rows, is_payoff=False):
@@ -328,7 +332,7 @@ class PayNextInstallmentView(APIView):
     # -- providers (mirror apps/payments/views.py, charging `amount` against `ip`) -- #
     # `amount` is one installment for pay-next, or the SUM of all remaining rows for a
     # payoff; `is_payoff` flags the Payment so the webhook settles every remaining row.
-    def _start_stripe(self, inv, ip, amount, is_payoff=False):
+    def _start_stripe(self, inv, ip, amount, is_payoff=False, saved_card_id=None, user=None):
         if not stripe_service.is_configured():
             return Response(
                 {"configured": False, "code": "stripe_unconfigured",
@@ -349,6 +353,7 @@ class PayNextInstallmentView(APIView):
                     "installment_payment_id": str(ip.id),
                     "installment_payoff": "1" if is_payoff else "0",
                 },
+                **(charge_kwargs(user, saved_card_id) if user is not None else {}),
             )
         except stripe_service.StripeError:
             return Response(
@@ -474,7 +479,10 @@ class PayoffInstallmentView(PayNextInstallmentView):
         if provider == BALANCE_PROVIDER:
             return self._pay_from_balance(request, plan, unpaid, is_payoff=True)
         if provider == "stripe":
-            return self._start_stripe(inv, anchor, total, is_payoff=True)
+            return self._start_stripe(
+                inv, anchor, total, is_payoff=True,
+                saved_card_id=request.data.get("saved_card_id"), user=request.user,
+            )
         return self._start_nowpayments(request, inv, anchor, total, is_payoff=True)
 
 

@@ -54,7 +54,9 @@ def publishable_key() -> str:
 # --------------------------------------------------------------------------- #
 # PaymentIntent creation (server→Stripe). Lazy-imports `stripe`.
 # --------------------------------------------------------------------------- #
-def create_payment_intent(*, amount, currency: str, metadata: dict) -> dict:
+def create_payment_intent(
+    *, amount, currency: str, metadata: dict, customer: str = "", payment_method: str = ""
+) -> dict:
     """
     Create a Stripe PaymentIntent for `amount` (a Decimal of major units, e.g. USD)
     and return {id, client_secret}. The client_secret is returned to the browser to
@@ -69,16 +71,103 @@ def create_payment_intent(*, amount, currency: str, metadata: dict) -> dict:
     stripe.api_key = settings.STRIPE_SECRET_KEY
     # Stripe expects the smallest currency unit (cents for USD).
     amount_minor = int((amount * 100).to_integral_value())
+    extra = {}
+    if customer:
+        extra["customer"] = customer
+    if payment_method:
+        # A saved card: attached here (server side) so its id never reaches the browser,
+        # which only confirms the intent — and completes 3-D Secure if the bank asks.
+        extra["payment_method"] = payment_method
     try:
         intent = stripe.PaymentIntent.create(
             amount=amount_minor,
             currency=(currency or settings.STRIPE_CURRENCY).lower(),
             metadata=metadata,
             automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+            **extra,
         )
     except Exception as exc:  # stripe.error.* — don't leak details into responses
         raise StripeError("Could not create the payment.") from exc
     return {"id": intent["id"], "client_secret": intent["client_secret"]}
+
+
+# --------------------------------------------------------------------------- #
+# Saved cards: one Stripe Customer per user, cards saved through a SetupIntent (on-session:
+# the investor is always present to confirm a charge). See apps/payments/saved_cards.py.
+# --------------------------------------------------------------------------- #
+def _stripe():
+    if not is_configured():
+        raise StripeNotConfigured("Stripe API key is not configured.")
+    import stripe
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    return stripe
+
+
+def create_customer(*, email: str, user_id: str) -> str:
+    stripe = _stripe()
+    try:
+        return stripe.Customer.create(email=email, metadata={"user_id": user_id})["id"]
+    except Exception as exc:
+        raise StripeError("Could not create the customer.") from exc
+
+
+def customer_exists(customer_id: str) -> bool:
+    stripe = _stripe()
+    try:
+        c = stripe.Customer.retrieve(customer_id)
+        return not c.get("deleted")
+    except Exception:
+        return False
+
+
+def create_setup_intent(*, customer: str) -> dict:
+    stripe = _stripe()
+    try:
+        si = stripe.SetupIntent.create(
+            customer=customer, usage="on_session", payment_method_types=["card"],
+        )
+    except Exception as exc:
+        raise StripeError("Could not start saving the card.") from exc
+    return {"id": si["id"], "client_secret": si["client_secret"]}
+
+
+def retrieve_setup_intent(setup_intent_id: str) -> dict:
+    stripe = _stripe()
+    try:
+        si = stripe.SetupIntent.retrieve(setup_intent_id)
+    except Exception as exc:
+        raise StripeError("Card setup not found.") from exc
+    pm = si.get("payment_method")
+    return {
+        "customer": si.get("customer") or "",
+        "status": si.get("status") or "",
+        "payment_method": pm if isinstance(pm, str) else (pm or {}).get("id", ""),
+    }
+
+
+def retrieve_card(payment_method_id: str) -> dict:
+    stripe = _stripe()
+    try:
+        pm = stripe.PaymentMethod.retrieve(payment_method_id)
+    except Exception as exc:
+        raise StripeError("Card not found.") from exc
+    card = pm.get("card") or {}
+    return {
+        "brand": card.get("brand") or "card",
+        "last4": card.get("last4") or "",
+        "exp_month": int(card.get("exp_month") or 0),
+        "exp_year": int(card.get("exp_year") or 0),
+        "name": ((pm.get("billing_details") or {}).get("name") or ""),
+    }
+
+
+def detach_payment_method(payment_method_id: str) -> None:
+    stripe = _stripe()
+    try:
+        stripe.PaymentMethod.detach(payment_method_id)
+    except Exception:  # best effort — the local card is removed regardless
+        pass
 
 
 # --------------------------------------------------------------------------- #
