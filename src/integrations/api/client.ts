@@ -917,8 +917,25 @@ export const walletsApi = {
     notes?: string;
     bank_account_id?: string;
     crypto_wallet_id?: string;
+    route?: "manual" | "auto";
+    speed?: "standard" | "instant";
   }) => rawRequest("/wallets/withdrawals/", { method: "POST", auth: true, body: payload }),
+  /** What the withdraw form can offer: automatic bank payouts via Stripe, instant fee/limits. */
+  payoutOptions: () =>
+    rawRequest("/wallets/payouts/options/", { auth: true }) as Promise<PayoutOptions>,
+  /** A Stripe-hosted link to set up the caller's payout account (bank + optional debit card). */
+  payoutConnect: () =>
+    rawRequest("/wallets/payouts/connect/", { method: "POST", auth: true }) as Promise<{ url: string }>,
 };
+
+export interface PayoutOptions {
+  bank_auto: boolean;
+  connect_status: "none" | "pending" | "verified";
+  auto_approve_limit: number;
+  instant_enabled: boolean;
+  instant_fee_percent: number;
+  instant_max: number;
+}
 
 // --------------------------------------------------------------------------- //
 // Investor PEER secondary market (Phase 6 Wave 3) — one-shot listings, on-chain

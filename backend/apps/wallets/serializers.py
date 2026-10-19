@@ -107,7 +107,7 @@ class WithdrawalSerializer(serializers.ModelSerializer):
         fields = (
             "id", "amount", "currency", "method", "status", "reference",
             "notes", "destination_label", "bank_account", "crypto_wallet",
-            "processed_at", "created_at",
+            "provider", "speed", "fee_amount", "processed_at", "created_at",
         )
         read_only_fields = fields
 
@@ -124,6 +124,10 @@ class WithdrawalCreateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
     bank_account_id = serializers.UUIDField(required=False, allow_null=True)
     crypto_wallet_id = serializers.UUIDField(required=False, allow_null=True)
+    # "auto" = paid automatically to the investor's Stripe payout account (bank only);
+    # "instant" speed = to their debit card, for a fee (apps/wallets/auto_payouts.py).
+    route = serializers.ChoiceField(choices=["manual", "auto"], required=False, default="manual")
+    speed = serializers.ChoiceField(choices=["standard", "instant"], required=False, default="standard")
 
 
 class BalanceTransactionSerializer(serializers.ModelSerializer):

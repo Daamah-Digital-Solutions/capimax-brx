@@ -171,6 +171,90 @@ def detach_payment_method(payment_method_id: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Stripe Connect payouts (apps/wallets/auto_payouts.py): an Express account per investor,
+# a Transfer from the platform balance to it, optionally an instant payout to its debit card.
+# --------------------------------------------------------------------------- #
+class StripeBalanceInsufficient(StripeError):
+    """The platform's Stripe balance can't fund this transfer right now."""
+
+
+def create_express_account(*, email: str, user_id: str) -> str:
+    stripe = _stripe()
+    try:
+        acct = stripe.Account.create(
+            type="express", email=email, metadata={"user_id": user_id},
+            capabilities={"transfers": {"requested": True}},
+        )
+    except Exception as exc:
+        raise StripeError("Could not create the payout account.") from exc
+    return acct["id"]
+
+
+def create_account_link(*, account_id: str, refresh_url: str, return_url: str) -> str:
+    stripe = _stripe()
+    try:
+        link = stripe.AccountLink.create(
+            account=account_id, refresh_url=refresh_url, return_url=return_url,
+            type="account_onboarding",
+        )
+    except Exception as exc:
+        raise StripeError("Could not start linking the bank account.") from exc
+    return link["url"]
+
+
+def retrieve_account(account_id: str) -> dict:
+    stripe = _stripe()
+    try:
+        acct = stripe.Account.retrieve(account_id)
+    except Exception as exc:
+        raise StripeError("Payout account not found.") from exc
+    return {
+        "payouts_enabled": bool(acct.get("payouts_enabled")),
+        "details_submitted": bool(acct.get("details_submitted")),
+    }
+
+
+def has_instant_destination(account_id: str) -> bool:
+    """True when the connected account has a debit card eligible for instant payouts."""
+    stripe = _stripe()
+    try:
+        ext = stripe.Account.list_external_accounts(account_id, limit=10)
+    except Exception:
+        return False
+    for item in ext.get("data", []):
+        if "instant" in (item.get("available_payout_methods") or []):
+            return True
+    return False
+
+
+def create_transfer(*, amount, account_id: str, idempotency_key: str, metadata: dict) -> str:
+    stripe = _stripe()
+    try:
+        tr = stripe.Transfer.create(
+            amount=int((amount * 100).to_integral_value()), currency="usd",
+            destination=account_id, metadata=metadata, idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        code = getattr(exc, "code", "") or getattr(getattr(exc, "error", None), "code", "")
+        if code == "balance_insufficient":
+            raise StripeBalanceInsufficient("The platform's Stripe balance is too low.") from exc
+        raise StripeError("The transfer was refused.") from exc
+    return tr["id"]
+
+
+def create_instant_payout(*, amount, account_id: str, idempotency_key: str) -> str:
+    stripe = _stripe()
+    try:
+        po = stripe.Payout.create(
+            amount=int((amount * 100).to_integral_value()), currency="usd", method="instant",
+            stripe_account=account_id, idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        raise StripeError("The instant payout was refused.") from exc
+    return po["id"]
+
+
+# --------------------------------------------------------------------------- #
 # Webhook verification (the automation hinge) — manual, dependency-free.
 # --------------------------------------------------------------------------- #
 def verify_and_parse_webhook(raw_body: bytes, signature_header: str) -> dict | None:

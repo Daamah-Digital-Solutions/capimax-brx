@@ -17,6 +17,8 @@ from .payment_methods import (
 from .views import (
     BalanceTransactionsView,
     MyWalletView,
+    PayoutConnectView,
+    PayoutOptionsView,
     UserBalanceView,
     WalletCreateView,
     WalletTokensView,
@@ -34,6 +36,8 @@ urlpatterns = [
     # Read-only internal-balance ledger history (self-scoped). Phase 12 finishing.
     path("balance/transactions/", BalanceTransactionsView.as_view(), name="wallet-balance-transactions"),
     path("withdrawals/", WithdrawalsView.as_view(), name="wallet-withdrawals"),
+    path("payouts/options/", PayoutOptionsView.as_view(), name="wallet-payout-options"),
+    path("payouts/connect/", PayoutConnectView.as_view(), name="wallet-payout-connect"),
     # Payout instruments (client note 11) — real Django-backed bank accounts, crypto
     # wallets, and saved cards; replaces the dead Supabase managers. Self-scoped.
     path("payment-methods/bank-accounts/", BankAccountListCreateView.as_view(), name="pm-bank-list"),

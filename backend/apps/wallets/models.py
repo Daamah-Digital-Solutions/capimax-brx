@@ -291,6 +291,12 @@ class Withdrawal(models.Model):
     # Set by the operator when closing it (apps/wallets/payouts.py): the bank / chain
     # reference of the payout, or why it failed (a failed withdrawal is refunded).
     payout_reference = models.CharField(max_length=120, blank=True, default="")
+    # Automatic payouts (apps/wallets/auto_payouts.py): "stripe" = paid to the investor's
+    # Stripe Connect account; "manual" = paid by an operator. Instant = to their debit card,
+    # for fee_amount (deducted from what is sent).
+    provider = models.CharField(max_length=12, default="manual")
+    speed = models.CharField(max_length=10, default="standard")
+    fee_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     failure_reason = models.CharField(max_length=300, blank=True, default="")
     processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -429,6 +435,21 @@ class InvestorCryptoWallet(models.Model):
 
     def __str__(self):
         return f"{self.network}:{self.wallet_address[:10]}… ({self.user_id})"
+
+
+class StripeConnectAccount(models.Model):
+    """The investor's Stripe Connect (Express) account that automatic bank payouts go to."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="stripe_connect"
+    )
+    account_id = models.CharField(max_length=64)
+    payouts_enabled = models.BooleanField(default=False)
+    details_submitted = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.account_id} ({self.user_id})"
 
 
 class StripeCustomer(models.Model):

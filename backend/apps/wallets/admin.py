@@ -122,19 +122,36 @@ class WithdrawalAdmin(admin.ModelAdmin):
     """
 
     list_display = (
-        "user", "amount", "currency", "method", "destination_label", "status", "reference",
-        "created_at",
+        "user", "amount", "currency", "method", "provider", "speed", "destination_label",
+        "status", "reference", "created_at",
     )
-    list_filter = ("status", "method", "currency")
+    list_filter = ("status", "method", "provider", "currency")
     search_fields = ("user__email", "reference")
     fields = (
-        "id", "user", "amount", "currency", "method", "reference", "status",
-        "destination_label", "bank_account", "crypto_wallet", "notes",
+        "id", "user", "amount", "currency", "method", "provider", "speed", "fee_amount",
+        "reference", "status", "destination_label", "bank_account", "crypto_wallet", "notes",
         "payout_reference", "failure_reason", "processed_at", "created_at",
     )
     # Only the operator's notes are editable: the payout reference, or why it failed.
     readonly_fields = tuple(f for f in fields if f not in ("payout_reference", "failure_reason"))
-    actions = ("action_processing", "action_paid", "action_failed")
+    actions = ("action_pay_stripe", "action_processing", "action_paid", "action_failed")
+
+    @admin.action(description="Approve and pay via Stripe (automatic bank withdrawals)")
+    def action_pay_stripe(self, request, queryset):
+        from django.contrib import messages
+
+        from .auto_payouts import execute
+
+        results = {}
+        for wd in queryset:
+            outcome = execute(wd.pk)
+            results[outcome] = results.get(outcome, 0) + 1
+        labels = {"paid": "paid", "failed": "failed and refunded",
+                  "awaiting_balance": "waiting (platform Stripe balance too low)",
+                  "skipped": "skipped (not a pending Stripe withdrawal, or payout account not ready)"}
+        for outcome, n in results.items():
+            level = messages.SUCCESS if outcome == "paid" else messages.WARNING
+            self.message_user(request, f"{n} withdrawal(s) {labels.get(outcome, outcome)}.", level=level)
 
     def _run(self, request, queryset, step, done_msg, **kwargs):
         from django.contrib import messages

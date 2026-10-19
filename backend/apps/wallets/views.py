@@ -267,6 +267,28 @@ class WithdrawalsView(APIView):
         serializer.is_valid(raise_exception=True)
         method = serializer.validated_data["method"]
 
+        if serializer.validated_data.get("route") == "auto":
+            from .auto_payouts import request_auto_withdrawal
+
+            if method != "bank":
+                return Response(
+                    {"detail": "Automatic withdrawals go to a bank account.", "code": "auto_bank_only"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                withdrawal = request_auto_withdrawal(
+                    request.user, serializer.validated_data["amount"],
+                    speed=serializer.validated_data.get("speed") or "standard",
+                    notes=serializer.validated_data.get("notes") or "",
+                )
+            except InsufficientBalance:
+                return Response(
+                    {"detail": "Insufficient balance.", "code": "insufficient_balance"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            withdrawal.refresh_from_db()
+            return Response(WithdrawalSerializer(withdrawal).data, status=status.HTTP_201_CREATED)
+
         # Resolve the chosen payout destination to one of the caller's OWN saved methods
         # (self-scoped) and require it to match the method type — so a payout is never
         # recorded without a real, owned destination the operator can send to.
@@ -312,3 +334,44 @@ class WithdrawalsView(APIView):
         return Response(
             WithdrawalSerializer(withdrawal).data, status=status.HTTP_201_CREATED
         )
+
+
+class PayoutOptionsView(APIView):
+    """GET /api/wallets/payouts/options/ — what the withdraw form can offer the caller
+    (automatic bank payouts, their Stripe payout-account status, instant fee and limits)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .auto_payouts import options
+
+        return Response(options(request.user))
+
+
+class PayoutConnectView(APIView):
+    """
+    GET  /api/wallets/payouts/connect/ — the caller's Stripe payout-account status.
+    POST /api/wallets/payouts/connect/ — a Stripe-hosted link to set it up (bank account,
+    optional debit card for instant payouts). Stripe collects and holds the bank details.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .auto_payouts import options
+
+        return Response({"status": options(request.user)["connect_status"]})
+
+    def post(self, request):
+        from apps.core.permissions import EMAIL_UNVERIFIED, needs_email_verification
+        from apps.payments.stripe_service import StripeError
+
+        from .auto_payouts import start_onboarding
+
+        if needs_email_verification(request.user):
+            return Response(EMAIL_UNVERIFIED, status=status.HTTP_403_FORBIDDEN)
+        try:
+            url = start_onboarding(request.user)
+        except StripeError as exc:
+            return Response({"detail": str(exc), "code": "stripe_error"}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({"url": url})

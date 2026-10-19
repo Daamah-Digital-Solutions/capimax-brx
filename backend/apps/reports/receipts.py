@@ -28,6 +28,7 @@ SOURCE_LABELS = {
     "deposit": "Wallet top-up",
     "withdrawal": "Withdrawal request",
     "withdrawal_refund": "Withdrawal not completed — amount returned",
+    "instant_fee_refund": "Instant withdrawal fee returned",
     "reinvestment": "Purchase paid from the wallet",
     "installment": "Installment paid from the wallet",
     "installment_autodebit": "Installment auto-debited from the wallet",

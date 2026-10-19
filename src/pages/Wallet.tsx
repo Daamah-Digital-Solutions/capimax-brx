@@ -64,6 +64,8 @@ const SOURCE_LABEL: Record<string, { en: string; ar: string }> = {
   lp_market_purchase: { en: "Market purchase", ar: "شراء من السوق" },
   broker_commission: { en: "Referral commission", ar: "عمولة الإحالة" },
   withdrawal: { en: "Withdrawal", ar: "سحب" },
+  withdrawal_refund: { en: "Withdrawal returned", ar: "استرداد سحب" },
+  instant_fee_refund: { en: "Instant fee returned", ar: "استرداد رسوم السحب الفوري" },
 };
 
 // Deposit methods. ONLY card + crypto have a real gated rail (Stripe / NOW). The others

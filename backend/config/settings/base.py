@@ -507,3 +507,13 @@ INSTALLMENT_REMINDER_DAYS = env.int("INSTALLMENT_REMINDER_DAYS", default=3)
 # reinvest at the family rate instead.
 REINVEST_DISCOUNT_PERCENT = env.float("REINVEST_DISCOUNT_PERCENT", default=5.0)
 FAMILY_REINVEST_DISCOUNT_PERCENT = env.float("FAMILY_REINVEST_DISCOUNT_PERCENT", default=7.5)
+
+# Withdrawals (apps/wallets/auto_payouts.py). Manual (an operator pays) unless a method is
+# listed in PAYOUT_AUTO_METHODS ("bank" = Stripe Connect payouts; crypto stays manual) and
+# configured. An automatic withdrawal up to the limit is paid at once, above it waits for an
+# admin. Instant = to the investor's debit card, for a fee, up to a per-request cap.
+WITHDRAWAL_AUTO_APPROVE_LIMIT = env.float("WITHDRAWAL_AUTO_APPROVE_LIMIT", default=5000.0)
+PAYOUT_AUTO_METHODS = env.list("PAYOUT_AUTO_METHODS", default=[])
+PAYOUT_INSTANT_ENABLED = env.bool("PAYOUT_INSTANT_ENABLED", default=False)
+PAYOUT_INSTANT_FEE_PERCENT = env.float("PAYOUT_INSTANT_FEE_PERCENT", default=1.0)
+PAYOUT_INSTANT_MAX = env.float("PAYOUT_INSTANT_MAX", default=9999.0)
