@@ -13,15 +13,15 @@ export function LegalDisclaimer() {
   return (
     <section
       aria-label={isAr ? "إخلاء المسؤولية القانوني" : "Legal disclaimer"}
-      className="border-t border-border bg-background"
+      className="bg-card border-t border-border"
       dir={isAr ? "rtl" : "ltr"}
     >
-      <div className="container pt-6 pb-20 max-w-5xl">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+      <div className="container pt-8 pb-24">
+        <h2 className="font-sans text-xs font-semibold text-foreground/80 mb-3">
           {isAr ? "إخلاء المسؤولية القانوني — Capimax BRX" : "Capimax BRX Legal Disclaimer"}
         </h2>
         {isAr ? (
-          <div className="space-y-2 text-[11px] leading-relaxed text-muted-foreground">
+          <div className="space-y-2.5 text-[11px] sm:text-xs leading-relaxed text-muted-foreground">
             <p>
               يُدار هذا الموقع بواسطة شركة Capimax Real Estate Technologies LLC («كابيماكس»). منصة Capimax BRX
               هي منصة تقنية ومنظومة رقمية تربط بين المستثمرين وملاك العقارات والمطوّرين والوسطاء ومزوّدي السيولة.
@@ -49,7 +49,7 @@ export function LegalDisclaimer() {
             <p>حقوق النشر © 2026 Capimax Real Estate Technologies LLC. جميع الحقوق محفوظة.</p>
           </div>
         ) : (
-          <div className="space-y-2 text-[11px] leading-relaxed text-muted-foreground">
+          <div className="space-y-2.5 text-[11px] sm:text-xs leading-relaxed text-muted-foreground">
             <p>
               This website is operated by Capimax Real Estate Technologies LLC (“Capimax”). Capimax BRX is a
               technology platform and digital ecosystem connecting investors, property owners, developers, brokers
