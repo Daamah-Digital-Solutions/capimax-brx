@@ -65,6 +65,11 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, style={"input_type": "password"})
     full_name = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    # Both consents are required to create an account (recorded with a timestamp).
+    terms_accepted = serializers.BooleanField(required=True)
+    disclosure_accepted = serializers.BooleanField(required=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
     is_us_citizen = serializers.BooleanField(required=False, default=False)
     # Frontend role choice (RegisterRole.tsx -> Auth.tsx -> signUp). Optional;
@@ -85,6 +90,16 @@ class RegisterSerializer(serializers.Serializer):
         validate_password(value)
         return value
 
+    def validate_terms_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError("You must accept the Terms & Conditions.")
+        return value
+
+    def validate_disclosure_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError("You must accept the risk disclosure.")
+        return value
+
     def validate_role(self, value):
         """
         Anti-privilege-escalation: only self-selectable roles are accepted. 'admin'
@@ -101,13 +116,22 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
+        from django.utils import timezone
+
+        name = " ".join(
+            p for p in ((validated_data.get("first_name") or "").strip(),
+                        (validated_data.get("last_name") or "").strip()) if p
+        )
         profile_fields = {
-            "full_name": validated_data.get("full_name") or None,
+            "full_name": name or validated_data.get("full_name") or None,
+            "terms_accepted_at": timezone.now(),
+            "disclosure_accepted_at": timezone.now(),
             "phone": validated_data.get("phone") or None,
             "is_us_citizen": validated_data.get("is_us_citizen", False),
         }
-        # Default applied in validate_role; fall back defensively if `role` absent.
-        selected_role = validated_data.get("role") or Profile.Role.INVESTOR
+        # Every account starts as an Investor; other roles are added from Role Access
+        # (apps/roles). A role picked on the sign-up page is only a hint for the UI.
+        selected_role = Profile.Role.INVESTOR
         user = User.objects.create_user(
             email=validated_data["email"],
             password=validated_data["password"],
@@ -125,6 +149,12 @@ class RegisterSerializer(serializers.Serializer):
             from apps.broker.services import attribute_referral
 
             attribute_referral(profile, ref)
+        # Every account gets its custodial wallet at sign-up (it never blocks the sign-up).
+        from django.db import transaction
+
+        from apps.kyc.services import _auto_create_wallet
+
+        transaction.on_commit(lambda: _auto_create_wallet(user))
         user.refresh_from_db()
         return user
 

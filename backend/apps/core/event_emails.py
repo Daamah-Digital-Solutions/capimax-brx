@@ -45,6 +45,22 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    "role_approved": {
+        "subject": "Your {role} role is active",
+        "heading": "You're now a {role}",
+        "intro": "Your application for the {role} role was approved. Switch to it from the role switcher in the sidebar and get started.",
+        "cta_label": "Open your {role} dashboard",
+        "cta_path": "{dashboard}",
+        "outro": "",
+    },
+    "role_rejected": {
+        "subject": "Your {role} application",
+        "heading": "Your {role} application wasn't approved",
+        "intro": "We couldn't approve your application for the {role} role this time. {note} You can edit it and submit again.",
+        "cta_label": "Review your application",
+        "cta_path": "{apply_path}",
+        "outro": "",
+    },
     # Gifts / family transfers / inheritance (apps/transfers).
     "transfer_invite": {
         "subject": "{sender} sent you {what} on CapiMax BRX",

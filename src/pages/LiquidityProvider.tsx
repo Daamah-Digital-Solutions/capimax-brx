@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLiquidityProvider } from "@/hooks/useLiquidityProvider";
+import { RoleAccessGate } from "@/components/roles/RoleAccessGate";
 import { LPRegistrationFlow } from "@/components/liquidity/LPRegistrationFlow";
 import { LPOperationsDashboard } from "@/components/liquidity/LPOperationsDashboard";
 import { LPReports } from "@/components/liquidity/LPReports";
@@ -198,12 +199,7 @@ export default function LiquidityProvider() {
 
         {/* Show registration flow if no LP profile or KYB not complete */}
         {!lpProfile ? (
-          <LPRegistrationFlow
-            onSubmitRegistration={applyAsLP}
-            onSubmitKYB={submitKYB}
-            onUploadDocument={uploadKYBDocument}
-            isRTL={isRTL}
-          />
+          <RoleAccessGate role="lp" />
         ) : lpProfile.status === "pending" &&
           (lpProfile.kyb_status === "not_started" || lpProfile.kyb_status === "documents_pending") ? (
           // LP registered but KYB not started - show KYB flow

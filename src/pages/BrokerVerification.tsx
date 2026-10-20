@@ -1,5 +1,7 @@
 import { MainLayout } from "@/components/layout/MainLayout";
 import { BrokerVerificationCard } from "@/components/broker/BrokerVerificationCard";
+import { RoleAccessGate } from "@/components/roles/RoleAccessGate";
+import { useRoles } from "@/hooks/useRoles";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ShieldCheck, Users } from "lucide-react";
@@ -18,7 +20,10 @@ export default function BrokerVerification() {
   const { user } = useAuth();
   const { language } = useLanguage();
   const isArabic = language === "ar";
-  const isBroker = user?.profile?.role === "broker";
+  // Multi-role: the broker area opens once the Broker role is held (approved); a broker
+  // record made through the earlier verification flow keeps its card too.
+  const { holds, status } = useRoles();
+  const isBroker = holds("broker") || (user?.profile?.role === "broker" && status("broker") !== "available");
 
   return (
     <MainLayout>
@@ -49,14 +54,7 @@ export default function BrokerVerification() {
             {isBroker ? (
               <BrokerVerificationCard />
             ) : (
-              <div className="p-8 bg-card rounded-2xl border border-border text-center space-y-3">
-                <Users className="w-10 h-10 text-muted-foreground mx-auto" />
-                <p className="text-muted-foreground">
-                  {isArabic
-                    ? "هذه الصفحة مخصّصة للوسطاء. دور الحساب يُحدَّد عند التسجيل — اختر دور «وسيط» عند إنشاء حسابك، أو تواصل مع الدعم لتغيير دورك."
-                    : "This area is for brokers. Your account role is set at registration — choose the “Broker” role when signing up, or contact support to change your role."}
-                </p>
-              </div>
+              <RoleAccessGate role="broker" />
             )}
           </div>
         </div>

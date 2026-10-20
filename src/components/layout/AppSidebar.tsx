@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   LayoutDashboard,
@@ -54,6 +54,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useUnreadCount } from "@/hooks/useNotifications";
 import { useInstallmentPlans } from "@/hooks/useInstallmentPlans";
 import { useAuth } from "@/contexts/AuthContext";
+import { ROLE_LABELS, useRoles } from "@/hooks/useRoles";
+import { rolesApi } from "@/integrations/api/client";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -276,7 +279,12 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const { t, language } = useLanguage();
   const { unreadCount } = useUnreadCount();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  // Multi-role: the roles this account holds; switching changes the CURRENT role
+  // (apps/roles). Separate from the "View as Role" preview below, which stays as it is.
+  const { held: heldRoles, current: currentRole, isAdmin: rolesAdmin, refresh: refreshRoles } = useRoles();
+  const [switchingRole, setSwitchingRole] = useState(false);
   // Live installments badge — the caller's active plans (real, self-scoped), replacing the
   // old hardcoded "3". 0 → no badge, mirroring the notifications count.
   const { data: installmentData } = useInstallmentPlans();
@@ -396,6 +404,48 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
             <X className="w-5 h-5" />
           </Button>
         </div>
+
+        {/* My roles — switch the current role among the roles held */}
+        {isOpen && user && !rolesAdmin && heldRoles.length > 1 && (
+          <div className="px-3 pt-3">
+            <div className="flex items-center gap-2 mb-2">
+              <UserCircle className="w-4 h-4 text-primary" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {language === "ar" ? "دورك الحالي" : "My role"}
+              </span>
+            </div>
+            <Select
+              value={currentRole ?? "investor"}
+              disabled={switchingRole}
+              onValueChange={async (value) => {
+                setSwitchingRole(true);
+                try {
+                  await rolesApi.switchRole(value);
+                  await refreshUser();
+                  refreshRoles();
+                  setSelectedRole(roleFromProfile(value));
+                  const dash = heldRoles.find((r) => r.role === value)?.dashboard;
+                  if (dash) navigate(dash);
+                } catch (e: any) {
+                  toast.error(e?.message || (language === "ar" ? "تعذّر تبديل الدور" : "Could not switch role"));
+                } finally {
+                  setSwitchingRole(false);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {heldRoles.map((r) => (
+                  <SelectItem key={r.role} value={r.role}>
+                    {language === "ar" ? ROLE_LABELS[r.role].ar : ROLE_LABELS[r.role].en}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Role Selector */}
         {isOpen && (

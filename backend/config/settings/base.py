@@ -91,6 +91,7 @@ DOMAIN_STUB_APPS = [
     "apps.onboarding",
     "apps.kyc",
     "apps.transfers",
+    "apps.roles",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS + DOMAIN_STUB_APPS
@@ -533,3 +534,6 @@ FAMILY_TRANSFER_FEE_PERCENT = env.float("FAMILY_TRANSFER_FEE_PERCENT", default=0
 TRANSFER_CLAIM_DAYS = env.int("TRANSFER_CLAIM_DAYS", default=30)
 GIFT_REMINDER_DAYS = env.int("GIFT_REMINDER_DAYS", default=7)
 GIFT_MAX_DAYS_AHEAD = env.int("GIFT_MAX_DAYS_AHEAD", default=365)
+
+# Email-confirmation (and password-reset) links are valid for 24 hours.
+PASSWORD_RESET_TIMEOUT = env.int("PASSWORD_RESET_TIMEOUT", default=24 * 60 * 60)

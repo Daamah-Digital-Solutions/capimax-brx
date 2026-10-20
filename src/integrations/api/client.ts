@@ -171,10 +171,14 @@ export const authApi = {
     email: string;
     password: string;
     full_name?: string;
+    first_name?: string;
+    last_name?: string;
     phone?: string;
     is_us_citizen?: boolean;
     role?: string;
     ref?: string; // broker referral code carried from a /ref/<code> link (Phase 12 Wave A)
+    terms_accepted?: boolean;
+    disclosure_accepted?: boolean;
   }): Promise<void> {
     // Creates the account. We intentionally do NOT log the user in here — the
     // frontend shows a "check your email" screen and the user signs in next,
@@ -2228,5 +2232,56 @@ export const transfersApi = {
     if (fields.notes) form.append("notes", fields.notes);
     form.append("death_certificate", fields.file);
     return rawUpload("/transfers/estate/claims/", form);
+  },
+};
+
+// --------------------------------------------------------------------------- //
+// Multi-role accounts (/api/roles/, apps/roles). Every account is an Investor; Property
+// Owner is granted instantly, the other roles by an application an admin approves.
+// --------------------------------------------------------------------------- //
+export type RoleKey = "investor" | "owner" | "broker" | "lp" | "developer" | "partner";
+
+export interface RoleRow {
+  role: RoleKey;
+  slug: string;
+  label: string;
+  approval: "none" | "instant" | "admin";
+  status: "active" | "pending" | "rejected" | "available";
+  dashboard: string;
+  review_note: string;
+}
+
+export interface RolesOverview {
+  current: string;
+  is_admin: boolean;
+  roles: RoleRow[];
+}
+
+export interface RoleApplicationInfo {
+  role: RoleKey;
+  status: RoleRow["status"];
+  form: { fields: string[]; choices: Record<string, string[]>; docs: string[]; optional_docs: string[] } | null;
+  application: {
+    id: string;
+    status: "pending" | "approved" | "rejected";
+    data: Record<string, string>;
+    review_note: string;
+    submitted_at: string | null;
+    documents: { kind: string; name: string; size: number; uploaded_at: string }[];
+  } | null;
+}
+
+export const rolesApi = {
+  overview: () => rawRequest("/roles/", { auth: true }) as Promise<RolesOverview>,
+  becomeOwner: () => rawRequest("/roles/owner/", { method: "POST", auth: true }) as Promise<RolesOverview>,
+  switchRole: (role: string) =>
+    rawRequest("/roles/switch/", { method: "POST", auth: true, body: { role } }) as Promise<RolesOverview>,
+  application: (slug: string) =>
+    rawRequest(`/roles/applications/${slug}/`, { auth: true }) as Promise<RoleApplicationInfo>,
+  submitApplication: (slug: string, data: Record<string, string>, files: Record<string, File>) => {
+    const form = new FormData();
+    Object.entries(data).forEach(([k, v]) => form.append(k, v));
+    Object.entries(files).forEach(([k, f]) => form.append(k, f));
+    return rawUpload(`/roles/applications/${slug}/`, form);
   },
 };

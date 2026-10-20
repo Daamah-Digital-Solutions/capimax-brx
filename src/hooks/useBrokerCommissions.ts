@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { brokerApi, walletsApi, type BrokerCommissions } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoles } from "@/hooks/useRoles";
 
 // Phase 12 Wave B: the broker's REAL commission data. Commission is credited server-side
 // at the mint/settlement point of a referred investor's primary sale (platform-borne,
@@ -16,8 +17,8 @@ export interface BrokerCommissionsState {
 
 export function useBrokerCommissions(): BrokerCommissionsState {
   const { user } = useAuth();
-  const isApprovedBroker =
-    user?.profile?.role === "broker" && user?.profile?.role_status === "active";
+  const { holds } = useRoles();
+  const isApprovedBroker = holds("broker");
   const [data, setData] = useState<BrokerCommissions | null>(null);
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);

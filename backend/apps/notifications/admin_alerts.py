@@ -30,6 +30,7 @@ KINDS = {
     "support_ticket": "Support ticket",
     "partner_deliverable": "Partner deliverable",
     "estate_claim": "Inheritance claim",
+    "role_application": "Role application",
 }
 
 

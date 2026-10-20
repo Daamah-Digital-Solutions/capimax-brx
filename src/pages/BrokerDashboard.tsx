@@ -23,6 +23,7 @@ import { BrokerVerificationCard } from "@/components/broker/BrokerVerificationCa
 import { useBrokerCommissions } from "@/hooks/useBrokerCommissions";
 import { walletsApi } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoles } from "@/hooks/useRoles";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,8 @@ const listings = [
 
 export default function BrokerDashboard() {
   const { user } = useAuth();
-  const isBroker = user?.profile?.role === "broker";
+  const { holds } = useRoles();
+  const isBroker = holds("broker") || user?.profile?.role === "broker";
   const [filter, setFilter] = useState("all");
 
   // Phase 12 Wave B — REAL commission data (credited at the referred investor's mint/

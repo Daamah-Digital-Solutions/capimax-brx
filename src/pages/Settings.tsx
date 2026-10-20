@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { PWASettingsSection } from "@/components/settings/PWASettingsSection";
+import { RoleAccessCard } from "@/components/roles/RoleAccessCard";
 import { Link } from "react-router-dom";
 import { kycApi } from "@/integrations/api/client";
 import {
@@ -219,6 +220,7 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
+            {user && <RoleAccessCard />}
           </TabsContent>
 
           {/* Security Tab */}

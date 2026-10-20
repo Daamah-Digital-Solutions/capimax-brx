@@ -34,6 +34,8 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { categoryOf, renderNotificationCopy, relativeTime, type NotificationCategory } from "@/lib/notifications";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoles } from "@/hooks/useRoles";
+import { BecomeOwnerCard } from "@/components/roles/RoleAccessGate";
 import { Loader2 } from "lucide-react";
 
 // Phase 7 Wave B: real property submissions from Django.
@@ -100,6 +102,7 @@ export default function OwnerDashboard() {
   // verification card that matches the user's selected role (Phase 8 Wave A). Developer
   // and owner are separate roles/KYB entities; everything else on this page is shared.
   const isDeveloper = user?.profile?.role === "developer";
+  const { holds, isLoading: rolesLoading } = useRoles();
 
   // Real property submissions (Phase 7 Wave B) + owner primary-sale earnings (Wave D).
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -199,7 +202,13 @@ export default function OwnerDashboard() {
               (Phase 7 Wave A) and Developer (Phase 8 Wave A) are separate roles/KYB
               entities sharing this merged dashboard; show the card for the user's role. */}
           <div className="mb-8">
-            {isDeveloper ? <DeveloperVerificationCard /> : <OwnerVerificationCard />}
+            {isDeveloper ? (
+              <DeveloperVerificationCard />
+            ) : user && !rolesLoading && !holds("owner") ? (
+              <BecomeOwnerCard />
+            ) : (
+              <OwnerVerificationCard />
+            )}
           </div>
 
           {/* Stats Overview */}

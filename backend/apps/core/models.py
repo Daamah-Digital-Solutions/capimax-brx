@@ -103,6 +103,9 @@ class Profile(models.Model):
     )
 
     full_name = models.CharField(max_length=255, blank=True, null=True)
+    # Consents given at sign-up (Terms & Conditions, risk disclosure).
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    disclosure_accepted_at = models.DateTimeField(null=True, blank=True)
     phone = models.CharField(max_length=32, blank=True, null=True)
     avatar_url = models.URLField(blank=True, null=True)
     is_us_citizen = models.BooleanField(default=False)  # collected at signup. SPEC §3.0

@@ -15,6 +15,7 @@ OAuth (Google/Apple) scaffolding is documented in oauth.py + README; provider
 keys are env-driven and inert until supplied. SPEC §5.2 / §6.
 """
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import generics, status
@@ -300,6 +301,10 @@ class GoogleOAuthView(APIView):
             release_waiting_on_commit(user)
 
         if created:
+            # Every account gets its custodial wallet at sign-up.
+            from apps.kyc.services import _auto_create_wallet
+
+            transaction.on_commit(lambda: _auto_create_wallet(user))
             # Set the display name on first sight (never overwrite a later edit).
             profile = getattr(user, "profile", None)
             full_name = claims.get("name") or ""

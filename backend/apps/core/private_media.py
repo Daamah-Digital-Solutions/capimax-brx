@@ -36,6 +36,7 @@ PRIVATE_PREFIXES = (
     "owner_documents",
     "owner_kyb_documents",
     "partner_kyb_documents",
+    "role_applications",
     "submission_documents",
     "sukuk_certificates",
 )

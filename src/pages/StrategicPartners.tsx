@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoles } from "@/hooks/useRoles";
 import { PartnerVerificationCard } from "@/components/partner/PartnerVerificationCard";
 import { useAssignments } from "@/hooks/useAssignments";
 import { relativeTime } from "@/lib/notifications";
@@ -56,7 +57,8 @@ export default function StrategicPartners() {
   // Phase 11 Wave A: a role=partner user does their entity KYB + fills their public-
   // directory details here. Wave B: the assignment work portal below is now wired to the
   // real /api/partner/assignments/ surface (mirrors how the developer KYB card surfaces).
-  const isPartner = user?.profile?.role === "partner";
+  const { holds } = useRoles();
+  const isPartner = holds("partner") || user?.profile?.role === "partner";
   const { assignments, activity, uploadDeliverable, submitAssignment } = useAssignments();
 
   // Hidden per-asset file inputs (real deliverable upload, preserving the mock buttons).

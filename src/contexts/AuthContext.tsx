@@ -27,7 +27,7 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string }
+    metadata?: { full_name?: string; first_name?: string; last_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string; terms_accepted?: boolean; disclosure_accepted?: boolean }
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   // Exchange a Google GIS id_token (obtained by the browser) for a backend session.
@@ -81,13 +81,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    metadata?: { full_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string }
+    metadata?: { full_name?: string; first_name?: string; last_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string; terms_accepted?: boolean; disclosure_accepted?: boolean }
   ) => {
     try {
       await authApi.register({
         email,
         password,
         full_name: metadata?.full_name,
+        first_name: metadata?.first_name,
+        last_name: metadata?.last_name,
+        terms_accepted: metadata?.terms_accepted,
+        disclosure_accepted: metadata?.disclosure_accepted,
         phone: metadata?.phone,
         is_us_citizen: metadata?.is_us_citizen,
         role: metadata?.role, // selected role; backend validates + gates it

@@ -38,6 +38,7 @@ import ExitMechanism from "./pages/ExitMechanism";
 import Compliance from "./pages/Compliance";
 import Settings from "./pages/Settings";
 import Kyc from "./pages/Kyc";
+import RoleApply from "./pages/RoleApply";
 import SubmitProperty from "./pages/SubmitProperty";
 import StrategicPartners from "./pages/StrategicPartners";
 import Listings from "./pages/Listings";
@@ -149,6 +150,8 @@ const App = () => (
           <Route path="/faq" element={<FAQ />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/kyc" element={<Kyc />} />
+          <Route path="/roles/apply/:role" element={<RoleApply />} />
+          <Route path="/liquidity-dashboard" element={<Navigate to="/liquidity-provider" replace />} />
           <Route path="/strategic-partners" element={<StrategicPartners />} />
           <Route path="/partners" element={<Partners />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />

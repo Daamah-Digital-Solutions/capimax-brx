@@ -52,6 +52,10 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [isUSCitizen, setIsUSCitizen] = useState(false);
+  // Sign-up consents (both required, recorded server-side) + the visible referral code.
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [disclosureAccepted, setDisclosureAccepted] = useState(false);
+  const [referralInput, setReferralInput] = useState(referralCode ?? "");
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -59,6 +63,8 @@ export default function Auth() {
     password: "",
     confirmPassword: "",
     fullName: "",
+    firstName: "",
+    lastName: "",
     phone: "",
   });
 
@@ -105,11 +111,15 @@ export default function Auth() {
         // role. The backend validates it (rejects 'admin'/unknown) and gates
         // privileged roles behind verification, so this is safe. See DECISIONS.md.
         const { error } = await signUp(formData.email, formData.password, {
-          full_name: formData.fullName,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
+          full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+          terms_accepted: termsAccepted,
+          disclosure_accepted: disclosureAccepted,
           phone: formData.phone,
           is_us_citizen: isUSCitizen,
           role: selectedRole,
-          ref: referralCode,
+          ref: referralInput.trim() || undefined,
         });
 
         if (error) {
@@ -313,6 +323,13 @@ export default function Auth() {
                     ? `لقد أرسلنا رابط تحقق إلى ${formData.email}. يرجى النقر على الرابط لتفعيل حسابك.`
                     : `We've sent a verification link to ${formData.email}. Please click the link to activate your account.`}
                 </p>
+                {selectedRole !== "investor" && (
+                  <p className="text-sm text-muted-foreground mt-3">
+                    {language === "ar"
+                      ? "حسابك اتعمل كمستثمر. بعد تسجيل الدخول تقدر تضيف الدور اللي اخترته من الإعدادات ← صلاحيات الأدوار."
+                      : "Your account starts as an Investor. After signing in, add the role you chose from Settings → Role Access."}
+                  </p>
+                )}
               </div>
               <div className="space-y-3">
                 <Button
@@ -400,19 +417,36 @@ export default function Auth() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "register" && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {language === "ar" ? "الاسم الكامل" : "Full Name"}
-                </label>
-                <div className="relative">
-                  <User className={cn("absolute top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground", isRTL ? "right-3" : "left-3")} />
-                  <input
-                    type="text"
-                    placeholder={language === "ar" ? "أدخل اسمك الكامل" : "Enter your full name"}
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className={cn("w-full h-12 bg-muted rounded-lg outline-none focus:ring-2 focus:ring-primary/50", isRTL ? "pr-11 pl-4" : "pl-11 pr-4")}
-                    required
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      {language === "ar" ? "الاسم الأول" : "First Name"}
+                    </label>
+                    <div className="relative">
+                      <User className={cn("absolute top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground", isRTL ? "right-3" : "left-3")} />
+                      <input
+                        type="text"
+                        autoComplete="given-name"
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                        className={cn("w-full h-12 bg-muted rounded-lg outline-none focus:ring-2 focus:ring-primary/50", isRTL ? "pr-11 pl-4" : "pl-11 pr-4")}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      {language === "ar" ? "اسم العائلة" : "Last Name"}
+                    </label>
+                    <input
+                      type="text"
+                      autoComplete="family-name"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      className="w-full h-12 bg-muted rounded-lg outline-none focus:ring-2 focus:ring-primary/50 px-4"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -491,6 +525,22 @@ export default function Auth() {
               </div>
             )}
 
+            {mode === "register" && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  {language === "ar" ? "كود الإحالة (اختياري)" : "Referral code (optional)"}
+                </label>
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={referralInput}
+                  onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                  placeholder="BRK…"
+                  className="w-full h-12 bg-muted rounded-lg outline-none focus:ring-2 focus:ring-primary/50 px-4"
+                />
+              </div>
+            )}
+
             {mode === "login" && (
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -529,7 +579,13 @@ export default function Auth() {
 
                 {/* Terms Checkbox */}
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 mt-0.5 rounded border-border text-primary focus:ring-primary" required />
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-border text-primary focus:ring-primary"
+                    required
+                  />
                   <span className="text-sm text-muted-foreground">
                     {language === "ar" ? (
                       <>
@@ -544,6 +600,30 @@ export default function Auth() {
                         <Link to="/terms-conditions" className="text-primary hover:underline">Terms & Conditions</Link>
                         {" "}and{" "}
                         <Link to="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>
+                      </>
+                    )}
+                  </span>
+                </label>
+
+                {/* Risk disclosure consent */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={disclosureAccepted}
+                    onChange={(e) => setDisclosureAccepted(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-border text-primary focus:ring-primary"
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {language === "ar" ? (
+                      <>
+                        قرأت وأوافق على{" "}
+                        <Link to="/disclosure" className="text-primary hover:underline">الإفصاح عن المخاطر</Link>
+                      </>
+                    ) : (
+                      <>
+                        I have read and accept the{" "}
+                        <Link to="/disclosure" className="text-primary hover:underline">Risk Disclosure</Link>
                       </>
                     )}
                   </span>

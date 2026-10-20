@@ -55,6 +55,9 @@ class Notification(models.Model):
         GIFT_REMINDER = "gift_reminder", _("Scheduled gift reminder")
         # params.decision (approved|rejected)/number/note.
         ESTATE_CLAIM_DECIDED = "estate_claim_decided", _("Inheritance claim decided")
+        # Role applications (apps/roles). params.role(/dashboard | note/apply_path).
+        ROLE_APPROVED = "role_approved", _("Role approved")
+        ROLE_REJECTED = "role_rejected", _("Role application rejected")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

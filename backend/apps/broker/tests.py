@@ -240,7 +240,8 @@ class RegistrationRefTests(APITestCase):
         )
 
     def _register(self, email, ref=None):
-        body = {"email": email, "password": "pw-12345-strong", "role": "investor"}
+        body = {"email": email, "password": "pw-12345-strong", "role": "investor",
+                "terms_accepted": True, "disclosure_accepted": True}
         if ref is not None:
             body["ref"] = ref
         return self.client.post("/api/auth/register/", body, format="json")

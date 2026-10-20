@@ -26,6 +26,8 @@ class AuthFoundationTests(APITestCase):
             "full_name": "Test Investor",
             "phone": "+971500000000",
             "is_us_citizen": False,
+            "terms_accepted": True,
+            "disclosure_accepted": True,
         }
 
     def _register(self):
@@ -51,12 +53,9 @@ class AuthFoundationTests(APITestCase):
         self.assertEqual(prof.role, "investor")
         self.assertEqual(prof.role_status, "active")
 
-    def test_register_persists_privileged_role_but_gates_it(self):
-        """
-        SECURITY guardrail (Part A #4): a privileged role the user selects IS stored
-        (we follow the frontend) but is parked at PENDING_VERIFICATION — capabilities
-        gated until KYC/KYB activates it. Does not change what the frontend sends.
-        """
+    def test_register_always_creates_an_investor(self):
+        """Multi-role: every account starts as an active Investor; other roles are added
+        later from Role Access (apps/roles), whatever was picked on the sign-up page."""
         for role in ("owner", "broker", "developer", "lp", "partner"):
             email = f"{role}@example.com"
             resp = self.client.post(
@@ -64,10 +63,23 @@ class AuthFoundationTests(APITestCase):
             )
             self.assertEqual(resp.status_code, status.HTTP_201_CREATED, role)
             prof = User.objects.get(email=email).profile
-            self.assertEqual(prof.role, role)
-            self.assertEqual(prof.role_status, "pending_verification", role)
-            self.assertFalse(prof.is_role_active, role)
-            self.assertIsNone(prof.role_verified_at, role)
+            self.assertEqual(prof.role, "investor")
+            self.assertEqual(prof.role_status, "active", role)
+            self.assertIsNotNone(prof.terms_accepted_at)
+            self.assertIsNotNone(prof.disclosure_accepted_at)
+
+    def test_register_requires_both_consents(self):
+        for missing in ("terms_accepted", "disclosure_accepted"):
+            body = {**self.payload, "email": f"no-{missing}@example.com", missing: False}
+            resp = self.client.post(self.register_url, body, format="json")
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, missing)
+            self.assertIn(missing, resp.json())
+
+    def test_register_first_and_last_name(self):
+        body = {**self.payload, "email": "names@example.com", "full_name": "", "first_name": "Sara",
+                "last_name": "Ali"}
+        self.assertEqual(self.client.post(self.register_url, body, format="json").status_code, 201)
+        self.assertEqual(User.objects.get(email="names@example.com").profile.full_name, "Sara Ali")
 
     def test_register_rejects_admin_self_assignment(self):
         """Anti-privilege-escalation: 'admin' can never be self-assigned. SPEC §5."""
