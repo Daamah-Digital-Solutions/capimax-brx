@@ -806,7 +806,7 @@ const translations: Record<Language, Record<string, string>> = {
     "footer.partners": "الشركاء",
     "footer.description": "منصة رائدة للاستثمار العقاري المرمّز تتيح للجميع امتلاك حصص في أفضل العقارات",
     "footer.location": "8 The Green, Ste R, Dover, Kent, DE 19901, USA",
-    "footer.copyright": "© 2024 Capimax BRX. جميع الحقوق محفوظة.",
+    "footer.copyright": "© 2026 Capimax BRX. جميع الحقوق محفوظة.",
     
     // About Page
     "about.badge": "من نحن / About Us",
@@ -2285,7 +2285,7 @@ const translations: Record<Language, Record<string, string>> = {
     "footer.partners": "Partners",
     "footer.description": "A leading tokenized real estate investment platform enabling everyone to own shares in premium properties",
     "footer.location": "8 The Green, Ste R, Dover, Kent, DE 19901, USA",
-    "footer.copyright": "© 2024 Capimax BRX. All rights reserved.",
+    "footer.copyright": "© 2026 Capimax BRX. All rights reserved.",
     
     // About Page
     "about.badge": "About Us / من نحن",
