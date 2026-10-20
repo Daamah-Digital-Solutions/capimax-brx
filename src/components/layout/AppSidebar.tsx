@@ -55,7 +55,7 @@ import { useUnreadCount } from "@/hooks/useNotifications";
 import { useInstallmentPlans } from "@/hooks/useInstallmentPlans";
 import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_LABELS, useRoles } from "@/hooks/useRoles";
-import { rolesApi } from "@/integrations/api/client";
+import { rolesApi, type RoleKey } from "@/integrations/api/client";
 import { toast } from "sonner";
 import {
   Select,
@@ -283,7 +283,14 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const navigate = useNavigate();
   // Multi-role: the roles this account holds; switching changes the CURRENT role
   // (apps/roles). Separate from the "View as Role" preview below, which stays as it is.
-  const { held: heldRoles, current: currentRole, isAdmin: rolesAdmin, refresh: refreshRoles } = useRoles();
+  const {
+    held: heldRoles,
+    current: currentRole,
+    isAdmin: rolesAdmin,
+    refresh: refreshRoles,
+    status: roleStatus,
+    rows: roleRows,
+  } = useRoles();
   const [switchingRole, setSwitchingRole] = useState(false);
   // Live installments badge — the caller's active plans (real, self-scoped), replacing the
   // old hardcoded "3". 0 → no badge, mirroring the notifications count.
@@ -306,6 +313,42 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   useEffect(() => {
     localStorage.setItem('capimax_sidebar_role', selectedRole);
   }, [selectedRole]);
+
+  // Sidebar view → the account role(s) behind it ("Owner / Developer" covers both).
+  const ROLE_FOR_VIEW: Partial<Record<UserRole, RoleKey[]>> = {
+    investor: ["investor"],
+    owner: ["owner", "developer"],
+    liquidity_provider: ["lp"],
+    broker: ["broker"],
+    partner: ["partner"],
+  };
+  const handleViewChange = async (view: UserRole) => {
+    setSelectedRole(view);
+    if (!user || rolesAdmin) return;
+    const target = (ROLE_FOR_VIEW[view] ?? []).find((r) => heldRoles.some((h) => h.role === r));
+    if (!target || target === currentRole) return;
+    setSwitchingRole(true);
+    try {
+      await rolesApi.switchRole(target);
+      await refreshUser();
+      refreshRoles();
+    } catch {
+      /* the view still changes; the real role stays as it was */
+    } finally {
+      setSwitchingRole(false);
+    }
+  };
+  // The access box under the menu: the role this view needs, when the account doesn't hold it.
+  const gateRole: RoleKey | null = (() => {
+    const roles = ROLE_FOR_VIEW[selectedRole];
+    if (!roles || selectedRole === "investor" || rolesAdmin) return null;
+    if (user && roles.some((r) => roleStatus(r) === "active")) return null;
+    return roles[0];
+  })();
+  const gateStatus = gateRole && user ? roleStatus(gateRole) : "available";
+  const gateRow = gateRole ? roleRows.find((r) => r.role === gateRole) : undefined;
+  const gateSlug = gateRole === "lp" ? "liquidity_provider" : gateRole ?? "";
+  const [becomingOwner, setBecomingOwner] = useState(false);
 
   // Default the sidebar to the LOGGED-IN user's role so their real nav shows immediately
   // (no manual selector step). Runs once per logged-in user; manual switching still works
@@ -405,48 +448,6 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           </Button>
         </div>
 
-        {/* My roles — switch the current role among the roles held */}
-        {isOpen && user && !rolesAdmin && heldRoles.length > 1 && (
-          <div className="px-3 pt-3">
-            <div className="flex items-center gap-2 mb-2">
-              <UserCircle className="w-4 h-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {language === "ar" ? "دورك الحالي" : "My role"}
-              </span>
-            </div>
-            <Select
-              value={currentRole ?? "investor"}
-              disabled={switchingRole}
-              onValueChange={async (value) => {
-                setSwitchingRole(true);
-                try {
-                  await rolesApi.switchRole(value);
-                  await refreshUser();
-                  refreshRoles();
-                  setSelectedRole(roleFromProfile(value));
-                  const dash = heldRoles.find((r) => r.role === value)?.dashboard;
-                  if (dash) navigate(dash);
-                } catch (e: any) {
-                  toast.error(e?.message || (language === "ar" ? "تعذّر تبديل الدور" : "Could not switch role"));
-                } finally {
-                  setSwitchingRole(false);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {heldRoles.map((r) => (
-                  <SelectItem key={r.role} value={r.role}>
-                    {language === "ar" ? ROLE_LABELS[r.role].ar : ROLE_LABELS[r.role].en}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
         {/* Role Selector */}
         {isOpen && (
           <div className="px-3 py-3 border-b border-sidebar-border">
@@ -456,7 +457,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 {language === "ar" ? "عرض حسب الدور" : "View as Role"}
               </span>
             </div>
-            <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+            <Select value={selectedRole} disabled={switchingRole} onValueChange={(value) => handleViewChange(value as UserRole)}>
               <SelectTrigger className="w-full h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -468,6 +469,86 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 ))}
               </SelectContent>
             </Select>
+
+            {gateRole && (
+              <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                  <ShieldCheck className="w-4 h-4 text-primary" />
+                  {language === "ar"
+                    ? `صلاحية ${ROLE_LABELS[gateRole].ar}`
+                    : `${ROLE_LABELS[gateRole].en} access`}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1 mb-2 leading-snug">
+                  {gateStatus === "pending"
+                    ? language === "ar"
+                      ? "طلبك قيد مراجعة الإدارة."
+                      : "Your application is pending admin review."
+                    : gateStatus === "rejected"
+                      ? (gateRow?.review_note ? gateRow.review_note + " — " : "") +
+                        (language === "ar" ? "عدّل الطلب وقدّمه تاني." : "Edit your application and submit it again.")
+                      : gateRole === "owner"
+                        ? language === "ar"
+                          ? "بتتصفح منطقة المالك. الدور ده بيتفعّل فوراً."
+                          : "You're previewing the Owner area. This role is granted instantly."
+                        : language === "ar"
+                          ? `بتتصفح منطقة ${ROLE_LABELS[gateRole].ar}. قدّم طلب عشان تفعّلها.`
+                          : `You're previewing the ${ROLE_LABELS[gateRole].en} area. Request access to activate it.`}
+                </p>
+                {gateRole === "owner" && user ? (
+                  <Button
+                    size="sm"
+                    className="w-full h-8 gap-1 text-xs"
+                    disabled={becomingOwner}
+                    onClick={async () => {
+                      setBecomingOwner(true);
+                      try {
+                        await rolesApi.becomeOwner();
+                        await rolesApi.switchRole("owner");
+                        await refreshUser();
+                        refreshRoles();
+                        toast.success(language === "ar" ? "أصبحت مالك عقار" : "You're now a Property Owner");
+                      } catch (e: any) {
+                        toast.error(e?.message || (language === "ar" ? "تعذّر إضافة الدور" : "Could not add the role"));
+                      } finally {
+                        setBecomingOwner(false);
+                      }
+                    }}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    {language === "ar" ? "انضم كمالك" : "Become a Property Owner"}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={gateStatus === "pending" ? "outline" : "default"}
+                    className="w-full h-8 gap-1 text-xs"
+                    onClick={() =>
+                      navigate(
+                        !user
+                          ? `/auth?mode=register`
+                          : gateRole === "owner"
+                            ? "/settings"
+                            : `/roles/apply/${gateSlug}`,
+                      )
+                    }
+                  >
+                    {gateStatus === "pending" ? (
+                      <>
+                        <Clock className="w-3.5 h-3.5" />
+                        {language === "ar" ? "عرض الطلب" : "View application"}
+                      </>
+                    ) : gateStatus === "rejected" ? (
+                      <>{language === "ar" ? "عدّل وقدّم تاني" : "Edit & resubmit"}</>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        {language === "ar" ? "اطلب الصلاحية" : "Request Access"}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
