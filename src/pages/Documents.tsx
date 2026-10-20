@@ -304,9 +304,6 @@ export default function Documents() {
                         <h4 className="font-medium text-foreground truncate">
                           {language === "ar" ? doc.nameAr : doc.name}
                         </h4>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {language === "ar" ? doc.name : doc.nameAr}
-                        </p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           {doc.property && (
                             <span className="flex items-center gap-1">

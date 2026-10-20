@@ -333,15 +333,15 @@ export function LPRegistrationFlow({
                     <SelectValue placeholder={isRTL ? "اختر البلد" : "Select country"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="UAE">UAE</SelectItem>
-                    <SelectItem value="Saudi Arabia">Saudi Arabia</SelectItem>
-                    <SelectItem value="Qatar">Qatar</SelectItem>
-                    <SelectItem value="Kuwait">Kuwait</SelectItem>
-                    <SelectItem value="Bahrain">Bahrain</SelectItem>
-                    <SelectItem value="Oman">Oman</SelectItem>
-                    <SelectItem value="United States">United States</SelectItem>
-                    <SelectItem value="United Kingdom">United Kingdom</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="UAE">{isRTL ? "الإمارات" : "UAE"}</SelectItem>
+                    <SelectItem value="Saudi Arabia">{isRTL ? "السعودية" : "Saudi Arabia"}</SelectItem>
+                    <SelectItem value="Qatar">{isRTL ? "قطر" : "Qatar"}</SelectItem>
+                    <SelectItem value="Kuwait">{isRTL ? "الكويت" : "Kuwait"}</SelectItem>
+                    <SelectItem value="Bahrain">{isRTL ? "البحرين" : "Bahrain"}</SelectItem>
+                    <SelectItem value="Oman">{isRTL ? "عُمان" : "Oman"}</SelectItem>
+                    <SelectItem value="United States">{isRTL ? "الولايات المتحدة" : "United States"}</SelectItem>
+                    <SelectItem value="United Kingdom">{isRTL ? "المملكة المتحدة" : "United Kingdom"}</SelectItem>
+                    <SelectItem value="Other">{isRTL ? "أخرى" : "Other"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -439,11 +439,11 @@ export function LPRegistrationFlow({
                     <SelectValue placeholder={isRTL ? "اختر النطاق" : "Select range"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="under_1m">Under $1M</SelectItem>
+                    <SelectItem value="under_1m">{isRTL ? "أقل من 1 مليون $" : "Under $1M"}</SelectItem>
                     <SelectItem value="1m_10m">$1M - $10M</SelectItem>
                     <SelectItem value="10m_50m">$10M - $50M</SelectItem>
                     <SelectItem value="50m_100m">$50M - $100M</SelectItem>
-                    <SelectItem value="over_100m">Over $100M</SelectItem>
+                    <SelectItem value="over_100m">{isRTL ? "أكثر من 100 مليون $" : "Over $100M"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

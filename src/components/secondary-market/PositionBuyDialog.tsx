@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
 import { AlertTriangle, CalendarClock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -53,7 +54,7 @@ export function PositionBuyDialog({ listing, balance, buying, onOpenChange, onCo
         {listing && terms && (
           <div className="space-y-4">
             <div className="p-4 bg-muted rounded-xl space-y-2 text-sm">
-              <div className="font-medium text-foreground">{listing.property_name}</div>
+              <div className="font-medium text-foreground">{localName(listing, language)}</div>
               <Row
                 label={isAr ? "قيمة المركز" : "Position value"}
                 hint={`${listing.token_amount} × ${money(listing.unit_price)}`}

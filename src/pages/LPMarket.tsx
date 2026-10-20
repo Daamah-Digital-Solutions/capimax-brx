@@ -107,11 +107,13 @@ export default function LPMarket() {
       );
 
       toast.success(
-        target === "lp" ? "Asset listed on LP Market" : "Asset listed on Secondary Market"
+        language === "ar"
+          ? target === "lp" ? "تم عرض الأصل في سوق مزوّدي السيولة" : "تم عرض الأصل في السوق الثانوي"
+          : target === "lp" ? "Asset listed on LP Market" : "Asset listed on Secondary Market"
       );
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Failed to list asset");
+      toast.error(err.message || (language === "ar" ? "تعذّر عرض الأصل" : "Failed to list asset"));
       return { success: false, error: err.message };
     }
   };

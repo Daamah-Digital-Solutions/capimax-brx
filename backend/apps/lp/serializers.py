@@ -161,10 +161,17 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
     reference_price = _Money(read_only=True, allow_null=True)
     discount_percent = serializers.FloatField(read_only=True)
 
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        from apps.wallets.serializers import arabic_property_name
+
+        return arabic_property_name(self, obj.property_id)
+
     class Meta:
         model = LPMarketListing
         fields = (
-            "id", "investor_id", "lp_id", "property_id", "property_name",
+            "id", "investor_id", "lp_id", "property_id", "property_name", "property_name_ar",
             "token_symbol", "token_amount", "unit_price", "total_value",
             "platform_fee_percent", "platform_fee_amount", "net_amount",
             "pricing", "reference_price", "discount_percent", "expires_at", "status",
@@ -193,10 +200,17 @@ class LPHoldingSerializer(serializers.ModelSerializer):
     purchase_price = _Money(read_only=True)
     current_value = _Money(read_only=True)
 
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        from apps.wallets.serializers import arabic_property_name
+
+        return arabic_property_name(self, obj.property_id)
+
     class Meta:
         model = LPHolding
         fields = (
-            "id", "lp_id", "listing_id", "property_id", "property_name",
+            "id", "lp_id", "listing_id", "property_id", "property_name", "property_name_ar",
             "token_symbol", "token_amount", "purchase_price", "current_value",
             "purchase_date", "status", "listed_at", "sold_at",
             "created_at", "updated_at",

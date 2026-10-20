@@ -11,6 +11,7 @@ export interface OwnershipToken {
   wallet_id: string;
   property_id: string;
   property_name: string;
+  property_name_ar?: string;
   token_symbol: string;
   token_amount: number;
   token_value_usd: number;

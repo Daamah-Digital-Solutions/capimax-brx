@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
+import { ar as arLocale } from "date-fns/locale";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -197,7 +199,7 @@ export function LPHoldingsView({
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {holding.property_name}
+                        {localName(holding, language)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -209,7 +211,7 @@ export function LPHoldingsView({
                       ${holding.current_value.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
-                      {format(new Date(holding.purchase_date), "MMM d, yyyy")}
+                      {format(new Date(holding.purchase_date), "MMM d, yyyy", language === "ar" ? { locale: arLocale } : undefined)}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -257,7 +259,7 @@ export function LPHoldingsView({
               <TableBody>
                 {listedHoldings.map((holding) => (
                   <TableRow key={holding.id}>
-                    <TableCell className="font-medium">{holding.property_name}</TableCell>
+                    <TableCell className="font-medium">{localName(holding, language)}</TableCell>
                     <TableCell>{holding.token_amount}</TableCell>
                     <TableCell>
                       {holding.status === "listed_lp" 
@@ -265,7 +267,7 @@ export function LPHoldingsView({
                         : (language === "ar" ? "السوق الثانوي" : "Secondary Market")}
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
-                      {holding.listed_at && format(new Date(holding.listed_at), "MMM d, yyyy")}
+                      {holding.listed_at && format(new Date(holding.listed_at), "MMM d, yyyy", language === "ar" ? { locale: arLocale } : undefined)}
                     </TableCell>
                     <TableCell>{getStatusBadge(holding.status)}</TableCell>
                   </TableRow>
@@ -299,12 +301,12 @@ export function LPHoldingsView({
               <TableBody>
                 {soldHoldings.map((holding) => (
                   <TableRow key={holding.id}>
-                    <TableCell className="font-medium">{holding.property_name}</TableCell>
+                    <TableCell className="font-medium">{localName(holding, language)}</TableCell>
                     <TableCell className="text-right">{holding.token_amount}</TableCell>
                     <TableCell className="text-right">${holding.purchase_price.toLocaleString()}</TableCell>
                     <TableCell className="text-right">${holding.current_value.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
-                      {holding.sold_at && format(new Date(holding.sold_at), "MMM d, yyyy")}
+                      {holding.sold_at && format(new Date(holding.sold_at), "MMM d, yyyy", language === "ar" ? { locale: arLocale } : undefined)}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -48,6 +48,13 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      // A class component (no hooks): read the saved site language directly.
+      let isAr = false;
+      try {
+        isAr = localStorage.getItem("language") === "ar";
+      } catch {
+        /* storage unavailable */
+      }
       return (
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
           <div className="max-w-md w-full text-center space-y-6">
@@ -57,10 +64,12 @@ class ErrorBoundary extends Component<Props, State> {
             
             <div className="space-y-2">
               <h1 className="text-2xl font-bold text-foreground">
-                Something went wrong
+                {isAr ? "حدث خطأ ما" : "Something went wrong"}
               </h1>
               <p className="text-muted-foreground">
-                An unexpected error occurred. Please try refreshing the page or return to the home page.
+                {isAr
+                  ? "حدث خطأ غير متوقع. حاول تحديث الصفحة أو العودة للصفحة الرئيسية."
+                  : "An unexpected error occurred. Please try refreshing the page or return to the home page."}
               </p>
             </div>
 
@@ -75,11 +84,11 @@ class ErrorBoundary extends Component<Props, State> {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button onClick={this.handleRefresh} variant="default">
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh Page
+                {isAr ? "تحديث الصفحة" : "Refresh Page"}
               </Button>
               <Button onClick={this.handleGoHome} variant="outline">
                 <Home className="w-4 h-4 mr-2" />
-                Go Home
+                {isAr ? "الرئيسية" : "Go Home"}
               </Button>
             </div>
           </div>

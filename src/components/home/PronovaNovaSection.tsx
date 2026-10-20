@@ -62,7 +62,7 @@ export function PronovaNovaSection() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-foreground mb-2">
-                    Nova Financing
+                    {t("promo.novaFinancingTitle")}
                   </h3>
                   <p className="text-muted-foreground text-sm">
                     {t("promo.novaDescription")}

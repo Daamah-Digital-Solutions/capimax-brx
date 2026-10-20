@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
 import {
   Building2,
   Search,
@@ -253,7 +254,7 @@ export default function SecondaryMarket() {
                             <Building2 className="w-6 h-6 text-primary" />
                           </div>
                           <div>
-                            <h3 className="font-semibold text-foreground">{l.property_name}</h3>
+                            <h3 className="font-semibold text-foreground">{localName(l, language)}</h3>
                             <span className="text-xs text-muted-foreground font-mono">{l.token_symbol}</span>
                           </div>
                         </div>
@@ -366,7 +367,7 @@ export default function SecondaryMarket() {
                           </div>
                           <div>
                             <h4 className="font-semibold text-foreground">
-                              {l.property_name}
+                              {localName(l, language)}
                               {l.is_position && (
                                 <span className="ms-2 text-xs font-normal text-muted-foreground">
                                   {isAr ? "· مركز تقسيط" : "· installment position"}
@@ -423,7 +424,7 @@ export default function SecondaryMarket() {
                                   <Badge variant={sold ? "destructive" : "success"}>
                                     {sold ? t("secondaryMarket.sell") : t("secondaryMarket.buy")}
                                   </Badge>
-                                  <span className="font-medium text-foreground">{tr.property_name}</span>
+                                  <span className="font-medium text-foreground">{localName(tr, language)}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-foreground">{tr.token_amount}</td>
@@ -488,7 +489,7 @@ export default function SecondaryMarket() {
                             <Building2 className="w-5 h-5 text-primary" />
                           </div>
                           <div>
-                            <div className="font-medium text-foreground">{tk.property_name}</div>
+                            <div className="font-medium text-foreground">{localName(tk, language)}</div>
                             <div className="text-sm text-muted-foreground" dir="ltr">
                               {tk.token_amount} {isAr ? "وحدة" : "units"} · {tk.token_symbol}
                             </div>
@@ -503,7 +504,7 @@ export default function SecondaryMarket() {
               <>
                 <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-center justify-between">
                   <div>
-                    <div className="font-medium text-foreground">{selectedToken.property_name}</div>
+                    <div className="font-medium text-foreground">{localName(selectedToken, language)}</div>
                     <div className="text-sm text-muted-foreground" dir="ltr">
                       {selectedToken.token_amount} {isAr ? "وحدة متاحة" : "units available"}
                     </div>
@@ -647,7 +648,7 @@ export default function SecondaryMarket() {
             <div className="space-y-4 py-2">
               <div className="p-4 bg-muted rounded-xl space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{fundingListing.property_name}</span>
+                  <span className="text-muted-foreground">{localName(fundingListing, language)}</span>
                   <span className="font-medium" dir="ltr">
                     {fundingListing.token_amount} {t("secondaryMarket.units")}
                   </span>

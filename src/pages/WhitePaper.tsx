@@ -62,7 +62,7 @@ export default function WhitePaper() {
             </Button>
             <Button size="lg" variant="outline" className="gap-2">
               <FileText className="h-5 w-5" />
-              {language === 'ar' ? 'تحميل PDF (English)' : 'Download PDF (العربية)'}
+              {language === 'ar' ? 'تحميل PDF (الإنجليزية)' : 'Download PDF (Arabic)'}
             </Button>
           </div>
         </div>

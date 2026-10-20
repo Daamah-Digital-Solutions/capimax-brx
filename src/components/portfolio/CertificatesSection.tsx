@@ -161,7 +161,7 @@ export function CertificatesSection() {
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Building2 className="h-3 w-3" />
-                          {cert.property_name}
+                          {(isArabic && cert.property_name_ar) || cert.property_name}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
@@ -279,7 +279,7 @@ export function CertificatesSection() {
                   {isArabic ? "العقار" : "Property"}
                 </h4>
                 <div className="p-3 bg-muted/50 rounded-lg space-y-1">
-                  <p className="font-medium">{selectedCert.property_name}</p>
+                  <p className="font-medium">{(isArabic && selectedCert.property_name_ar) || selectedCert.property_name}</p>
                   <p className="text-sm text-muted-foreground">
                     {selectedCert.spv_name}
                   </p>

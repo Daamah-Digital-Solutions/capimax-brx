@@ -116,7 +116,7 @@ const publicItems: MenuItem[] = [
   { titleKey: "nav.liquidityProvider", icon: Coins, href: "/liquidity-provider" },
   { titleKey: "nav.partners", icon: Handshake, href: "/partners" },
   { titleKey: "nav.verificationCenter", icon: FileCheck, href: "/verification-center" },
-  { titleKey: "Why Capimax BRX", icon: Sparkles, href: "/#why-capimax-brx" },
+  { titleKey: "nav.whyCapimax", icon: Sparkles, href: "/#why-capimax-brx" },
 ];
 
 const menuSections: MenuSection[] = [
@@ -129,7 +129,7 @@ const menuSections: MenuSection[] = [
     items: [
       { titleKey: "nav.dashboard", icon: LayoutDashboard, href: "/dashboard" },
       { titleKey: "nav.portfolio", icon: Briefcase, href: "/portfolio" },
-      { titleKey: "Re Investment", icon: RefreshCw, href: "/reinvestment" },
+      { titleKey: "nav.reinvestment", icon: RefreshCw, href: "/reinvestment" },
       { titleKey: "nav.familyInvestment", icon: UsersRound, href: "/family-investment" },
       { titleKey: "nav.installments", icon: Calendar, href: "/installments" },
       { titleKey: "nav.distributions", icon: DollarSign, href: "/distributions" },
@@ -137,7 +137,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.wallet", icon: Wallet, href: "/wallet" },
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
       { titleKey: "nav.secondaryMarket", icon: TrendingUp, href: "/secondary-market" },
-      { titleKey: "Live Exits Hub", icon: ArrowRightLeft, href: "/exits-hub" },
+      { titleKey: "nav.exitsHub", icon: ArrowRightLeft, href: "/exits-hub" },
       { titleKey: "nav.documents", icon: FileText, href: "/documents" },
       { titleKey: "nav.notifications", icon: Bell, href: "/notifications" },
       { titleKey: "nav.support", icon: HelpCircle, href: "/support" },
@@ -211,13 +211,13 @@ const menuSections: MenuSection[] = [
     items: [
       { titleKey: "nav.about", icon: Landmark, href: "/about" },
       { titleKey: "nav.howItWorks", icon: Info, href: "/how-it-works" },
-      { titleKey: "Institutional", icon: Building, href: "/institutional" },
-      { titleKey: "Developers / API", icon: FileCheck, href: "/developers" },
-      { titleKey: "Investor Relations", icon: Newspaper, href: "/investor-relations" },
+      { titleKey: "nav.institutional", icon: Building, href: "/institutional" },
+      { titleKey: "nav.developersApi", icon: FileCheck, href: "/developers" },
+      { titleKey: "nav.investorRelations", icon: Newspaper, href: "/investor-relations" },
       { titleKey: "nav.fees", icon: DollarSign, href: "/fees" },
       { titleKey: "nav.exitMechanism", icon: LogOut, href: "/exit-mechanism" },
       { titleKey: "nav.settings", icon: Settings, href: "/settings" },
-      { titleKey: "Security & Audit Log", icon: ShieldCheck, href: "/audit-log" },
+      { titleKey: "nav.auditLog", icon: ShieldCheck, href: "/audit-log" },
     ],
   },
   {
@@ -226,9 +226,9 @@ const menuSections: MenuSection[] = [
     icon: ShieldCheck,
     color: "text-slate-500",
     items: [
-      { titleKey: "FAQ", icon: HelpCircle, href: "/faq" },
-      { titleKey: "Regulation", icon: Scale, href: "/regulation" },
-      { titleKey: "Compliance", icon: FileCheck, href: "/compliance" },
+      { titleKey: "nav.faq", icon: HelpCircle, href: "/faq" },
+      { titleKey: "nav.regulation", icon: Scale, href: "/regulation" },
+      { titleKey: "nav.compliance", icon: FileCheck, href: "/compliance" },
       { titleKey: "nav.privacyPolicy", icon: ShieldCheck, href: "/privacy-policy" },
       { titleKey: "nav.termsConditions", icon: FileText, href: "/terms-conditions" },
       { titleKey: "nav.disclaimer", icon: Info, href: "/disclaimer" },
@@ -702,7 +702,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                       <>
                         <span className="flex-1">{language === "ar" ? "بطاقاتي" : "My Cards"}</span>
                         <span className="px-2 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full">
-                          NEW
+                          {t("nav.new")}
                         </span>
                       </>
                     )}

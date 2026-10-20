@@ -85,6 +85,11 @@ class InvestmentSerializer(serializers.ModelSerializer):
     # Nova certificate (sukuk) review state, so the checkout poll / portfolio can show
     # "under review" or "rejected + reason". Null for non-sukuk buys.
     sukuk = serializers.SerializerMethodField()
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        prop = getattr(obj, "property", None)
+        return (getattr(prop, "name_ar", "") or "") if prop else ""
 
     def get_sukuk(self, obj):
         cert = getattr(obj, "sukuk_certificate", None)
@@ -98,6 +103,7 @@ class InvestmentSerializer(serializers.ModelSerializer):
             "id",
             "property_id",
             "property_name",
+            "property_name_ar",
             "amount_invested",
             "token_amount",
             "token_symbol",

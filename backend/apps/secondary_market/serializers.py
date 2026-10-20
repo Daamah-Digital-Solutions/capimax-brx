@@ -31,11 +31,18 @@ class SecondaryMarketListingSerializer(serializers.ModelSerializer):
     assumed_principal = _Money(read_only=True, allow_null=True)
     position = serializers.SerializerMethodField()
 
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        from apps.wallets.serializers import arabic_property_name
+
+        return arabic_property_name(self, obj.property_id)
+
     class Meta:
         model = SecondaryMarketListing
         fields = (
             "id", "seller_id", "seller_type", "buyer_id", "buyer_type",
-            "property_id", "property_name", "token_symbol", "token_amount",
+            "property_id", "property_name", "property_name_ar", "token_symbol", "token_amount",
             "unit_price", "total_value", "platform_fee_percent",
             "platform_fee_amount", "net_amount", "fee_payer", "buyer_total",
             "plan_id", "is_position", "position_value", "paid_principal",

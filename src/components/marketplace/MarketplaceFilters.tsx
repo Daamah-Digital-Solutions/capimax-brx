@@ -37,7 +37,6 @@ function FilterSection({ title, titleEn, icon: Icon, children, defaultOpen = tru
         <div className="flex items-center gap-2">
           <Icon className="w-4 h-4 text-primary" />
           <span className="font-medium text-foreground">{title}</span>
-          <span className="text-xs text-muted-foreground">/ {titleEn}</span>
         </div>
         {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
@@ -307,7 +306,7 @@ export function MarketplaceFilters({
             <span className="text-muted-foreground">{t("filters.to")} {yieldRange[1]}%</span>
           </div>
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Min</label>
+            <label className="text-xs text-muted-foreground">{language === "ar" ? "الحد الأدنى" : "Min"}</label>
             <input
               type="range"
               min="0"
@@ -316,7 +315,7 @@ export function MarketplaceFilters({
               onChange={(e) => setYieldRange([parseInt(e.target.value), yieldRange[1]])}
               className="w-full accent-primary"
             />
-            <label className="text-xs text-muted-foreground">Max</label>
+            <label className="text-xs text-muted-foreground">{language === "ar" ? "الحد الأقصى" : "Max"}</label>
             <input
               type="range"
               min="0"

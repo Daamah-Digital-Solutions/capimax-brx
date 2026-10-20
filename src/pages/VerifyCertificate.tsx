@@ -18,9 +18,16 @@ import {
   Loader2
 } from "lucide-react";
 import { format } from "date-fns";
+import { ar as arLocale } from "date-fns/locale";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const VerifyCertificate = () => {
   const { code } = useParams<{ code: string }>();
+  const { language, isRTL } = useLanguage();
+  const isAr = language === "ar";
+  const L = (en: string, ar: string) => (isAr ? ar : en);
+  const fmt = (d: string | Date, pattern: string) =>
+    format(new Date(d), isAr ? pattern.replace("'at'", "'الساعة'") : pattern, isAr ? { locale: arLocale } : undefined);
 
   const { data: certificate, isLoading, error } = useQuery({
     queryKey: ['verify-certificate', code],
@@ -38,21 +45,21 @@ const VerifyCertificate = () => {
         return (
           <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-lg px-4 py-2">
             <CheckCircle className="w-5 h-5 mr-2" />
-            Final - Verified
+            {L("Final - Verified", "نهائية - موثّقة")}
           </Badge>
         );
       case 'provisional':
         return (
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-lg px-4 py-2">
             <Clock className="w-5 h-5 mr-2" />
-            Provisional
+            {L("Provisional", "مبدئية")}
           </Badge>
         );
       case 'revoked':
         return (
           <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-lg px-4 py-2">
             <XCircle className="w-5 h-5 mr-2" />
-            Revoked
+            {L("Revoked", "ملغاة")}
           </Badge>
         );
       default:
@@ -65,7 +72,7 @@ const VerifyCertificate = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Verifying certificate...</p>
+          <p className="text-muted-foreground">{L("Verifying certificate...", "جارٍ التحقق من الشهادة...")}</p>
         </div>
       </div>
     );
@@ -77,18 +84,22 @@ const VerifyCertificate = () => {
         <Card className="max-w-md w-full border-red-500/30 bg-red-500/5">
           <CardContent className="pt-6 text-center">
             <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-foreground mb-2">Certificate Not Found</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">{L("Certificate Not Found", "الشهادة غير موجودة")}</h1>
             <p className="text-muted-foreground mb-6">
-              The verification code <span className="font-mono text-red-400">{code}</span> does not match any certificate in our system.
+              {L("The verification code", "رمز التحقق")} <span className="font-mono text-red-400" dir="ltr">{code}</span>{" "}
+              {L("does not match any certificate in our system.", "لا يطابق أي شهادة في نظامنا.")}
             </p>
             <p className="text-sm text-muted-foreground">
-              Please ensure you have entered the correct verification code or contact support if you believe this is an error.
+              {L(
+                "Please ensure you have entered the correct verification code or contact support if you believe this is an error.",
+                "تأكد من إدخال رمز التحقق الصحيح، أو تواصل مع الدعم إذا كنت تعتقد أن هناك خطأ.",
+              )}
             </p>
             <Link 
               to="/" 
               className="inline-block mt-6 text-primary hover:underline"
             >
-              Return to Home
+              {L("Return to Home", "العودة للرئيسية")}
             </Link>
           </CardContent>
         </Card>
@@ -97,7 +108,7 @@ const VerifyCertificate = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8 px-4">
+    <div className="min-h-screen bg-background py-8 px-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -105,7 +116,7 @@ const VerifyCertificate = () => {
             <Shield className="w-8 h-8 text-primary" />
             <h1 className="text-2xl font-bold text-foreground">Capimax BRX</h1>
           </div>
-          <h2 className="text-xl text-muted-foreground">Certificate Verification</h2>
+          <h2 className="text-xl text-muted-foreground">{L("Certificate Verification", "التحقق من الشهادة")}</h2>
         </div>
 
         {/* Status Card */}
@@ -125,9 +136,10 @@ const VerifyCertificate = () => {
               {getStatusBadge(certificate.status)}
               
               <p className="mt-4 text-muted-foreground">
-                {certificate.status === 'final' && "This certificate has been verified and is authentic."}
-                {certificate.status === 'provisional' && "This certificate is provisional and pending final approval."}
-                {certificate.status === 'revoked' && `This certificate has been revoked. Reason: ${certificate.revocation_reason || 'Not specified'}`}
+                {certificate.status === 'final' && L("This certificate has been verified and is authentic.", "تم التحقق من هذه الشهادة وهي أصلية.")}
+                {certificate.status === 'provisional' && L("This certificate is provisional and pending final approval.", "هذه الشهادة مبدئية وبانتظار الاعتماد النهائي.")}
+                {certificate.status === 'revoked' &&
+                  `${L("This certificate has been revoked. Reason:", "تم إلغاء هذه الشهادة. السبب:")} ${certificate.revocation_reason || L("Not specified", "غير محدد")}`}
               </p>
             </div>
           </CardContent>
@@ -138,20 +150,20 @@ const VerifyCertificate = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Certificate Details
+              {L("Certificate Details", "تفاصيل الشهادة")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Certificate Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">Certificate ID</p>
+                <p className="text-sm text-muted-foreground">{L("Certificate ID", "رقم الشهادة")}</p>
                 <p className="font-mono font-semibold text-foreground">{certificate.certificate_id}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Issue Date</p>
+                <p className="text-sm text-muted-foreground">{L("Issue Date", "تاريخ الإصدار")}</p>
                 <p className="font-semibold text-foreground">
-                  {format(new Date(certificate.issue_date), "MMMM dd, yyyy 'at' HH:mm")}
+                  {fmt(certificate.issue_date, "MMMM dd, yyyy 'at' HH:mm")}
                 </p>
               </div>
             </div>
@@ -162,16 +174,16 @@ const VerifyCertificate = () => {
             <div>
               <h3 className="flex items-center gap-2 font-semibold mb-3 text-foreground">
                 <User className="w-4 h-4" />
-                Investor Information
+                {L("Investor Information", "بيانات المستثمر")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
                 <div>
-                  <p className="text-sm text-muted-foreground">Legal Name</p>
+                  <p className="text-sm text-muted-foreground">{L("Legal Name", "الاسم القانوني")}</p>
                   <p className="font-semibold text-foreground">{certificate.investor_name}</p>
                 </div>
                 {certificate.investor_id_masked && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Investor ID</p>
+                    <p className="text-sm text-muted-foreground">{L("Investor ID", "رقم المستثمر")}</p>
                     <p className="font-mono text-foreground">{certificate.investor_id_masked}</p>
                   </div>
                 )}
@@ -184,31 +196,31 @@ const VerifyCertificate = () => {
             <div>
               <h3 className="flex items-center gap-2 font-semibold mb-3 text-foreground">
                 <Building2 className="w-4 h-4" />
-                Property & SPV Information
+                {L("Property & SPV Information", "بيانات العقار والشركة ذات الغرض الخاص")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
                 <div>
-                  <p className="text-sm text-muted-foreground">SPV Name</p>
+                  <p className="text-sm text-muted-foreground">{L("SPV Name", "اسم الشركة ذات الغرض الخاص")}</p>
                   <p className="font-semibold text-foreground">{certificate.spv_name}</p>
                 </div>
                 {certificate.spv_registration_ref && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Registration Reference</p>
+                    <p className="text-sm text-muted-foreground">{L("Registration Reference", "مرجع التسجيل")}</p>
                     <p className="font-mono text-foreground">{certificate.spv_registration_ref}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-sm text-muted-foreground">Property Name</p>
+                  <p className="text-sm text-muted-foreground">{L("Property Name", "اسم العقار")}</p>
                   <p className="font-semibold text-foreground">{certificate.property_name}</p>
                 </div>
                 {certificate.property_location && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Location</p>
+                    <p className="text-sm text-muted-foreground">{L("Location", "الموقع")}</p>
                     <p className="text-foreground">{certificate.property_location}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-sm text-muted-foreground">Listing ID</p>
+                  <p className="text-sm text-muted-foreground">{L("Listing ID", "رقم الإدراج")}</p>
                   <p className="font-mono text-foreground">{certificate.listing_id}</p>
                 </div>
               </div>
@@ -220,42 +232,42 @@ const VerifyCertificate = () => {
             <div>
               <h3 className="flex items-center gap-2 font-semibold mb-3 text-foreground">
                 <DollarSign className="w-4 h-4" />
-                Investment Details
+                {L("Investment Details", "تفاصيل الاستثمار")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
                 <div>
-                  <p className="text-sm text-muted-foreground">Investment Amount</p>
+                  <p className="text-sm text-muted-foreground">{L("Investment Amount", "مبلغ الاستثمار")}</p>
                   <p className="font-semibold text-foreground">
                     ${Number(certificate.investment_amount).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Units Purchased</p>
+                  <p className="text-sm text-muted-foreground">{L("Units Purchased", "الوحدات المشتراة")}</p>
                   <p className="font-semibold text-foreground">
                     {Number(certificate.units_purchased).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Unit Price</p>
+                  <p className="text-sm text-muted-foreground">{L("Unit Price", "سعر الوحدة")}</p>
                   <p className="font-semibold text-foreground">
                     ${Number(certificate.unit_price).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Ownership Percentage</p>
+                  <p className="text-sm text-muted-foreground">{L("Ownership Percentage", "نسبة الملكية")}</p>
                   <p className="font-semibold text-foreground">
                     {Number(certificate.ownership_percentage).toFixed(4)}%
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Subscription Date</p>
+                  <p className="text-sm text-muted-foreground">{L("Subscription Date", "تاريخ الاكتتاب")}</p>
                   <p className="text-foreground">
-                    {format(new Date(certificate.subscription_date), "MMMM dd, yyyy")}
+                    {fmt(certificate.subscription_date, "MMMM dd, yyyy")}
                   </p>
                 </div>
                 {certificate.platform_fee && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Platform Fee</p>
+                    <p className="text-sm text-muted-foreground">{L("Platform Fee", "رسوم المنصة")}</p>
                     <p className="text-foreground">
                       ${Number(certificate.platform_fee).toLocaleString()}
                     </p>
@@ -270,20 +282,20 @@ const VerifyCertificate = () => {
             <div>
               <h3 className="flex items-center gap-2 font-semibold mb-3 text-foreground">
                 <Calendar className="w-4 h-4" />
-                Verification & Authorization
+                {L("Verification & Authorization", "التحقق والاعتماد")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
                 <div>
-                  <p className="text-sm text-muted-foreground">Verification Code</p>
+                  <p className="text-sm text-muted-foreground">{L("Verification Code", "رمز التحقق")}</p>
                   <p className="font-mono text-foreground">{certificate.verification_code}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Authorized Signatory</p>
+                  <p className="text-sm text-muted-foreground">{L("Authorized Signatory", "المفوّض بالتوقيع")}</p>
                   <p className="text-foreground">{certificate.authorized_signatory}</p>
                 </div>
                 {certificate.digital_signature_hash && (
                   <div className="md:col-span-2">
-                    <p className="text-sm text-muted-foreground">Digital Signature Hash</p>
+                    <p className="text-sm text-muted-foreground">{L("Digital Signature Hash", "بصمة التوقيع الرقمي")}</p>
                     <p className="font-mono text-xs text-foreground break-all">
                       {certificate.digital_signature_hash}
                     </p>
@@ -291,9 +303,9 @@ const VerifyCertificate = () => {
                 )}
                 {certificate.finalized_at && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Finalized At</p>
+                    <p className="text-sm text-muted-foreground">{L("Finalized At", "تاريخ الاعتماد النهائي")}</p>
                     <p className="text-foreground">
-                      {format(new Date(certificate.finalized_at), "MMMM dd, yyyy 'at' HH:mm")}
+                      {fmt(certificate.finalized_at, "MMMM dd, yyyy 'at' HH:mm")}
                     </p>
                   </div>
                 )}
@@ -304,15 +316,15 @@ const VerifyCertificate = () => {
 
         {/* Footer */}
         <div className="text-center mt-8 text-sm text-muted-foreground">
-          <p>This verification was performed on {format(new Date(), "MMMM dd, yyyy 'at' HH:mm")}</p>
+          <p>{L("This verification was performed on", "تم إجراء هذا التحقق في")} {fmt(new Date(), "MMMM dd, yyyy 'at' HH:mm")}</p>
           <p className="mt-2">
-            For questions about this certificate, please contact{" "}
+            {L("For questions about this certificate, please contact", "للاستفسار عن هذه الشهادة، تواصل مع")}{" "}
             <a href="mailto:support@capimax.io" className="text-primary hover:underline">
               support@capimax.io
             </a>
           </p>
           <Link to="/" className="inline-block mt-4 text-primary hover:underline">
-            Visit Capimax BRX
+            {L("Visit Capimax BRX", "زيارة Capimax BRX")}
           </Link>
         </div>
       </div>

@@ -58,16 +58,21 @@ export function GoogleSignInButton() {
   const { loginWithGoogle } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const rendered = useRef(false); // guard StrictMode double-invoke
+  const renderedLang = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!CLIENT_ID || rendered.current) return;
+    if (!CLIENT_ID || renderedLang.current === language) return;
     let active = true;
 
     loadGis()
       .then(() => {
-        if (!active || rendered.current || !containerRef.current || !window.google) return;
-        rendered.current = true;
-        window.google.accounts.id.initialize({
+        if (!active || renderedLang.current === language || !containerRef.current || !window.google) return;
+        renderedLang.current = language;
+        // The button is drawn in the site's language; redraw it when the language changes.
+        containerRef.current.innerHTML = "";
+        if (!rendered.current) {
+          rendered.current = true;
+          window.google.accounts.id.initialize({
           client_id: CLIENT_ID,
           callback: async (resp: GoogleCredentialResponse) => {
             if (!resp.credential) return;
@@ -80,7 +85,8 @@ export function GoogleSignInButton() {
               });
             }
           },
-        });
+          });
+        }
         window.google.accounts.id.renderButton(containerRef.current, {
           type: "standard",
           theme: "outline",

@@ -18,6 +18,19 @@ from .models import (
 )
 
 
+def arabic_property_name(serializer, slug: str) -> str:
+    """The property's Arabic name for a holding/record that stores only the English one
+    (cached per response, so a list doesn't query once per row)."""
+    from apps.properties.models import Property
+
+    cache = serializer.context.setdefault("_property_name_ar", {})
+    if slug not in cache:
+        cache[slug] = (
+            Property.objects.filter(slug=slug).values_list("name_ar", flat=True).first() or ""
+        )
+    return cache[slug]
+
+
 class OwnershipTokenSerializer(serializers.ModelSerializer):
     """
     Matches the frontend `OwnershipToken` shape (src/hooks/useOwnershipTokens.ts).
@@ -29,6 +42,10 @@ class OwnershipTokenSerializer(serializers.ModelSerializer):
     # installment's unpaid, still-locked portion). `available_amount` = token_amount −
     # locked_amount. Lets holdings honestly show "X of Y released" without a separate call.
     available_amount = serializers.IntegerField(read_only=True)
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        return arabic_property_name(self, obj.property_id)
 
     class Meta:
         model = OwnershipToken
@@ -37,6 +54,7 @@ class OwnershipTokenSerializer(serializers.ModelSerializer):
             "wallet_id",
             "property_id",
             "property_name",
+            "property_name_ar",
             "token_symbol",
             "token_amount",
             "locked_amount",

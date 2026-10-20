@@ -67,7 +67,7 @@ export function Footer() {
               </div>
               <div>
                 <h3 className="font-display text-lg font-bold text-foreground">Capimax BRX</h3>
-                <p className="text-xs text-muted-foreground">Real Estate Tokenization</p>
+                <p className="text-xs text-muted-foreground">{t("footer.tagline")}</p>
               </div>
             </div>
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
@@ -83,7 +83,7 @@ export function Footer() {
                 <address className="not-italic text-foreground/90 leading-relaxed">
                   8 The Green, Ste R<br />
                   Dover, Kent, DE 19901<br />
-                  United States
+                  {language === "ar" ? "الولايات المتحدة" : "United States"}
                 </address>
               </div>
 

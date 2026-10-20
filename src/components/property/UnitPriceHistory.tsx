@@ -34,6 +34,13 @@ interface Props {
   className?: string;
 }
 
+// "Phase 3" (typed in the admin) reads "المرحلة 3" on the Arabic site.
+const phaseName = (label: string | null | undefined, isAr: boolean) => {
+  if (!label) return label;
+  const m = /^phase\s*(\d+)$/i.exec(label.trim());
+  return isAr && m ? `المرحلة ${m[1]}` : label;
+};
+
 export function UnitPriceHistory({ slug, avgCost, compact, hideIfUnchanged, title, className }: Props) {
   const { language } = useLanguage();
   const isAr = language === "ar";
@@ -102,7 +109,7 @@ export function UnitPriceHistory({ slug, avgCost, compact, hideIfUnchanged, titl
         </div>
         <Stat
           label={data.label ? (isAr ? "المرحلة الحالية" : "Current phase") : isAr ? "آخر تحديث" : "Last update"}
-          value={data.label || (data.updatedAt ? fmtDate(data.updatedAt) : isAr ? "لم يتغيّر" : "Unchanged")}
+          value={phaseName(data.label, isAr) || (data.updatedAt ? fmtDate(data.updatedAt) : isAr ? "لم يتغيّر" : "Unchanged")}
         />
       </div>
 
@@ -185,7 +192,7 @@ export function UnitPriceHistory({ slug, avgCost, compact, hideIfUnchanged, titl
                     <span className="font-medium">{money(Number(p.price))}</span>
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    {[p.label, p.note].filter(Boolean).join(" — ") || "—"}
+                    {[phaseName(p.label, isAr), p.note].filter(Boolean).join(" — ") || "—"}
                   </td>
                 </tr>
               ))}

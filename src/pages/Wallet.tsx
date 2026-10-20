@@ -87,6 +87,21 @@ const paymentMethods = [
   { id: "google", nameAr: "Google Pay", nameEn: "Google Pay", icon: Smartphone, available: true },
 ];
 
+// Ledger types not in SOURCE_LABEL above (same wording as the receipts).
+const EXTRA_SOURCE_LABEL: Record<string, { en: string; ar: string }> = {
+  deposit: { en: "Wallet top-up", ar: "شحن المحفظة" },
+  reinvestment: { en: "Purchase paid from the wallet", ar: "شراء من المحفظة" },
+  installment: { en: "Installment paid from the wallet", ar: "قسط مدفوع من المحفظة" },
+  installment_autodebit: { en: "Installment auto-debited", ar: "خصم قسط تلقائي" },
+  secondary_market_purchase: { en: "Secondary market purchase", ar: "شراء من السوق الثانوي" },
+  secondary_market_sale: { en: "Secondary market sale proceeds", ar: "عائدات بيع في السوق الثانوي" },
+  purchase_refund: { en: "Purchase refunded to the wallet", ar: "استرداد مبلغ شراء للمحفظة" },
+  crypto_underpaid_refund: { en: "Crypto payment below the amount due — returned", ar: "دفعة كريبتو أقل من المستحق — أُعيدت" },
+  crypto_overpaid_credit: { en: "Crypto payment above the amount due — extra credited", ar: "دفعة كريبتو أعلى من المستحق — أُضيف الفرق" },
+  family_accrual_release: { en: "Family allocation released", ar: "صرف مخصص عائلي" },
+  estate_returned: { en: "Inheritance returned", ar: "ميراث مُعاد" },
+};
+
 export default function Wallet() {
   const { t, language } = useLanguage();
   const { exporting, run: runExport } = useExport();
@@ -163,7 +178,9 @@ export default function Wallet() {
 
   const getTransactionLabel = (tx: BalanceTransactionRow) => {
     const mapped = SOURCE_LABEL[tx.source];
-    return mapped ? (isAr ? mapped.ar : mapped.en) : tx.source.replace(/_/g, " ");
+    const extra = EXTRA_SOURCE_LABEL[tx.source];
+    if (mapped || extra) return isAr ? (mapped || extra).ar : (mapped || extra).en;
+    return isAr ? "حركة محفظة" : tx.source.replace(/_/g, " ");
   };
 
   const resetDepositFlow = () => {

@@ -14,6 +14,7 @@ export interface Certificate {
   investor_id_masked: string;
   spv_name: string;
   property_name: string;
+  property_name_ar?: string;
   property_location: string;
   listing_id: string;
   investment_amount: number;

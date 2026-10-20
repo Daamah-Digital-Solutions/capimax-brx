@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -253,7 +254,7 @@ export function LPMarketplaceView({
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-muted-foreground" />
-                            {listing.property_name}
+                            {localName(listing, language)}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -294,7 +295,7 @@ export function LPMarketplaceView({
                           <div className="flex items-center gap-2">
                             <Building2 className="h-5 w-5 text-muted-foreground" />
                             <div>
-                              <h4 className="font-medium">{listing.property_name}</h4>
+                              <h4 className="font-medium">{localName(listing, language)}</h4>
                               <Badge variant="outline" className="mt-1">{listing.token_symbol}</Badge>
                             </div>
                           </div>
@@ -302,11 +303,11 @@ export function LPMarketplaceView({
                         
                         <div className="grid grid-cols-3 gap-2 text-sm pt-2 border-t">
                           <div>
-                            <p className="text-muted-foreground text-xs">Tokens</p>
+                            <p className="text-muted-foreground text-xs">{language === "ar" ? "الرموز" : "Tokens"}</p>
                             <p className="font-medium">{listing.token_amount}</p>
                           </div>
                           <div>
-                            <p className="text-muted-foreground text-xs">Unit Price</p>
+                            <p className="text-muted-foreground text-xs">{language === "ar" ? "سعر الوحدة" : "Unit Price"}</p>
                             <p className="font-medium">${listing.unit_price}</p>
                           </div>
                           <div>

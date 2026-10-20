@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { propertyLabel } from "@/lib/propertyLabels";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -285,7 +286,7 @@ export default function Listings() {
                                 {isAr ? p.nameAr || p.name : p.name}
                               </h3>
                               {fundedBadge(p.funded)}
-                              <Badge variant="outline" className="capitalize">{p.assetType}</Badge>
+                              <Badge variant="outline">{propertyLabel(p.assetType, isAr)}</Badge>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-4 text-sm">

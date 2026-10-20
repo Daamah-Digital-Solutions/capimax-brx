@@ -123,6 +123,24 @@ const projectReports = {
   ]
 };
 
+// English for the Arabic-only labels in the sample data above (shown in the English site).
+const EN_LABELS: Record<string, string> = {
+  "الرياض، المملكة العربية السعودية": "Riyadh, Saudi Arabia",
+  "دبي، الإمارات": "Dubai, UAE",
+  "المنامة، البحرين": "Manama, Bahrain",
+  "سكني": "Residential",
+  "تجاري": "Commercial",
+  "فندقي": "Hospitality",
+  "مكتبي": "Office",
+  "شركة التدقيق الخليجية": "Gulf Auditing Company",
+  "إدارة الأصول": "Asset Management",
+  "شركة الهندسة المتحدة": "United Engineering Company",
+  "مدير المشروع": "Project Manager",
+  "إدارة المستثمرين": "Investor Relations",
+  "شركة التقييم الدولية": "International Valuation Company",
+  "يناير 2024": "January 2024",
+};
+
 const reportCategories = [
   { id: "financial", label: "التقارير المالية", labelEn: "Financial Reports", icon: FileSpreadsheet, count: 3 },
   { id: "construction", label: "تقارير الإنشاء", labelEn: "Construction Reports", icon: HardHat, count: 2 },
@@ -134,6 +152,7 @@ export default function PublicReports() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedProjectId = searchParams.get("project");
   const { t, isRTL, language } = useLanguage();
+  const tx = (s: string) => (language === "ar" ? s : EN_LABELS[s] ?? s);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState("all");
@@ -348,7 +367,7 @@ export default function PublicReports() {
                     </h3>
                     <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5" />
-                      {project.location}
+                      {tx(project.location)}
                     </p>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -406,7 +425,6 @@ export default function PublicReports() {
                         <h2 className="text-2xl font-bold text-foreground mb-1">
                           {language === 'ar' ? selectedProject.name : selectedProject.nameEn}
                         </h2>
-                        <p className="text-muted-foreground">{language === 'ar' ? selectedProject.nameEn : selectedProject.name}</p>
                       </div>
                       <Badge 
                         className={
@@ -424,12 +442,12 @@ export default function PublicReports() {
                         <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الموقع' : 'Location'}</p>
                         <p className="text-sm font-medium flex items-center gap-1">
                           <MapPin className="w-3.5 h-3.5 text-primary" />
-                          {selectedProject.location}
+                          {tx(selectedProject.location)}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">{t("publicReports.assetType")}</p>
-                        <p className="text-sm font-medium">{selectedProject.type}</p>
+                        <p className="text-sm font-medium">{tx(selectedProject.type)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">{t("publicReports.totalValue")}</p>
@@ -520,13 +538,12 @@ export default function PublicReports() {
                         </div>
                         <div>
                           <h4 className="font-medium text-foreground mb-1">{language === 'ar' ? report.title : report.titleEn}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">{language === 'ar' ? report.titleEn : report.title}</p>
                           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5" />
-                              {t("publicReports.reportPeriod")}: {report.period}
+                              {t("publicReports.reportPeriod")}: {tx(report.period)}
                             </span>
-                            <span>{t("publicReports.reportIssuer")}: {report.issuer}</span>
+                            <span>{t("publicReports.reportIssuer")}: {tx(report.issuer)}</span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3.5 h-3.5" />
                               {report.date}

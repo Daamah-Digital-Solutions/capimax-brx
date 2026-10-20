@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,7 +104,7 @@ export function ResaleForm({
               <div className="flex items-start gap-3">
                 <Building2 className="h-10 w-10 text-primary p-2 bg-primary/10 rounded-lg" />
                 <div className="flex-1">
-                  <h4 className="font-semibold">{holding.property_name}</h4>
+                  <h4 className="font-semibold">{localName(holding, language)}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="outline">{holding.token_symbol}</Badge>
                     <span className="text-sm text-muted-foreground">

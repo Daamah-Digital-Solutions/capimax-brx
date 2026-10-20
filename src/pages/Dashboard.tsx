@@ -72,7 +72,7 @@ export default function Dashboard() {
     for (const tk of tokens) {
       const cur = map.get(tk.property_id) ?? {
         propertyId: tk.property_id,
-        name: tk.property_name,
+        name: (isAr && tk.property_name_ar) || tk.property_name,
         units: 0,
         value: 0,
         ownership: 0,

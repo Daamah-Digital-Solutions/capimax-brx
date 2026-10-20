@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
+import { ar as arLocale } from "date-fns/locale";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,15 +88,15 @@ export function InvestorAssetsView({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "listed":
-        return <Badge variant="info">Listed</Badge>;
+        return <Badge variant="info">{language === "ar" ? "معروض" : "Listed"}</Badge>;
       case "pending":
-        return <Badge variant="warning">Pending</Badge>;
+        return <Badge variant="warning">{language === "ar" ? "قيد الانتظار" : "Pending"}</Badge>;
       case "completed":
-        return <Badge variant="success">Completed</Badge>;
+        return <Badge variant="success">{language === "ar" ? "مكتمل" : "Completed"}</Badge>;
       case "cancelled":
-        return <Badge variant="secondary">Cancelled</Badge>;
+        return <Badge variant="secondary">{language === "ar" ? "ملغى" : "Cancelled"}</Badge>;
       case "expired":
-        return <Badge variant="destructive">Expired</Badge>;
+        return <Badge variant="destructive">{language === "ar" ? "منتهي" : "Expired"}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -294,11 +296,11 @@ export function InvestorAssetsView({
                         <div className="flex items-center gap-2">
                           <Building2 className="h-5 w-5 text-muted-foreground" />
                           <div>
-                            <h4 className="font-medium line-clamp-1">{token.property_name}</h4>
+                            <h4 className="font-medium line-clamp-1">{localName(token, language)}</h4>
                             <Badge variant="outline" className="mt-1">{token.token_symbol}</Badge>
                           </div>
                         </div>
-                        <Badge variant="success" className="shrink-0">Active</Badge>
+                        <Badge variant="success" className="shrink-0">{language === "ar" ? "نشط" : "Active"}</Badge>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3 pt-2 border-t">
@@ -381,7 +383,7 @@ export function InvestorAssetsView({
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {listing.property_name}
+                        {localName(listing, language)}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">{listing.token_amount}</TableCell>
@@ -409,7 +411,7 @@ export function InvestorAssetsView({
                       )}
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
-                      {format(new Date(listing.listed_at), "MMM d, yyyy")}
+                      {format(new Date(listing.listed_at), "MMM d, yyyy", language === "ar" ? { locale: arLocale } : undefined)}
                     </TableCell>
                     <TableCell>
                       {listing.status === "listed" && (
@@ -451,17 +453,17 @@ export function InvestorAssetsView({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-5 w-5 text-muted-foreground" />
-                    <span className="font-medium">{selectedAsset.property_name}</span>
+                    <span className="font-medium">{localName(selectedAsset, language)}</span>
                   </div>
                   <Badge variant="outline">{selectedAsset.token_symbol}</Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Available Tokens</p>
+                    <p className="text-muted-foreground">{language === "ar" ? "الرموز المتاحة" : "Available Tokens"}</p>
                     <p className="font-semibold">{selectedAsset.token_amount}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Total Value</p>
+                    <p className="text-muted-foreground">{language === "ar" ? "القيمة الإجمالية" : "Total Value"}</p>
                     <p className="font-semibold">${selectedAsset.token_value_usd.toLocaleString()}</p>
                   </div>
                 </div>
@@ -475,7 +477,7 @@ export function InvestorAssetsView({
                   onChange={(e) => setSellAmount(e.target.value)}
                   max={selectedAsset.token_amount}
                   min={1}
-                  placeholder="Enter amount"
+                  placeholder={language === "ar" ? "أدخل الكمية" : "Enter amount"}
                 />
                 <p className="text-xs text-muted-foreground">
                   {language === "ar" ? "الحد الأقصى" : "Maximum"}: {selectedAsset.token_amount} tokens

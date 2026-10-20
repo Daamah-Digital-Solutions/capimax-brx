@@ -118,7 +118,6 @@ export default function Fees() {
               </div>
               <div>
                 <CardTitle>{isRTL ? "رسوم المنصة القياسية" : "Standard Platform Fees"}</CardTitle>
-                <p className="text-sm text-muted-foreground">Standard Platform Fees</p>
               </div>
             </div>
           </CardHeader>
@@ -131,7 +130,6 @@ export default function Fees() {
                 >
                   <div className="flex-1">
                     <h4 className="font-medium text-foreground">{fee.name}</h4>
-                    <p className="text-xs text-muted-foreground mb-1">{fee.nameEn}</p>
                     <p className="text-sm text-muted-foreground">{fee.description}</p>
                   </div>
                   <Badge
@@ -195,7 +193,6 @@ export default function Fees() {
               </div>
               <div>
                 <CardTitle>{isRTL ? "طرق الدفع والرسوم" : "Payment Methods & Fees"}</CardTitle>
-                <p className="text-sm text-muted-foreground">Payment Methods & Fees</p>
               </div>
             </div>
           </CardHeader>
@@ -212,7 +209,6 @@ export default function Fees() {
                 >
                   <div>
                     <h4 className="font-medium text-foreground">{method.name}</h4>
-                    <p className="text-xs text-muted-foreground">{method.nameEn}</p>
                   </div>
                   <Badge
                     variant={
@@ -274,7 +270,6 @@ export default function Fees() {
               </div>
               <div>
                 <CardTitle>{isRTL ? "مثال على حساب الرسوم" : "Fee Calculation Example"}</CardTitle>
-                <p className="text-sm text-muted-foreground">Fee Calculation Example</p>
               </div>
             </div>
           </CardHeader>

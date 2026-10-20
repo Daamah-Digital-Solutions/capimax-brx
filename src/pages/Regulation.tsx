@@ -334,7 +334,7 @@ RECORD KEEPING
                   className="flex items-center gap-2 p-3 bg-background rounded-lg hover:bg-muted transition-colors"
                 >
                   <Globe className="w-4 h-4 text-primary" />
-                  <span className="text-sm">SEC - Securities and Exchange Commission</span>
+                  <span className="text-sm">{language === "ar" ? "SEC - هيئة الأوراق المالية والبورصات الأمريكية" : "SEC - Securities and Exchange Commission"}</span>
                 </a>
                 <a
                   href="https://www.fincen.gov"
@@ -343,7 +343,7 @@ RECORD KEEPING
                   className="flex items-center gap-2 p-3 bg-background rounded-lg hover:bg-muted transition-colors"
                 >
                   <Globe className="w-4 h-4 text-primary" />
-                  <span className="text-sm">FinCEN - Financial Crimes Enforcement</span>
+                  <span className="text-sm">{language === "ar" ? "FinCEN - شبكة مكافحة الجرائم المالية" : "FinCEN - Financial Crimes Enforcement"}</span>
                 </a>
               </div>
             </CardContent>

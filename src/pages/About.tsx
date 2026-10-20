@@ -263,11 +263,11 @@ export default function About() {
                   </div>
                   <h3 className="font-semibold text-foreground mb-1">{t("about.phone")}</h3>
                   <p className="text-sm text-muted-foreground" dir="ltr">
-                    USA: +1 205 350 8771
+                    {language === "ar" ? "أمريكا" : "USA"}: +1 205 350 8771
                     <br />
-                    USA: +1 205 350 8864
+                    {language === "ar" ? "أمريكا" : "USA"}: +1 205 350 8864
                     <br />
-                    UK: +44 7577 370309
+                    {language === "ar" ? "بريطانيا" : "UK"}: +44 7577 370309
                   </p>
                 </div>
               </div>

@@ -209,7 +209,7 @@ function TokenCard({ token, isArabic }: TokenCardProps) {
               <Building2 className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h4 className="font-semibold text-foreground">{token.property_name}</h4>
+              <h4 className="font-semibold text-foreground">{(isArabic && token.property_name_ar) || token.property_name}</h4>
               <p className="text-xs text-muted-foreground font-mono">{token.token_symbol}</p>
             </div>
             {getStatusBadge()}

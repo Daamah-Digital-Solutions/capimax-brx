@@ -224,8 +224,7 @@ export default function Support() {
                           <cat.icon className="w-6 h-6 text-primary" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-medium text-foreground">{cat.title}</h4>
-                          <p className="text-sm text-muted-foreground">{cat.titleEn}</p>
+                          <h4 className="font-medium text-foreground">{language === "ar" ? cat.title : cat.titleEn}</h4>
                         </div>
                         <div className="text-right">
                           {/* No FAQ store yet → honest "—" instead of a fabricated count. */}

@@ -133,9 +133,6 @@ export function PortfolioInstallments({ installments, onPayNow }: PortfolioInsta
                     <h3 className="font-display text-lg font-semibold text-foreground">
                       {language === "ar" ? plan.propertyName : plan.propertyNameEn}
                     </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? plan.propertyNameEn : plan.propertyName}
-                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {plan.status === "active" && (

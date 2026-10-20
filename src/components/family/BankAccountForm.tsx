@@ -8,6 +8,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Building, CreditCard, Shield } from "lucide-react";
 import { z } from "zod";
 
+const AR_ERRORS: Record<string, string> = {
+  "Bank name is required": "اسم البنك مطلوب",
+  "Account holder name is required": "اسم صاحب الحساب مطلوب",
+  "Account number is required": "رقم الحساب مطلوب",
+};
+
 const bankAccountSchema = z.object({
   bank_name: z.string().min(2, "Bank name is required").max(100),
   bank_code: z.string().max(20).optional(),
@@ -65,7 +71,7 @@ export function BankAccountForm({ familyAccountId, onSubmit, onCancel, isSubmitt
         const fieldErrors: Record<string, string> = {};
         error.errors.forEach((err) => {
           if (err.path[0]) {
-            fieldErrors[err.path[0] as string] = err.message;
+            fieldErrors[err.path[0] as string] = isRTL ? AR_ERRORS[err.message] ?? err.message : err.message;
           }
         });
         setErrors(fieldErrors);
@@ -162,11 +168,11 @@ export function BankAccountForm({ familyAccountId, onSubmit, onCancel, isSubmitt
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="USD">USD - US Dollar</SelectItem>
-              <SelectItem value="AED">AED - UAE Dirham</SelectItem>
-              <SelectItem value="EUR">EUR - Euro</SelectItem>
-              <SelectItem value="GBP">GBP - British Pound</SelectItem>
-              <SelectItem value="SAR">SAR - Saudi Riyal</SelectItem>
+              <SelectItem value="USD">{isRTL ? "USD - دولار أمريكي" : "USD - US Dollar"}</SelectItem>
+              <SelectItem value="AED">{isRTL ? "AED - درهم إماراتي" : "AED - UAE Dirham"}</SelectItem>
+              <SelectItem value="EUR">{isRTL ? "EUR - يورو" : "EUR - Euro"}</SelectItem>
+              <SelectItem value="GBP">{isRTL ? "GBP - جنيه إسترليني" : "GBP - British Pound"}</SelectItem>
+              <SelectItem value="SAR">{isRTL ? "SAR - ريال سعودي" : "SAR - Saudi Riyal"}</SelectItem>
             </SelectContent>
           </Select>
         </div>

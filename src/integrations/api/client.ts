@@ -407,6 +407,7 @@ export interface SukukInvestmentRow {
   id: string;
   property_id: string;
   property_name: string;
+  property_name_ar?: string;
   token_amount: number;
   settlement_amount: number;
   state: "under_review" | "rejected";
@@ -617,6 +618,7 @@ export interface ReinvestmentRow {
   id: string;
   property_id: string;
   property_name: string;
+  property_name_ar?: string;
   source_amount: number;       // amount spent from balance (== net; no discount in v1)
   discount_amount: number;     // always 0 in v1 (bonus deferred)
   net_investment_value: number;
@@ -1280,6 +1282,7 @@ export const ownerApi = {
       properties: Array<{
         property_id: string;
         property_name: string;
+        property_name_ar?: string;
         is_published: boolean;
         token_supply: number;
         units_sold: number;
@@ -1297,6 +1300,7 @@ export const ownerApi = {
       properties: Array<{
         property_id: string;
         property_name: string;
+        property_name_ar?: string;
         total_distributed: number;
         distribution_count: number;
         last_pay_date: string | null;
@@ -1324,6 +1328,7 @@ export const ownerApi = {
       by_property: Array<{
         property_id: string;
         property_name: string;
+        property_name_ar?: string;
         investors: number;
         units: number;
         value: number;
@@ -2162,6 +2167,7 @@ export interface TransferRow {
   recipient_name: string;
   property_slug: string;
   property_name: string;
+  property_name_ar?: string;
   units: number;
   amount: number;
   fee_amount: number;

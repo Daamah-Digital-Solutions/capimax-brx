@@ -84,7 +84,7 @@ export default function Portfolio() {
           tk.construction_progress != null && tk.construction_progress < 100;
         return {
           id: tk.property_id,
-          name: tk.property_name,
+          name: (isAr && tk.property_name_ar) || tk.property_name,
           location: (isAr ? tk.location_ar || tk.location : tk.location) || null,
           type: tk.category || tk.asset_type || null,
           units: Number(tk.token_amount) || 0,

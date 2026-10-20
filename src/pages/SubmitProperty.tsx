@@ -31,35 +31,35 @@ import {
 } from "lucide-react";
 
 const steps = [
-  { id: 1, title: "Basic Info", icon: Building2 },
-  { id: 2, title: "Location", icon: MapPin },
-  { id: 3, title: "Financial Details", icon: DollarSign },
-  { id: 4, title: "Documents", icon: FileText },
-  { id: 5, title: "Media", icon: Image },
-  { id: 6, title: "Review & Submit", icon: Check },
+  { id: 1, title: "Basic Info", titleAr: "المعلومات الأساسية", icon: Building2 },
+  { id: 2, title: "Location", titleAr: "الموقع", icon: MapPin },
+  { id: 3, title: "Financial Details", titleAr: "التفاصيل المالية", icon: DollarSign },
+  { id: 4, title: "Documents", titleAr: "المستندات", icon: FileText },
+  { id: 5, title: "Media", titleAr: "الوسائط", icon: Image },
+  { id: 6, title: "Review & Submit", titleAr: "المراجعة والإرسال", icon: Check },
 ];
 
 const propertyTypes = [
-  { id: "residential", label: "Residential" },
-  { id: "commercial", label: "Commercial" },
-  { id: "mixed", label: "Mixed Use" },
-  { id: "industrial", label: "Industrial" },
-  { id: "land", label: "Land" },
+  { id: "residential", label: "Residential", labelAr: "سكني" },
+  { id: "commercial", label: "Commercial", labelAr: "تجاري" },
+  { id: "mixed", label: "Mixed Use", labelAr: "متعدد الاستخدامات" },
+  { id: "industrial", label: "Industrial", labelAr: "صناعي" },
+  { id: "land", label: "Land", labelAr: "أرض" },
 ];
 
 const constructionStatus = [
-  { id: "ready", label: "Ready / Completed" },
-  { id: "under-construction", label: "Under Construction" },
-  { id: "off-plan", label: "Off-Plan" },
+  { id: "ready", label: "Ready / Completed", labelAr: "جاهز / مكتمل" },
+  { id: "under-construction", label: "Under Construction", labelAr: "قيد الإنشاء" },
+  { id: "off-plan", label: "Off-Plan", labelAr: "على الخارطة" },
 ];
 
 const requiredDocuments = [
-  { id: "title", name: "Title Deed", required: true },
-  { id: "valuation", name: "Valuation Report", required: true },
-  { id: "insurance", name: "Insurance Policy", required: true },
-  { id: "noc", name: "NOC (No Objection Certificate)", required: false },
-  { id: "financial", name: "Financial Statements", required: false },
-  { id: "legal", name: "Legal Documents", required: true },
+  { id: "title", name: "Title Deed", nameAr: "سند الملكية", required: true },
+  { id: "valuation", name: "Valuation Report", nameAr: "تقرير التقييم", required: true },
+  { id: "insurance", name: "Insurance Policy", nameAr: "وثيقة التأمين", required: true },
+  { id: "noc", name: "NOC (No Objection Certificate)", nameAr: "شهادة عدم ممانعة (NOC)", required: false },
+  { id: "financial", name: "Financial Statements", nameAr: "القوائم المالية", required: false },
+  { id: "legal", name: "Legal Documents", nameAr: "المستندات القانونية", required: true },
 ];
 
 // Required-document types the backend enforces on submit (Title Deed, Valuation,
@@ -168,7 +168,7 @@ export default function SubmitProperty() {
       setSubmissionId(created.id);
       return created.id;
     } catch (err: any) {
-      toast.error(err?.message || "Could not save the draft");
+      toast.error(err?.message || (isArabic ? "تعذّر حفظ المسودة" : "Could not save the draft"));
       return null;
     }
   };
@@ -192,7 +192,7 @@ export default function SubmitProperty() {
       setUploadedDocs((prev) => ({ ...prev, [docId]: doc }));
       toast.success(isArabic ? "تم رفع المستند" : "Document uploaded");
     } catch (err: any) {
-      toast.error(err?.message || "Upload failed");
+      toast.error(err?.message || (isArabic ? "فشل الرفع" : "Upload failed"));
     } finally {
       setBusy(false);
     }
@@ -218,7 +218,7 @@ export default function SubmitProperty() {
       if (prev) await ownerApi.deleteSubmissionDocument(id, prev.id).catch(() => {});
       toast.success(isArabic ? "تم رفع الصورة" : "Image uploaded");
     } catch (err: any) {
-      toast.error(err?.message || "Upload failed");
+      toast.error(err?.message || (isArabic ? "فشل الرفع" : "Upload failed"));
     } finally {
       setBusy(false);
     }
@@ -237,7 +237,7 @@ export default function SubmitProperty() {
       if (prev) await ownerApi.deleteSubmissionDocument(id, prev.id).catch(() => {});
       toast.success(isArabic ? "تم رفع الفيديو" : "Video uploaded");
     } catch (err: any) {
-      toast.error(err?.message || "Upload failed");
+      toast.error(err?.message || (isArabic ? "فشل الرفع" : "Upload failed"));
     } finally {
       setBusy(false);
     }
@@ -262,13 +262,16 @@ export default function SubmitProperty() {
       const data = (err?.data ?? {}) as { code?: string; missing?: string[] };
       if (data.code === "missing_required_documents") {
         const names = (data.missing || [])
-          .map((t) => requiredDocuments.find((d) => d.id === t)?.name || t)
+          .map((t) => {
+            const d = requiredDocuments.find((x) => x.id === t);
+            return (d && (isArabic ? d.nameAr : d.name)) || t;
+          })
           .join(", ");
         toast.error(
           (isArabic ? "مستندات مطلوبة ناقصة: " : "Missing required documents: ") + names,
         );
       } else {
-        toast.error(err?.message || "Failed to submit");
+        toast.error(err?.message || (isArabic ? "فشل الإرسال" : "Failed to submit"));
       }
     } finally {
       setBusy(false);
@@ -323,18 +326,22 @@ export default function SubmitProperty() {
 
   return (
     <MainLayout>
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6" dir={isArabic ? "rtl" : "ltr"}>
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">
-              Submit New Property
+              {isArabic ? "تقديم عقار جديد" : "Submit New Property"}
             </h1>
-            <p className="text-muted-foreground mt-1">Complete all steps to submit your property for listing</p>
+            <p className="text-muted-foreground mt-1">
+              {isArabic
+                ? "أكمل جميع الخطوات لتقديم عقارك للإدراج"
+                : "Complete all steps to submit your property for listing"}
+            </p>
           </div>
           <Button variant="outline" onClick={saveDraft} disabled={busy}>
             <Save className="w-4 h-4 mr-2" />
-            Save as Draft
+            {isArabic ? "حفظ كمسودة" : "Save as Draft"}
           </Button>
         </div>
 
@@ -343,7 +350,9 @@ export default function SubmitProperty() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm text-muted-foreground">
-                Step {currentStep} of {steps.length}
+                {isArabic
+                  ? `الخطوة ${currentStep} من ${steps.length}`
+                  : `Step ${currentStep} of ${steps.length}`}
               </span>
               <span className="text-sm font-medium text-primary">{Math.round(progress)}%</span>
             </div>
@@ -376,7 +385,7 @@ export default function SubmitProperty() {
                       <step.icon className="w-5 h-5" />
                     )}
                   </div>
-                  <span className="text-xs hidden sm:block">{step.title}</span>
+                  <span className="text-xs hidden sm:block">{isArabic ? step.titleAr : step.title}</span>
                 </div>
               ))}
             </div>
@@ -391,7 +400,7 @@ export default function SubmitProperty() {
                 const StepIcon = steps[currentStep - 1].icon;
                 return <StepIcon className="w-5 h-5 text-primary" />;
               })()}
-              {steps[currentStep - 1].title}
+              {isArabic ? steps[currentStep - 1].titleAr : steps[currentStep - 1].title}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -399,16 +408,20 @@ export default function SubmitProperty() {
             {currentStep === 1 && (
               <>
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Property Name</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "اسم العقار" : "Property Name"}
+                  </label>
                   <Input
-                    placeholder="e.g. Marina Residential Tower"
+                    placeholder={isArabic ? "مثال: برج مارينا السكني" : "e.g. Marina Residential Tower"}
                     value={form.name}
                     onChange={(e) => set("name", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Property Type</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "نوع العقار" : "Property Type"}
+                  </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     {propertyTypes.map((type) => (
                       <button
@@ -420,14 +433,16 @@ export default function SubmitProperty() {
                             : "border-border hover:border-primary/50"
                         }`}
                       >
-                        <p className="font-medium text-foreground">{type.label}</p>
+                        <p className="font-medium text-foreground">{isArabic ? type.labelAr : type.label}</p>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Construction Status</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "حالة البناء" : "Construction Status"}
+                  </label>
                   <div className="grid sm:grid-cols-3 gap-3">
                     {constructionStatus.map((status) => (
                       <button
@@ -439,16 +454,22 @@ export default function SubmitProperty() {
                             : "border-border hover:border-primary/50"
                         }`}
                       >
-                        <p className="font-medium text-foreground">{status.label}</p>
+                        <p className="font-medium text-foreground">{isArabic ? status.labelAr : status.label}</p>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Property Description</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "وصف العقار" : "Property Description"}
+                  </label>
                   <Textarea
-                    placeholder="Enter a detailed description of the property..."
+                    placeholder={
+                      isArabic
+                        ? "أدخل وصفاً تفصيلياً للعقار..."
+                        : "Enter a detailed description of the property..."
+                    }
                     rows={4}
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
@@ -462,49 +483,63 @@ export default function SubmitProperty() {
               <>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Country</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "الدولة" : "Country"}
+                    </label>
                     <select
                       className="w-full h-10 rounded-md border border-input bg-background px-3"
                       value={form.country}
                       onChange={(e) => set("country", e.target.value)}
                     >
-                      <option value="">Select Country...</option>
-                      <option value="USA">United States</option>
-                      <option value="UAE">United Arab Emirates</option>
-                      <option value="UK">United Kingdom</option>
-                      <option value="SA">Saudi Arabia</option>
-                      <option value="EG">Egypt</option>
+                      <option value="">{isArabic ? "اختر الدولة..." : "Select Country..."}</option>
+                      <option value="USA">{isArabic ? "الولايات المتحدة" : "United States"}</option>
+                      <option value="UAE">{isArabic ? "الإمارات العربية المتحدة" : "United Arab Emirates"}</option>
+                      <option value="UK">{isArabic ? "المملكة المتحدة" : "United Kingdom"}</option>
+                      <option value="SA">{isArabic ? "المملكة العربية السعودية" : "Saudi Arabia"}</option>
+                      <option value="EG">{isArabic ? "مصر" : "Egypt"}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">City</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "المدينة" : "City"}
+                    </label>
                     <select
                       className="w-full h-10 rounded-md border border-input bg-background px-3"
                       value={form.city}
                       onChange={(e) => set("city", e.target.value)}
                     >
-                      <option value="">Select City...</option>
-                      <option value="newyork">New York</option>
-                      <option value="miami">Miami</option>
-                      <option value="dubai">Dubai</option>
-                      <option value="london">London</option>
+                      <option value="">{isArabic ? "اختر المدينة..." : "Select City..."}</option>
+                      <option value="newyork">{isArabic ? "نيويورك" : "New York"}</option>
+                      <option value="miami">{isArabic ? "ميامي" : "Miami"}</option>
+                      <option value="dubai">{isArabic ? "دبي" : "Dubai"}</option>
+                      <option value="london">{isArabic ? "لندن" : "London"}</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">District / Neighborhood</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "الحي / المنطقة" : "District / Neighborhood"}
+                  </label>
                   <Input
-                    placeholder="e.g. Marina, Downtown, Financial District"
+                    placeholder={
+                      isArabic
+                        ? "مثال: مارينا، وسط المدينة، الحي المالي"
+                        : "e.g. Marina, Downtown, Financial District"
+                    }
                     value={form.district}
                     onChange={(e) => set("district", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Full Address</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "العنوان الكامل" : "Full Address"}
+                  </label>
                   <Textarea
-                    placeholder="Enter the complete property address..."
+                    placeholder={
+                      isArabic ? "أدخل العنوان الكامل للعقار..." : "Enter the complete property address..."
+                    }
                     rows={2}
                     value={form.address}
                     onChange={(e) => set("address", e.target.value)}
@@ -563,7 +598,9 @@ export default function SubmitProperty() {
               <>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Property Value (USD)</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "قيمة العقار (USD)" : "Property Value (USD)"}
+                    </label>
                     <Input
                       type="number"
                       placeholder="0"
@@ -572,7 +609,9 @@ export default function SubmitProperty() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Minimum Investment</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "الحد الأدنى للاستثمار" : "Minimum Investment"}
+                    </label>
                     <Input
                       type="number"
                       placeholder="1000"
@@ -585,7 +624,7 @@ export default function SubmitProperty() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
-                      Expected Yield (Annual %)
+                      {isArabic ? "العائد المتوقع (% سنوياً)" : "Expected Yield (Annual %)"}
                     </label>
                     <Input
                       type="number"
@@ -595,7 +634,9 @@ export default function SubmitProperty() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Investment Duration (Years)</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      {isArabic ? "مدة الاستثمار (بالسنوات)" : "Investment Duration (Years)"}
+                    </label>
                     <Input
                       type="number"
                       placeholder="5"
@@ -606,15 +647,17 @@ export default function SubmitProperty() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Distribution Model</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    {isArabic ? "نموذج التوزيع" : "Distribution Model"}
+                  </label>
                   <select
                     className="w-full h-10 rounded-md border border-input bg-background px-3"
                     value={form.distribution_model}
                     onChange={(e) => set("distribution_model", e.target.value)}
                   >
-                    <option value="quarterly">Quarterly</option>
-                    <option value="semi-annual">Semi-Annual</option>
-                    <option value="annual">Annual</option>
+                    <option value="quarterly">{isArabic ? "ربع سنوي" : "Quarterly"}</option>
+                    <option value="semi-annual">{isArabic ? "نصف سنوي" : "Semi-Annual"}</option>
+                    <option value="annual">{isArabic ? "سنوي" : "Annual"}</option>
                   </select>
                 </div>
 
@@ -622,9 +665,13 @@ export default function SubmitProperty() {
                   <div className="flex items-start gap-3">
                     <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm text-foreground font-medium">Important Note</p>
+                      <p className="text-sm text-foreground font-medium">
+                        {isArabic ? "ملاحظة مهمة" : "Important Note"}
+                      </p>
                       <p className="text-sm text-muted-foreground">
-                        Financial details will be reviewed by our valuation team before listing approval
+                        {isArabic
+                          ? "ستتم مراجعة التفاصيل المالية من قِبل فريق التقييم لدينا قبل اعتماد الإدراج"
+                          : "Financial details will be reviewed by our valuation team before listing approval"}
                       </p>
                     </div>
                   </div>
@@ -646,7 +693,7 @@ export default function SubmitProperty() {
                         <div className="flex items-center gap-3">
                           <FileText className="w-5 h-5 text-muted-foreground" />
                           <div>
-                            <p className="font-medium text-foreground">{doc.name}</p>
+                            <p className="font-medium text-foreground">{isArabic ? doc.nameAr : doc.name}</p>
                             {uploaded && (
                               <p className="text-xs text-emerald-500 flex items-center gap-1">
                                 <Check className="w-3 h-3" />
@@ -656,7 +703,7 @@ export default function SubmitProperty() {
                           </div>
                           {doc.required && (
                             <Badge variant="destructive" className="text-xs">
-                              Required
+                              {isArabic ? "مطلوب" : "Required"}
                             </Badge>
                           )}
                         </div>
@@ -674,7 +721,9 @@ export default function SubmitProperty() {
                           disabled={busy}
                         >
                           <Upload className="w-4 h-4 mr-2" />
-                          {uploaded ? "Replace" : "Upload"}
+                          {uploaded
+                            ? isArabic ? "استبدال" : "Replace"
+                            : isArabic ? "رفع" : "Upload"}
                         </Button>
                       </div>
                     );
@@ -683,9 +732,13 @@ export default function SubmitProperty() {
 
                 <div className="p-4 bg-muted/30 rounded-lg border-2 border-dashed border-border text-center">
                   <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-foreground">PDF, DOC, DOCX up to 25MB per file</p>
+                  <p className="text-sm text-foreground">
+                    {isArabic ? "PDF، DOC، DOCX بحد أقصى 25 ميجابايت لكل ملف" : "PDF, DOC, DOCX up to 25MB per file"}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Title Deed, Valuation Report &amp; Legal Documents are required to submit
+                    {isArabic
+                      ? "سند الملكية وتقرير التقييم والمستندات القانونية مطلوبة لإتمام الإرسال"
+                      : "Title Deed, Valuation Report & Legal Documents are required to submit"}
                   </p>
                 </div>
               </>
@@ -779,7 +832,9 @@ export default function SubmitProperty() {
                       <>
                         <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                         <p className="text-sm text-foreground">{isArabic ? "رفع فيديو" : "Upload Video"}</p>
-                        <p className="text-xs text-muted-foreground mt-1">MP4, MOV up to 100MB</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {isArabic ? "MP4، MOV بحد أقصى 100 ميجابايت" : "MP4, MOV up to 100MB"}
+                        </p>
                       </>
                     )}
                   </button>
@@ -805,19 +860,30 @@ export default function SubmitProperty() {
                 <div className="p-6 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                   <div className="flex items-center gap-3 mb-4">
                     <Check className="w-6 h-6 text-emerald-500" />
-                    <h3 className="font-semibold text-foreground">Ready to Submit</h3>
+                    <h3 className="font-semibold text-foreground">
+                      {isArabic ? "جاهز للإرسال" : "Ready to Submit"}
+                    </h3>
                   </div>
                   <p className="text-muted-foreground">
-                    Please review all information before submitting your listing request. Your application will be reviewed by our team within 3-5 business days.
+                    {isArabic
+                      ? "يرجى مراجعة جميع المعلومات قبل إرسال طلب الإدراج. ستتم مراجعة طلبك من قِبل فريقنا خلال 3-5 أيام عمل."
+                      : "Please review all information before submitting your listing request. Your application will be reviewed by our team within 3-5 business days."}
                   </p>
                 </div>
 
                 <div className="space-y-4">
-                  {[
-                    "I confirm that all information provided is accurate and correct",
-                    "I agree to the Listing Terms and Conditions",
-                    "I understand that the platform will verify all documents and information",
-                  ].map((label, i) => (
+                  {(isArabic
+                    ? [
+                        "أؤكد أن جميع المعلومات المقدمة دقيقة وصحيحة",
+                        "أوافق على شروط وأحكام الإدراج",
+                        "أدرك أن المنصة ستتحقق من جميع المستندات والمعلومات",
+                      ]
+                    : [
+                        "I confirm that all information provided is accurate and correct",
+                        "I agree to the Listing Terms and Conditions",
+                        "I understand that the platform will verify all documents and information",
+                      ]
+                  ).map((label, i) => (
                     <div key={i} className="flex items-start gap-3">
                       <input
                         type="checkbox"
@@ -844,7 +910,7 @@ export default function SubmitProperty() {
         <div className="flex justify-between">
           <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
             <ChevronLeft className="w-4 h-4 mr-2" />
-            Previous
+            {isArabic ? "السابق" : "Previous"}
           </Button>
 
           {currentStep === steps.length ? (
@@ -854,12 +920,12 @@ export default function SubmitProperty() {
               disabled={busy || !allConfirmed}
             >
               {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Submit for Review
+              {isArabic ? "إرسال للمراجعة" : "Submit for Review"}
               <Check className="w-4 h-4 ml-2" />
             </Button>
           ) : (
             <Button onClick={nextStep}>
-              Next
+              {isArabic ? "التالي" : "Next"}
               <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
           )}

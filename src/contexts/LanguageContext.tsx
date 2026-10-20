@@ -608,13 +608,13 @@ const translations: Record<Language, Record<string, string>> = {
     "sukuk.confirmationDoc": "شهادة / وثيقة التأكيد",
     "sukuk.remove": "إزالة",
     "sukuk.uploadDoc": "انقر لرفع المستند",
-    "sukuk.uploadFormats": "PDF, JPG, PNG (Max 5MB)",
+    "sukuk.uploadFormats": "PDF أو JPG أو PNG (حتى 5MB)",
     "sukuk.submitForReview": "إرسال للمراجعة",
     "sukuk.verificationNote": "سيتم التحقق من صحة الصك خلال 1-2 يوم عمل. ستتلقى إشعاراً عند اكتمال المراجعة.",
     "sukuk.shariaCompliant": "متوافق مع الشريعة",
     
     // Featured Properties
-    "featured.badge": "Featured Opportunities / الفرص المميزة",
+    "featured.badge": "الفرص المميزة",
     "featured.title": "فرص استثمارية حصرية",
     "featured.subtitle": "اكتشف مجموعة مختارة من أفضل العقارات الاستثمارية المتاحة للملكية الجزئية",
     "featured.viewAll": "عرض جميع الفرص",
@@ -633,7 +633,7 @@ const translations: Record<Language, Record<string, string>> = {
     "featured.investNow": "تملّك الآن",
     
     // Benefits Section
-    "benefits.badge": "Investor Benefits / مزايا المستثمر",
+    "benefits.badge": "مزايا المستثمر",
     "benefits.title": "لماذا Capimax BRX؟",
     "benefits.subtitle": "منصة مصممة خصيصاً لتمكين المستثمرين من المشاركة في سوق العقارات بطريقة مبتكرة وآمنة",
     "benefits.fractionalOwnership": "ملكية جزئية",
@@ -668,7 +668,7 @@ const translations: Record<Language, Record<string, string>> = {
     "benefits.continuousAudit": "تدقيق مستمر",
     
     // Asset Types Section
-    "assetTypes.badge": "Investment Models / نماذج الاستثمار",
+    "assetTypes.badge": "نماذج الاستثمار",
     "assetTypes.title": "خيارات استثمارية متنوعة",
     "assetTypes.subtitle": "اختر نموذج الاستثمار الذي يناسب أهدافك المالية ومستوى المخاطر المقبول",
     "assetTypes.readyProperties": "عقارات جاهزة للعائد",
@@ -704,7 +704,7 @@ const translations: Record<Language, Record<string, string>> = {
     "assetTypes.explore": "استكشف",
     
     // Returns Section
-    "returns.howReturnsBadge": "How Returns Work / كيف تعمل العوائد",
+    "returns.howReturnsBadge": "كيف تعمل العوائد",
     "returns.howReturnsTitle": "استلم عوائدك بانتظام",
     "returns.howReturnsSubtitle": "نوزع الأرباح بشكل دوري مباشرة إلى محفظتك على المنصة",
     "returns.collectRevenue": "تحصيل الإيرادات",
@@ -716,7 +716,7 @@ const translations: Record<Language, Record<string, string>> = {
     "returns.monthlyExample": "مثال على التوزيع الشهري",
     "returns.paid": "مدفوع",
     "returns.forInvestment": "للاستثمار $10,000",
-    "returns.exitStrategyBadge": "Exit Strategy / استراتيجية الخروج",
+    "returns.exitStrategyBadge": "استراتيجية الخروج",
     "returns.exitStrategyTitle": "خيارات خروج مرنة",
     "returns.exitStrategySubtitle": "نوفر عدة طرق للخروج من استثمارك حسب نوع الأصل",
     "returns.secondaryMarket": "السوق الثانوي",
@@ -730,7 +730,7 @@ const translations: Record<Language, Record<string, string>> = {
     "returns.noteText": "قد تطبق شروط وفترات إغلاق على بعض الأصول. راجع تفاصيل كل فرصة استثمارية.",
     
     // Owner/Developer Section
-    "ownerDev.ownerBadge": "For Property Owners / لأصحاب العقارات",
+    "ownerDev.ownerBadge": "لأصحاب العقارات",
     "ownerDev.ownerTitle": "حوّل عقارك إلى فرصة استثمارية",
     "ownerDev.ownerSubtitle": "افتح باب الاستثمار في عقارك لآلاف المستثمرين واحصل على سيولة فورية مع الاحتفاظ بجزء من الملكية",
     "ownerDev.globalInvestors": "وصول لقاعدة مستثمرين عالمية",
@@ -738,7 +738,7 @@ const translations: Record<Language, Record<string, string>> = {
     "ownerDev.professionalManagement": "إدارة وتقارير احترافية",
     "ownerDev.verifiedInvestors": "مستثمرين موثقين (KYC)",
     "ownerDev.listPropertyNow": "أدرج عقارك الآن",
-    "ownerDev.developerBadge": "For Developers / للمطورين",
+    "ownerDev.developerBadge": "للمطورين",
     "ownerDev.developerTitle": "موّل مشاريعك بطريقة مبتكرة",
     "ownerDev.developerSubtitle": "احصل على التمويل اللازم لمشاريعك التطويرية من خلال الترميز الرقمي وقاعدة مستثمرينا",
     "ownerDev.fastFlexibleFunding": "تمويل سريع ومرن",
@@ -748,7 +748,7 @@ const translations: Record<Language, Record<string, string>> = {
     "ownerDev.contactDevelopers": "تواصل معنا للمطورين",
     
     // Trust Section
-    "trust.badge": "Trust & Transparency / الثقة والشفافية",
+    "trust.badge": "الثقة والشفافية",
     "trust.title": "استثمارك في أيدٍ أمينة",
     "trust.subtitle": "نستخدم أحدث التقنيات والمعايير لضمان أمان وشفافية استثماراتك",
     "trust.blockchain": "تقنية البلوكتشين",
@@ -809,7 +809,7 @@ const translations: Record<Language, Record<string, string>> = {
     "footer.copyright": "© 2026 Capimax BRX. جميع الحقوق محفوظة.",
     
     // About Page
-    "about.badge": "من نحن / About Us",
+    "about.badge": "من نحن",
     "about.heroDescription": "منصة رائدة في مجال الاستثمار العقاري الرقمي، نهدف إلى تمكين الجميع من الاستثمار في العقارات عالية القيمة من خلال تقنية الترميز والبلوكتشين",
     "about.totalAssetValue": "إجمالي قيمة الأصول",
     "about.countries": "دولة",
@@ -1206,6 +1206,7 @@ const translations: Record<Language, Record<string, string>> = {
     "howItWorks.ownBenefit2": "الوصول إلى قاعدة مستثمرين عالمية وموثقة",
     "howItWorks.ownBenefit3": "تقييم عادل وشفاف للعقار من خبراء معتمدين",
     "howItWorks.ownBenefit4": "إدارة احترافية وتقارير دورية شاملة",
+    "howItWorks.investorJourney": "رحلة المستثمر",
     "howItWorks.ownerJourney": "رحلة المالك",
     "howItWorks.step1InvTitle": "إنشاء حساب",
     "howItWorks.step1InvDesc": "سجّل حسابك وأكمل عملية التحقق من الهوية (KYC)",
@@ -1362,7 +1363,7 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Strategic Partners Page
     "partners.pageTitle": "بوابة الشركاء الاستراتيجيين",
-    "partners.pageSubtitle": "Strategic Partners Portal",
+    "partners.pageSubtitle": "بوابة الشركاء الاستراتيجيين",
     "partners.assignedAssets": "أصول مُسندة",
     "partners.inProgress": "قيد العمل",
     "partners.completed": "مكتملة",
@@ -1488,6 +1489,18 @@ const translations: Record<Language, Record<string, string>> = {
     "fees.downPaymentFee": "من الدفعة الأولى",
     "fees.installmentFee": "من كل قسط",
     "fees.profitMarginFee": "من هامش الربح السنوي الصافي",
+    "nav.whyCapimax": "لماذا Capimax BRX",
+    "nav.institutional": "المؤسسات",
+    "nav.developersApi": "المطورون / API",
+    "nav.investorRelations": "علاقات المستثمرين",
+    "nav.auditLog": "الأمان وسجل التدقيق",
+    "nav.faq": "الأسئلة الشائعة",
+    "nav.regulation": "اللوائح التنظيمية",
+    "nav.new": "جديد",
+    "footer.tagline": "ترميز العقارات",
+    "promo.novaFinancingTitle": "تمويل نوفا",
+    "nav.reinvestment": "إعادة الاستثمار",
+    "nav.exitsHub": "مركز التخارج المباشر",
   },
   en: {
     // Navigation
@@ -2093,7 +2106,7 @@ const translations: Record<Language, Record<string, string>> = {
     "sukuk.shariaCompliant": "Sharia Compliant",
     
     // Featured Properties
-    "featured.badge": "Featured Opportunities / الفرص المميزة",
+    "featured.badge": "Featured Opportunities",
     "featured.title": "Exclusive Investment Opportunities",
     "featured.subtitle": "Discover a curated selection of the best investment properties available for fractional ownership",
     "featured.viewAll": "View All Opportunities",
@@ -2112,7 +2125,7 @@ const translations: Record<Language, Record<string, string>> = {
     "featured.investNow": "Buy Share",
     
     // Benefits Section
-    "benefits.badge": "Investor Benefits / مزايا المستثمر",
+    "benefits.badge": "Investor Benefits",
     "benefits.title": "Why Capimax BRX?",
     "benefits.subtitle": "A platform designed specifically to enable investors to participate in the real estate market in an innovative and secure way",
     "benefits.fractionalOwnership": "Fractional Ownership",
@@ -2147,7 +2160,7 @@ const translations: Record<Language, Record<string, string>> = {
     "benefits.continuousAudit": "Continuous audit",
     
     // Asset Types Section
-    "assetTypes.badge": "Investment Models / نماذج الاستثمار",
+    "assetTypes.badge": "Investment Models",
     "assetTypes.title": "Diverse Investment Options",
     "assetTypes.subtitle": "Choose the investment model that suits your financial goals and acceptable risk level",
     "assetTypes.readyProperties": "Income-Ready Properties",
@@ -2183,7 +2196,7 @@ const translations: Record<Language, Record<string, string>> = {
     "assetTypes.explore": "Explore",
     
     // Returns Section
-    "returns.howReturnsBadge": "How Returns Work / كيف تعمل العوائد",
+    "returns.howReturnsBadge": "How Returns Work",
     "returns.howReturnsTitle": "Receive Your Returns Regularly",
     "returns.howReturnsSubtitle": "We distribute profits periodically directly to your wallet on the platform",
     "returns.collectRevenue": "Revenue Collection",
@@ -2195,7 +2208,7 @@ const translations: Record<Language, Record<string, string>> = {
     "returns.monthlyExample": "Monthly Distribution Example",
     "returns.paid": "Paid",
     "returns.forInvestment": "for $10,000 investment",
-    "returns.exitStrategyBadge": "Exit Strategy / استراتيجية الخروج",
+    "returns.exitStrategyBadge": "Exit Strategy",
     "returns.exitStrategyTitle": "Flexible Exit Options",
     "returns.exitStrategySubtitle": "We provide multiple ways to exit your investment depending on asset type",
     "returns.secondaryMarket": "Secondary Market",
@@ -2209,7 +2222,7 @@ const translations: Record<Language, Record<string, string>> = {
     "returns.noteText": "Terms and lock-up periods may apply to some assets. Review details of each investment opportunity.",
     
     // Owner/Developer Section
-    "ownerDev.ownerBadge": "For Property Owners / لأصحاب العقارات",
+    "ownerDev.ownerBadge": "For Property Owners",
     "ownerDev.ownerTitle": "Turn Your Property Into an Investment Opportunity",
     "ownerDev.ownerSubtitle": "Open the door to investment in your property for thousands of investors and get instant liquidity while retaining partial ownership",
     "ownerDev.globalInvestors": "Access to global investor base",
@@ -2217,7 +2230,7 @@ const translations: Record<Language, Record<string, string>> = {
     "ownerDev.professionalManagement": "Professional management and reporting",
     "ownerDev.verifiedInvestors": "Verified investors (KYC)",
     "ownerDev.listPropertyNow": "List Your Property Now",
-    "ownerDev.developerBadge": "For Developers / للمطورين",
+    "ownerDev.developerBadge": "For Developers",
     "ownerDev.developerTitle": "Fund Your Projects Innovatively",
     "ownerDev.developerSubtitle": "Get the funding you need for your development projects through digital tokenization and our investor base",
     "ownerDev.fastFlexibleFunding": "Fast and flexible funding",
@@ -2227,7 +2240,7 @@ const translations: Record<Language, Record<string, string>> = {
     "ownerDev.contactDevelopers": "Contact Us for Developers",
     
     // Trust Section
-    "trust.badge": "Trust & Transparency / الثقة والشفافية",
+    "trust.badge": "Trust & Transparency",
     "trust.title": "Your Investment in Safe Hands",
     "trust.subtitle": "We use the latest technologies and standards to ensure the security and transparency of your investments",
     "trust.blockchain": "Blockchain Technology",
@@ -2288,7 +2301,7 @@ const translations: Record<Language, Record<string, string>> = {
     "footer.copyright": "© 2026 Capimax BRX. All rights reserved.",
     
     // About Page
-    "about.badge": "About Us / من نحن",
+    "about.badge": "About Us",
     "about.heroDescription": "A leading platform in digital real estate investment, aiming to enable everyone to invest in high-value properties through tokenization and blockchain technology",
     "about.totalAssetValue": "Total Asset Value",
     "about.countries": "Countries",
@@ -2968,6 +2981,18 @@ const translations: Record<Language, Record<string, string>> = {
     "fees.downPaymentFee": "of down payment",
     "fees.installmentFee": "of each installment",
     "fees.profitMarginFee": "of annual net profit margin",
+    "nav.whyCapimax": "Why Capimax BRX",
+    "nav.institutional": "Institutional",
+    "nav.developersApi": "Developers / API",
+    "nav.investorRelations": "Investor Relations",
+    "nav.auditLog": "Security & Audit Log",
+    "nav.faq": "FAQ",
+    "nav.regulation": "Regulation",
+    "nav.new": "NEW",
+    "footer.tagline": "Real Estate Tokenization",
+    "promo.novaFinancingTitle": "Nova Financing",
+    "nav.reinvestment": "Re Investment",
+    "nav.exitsHub": "Live Exits Hub",
   },
   fr: {
     // French translations - fallback to English with French labels

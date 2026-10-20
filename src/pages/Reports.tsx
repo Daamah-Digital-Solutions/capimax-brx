@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { propertyLabel } from "@/lib/propertyLabels";
 import {
   BarChart3,
   Download,
@@ -107,7 +108,7 @@ export default function Reports() {
         const change = invested && invested > 0 ? ((value - invested) / invested) * 100 : null;
         return {
           id: t.property_id,
-          name: t.property_name,
+          name: (isAr && t.property_name_ar) || t.property_name,
           value,
           change, // null → "—" (no cost basis yet)
           yield: t.expected_yield ?? null,
@@ -333,7 +334,7 @@ export default function Reports() {
                               style={{ backgroundColor: ALLOC_COLORS[i % ALLOC_COLORS.length] }}
                             />
                             <span className="text-sm text-muted-foreground truncate">
-                              {e.type} ({e.pct.toFixed(0)}%)
+                              {propertyLabel(e.type, isAr)} ({e.pct.toFixed(0)}%)
                             </span>
                           </div>
                         ))}
@@ -404,7 +405,7 @@ export default function Reports() {
                     slug={t.property_id}
                     avgCost={t.avg_cost_per_token ?? null}
                     compact
-                    title={`${isAr ? "سعر الوحدة عبر الزمن" : "Unit price over time"} — ${t.property_name}`}
+                    title={`${isAr ? "سعر الوحدة عبر الزمن" : "Unit price over time"} — ${(isAr && t.property_name_ar) || t.property_name}`}
                   />
                 ))}
             </TabsContent>

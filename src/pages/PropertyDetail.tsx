@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { propertyLabel } from "@/lib/propertyLabels";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
   MapPin, 
@@ -351,7 +352,7 @@ export default function PropertyDetail() {
                 <h1 className="font-display text-2xl md:text-4xl font-bold text-foreground mb-2">{cpName}</h1>
                 <div className="flex items-center gap-x-4 gap-y-1 text-muted-foreground text-sm flex-wrap">
                   <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{cpLoc}</span>
-                  <Badge variant="outline" className="capitalize">{cp.assetType}</Badge>
+                  <Badge variant="outline">{propertyLabel(cp.assetType, language === "ar")}</Badge>
                   <Badge variant={cp.status === "ready" ? "ready" : "construction"}>
                     {cp.status === "ready" ? t("propertyDetail.readyForYield") : t("property.underConstruction")}
                   </Badge>
@@ -1109,7 +1110,6 @@ export default function PropertyDetail() {
                       </div>
                       <div>
                         <h3 className="font-display text-xl font-semibold text-foreground">{t("propertyDetail.spvDetails")}</h3>
-                        <p className="text-sm text-muted-foreground">Special Purpose Vehicle Details</p>
                       </div>
                     </div>
 
@@ -1154,7 +1154,6 @@ export default function PropertyDetail() {
                         </div>
                         <div>
                           <h3 className="font-display text-xl font-semibold text-foreground">{t("propertyDetail.smartContractDetails")}</h3>
-                          <p className="text-sm text-muted-foreground">Smart Contract & Token Details</p>
                         </div>
                       </div>
                       {currentProperty.tokenDetails.verified ? (
@@ -1259,7 +1258,6 @@ export default function PropertyDetail() {
                           >
                             <ExternalLink className="w-4 h-4" />
                             {t("propertyDetail.verifyOnBlockchain")}
-                            <span className="text-xs opacity-80">Verify on Blockchain</span>
                           </Button>
                         </div>
                       )}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { propertyLabel } from "@/lib/propertyLabels";
 import {
   Building2,
   Award,
@@ -185,20 +186,20 @@ const PROPERTY_EXTRAS: Record<string, { amenities: { en: string; ar: string }[];
 
 function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
   const specs = [
-    { en: "Asset Class", ar: "فئة الأصل", v: p.assetType },
-    { en: "Property Type", ar: "نوع العقار", v: p.assetType },
-    { en: "Country", ar: "الدولة", v: p.country.toUpperCase() },
-    { en: "City", ar: "المدينة", v: p.city },
+    { en: "Asset Class", ar: "فئة الأصل", v: propertyLabel(p.assetType, isAr) },
+    { en: "Property Type", ar: "نوع العقار", v: propertyLabel(p.assetType, isAr) },
+    { en: "Country", ar: "الدولة", v: propertyLabel(p.country, isAr) },
+    { en: "City", ar: "المدينة", v: propertyLabel(p.city, isAr) },
     { en: "Status", ar: "الحالة", v: p.status === "ready" ? (isAr ? "جاهز" : "Ready") : (isAr ? "قيد الإنشاء" : "Under Construction") },
-    { en: "Yield Type", ar: "نوع العائد", v: p.yieldType },
-    { en: "Risk Level", ar: "مستوى المخاطر", v: p.riskLevel },
+    { en: "Yield Type", ar: "نوع العائد", v: propertyLabel(p.yieldType, isAr) },
+    { en: "Risk Level", ar: "مستوى المخاطر", v: propertyLabel(p.riskLevel, isAr) },
     { en: "Investment Duration", ar: "مدة الاستثمار", v: isAr ? p.durationAr : p.duration },
     { en: "Total Value", ar: "القيمة الإجمالية", v: fmtMoney(p.totalValue) },
     { en: "Token Price", ar: "سعر الرمز", v: `$${p.tokenPrice}` },
     { en: "Min. Investment", ar: "الحد الأدنى", v: `$${p.minInvestment}` },
     { en: "Funded", ar: "نسبة التمويل", v: `${p.funded}%` },
     { en: "Investors", ar: "المستثمرون", v: p.investors },
-    { en: "Exit Availability", ar: "توفر التخارج", v: p.exitAvailability },
+    { en: "Exit Availability", ar: "توفر التخارج", v: propertyLabel(p.exitAvailability, isAr) },
   ];
 
   const extras = PROPERTY_EXTRAS[p.id];
@@ -516,11 +517,11 @@ function FinancialSection({ p, isAr }: { p: Property; isAr: boolean }) {
   const projection = adminProjection.length
     ? adminProjection
     : [
-        { y: "Year 1", v: yieldPct },
-        { y: "Year 2", v: +(yieldPct * 1.04).toFixed(1) },
-        { y: "Year 3", v: +(yieldPct * 1.08).toFixed(1) },
-        { y: "Year 4", v: +(yieldPct * 1.12).toFixed(1) },
-        { y: "Year 5", v: +(yieldPct * 1.15).toFixed(1) },
+        { y: isAr ? "السنة 1" : "Year 1", v: yieldPct },
+        { y: isAr ? "السنة 2" : "Year 2", v: +(yieldPct * 1.04).toFixed(1) },
+        { y: isAr ? "السنة 3" : "Year 3", v: +(yieldPct * 1.08).toFixed(1) },
+        { y: isAr ? "السنة 4" : "Year 4", v: +(yieldPct * 1.12).toFixed(1) },
+        { y: isAr ? "السنة 5" : "Year 5", v: +(yieldPct * 1.15).toFixed(1) },
       ];
 
   return (
@@ -550,7 +551,7 @@ function FinancialSection({ p, isAr }: { p: Property; isAr: boolean }) {
           </div>
           <div className="p-4 rounded-lg bg-muted/40 border border-border">
             <Percent className="w-4 h-4 text-primary mb-2" />
-            <p className="text-xs text-muted-foreground">Cap Rate</p>
+            <p className="text-xs text-muted-foreground">{isAr ? "معدل الرسملة" : "Cap Rate"}</p>
             <p className="text-lg font-bold">{capRate.toFixed(2)}%</p>
           </div>
         </div>
@@ -1596,7 +1597,7 @@ export function PropertyDataRoom({
           )}
           <TabsTrigger value="market">{isAr ? "السوق" : "Market"}</TabsTrigger>
           <TabsTrigger value="risk">{isAr ? "المخاطر" : "Risk"}</TabsTrigger>
-          <TabsTrigger value="faq">FAQ</TabsTrigger>
+          <TabsTrigger value="faq">{isAr ? "الأسئلة الشائعة" : "FAQ"}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localName } from "@/lib/propertyLabels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,7 +128,7 @@ export function PurchaseForm({
                 <div className="flex items-start gap-3">
                   <Building2 className="h-10 w-10 text-primary p-2 bg-primary/10 rounded-lg" />
                   <div className="flex-1">
-                    <h4 className="font-semibold">{listing.property_name}</h4>
+                    <h4 className="font-semibold">{localName(listing, language)}</h4>
                     <Badge variant="outline" className="mt-1">{listing.token_symbol}</Badge>
                   </div>
                 </div>
@@ -251,7 +252,7 @@ export function PurchaseForm({
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{language === "ar" ? "الأصل" : "Asset"}</span>
-                  <span className="font-medium">{listing.property_name}</span>
+                  <span className="font-medium">{localName(listing, language)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{language === "ar" ? "الكمية" : "Quantity"}</span>

@@ -172,7 +172,7 @@ class CertificateVerifyPublicTests(APITestCase):
             {
                 "certificate_id", "status", "issue_date", "subscription_date",
                 "finalized_at", "investor_name", "investor_id_masked", "spv_name",
-                "spv_registration_ref", "property_name", "property_location",
+                "spv_registration_ref", "property_name", "property_name_ar", "property_location",
                 "listing_id", "investment_amount", "units_purchased", "unit_price",
                 "ownership_percentage", "platform_fee", "authorized_signatory",
                 "digital_signature_hash", "verification_code", "verification_url",

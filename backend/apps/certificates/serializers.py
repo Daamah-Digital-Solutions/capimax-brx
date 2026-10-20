@@ -13,6 +13,13 @@ from .models import Certificate
 
 
 class CertificateSerializer(serializers.ModelSerializer):
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        inv = getattr(obj, "investment", None)
+        prop = getattr(inv, "property", None) if inv else None
+        return (getattr(prop, "name_ar", "") or "") if prop else ""
+
     """Owner view — matches the frontend `Certificate` shape (useCertificates.ts)."""
 
     class Meta:
@@ -29,6 +36,7 @@ class CertificateSerializer(serializers.ModelSerializer):
             "spv_name",
             "spv_registration_ref",
             "property_name",
+            "property_name_ar",
             "property_location",
             "listing_id",
             "investment_amount",
@@ -54,6 +62,13 @@ class CertificatePublicSerializer(serializers.ModelSerializer):
     or any other PII. Exactly the fields the public /verify page renders.
     """
 
+    property_name_ar = serializers.SerializerMethodField()
+
+    def get_property_name_ar(self, obj):
+        inv = getattr(obj, "investment", None)
+        prop = getattr(inv, "property", None) if inv else None
+        return (getattr(prop, "name_ar", "") or "") if prop else ""
+
     class Meta:
         model = Certificate
         fields = (
@@ -67,6 +82,7 @@ class CertificatePublicSerializer(serializers.ModelSerializer):
             "spv_name",
             "spv_registration_ref",
             "property_name",
+            "property_name_ar",
             "property_location",
             "listing_id",
             "investment_amount",

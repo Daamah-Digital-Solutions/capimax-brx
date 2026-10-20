@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { localName, propertyLabel } from "@/lib/propertyLabels";
 import { lpApi, secondaryMarketApi } from "@/integrations/api/client";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,7 +66,7 @@ export default function ExitsHub() {
       toast.success(isAr ? "تم الإلغاء" : "Cancelled");
       load();
     } catch (e: any) {
-      toast.error(e?.message || "Failed to cancel");
+      toast.error(e?.message || (language === "ar" ? "تعذّر الإلغاء" : "Failed to cancel"));
     }
   };
   const cancelSec = async (id: string) => {
@@ -74,7 +75,7 @@ export default function ExitsHub() {
       toast.success(isAr ? "تم الإلغاء" : "Cancelled");
       load();
     } catch (e: any) {
-      toast.error(e?.message || "Failed to cancel");
+      toast.error(e?.message || (language === "ar" ? "تعذّر الإلغاء" : "Failed to cancel"));
     }
   };
 
@@ -89,12 +90,12 @@ export default function ExitsHub() {
     <div key={l.id} className="p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h4 className="font-semibold">{l.property_name}</h4>
+          <h4 className="font-semibold">{localName(l, language)}</h4>
           <p className="text-xs text-muted-foreground font-mono">
             {format(new Date(l.listed_at), "yyyy-MM-dd HH:mm")}
           </p>
         </div>
-        <Badge variant={l.status === "listed" ? "default" : "secondary"}>{l.status}</Badge>
+        <Badge variant={l.status === "listed" ? "default" : "secondary"}>{propertyLabel(l.status, isAr)}</Badge>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
         <Stat label={isAr ? "وحدات" : "Units"} value={String(l.token_amount)} />

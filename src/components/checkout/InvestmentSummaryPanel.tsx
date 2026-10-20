@@ -1,4 +1,5 @@
 import { Building2, Tag, Percent, DollarSign, Edit3 } from "lucide-react";
+import { propertyLabel } from "@/lib/propertyLabels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InvestmentData } from "@/pages/Checkout";
@@ -35,7 +36,7 @@ export function InvestmentSummaryPanel({
 }: InvestmentSummaryPanelProps) {
   const { t, language } = useLanguage();
   const propertyName = language === "ar" ? investment.propertyNameAr : investment.propertyName;
-  const assetType = language === "ar" ? investment.assetType : investment.assetTypeEn;
+  const assetType = propertyLabel(investment.assetTypeEn || investment.assetType, language === "ar");
 
   return (
     <div className="sticky top-24 p-6 bg-card rounded-2xl border border-border shadow-card animate-fade-in">
@@ -59,9 +60,6 @@ export function InvestmentSummaryPanel({
             <h3 className="font-semibold text-foreground truncate">
               {propertyName}
             </h3>
-            <p className="text-sm text-muted-foreground truncate">
-              {language === "ar" ? investment.propertyName : investment.propertyNameAr}
-            </p>
             <Badge variant="secondary" className="mt-2">
               {assetType}
             </Badge>

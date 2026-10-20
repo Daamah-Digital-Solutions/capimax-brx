@@ -371,7 +371,7 @@ export default function RegisterRole() {
                 <div className="flex items-center justify-between pt-4 border-t border-border/50">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>{role.kyc}</span>
+                    <span>{language === "ar" && role.kyc === "KYC + Accreditation" ? "KYC + اعتماد المستثمر" : role.kyc}</span>
                   </div>
                   <span
                     className={cn(

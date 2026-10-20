@@ -107,9 +107,6 @@ export default function ExitMechanism() {
                     {isRTL ? "البيع الفوري عبر مزود السيولة (LP)" : "Immediate Sale via Liquidity Provider (LP)"}
                   </CardTitle>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Immediate Sale via Liquidity Provider
-                </p>
               </div>
               <Badge variant="outline" className="text-lg font-bold px-4 py-2 border-primary/30">
                 1% {isRTL ? "رسوم" : "Fee"}
@@ -192,9 +189,6 @@ export default function ExitMechanism() {
                     {isRTL ? "البيع عبر السوق الثانوي" : "Sale via Secondary Market"}
                   </CardTitle>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Sale via Secondary Market
-                </p>
               </div>
               <Badge variant="outline" className="text-lg font-bold px-4 py-2 border-emerald-500/30 text-emerald-600">
                 0.5% {isRTL ? "رسوم" : "Fee"}
@@ -262,7 +256,6 @@ export default function ExitMechanism() {
               </div>
               <div>
                 <CardTitle>{isRTL ? "مقارنة سريعة" : "Quick Comparison"}</CardTitle>
-                <p className="text-sm text-muted-foreground">Quick Comparison</p>
               </div>
             </div>
           </CardHeader>
