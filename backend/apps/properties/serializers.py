@@ -194,12 +194,15 @@ class SPVSerializer(serializers.ModelSerializer):
 
 
 class TokenMetadataSerializer(serializers.ModelSerializer):
-    contractAddress = serializers.CharField(source="contract_address")
+    # The contract address / "verified" shown anywhere come ONLY from the real deployment —
+    # a hand-typed address is never displayed — and the token price is the property's own.
+    contractAddress = serializers.SerializerMethodField()
+    verified = serializers.SerializerMethodField()
     networkIcon = serializers.CharField(source="network_icon")
     totalSupply = serializers.IntegerField(source="total_supply")
     tokenizedUnits = serializers.IntegerField(source="tokenized_units")
     tokenPrice = serializers.DecimalField(
-        source="token_price", max_digits=12, decimal_places=2
+        source="property.token_price", max_digits=12, decimal_places=2
     )
     deployedDate = serializers.DateField(source="deployed_date")
     explorerUrl = serializers.CharField(source="explorer_url")
@@ -231,6 +234,12 @@ class TokenMetadataSerializer(serializers.ModelSerializer):
             "liquidity",
             "onChain",
         )
+
+    def get_contractAddress(self, obj):
+        return (obj.deployed_contract_address or "").strip()
+
+    def get_verified(self, obj):
+        return bool((obj.deployed_contract_address or "").strip())
 
     def get_onChain(self, obj):
         addr = (obj.deployed_contract_address or "").strip()
@@ -553,6 +562,7 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     droneVideoUrl = serializers.CharField(source="drone_video_url")
     # Off-plan §4: how investors pay (installments / full / both) + the offered plans.
     offplanPayment = serializers.CharField(source="offplan_payment")
+    expectedCompletion = serializers.SerializerMethodField()
     installmentTerms = serializers.SerializerMethodField()
     installmentFeeRate = serializers.DecimalField(
         source="fee_installment", max_digits=5, decimal_places=2
@@ -585,9 +595,19 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "sitePhotosUrl",
             "droneVideoUrl",
             "offplanPayment",
+            "expectedCompletion",
+            "expectedCompletionAr",
             "installmentTerms",
             "installmentFeeRate",
         )
+
+    expectedCompletionAr = serializers.SerializerMethodField()
+
+    def get_expectedCompletion(self, obj):
+        return obj.expected_completion or None  # None → the page's own fallback
+
+    def get_expectedCompletionAr(self, obj):
+        return obj.expected_completion_ar or obj.expected_completion or None
 
     def get_installment(self, obj):
         return (

@@ -239,6 +239,13 @@ class Property(models.Model):
     min_investment = models.DecimalField(max_digits=12, decimal_places=2, default=100)
     duration = models.CharField(max_length=40)
     duration_ar = models.CharField(max_length=40)
+    # Expected completion / handover, as shown on the page (e.g. "Q4 2027", "June 2028").
+    expected_completion = models.CharField(
+        max_length=40, blank=True, default="",
+        help_text='Shown as the handover / expected completion date, e.g. "Q4 2027". '
+                  "Empty → the installment activation date, then the duration.",
+    )
+    expected_completion_ar = models.CharField(max_length=40, blank=True, default="")
 
     # Off-plan purchase mode (ignored for ready properties, which are always paid in full).
     offplan_payment = models.CharField(
@@ -304,7 +311,9 @@ class Property(models.Model):
     # (so seeded properties are unaffected). Wave D credits this owner on primary sales.
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="owned_properties",
+        related_name="owned_properties", verbose_name="Owner / developer account",
+        help_text="The owner or developer credited with this property's sale proceeds and "
+                  "shown it in their dashboard. Empty = a platform-owned property.",
     )
     funded_date = models.DateField(
         null=True, blank=True
@@ -393,6 +402,8 @@ class Property(models.Model):
             )
         if not self.image and not self.image_file:
             errors["image"] = "Upload a main image or enter an image URL."
+        if (self.slug or "").strip() in ("1", "2"):
+            errors["slug"] = 'The slugs "1" and "2" are reserved for the demo pages — choose another.'
         if self.images not in (None, "") and (
             not isinstance(self.images, list) or not all(isinstance(u, str) for u in self.images)
         ):
@@ -682,6 +693,21 @@ class TokenMetadata(models.Model):
         return f"Token · {self.property.slug}"
 
 
+def _check_points(value, field, key, limit):
+    """[{"<key>": "...", "value": number}, ...] — the shape the property page charts."""
+    from django.core.exceptions import ValidationError
+
+    if value in (None, ""):
+        return
+    ok = isinstance(value, list) and len(value) <= limit and all(
+        isinstance(p, dict) and str(p.get(key, "")).strip() and isinstance(p.get("value"), (int, float))
+        for p in value
+    )
+    if not ok:
+        raise ValidationError({field: f'Use up to {limit} points like [{{"{key}": "2024", "value": 8.1}}] '
+                                      "(value must be a number)."})
+
+
 class PropertyFinancials(models.Model):
     """Detail financials tab (PropertyDetail.tsx inline `financials`)."""
 
@@ -700,6 +726,10 @@ class PropertyFinancials(models.Model):
         default=list, blank=True,
         help_text='Up to 5 points, e.g. [{"year": "Year 1", "value": 8.1}, {"year": "Year 2", "value": 8.4}]',
     )
+
+    def clean(self):
+        super().clean()
+        _check_points(self.yield_projection, "yield_projection", "year", 5)
 
     def __str__(self):
         return f"Financials · {self.property.slug}"
@@ -838,7 +868,18 @@ class DeveloperInfo(models.Model):
     location_ar = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=40, blank=True)
-    related_projects = models.JSONField(default=list, blank=True)  # [{"en":.., "ar":..}]
+    related_projects = models.JSONField(
+        default=list, blank=True,
+        help_text='List of projects, e.g. [{"en": "Marina Heights", "ar": "مارينا هايتس"}]',
+    )  # [{"en":.., "ar":..}]
+
+    def clean(self):
+        super().clean()
+        v = self.related_projects
+        if v not in (None, "") and (not isinstance(v, list) or not all(isinstance(x, dict) and x.get("en") for x in v)):
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError({"related_projects": 'Use a list like [{"en": "Name", "ar": "الاسم"}].'})
 
     def __str__(self):
         return f"Developer · {self.property.slug}"
@@ -870,7 +911,10 @@ class MarketData(models.Model):
     city_growth = models.CharField(max_length=16, blank=True)   # e.g. "+9.2%"
     vacancy_rate = models.CharField(max_length=16, blank=True)  # e.g. "4.1%"
     rent_index = models.CharField(max_length=16, blank=True)    # e.g. "112"
-    price_index_history = models.JSONField(default=list, blank=True)  # [{"year":"2021","value":100}]
+    price_index_history = models.JSONField(
+        default=list, blank=True,
+        help_text='Yearly index, e.g. [{"year": "2021", "value": 100}, {"year": "2022", "value": 108}]',
+    )  # [{"year":"2021","value":100}]
     # Valuation section "market comparison" (empty → the page keeps its default figures).
     market_average = models.DecimalField(
         max_digits=16, decimal_places=2, null=True, blank=True,
@@ -885,6 +929,10 @@ class MarketData(models.Model):
         help_text='e.g. "+6.4%". Empty → computed from the comparables value when set.',
     )
 
+    def clean(self):
+        super().clean()
+        _check_points(self.price_index_history, "price_index_history", "year", 20)
+
     def __str__(self):
         return f"Market · {self.property.slug}"
 
@@ -897,9 +945,10 @@ class Amenity(models.Model):
     )
     name_en = models.CharField(max_length=120)
     name_ar = models.CharField(max_length=120, blank=True)
+    order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
-        ordering = ("id",)
+        ordering = ("order", "id")
 
     def __str__(self):
         return self.name_en
@@ -913,9 +962,10 @@ class Landmark(models.Model):
     )
     name_en = models.CharField(max_length=160)
     name_ar = models.CharField(max_length=160, blank=True)
+    order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
-        ordering = ("id",)
+        ordering = ("order", "id")
 
     def __str__(self):
         return self.name_en
@@ -929,9 +979,10 @@ class RiskFactor(models.Model):
     )
     text_en = models.CharField(max_length=300)
     text_ar = models.CharField(max_length=300, blank=True)
+    order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
-        ordering = ("id",)
+        ordering = ("order", "id")
 
     def __str__(self):
         return self.text_en
@@ -1018,9 +1069,10 @@ class PropertyFAQ(models.Model):
     question_ar = models.CharField(max_length=300, blank=True)
     answer_en = models.TextField()
     answer_ar = models.TextField(blank=True)
+    order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
-        ordering = ("id",)
+        ordering = ("order", "id")
 
     def __str__(self):
         return self.question_en

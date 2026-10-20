@@ -468,6 +468,7 @@ export default function PropertyDetail() {
                   expectedGrowth={Number(cp.expectedGrowth ?? 0)}
                   constructionProgress={Number(cp.constructionProgress ?? 0)}
                   expectedCompletion={
+                    (language === "ar" ? cp.expectedCompletionAr : cp.expectedCompletion) ??
                     cp.installment?.activationDate ??
                     (language === "ar" ? cp.durationAr ?? "" : cp.duration ?? "")
                   }

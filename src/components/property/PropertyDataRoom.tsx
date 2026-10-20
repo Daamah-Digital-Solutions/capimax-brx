@@ -1367,7 +1367,8 @@ function PostConstructionPaymentPlan({
     : isAr ? "شهري" : "Monthly";
   const handoverDate =
     (usingPreview ? preview!.rows[0]?.dueDate : undefined) ??
-    (p as unknown as { expectedCompletion?: string }).expectedCompletion ??
+    (isAr ? p.expectedCompletionAr : null) ??
+    p.expectedCompletion ??
     p.installment?.activationDate ??
     "Q4 2026";
 

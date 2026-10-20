@@ -76,6 +76,11 @@ class TokenMetadataInline(admin.StackedInline):
     # token_supply on save (Wave 2 policy #4) — read-only so they can't desync again.
     # The deployment_* fields are written by the chain layer after on-chain confirmation.
     readonly_fields = (
+        "contract_address",
+        "verified",
+        "explorer_url",
+        "deployed_date",
+        "token_price",
         "total_supply",
         "tokenized_units",
         "deployed_contract_address",
@@ -289,8 +294,51 @@ class PropertyAdmin(admin.ModelAdmin):
     # they can never desync — they are read-only here. See Property._sync_derived.
     readonly_fields = (
         "id", "category", "token_supply", "created_at", "updated_at", "hero_preview",
-        "price_lock_note",
+        "price_lock_note", "page_checklist",
     )
+    raw_id_fields = ("submitted_by",)
+
+    @admin.display(description="Property page — what is filled in")
+    def page_checklist(self, obj):
+        """Which data-room sections have real content; an empty one shows the page's sample text."""
+        from django.utils.html import format_html, format_html_join
+
+        if obj is None or not obj.pk:
+            return "Save the property first, then fill in the sections below."
+        rel = lambda name: getattr(obj, name, None)  # noqa: E731
+
+        def one(name):
+            try:
+                return rel(name) is not None
+            except Exception:
+                return False
+
+        checks = [
+            ("Main image", bool(obj.image or obj.image_file)),
+            ("Gallery", bool(obj.images) or obj.gallery.exists()),
+            ("Description (EN / AR)", bool(obj.description and obj.description_ar)),
+            ("Expected completion", bool(obj.expected_completion), "the page uses the installment activation date or the duration"),
+            ("Financials", one("financials")),
+            ("Developer", one("developer_info")),
+            ("Insurance", one("insurance_info")),
+            ("Market data", one("market_data")),
+            ("SPV / legal", one("spv")),
+            ("Documents (with a file or link)", obj.documents.exclude(file="", url="").exists()),
+            ("Valuation reports", obj.valuation_reports.exists()),
+            ("Amenities", obj.amenities.exists()),
+            ("Landmarks", obj.landmarks.exists()),
+            ("Risk factors", obj.risk_factors.exists()),
+            ("FAQs", obj.faqs.exists()),
+            ("Construction milestones (under-construction properties)", obj.construction_milestones.exists()),
+            ("Post-handover benefits (off-plan properties)", obj.post_handover_benefits.exists()),
+            ("On-chain token (\"Deploy token contract\" action)", bool(getattr(rel("token_metadata"), "deployed_contract_address", "") if one("token_metadata") else ""), "not deployed yet — the page shows \"tokenization pending\""),
+        ]
+        rows = format_html_join(
+            "", "<li>{} {}</li>",
+            (("✅" if c[1] else "⚠️", c[0] + ("" if c[1] else " — " + (c[2] if len(c) > 2 else "empty: the page shows sample content")))
+             for c in checks),
+        )
+        return format_html('<ul style="margin:0;padding-left:1.2em;line-height:1.7">{}</ul>', rows)
     inlines = [
         PropertyImageInline,
         InstallmentTermInline,
@@ -317,6 +365,10 @@ class PropertyAdmin(admin.ModelAdmin):
         PostHandoverBenefitInline,
     ]
     fieldsets = (
+        (
+            "Property page checklist",
+            {"fields": ("page_checklist",)},
+        ),
         (
             "Identity",
             {
@@ -355,6 +407,7 @@ class PropertyAdmin(admin.ModelAdmin):
                     ("expected_yield", "expected_growth"),
                     ("funded", "investors"),
                     ("duration", "duration_ar"),
+                    ("expected_completion", "expected_completion_ar"),
                     "offplan_payment",
                 ),
             },
@@ -379,6 +432,14 @@ class PropertyAdmin(admin.ModelAdmin):
                 "description": "Commission % a referring broker earns on this property "
                                "(empty = the broker's own rate), and whether brokers can promote it.",
                 "fields": (("broker_commission_rate", "open_for_promotion"),),
+            },
+        ),
+        (
+            "Owner",
+            {
+                "description": "Link the owner/developer account that is credited with this "
+                               "property's sales (leave empty for a platform-owned property).",
+                "fields": ("submitted_by",),
             },
         ),
         (
