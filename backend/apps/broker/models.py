@@ -148,9 +148,10 @@ class BrokerProfile(models.Model):
 
     # --- state transitions (the only places status changes) ------------------ #
     def mark_license_submitted(self):
-        """Record licence submission. Status stays PENDING (admin approves the hinge)."""
-        if self.license_submitted_at is None:
-            self.license_submitted_at = timezone.now()
+        """Record licence submission (a resubmission after a rejection goes back to review)."""
+        if self.status == BrokerStatus.REJECTED:
+            self.status = BrokerStatus.PENDING
+        self.license_submitted_at = timezone.now()
 
     def mark_approved(self):
         """Licence approved by the admin (gated on KYC). Idempotent."""

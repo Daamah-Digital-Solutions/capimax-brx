@@ -117,7 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // login. First sign-in creates the account (baseline investor). SPEC §6.
   const loginWithGoogle = async (idToken: string) => {
     try {
-      const result = await authApi.googleOAuth(idToken);
+      // A broker referral (?ref= / stored link) is kept for Google sign-ups too.
+      const ref = new URLSearchParams(window.location.search).get("ref") || localStorage.getItem("capimax_ref");
+      const result = await authApi.googleOAuth(idToken, ref);
+      localStorage.removeItem("capimax_ref");
       setUser(toAuthUser(result.user));
       setSession({ access_token: result.session.access_token });
       return { error: null };

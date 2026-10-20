@@ -123,7 +123,7 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "heading": "Your {role} account is approved",
         "intro": "Your business verification (KYB) has been approved. Your {role} account is now active on CapiMax BRX.",
         "cta_label": "Open your dashboard",
-        "cta_path": "/dashboard",
+        "cta_path": "{dashboard}",
         "outro": "",
     },
     "kyb_rejected": {
@@ -131,7 +131,7 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "heading": "Your business verification needs attention",
         "intro": "We couldn't approve your business verification (KYB) this time. Please review your submission and try again.",
         "cta_label": "Review verification",
-        "cta_path": "/dashboard",
+        "cta_path": "{dashboard}",
         "outro": "",
     },
     "wallet_created": {
@@ -299,7 +299,7 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "heading": "You're an approved broker",
         "intro": "Your broker licence has been approved. Your broker tools, referrals and commissions are now active.",
         "cta_label": "Open broker tools",
-        "cta_path": "/listings",
+        "cta_path": "/broker-dashboard",
         "outro": "",
     },
     "broker_license_rejected": {
@@ -307,7 +307,7 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "heading": "Your broker licence needs attention",
         "intro": "We couldn't approve your broker licence this time. Please review your details and resubmit.",
         "cta_label": "Review licence",
-        "cta_path": "/listings",
+        "cta_path": "/broker-verification",
         "outro": "",
     },
     "broker_commission_credited": {

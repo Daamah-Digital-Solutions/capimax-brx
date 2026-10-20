@@ -234,10 +234,10 @@ export const authApi = {
   },
 
   /** Sign in / up with a Google GIS id_token. Returns the same shape as login. */
-  async googleOAuth(idToken: string): Promise<AuthResult> {
+  async googleOAuth(idToken: string, ref?: string | null): Promise<AuthResult> {
     const data = (await rawRequest("/auth/oauth/google/", {
       method: "POST",
-      body: { id_token: idToken },
+      body: { id_token: idToken, ...(ref ? { ref } : {}) },
     })) as AuthResult;
     tokenStore.set(data.session.access_token, data.session.refresh_token);
     return data;

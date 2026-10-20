@@ -82,7 +82,8 @@ def approve_kyb(owner: OwnerProfile, *, review_answer: str = "", source: str = "
     transaction.on_commit(lambda: _activate_owner_role(owner.user))
     if not already:
         log.info("Owner KYB approved (source=%s) for user %s", source, owner.user_id)
-        notify(owner.user, NotificationType.KYB_APPROVED, params={"role": "owner"})
+        notify(owner.user, NotificationType.KYB_APPROVED,
+               params={"role": "owner", "dashboard": "/my-assets"}, action_url="/my-assets")
     return owner
 
 
@@ -95,7 +96,8 @@ def reject_kyb(owner: OwnerProfile, *, reason: str = "", review_answer: str = ""
     owner.save()
     log.info("Owner KYB rejected (source=%s) for user %s", source, owner.user_id)
     if not already:
-        notify(owner.user, NotificationType.KYB_REJECTED, params={"role": "owner"})
+        notify(owner.user, NotificationType.KYB_REJECTED,
+               params={"role": "owner", "dashboard": "/my-assets"}, action_url="/my-assets")
     return owner
 
 

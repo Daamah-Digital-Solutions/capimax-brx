@@ -63,7 +63,8 @@ def approve_kyb(lp: LiquidityProvider, *, review_answer: str = "", source: str =
     transaction.on_commit(lambda: _activate_lp_role(lp.user))
     if not already:
         log.info("LP KYB approved (source=%s) for user %s", source, lp.user_id)
-        notify(lp.user, NotificationType.KYB_APPROVED, params={"role": "lp"})
+        notify(lp.user, NotificationType.KYB_APPROVED,
+               params={"role": "lp", "dashboard": "/liquidity-provider"}, action_url="/liquidity-provider")
     return lp
 
 
@@ -76,7 +77,8 @@ def reject_kyb(lp: LiquidityProvider, *, reason: str = "", review_answer: str = 
     lp.save()
     log.info("LP KYB rejected (source=%s) for user %s", source, lp.user_id)
     if not already:
-        notify(lp.user, NotificationType.KYB_REJECTED, params={"role": "lp"})
+        notify(lp.user, NotificationType.KYB_REJECTED,
+               params={"role": "lp", "dashboard": "/liquidity-provider"}, action_url="/liquidity-provider")
     return lp
 
 

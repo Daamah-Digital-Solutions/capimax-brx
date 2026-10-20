@@ -84,7 +84,8 @@ def approve_kyb(partner: PartnerProfile, *, review_answer: str = "", source: str
     transaction.on_commit(lambda: _activate_partner_role(partner.user))
     if not already:
         log.info("Partner KYB approved (source=%s) for user %s", source, partner.user_id)
-        notify(partner.user, NotificationType.KYB_APPROVED, params={"role": "partner"})
+        notify(partner.user, NotificationType.KYB_APPROVED,
+               params={"role": "partner", "dashboard": "/strategic-partners"}, action_url="/strategic-partners")
     return partner
 
 
@@ -97,7 +98,8 @@ def reject_kyb(partner: PartnerProfile, *, reason: str = "", review_answer: str 
     partner.save()
     log.info("Partner KYB rejected (source=%s) for user %s", source, partner.user_id)
     if not already:
-        notify(partner.user, NotificationType.KYB_REJECTED, params={"role": "partner"})
+        notify(partner.user, NotificationType.KYB_REJECTED,
+               params={"role": "partner", "dashboard": "/strategic-partners"}, action_url="/strategic-partners")
     return partner
 
 

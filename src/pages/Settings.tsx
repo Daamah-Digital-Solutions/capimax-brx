@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { PWASettingsSection } from "@/components/settings/PWASettingsSection";
+import { Link } from "react-router-dom";
+import { kycApi } from "@/integrations/api/client";
 import {
   User,
   Shield,
@@ -62,6 +64,12 @@ export default function Settings() {
     admin: { en: "Admin", ar: "مسؤول" },
   };
   const roleLabel = roleKey ? roleLabels[roleKey]?.[isAr ? "ar" : "en"] ?? roleKey : "";
+  // The "Verified" badge reflects the real identity (KYC) status.
+  const [kycApproved, setKycApproved] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    kycApi.me().then((k) => setKycApproved(k?.status === "approved")).catch(() => setKycApproved(null));
+  }, [user]);
 
   // Personal-info form: prefill from the real profile, then stay editable so the
   // user edits their own data (not a fixed placeholder). Re-syncs once the profile
@@ -143,10 +151,18 @@ export default function Settings() {
                       {profileName}
                     </h3>
                     <p className="text-sm text-muted-foreground">{roleLabel}</p>
-                    <Badge variant="success" className="mt-2">
-                      <Check className="w-3 h-3 mr-1" />
-                      {t("settings.verified")}
-                    </Badge>
+                    {kycApproved ? (
+                      <Badge variant="success" className="mt-2">
+                        <Check className="w-3 h-3 mr-1" />
+                        {t("settings.verified")}
+                      </Badge>
+                    ) : kycApproved === false ? (
+                      <Link to="/kyc">
+                        <Badge variant="outline" className="mt-2 hover:border-primary">
+                          {isAr ? "الهوية غير موثّقة — وثّقها الآن" : "Identity not verified — verify now"}
+                        </Badge>
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
 

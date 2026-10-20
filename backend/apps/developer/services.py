@@ -66,7 +66,8 @@ def approve_kyb(developer: DeveloperProfile, *, review_answer: str = "", source:
     transaction.on_commit(lambda: _activate_developer_role(developer.user))
     if not already:
         log.info("Developer KYB approved (source=%s) for user %s", source, developer.user_id)
-        notify(developer.user, NotificationType.KYB_APPROVED, params={"role": "developer"})
+        notify(developer.user, NotificationType.KYB_APPROVED,
+               params={"role": "developer", "dashboard": "/my-assets"}, action_url="/my-assets")
     return developer
 
 
@@ -79,7 +80,8 @@ def reject_kyb(developer: DeveloperProfile, *, reason: str = "", review_answer: 
     developer.save()
     log.info("Developer KYB rejected (source=%s) for user %s", source, developer.user_id)
     if not already:
-        notify(developer.user, NotificationType.KYB_REJECTED, params={"role": "developer"})
+        notify(developer.user, NotificationType.KYB_REJECTED,
+               params={"role": "developer", "dashboard": "/my-assets"}, action_url="/my-assets")
     return developer
 
 

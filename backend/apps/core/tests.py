@@ -238,6 +238,18 @@ class GoogleOAuthTests(APITestCase):
         self.assertFalse(user.has_usable_password())
 
     @patch("apps.core.views.verify_google_id_token")
+    def test_google_signup_keeps_the_broker_referral(self, mock_verify):
+        from apps.broker.services import get_or_create_broker
+
+        broker_user = User.objects.create_user(email="brk@ex.com", password="Str0ng-Passw0rd!")
+        broker, _ = get_or_create_broker(broker_user, defaults={"contact_name": "B", "email": broker_user.email})
+        mock_verify.return_value = self._claims()
+        resp = self.client.post(self.url, {"id_token": "fake", "ref": broker.referral_code}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        user = User.objects.get(email__iexact="newuser@gmail.com")
+        self.assertEqual(user.profile.referred_by_broker_id, broker.pk)
+
+    @patch("apps.core.views.verify_google_id_token")
     def test_returning_user_is_not_duplicated(self, mock_verify):
         existing = User.objects.create_user(email="dev@gmail.com", password="Str0ng-Passw0rd!")
         mock_verify.return_value = self._claims(email="DEV@gmail.com", name="Ignored")

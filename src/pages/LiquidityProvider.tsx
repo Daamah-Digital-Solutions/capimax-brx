@@ -204,7 +204,8 @@ export default function LiquidityProvider() {
             onUploadDocument={uploadKYBDocument}
             isRTL={isRTL}
           />
-        ) : lpProfile.status === "pending" && lpProfile.kyb_status === "not_started" ? (
+        ) : lpProfile.status === "pending" &&
+          (lpProfile.kyb_status === "not_started" || lpProfile.kyb_status === "documents_pending") ? (
           // LP registered but KYB not started - show KYB flow
           <div className="space-y-6">
             <Card className="border-primary/30 bg-primary/5">

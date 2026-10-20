@@ -282,6 +282,15 @@ class GoogleOAuthView(APIView):
             # creates the baseline (investor, active) profile.
             user = User.objects.create_user(email=email)
 
+        # A broker referral code travels with a Google sign-up too (set-once, first wins).
+        ref = (request.data.get("ref") or "").strip()
+        if created and ref:
+            from apps.broker.services import attribute_referral
+
+            profile = getattr(user, "profile", None)
+            if profile is not None and attribute_referral(profile, ref) is not None:
+                profile.save()
+
         # Google already verified the email; reflect that on our side.
         if not user.is_email_verified:
             user.is_email_verified = True

@@ -91,10 +91,10 @@ export default function Auth() {
           return;
         }
 
-        if (formData.password.length < 6) {
+        if (formData.password.length < 8) {
           toast({
             title: language === "ar" ? "خطأ" : "Error",
-            description: language === "ar" ? "كلمة المرور يجب أن تكون 6 أحرف على الأقل" : "Password must be at least 6 characters",
+            description: language === "ar" ? "كلمة المرور يجب أن تكون 8 أحرف على الأقل" : "Password must be at least 8 characters",
             variant: "destructive",
           });
           setIsLoading(false);
@@ -534,16 +534,16 @@ export default function Auth() {
                     {language === "ar" ? (
                       <>
                         أوافق على{" "}
-                        <Link to="/terms" className="text-primary hover:underline">الشروط والأحكام</Link>
+                        <Link to="/terms-conditions" className="text-primary hover:underline">الشروط والأحكام</Link>
                         {" "}و{" "}
-                        <Link to="/privacy" className="text-primary hover:underline">سياسة الخصوصية</Link>
+                        <Link to="/privacy-policy" className="text-primary hover:underline">سياسة الخصوصية</Link>
                       </>
                     ) : (
                       <>
                         I agree to the{" "}
-                        <Link to="/terms" className="text-primary hover:underline">Terms & Conditions</Link>
+                        <Link to="/terms-conditions" className="text-primary hover:underline">Terms & Conditions</Link>
                         {" "}and{" "}
-                        <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+                        <Link to="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>
                       </>
                     )}
                   </span>

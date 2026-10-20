@@ -168,6 +168,13 @@ class LicenseHingeTests(TestCase):
             ).exists()
         )
 
+    def test_resubmitting_after_a_rejection_goes_back_to_review(self):
+        _approve_identity(self.user)
+        reject_license(self.broker, notes="Licence expired")
+        submit_license(self.broker, license_info={"license_number": "LIC-100", "license_authority": "RERA"})
+        self.broker.refresh_from_db()
+        self.assertEqual(self.broker.status, BrokerStatus.PENDING)
+
     def test_reject_records_notes_and_leaves_inactive(self):
         _approve_identity(self.user)
         reject_license(self.broker, notes="Licence expired")
