@@ -32,6 +32,26 @@ interface OwnerWithdrawDialogProps {
   onSuccess?: () => void;
 }
 
+// Countries an investor's bank can be in for automatic payouts (Stripe Connect).
+const PAYOUT_COUNTRIES = [
+  { code: "AE", en: "United Arab Emirates", ar: "الإمارات" },
+  { code: "SA", en: "Saudi Arabia", ar: "السعودية" },
+  { code: "QA", en: "Qatar", ar: "قطر" },
+  { code: "KW", en: "Kuwait", ar: "الكويت" },
+  { code: "BH", en: "Bahrain", ar: "البحرين" },
+  { code: "OM", en: "Oman", ar: "عُمان" },
+  { code: "EG", en: "Egypt", ar: "مصر" },
+  { code: "JO", en: "Jordan", ar: "الأردن" },
+  { code: "MA", en: "Morocco", ar: "المغرب" },
+  { code: "TR", en: "Turkey", ar: "تركيا" },
+  { code: "GB", en: "United Kingdom", ar: "المملكة المتحدة" },
+  { code: "US", en: "United States", ar: "الولايات المتحدة" },
+  { code: "DE", en: "Germany", ar: "ألمانيا" },
+  { code: "FR", en: "France", ar: "فرنسا" },
+  { code: "IN", en: "India", ar: "الهند" },
+  { code: "PK", en: "Pakistan", ar: "باكستان" },
+];
+
 const maskAddress = (addr: string) =>
   addr && addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
 
@@ -59,6 +79,9 @@ export function OwnerWithdrawDialog({
   const [route, setRoute] = useState<"auto" | "manual">("manual");
   const [speed, setSpeed] = useState<"standard" | "instant">("standard");
   const [linking, setLinking] = useState(false);
+  // The bank account's country — asked before the first link (Stripe creates the payout
+  // account in that country).
+  const [payoutCountry, setPayoutCountry] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +97,7 @@ export function OwnerWithdrawDialog({
   const linkStripe = async () => {
     setLinking(true);
     try {
-      const { url } = await walletsApi.payoutConnect();
+      const { url } = await walletsApi.payoutConnect(payoutCountry || undefined);
       window.location.href = url;
     } catch (err: any) {
       toast.error(err?.message || (isAr ? "تعذّر فتح ربط الحساب" : "Could not start linking"));
@@ -237,7 +260,27 @@ export function OwnerWithdrawDialog({
                         ? "اربط حسابك البنكي مع Stripe ليصلك السحب تلقائياً."
                         : "Link your bank with Stripe to get withdrawals paid automatically."}
                   </p>
-                  <Button type="button" variant="outline" size="sm" onClick={linkStripe} disabled={linking}>
+                  {payout.connect_status === "none" && (
+                    <Select value={payoutCountry} onValueChange={setPayoutCountry}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder={isAr ? "دولة الحساب البنكي" : "Country of your bank account"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAYOUT_COUNTRIES.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {isAr ? c.ar : c.en}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={linkStripe}
+                    disabled={linking || (payout.connect_status === "none" && !payoutCountry)}
+                  >
                     {linking ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : <ExternalLink className="w-4 h-4 me-2" />}
                     {payout.connect_status === "pending"
                       ? isAr ? "أكمل الربط" : "Finish linking"

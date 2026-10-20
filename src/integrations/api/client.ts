@@ -932,8 +932,12 @@ export const walletsApi = {
   payoutOptions: () =>
     rawRequest("/wallets/payouts/options/", { auth: true }) as Promise<PayoutOptions>,
   /** A Stripe-hosted link to set up the caller's payout account (bank + optional debit card). */
-  payoutConnect: () =>
-    rawRequest("/wallets/payouts/connect/", { method: "POST", auth: true }) as Promise<{ url: string }>,
+  payoutConnect: (country?: string) =>
+    rawRequest("/wallets/payouts/connect/", {
+      method: "POST",
+      auth: true,
+      body: country ? { country } : {},
+    }) as Promise<{ url: string }>,
 };
 
 export interface PayoutOptions {

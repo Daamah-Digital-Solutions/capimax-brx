@@ -69,14 +69,20 @@ def options(user) -> dict:
     }
 
 
-def start_onboarding(user) -> str:
-    """The Stripe-hosted page where the investor links their bank (and debit card)."""
+def start_onboarding(user, country: str = "") -> str:
+    """The Stripe-hosted page where the investor links their bank (and debit card). The account
+    is created in the investor's country (asked once, before the first link)."""
     if not bank_auto_enabled():
         raise ValidationError({"code": "payouts_manual", "detail": "Automatic bank payouts are not enabled."})
     acct = StripeConnectAccount.objects.filter(user=user).first()
     if acct is None:
+        country = (country or "").strip().upper()
+        if len(country) != 2 or not country.isalpha():
+            raise ValidationError({"code": "country_required", "detail": "Choose the country of your bank account."})
         acct = StripeConnectAccount.objects.create(
-            user=user, account_id=stripe_service.create_express_account(email=user.email, user_id=str(user.pk)),
+            user=user,
+            account_id=stripe_service.create_express_account(
+                email=user.email, user_id=str(user.pk), country=country),
         )
     back = f"{settings.FRONTEND_URL.rstrip('/')}/wallet?payouts=linked"
     return stripe_service.create_account_link(account_id=acct.account_id, refresh_url=back, return_url=back)

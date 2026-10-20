@@ -371,7 +371,7 @@ class PayoutConnectView(APIView):
         if needs_email_verification(request.user):
             return Response(EMAIL_UNVERIFIED, status=status.HTTP_403_FORBIDDEN)
         try:
-            url = start_onboarding(request.user)
+            url = start_onboarding(request.user, str(request.data.get("country") or ""))
         except StripeError as exc:
             return Response({"detail": str(exc), "code": "stripe_error"}, status=status.HTTP_502_BAD_GATEWAY)
         return Response({"url": url})

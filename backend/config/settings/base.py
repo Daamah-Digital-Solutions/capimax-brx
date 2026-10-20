@@ -525,6 +525,9 @@ PAYOUT_AUTO_METHODS = env.list("PAYOUT_AUTO_METHODS", default=[])
 PAYOUT_INSTANT_ENABLED = env.bool("PAYOUT_INSTANT_ENABLED", default=False)
 PAYOUT_INSTANT_FEE_PERCENT = env.float("PAYOUT_INSTANT_FEE_PERCENT", default=1.0)
 PAYOUT_INSTANT_MAX = env.float("PAYOUT_INSTANT_MAX", default=9999.0)
+# The country of the platform's Stripe account; investors elsewhere get cross-border
+# "recipient" Express accounts.
+STRIPE_PLATFORM_COUNTRY = env("STRIPE_PLATFORM_COUNTRY", default="US")
 
 # Gifts, family transfers and inheritance (apps/transfers). A recipient who isn't verified
 # yet has TRANSFER_CLAIM_DAYS to sign up + verify before a gift / family transfer returns

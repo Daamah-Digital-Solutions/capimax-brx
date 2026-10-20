@@ -178,15 +178,23 @@ class StripeBalanceInsufficient(StripeError):
     """The platform's Stripe balance can't fund this transfer right now."""
 
 
-def create_express_account(*, email: str, user_id: str) -> str:
+def create_express_account(*, email: str, user_id: str, country: str) -> str:
+    """An Express account in the investor's own country. Outside the platform's country it is a
+    cross-border "recipient" account (it can receive transfers, which is all payouts need)."""
+    from django.conf import settings
+
     stripe = _stripe()
+    params = {
+        "type": "express", "country": country, "email": email, "metadata": {"user_id": user_id},
+        "capabilities": {"transfers": {"requested": True}},
+    }
+    if country != settings.STRIPE_PLATFORM_COUNTRY:
+        params["tos_acceptance"] = {"service_agreement": "recipient"}
     try:
-        acct = stripe.Account.create(
-            type="express", email=email, metadata={"user_id": user_id},
-            capabilities={"transfers": {"requested": True}},
-        )
+        acct = stripe.Account.create(**params)
     except Exception as exc:
-        raise StripeError("Could not create the payout account.") from exc
+        msg = getattr(exc, "user_message", None) or "Could not create the payout account."
+        raise StripeError(msg) from exc
     return acct["id"]
 
 

@@ -139,11 +139,33 @@ class AutoWithdrawalApiTests(APITestCase):
     def test_connect_returns_a_stripe_link_and_reuses_the_account(self):
         with mock.patch.object(stripe_service, "create_express_account", return_value="acct_new") as ca, \
                 mock.patch.object(stripe_service, "create_account_link", return_value="https://connect.stripe.com/x"):
-            r1 = self.client.post("/api/wallets/payouts/connect/")
+            r0 = self.client.post("/api/wallets/payouts/connect/")
+            r1 = self.client.post("/api/wallets/payouts/connect/", {"country": "ae"}, format="json")
             r2 = self.client.post("/api/wallets/payouts/connect/")
+        self.assertEqual(r0.status_code, 400)
+        self.assertEqual(r0.json()["code"], "country_required")
         self.assertEqual(r1.json()["url"], "https://connect.stripe.com/x")
         self.assertEqual(r2.status_code, 200)
         self.assertEqual(ca.call_count, 1)
+        self.assertEqual(ca.call_args.kwargs["country"], "AE")
+
+    @override_settings(**AUTO)
+    def test_cross_border_accounts_are_recipients(self):
+        created = {}
+
+        class FakeAccount:
+            @staticmethod
+            def create(**kw):
+                created.update(kw)
+                return {"id": "acct_x"}
+
+        fake = mock.Mock(Account=FakeAccount)
+        with mock.patch.object(stripe_service, "_stripe", return_value=fake):
+            stripe_service.create_express_account(email="a@b.c", user_id="1", country="AE")
+            self.assertEqual(created["tos_acceptance"], {"service_agreement": "recipient"})
+            created.clear()
+            stripe_service.create_express_account(email="a@b.c", user_id="1", country="US")
+            self.assertNotIn("tos_acceptance", created)
 
     @override_settings(**AUTO)
     def test_auto_withdrawal_through_the_api(self):
