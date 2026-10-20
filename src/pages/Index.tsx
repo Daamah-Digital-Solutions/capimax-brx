@@ -14,6 +14,7 @@ import { PronovaNovaSection } from "@/components/home/PronovaNovaSection";
 import { NotificationsSection } from "@/components/home/NotificationsSection";
 import { PlatformDisclaimer } from "@/components/home/PlatformDisclaimer";
 import { Footer } from "@/components/home/Footer";
+import { LegalDisclaimer } from "@/components/home/LegalDisclaimer";
 
 const Index = () => {
   return (
@@ -32,6 +33,7 @@ const Index = () => {
       <CTASection />
       <PlatformDisclaimer />
       <Footer />
+      <LegalDisclaimer />
     </MainLayout>
   );
 };
