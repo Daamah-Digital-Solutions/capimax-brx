@@ -137,6 +137,7 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.distributions", icon: DollarSign, href: "/distributions" },
       { titleKey: "nav.reports", icon: BarChart3, href: "/reports" },
       { titleKey: "nav.wallet", icon: Wallet, href: "/wallet" },
+      { titleKey: "nav.transfers", icon: ArrowRightLeft, href: "/transfers" },
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
       { titleKey: "nav.secondaryMarket", icon: TrendingUp, href: "/secondary-market" },
       { titleKey: "nav.exitsHub", icon: ArrowRightLeft, href: "/exits-hub" },

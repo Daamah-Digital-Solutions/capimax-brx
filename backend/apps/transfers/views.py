@@ -30,6 +30,7 @@ _CLAIM_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 class TransferSerializer(serializers.ModelSerializer):
     direction = serializers.SerializerMethodField()
     counterparty = serializers.SerializerMethodField()
+    property_name_ar = serializers.SerializerMethodField()
     amount = serializers.FloatField(read_only=True)
     fee_amount = serializers.FloatField(read_only=True)
 
@@ -37,13 +38,26 @@ class TransferSerializer(serializers.ModelSerializer):
         model = UnitTransfer
         fields = (
             "id", "reference", "kind", "asset", "status", "direction", "counterparty",
-            "recipient_email", "recipient_name", "property_slug", "property_name", "units",
+            "recipient_email", "recipient_name", "property_slug", "property_name", "property_name_ar", "units",
             "amount", "fee_amount", "message", "occasion", "deliver_on", "expires_at",
             "delivered_at", "closed_reason", "created_at",
         )
 
     def get_direction(self, obj):
         return "sent" if obj.sender_id == self.context["user"].pk else "received"
+
+    def get_property_name_ar(self, obj):
+        """The property's Arabic name (the Arabic site shows it); cached per slug."""
+        if not obj.property_slug:
+            return ""
+        cache = self.context.setdefault("_ar_names", {})
+        if obj.property_slug not in cache:
+            from apps.properties.models import Property
+
+            cache[obj.property_slug] = (
+                Property.objects.filter(slug=obj.property_slug).values_list("name_ar", flat=True).first() or ""
+            )
+        return cache[obj.property_slug]
 
     def get_counterparty(self, obj):
         if obj.sender_id == self.context["user"].pk:
@@ -90,14 +104,20 @@ class GiftableView(APIView):
     def get(self, request):
         from apps.wallets.models import OwnershipToken, UserBalance
 
+        from apps.properties.models import Property
+
         rows = []
-        for pos in OwnershipToken.objects.filter(
+        positions = list(OwnershipToken.objects.filter(
             wallet__user=request.user, status=OwnershipToken.Status.ACTIVE, token_amount__gt=0,
-        ):
+        ))
+        ar_names = dict(Property.objects.filter(slug__in=[p.property_id for p in positions])
+                        .values_list("slug", "name_ar"))
+        for pos in positions:
             free = services.free_units(request.user, pos.property_id, pos)
             if free > 0:
                 rows.append({
                     "property_slug": pos.property_id, "property_name": pos.property_name,
+                    "property_name_ar": ar_names.get(pos.property_id) or "",
                     "free_units": free,
                     "unit_value": float(services.average_cost(request.user, pos.property_id)),
                 })

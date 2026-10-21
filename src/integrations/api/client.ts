@@ -2328,7 +2328,7 @@ export interface TransferRow {
 }
 
 export interface Giftable {
-  positions: { property_slug: string; property_name: string; free_units: number; unit_value: number }[];
+  positions: { property_slug: string; property_name: string; property_name_ar?: string; free_units: number; unit_value: number }[];
   balance: number;
   gift_fee_percent: number;
   family_fee_percent: number;

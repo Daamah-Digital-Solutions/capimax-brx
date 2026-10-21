@@ -133,6 +133,12 @@ def hamilton(total: int, percents: list[Decimal]) -> list[int]:
     return shares
 
 
+def page_for(t: UnitTransfer) -> str:
+    """Where the sender follows this transfer: general transfers have their own Transfers
+    page; family-member transfers and inheritance stay on the Family Investment page."""
+    return "/transfers" if t.kind == UnitTransfer.Kind.GIFT else "/family-investment"
+
+
 def _send_invite(t: UnitTransfer, user) -> None:
     from apps.core.event_emails import send_event_email
 
@@ -343,8 +349,8 @@ def deliver(transfer_id) -> str:
                 notify(t.sender, NotificationType.TRANSFER_WAITING,
                        params={"what": describe(t), "kind": KIND_LABEL[t.kind],
                                "recipient": t.recipient_name or t.recipient_email,
-                               "days": settings.TRANSFER_CLAIM_DAYS},
-                       action_url="/family-investment")
+                               "days": settings.TRANSFER_CLAIM_DAYS, "page": page_for(t)},
+                       action_url=page_for(t))
                 _send_invite(t, recipient)
             return t.status
         else:
@@ -373,11 +379,12 @@ def deliver(transfer_id) -> str:
 
 def _after_delivery(t: UnitTransfer, recipient) -> None:
     params = {"what": describe(t), "kind": KIND_LABEL[t.kind], "sender": display_name(t.sender),
-              "recipient": t.recipient_name or t.recipient_email, "message": t.message or ""}
+              "recipient": t.recipient_name or t.recipient_email, "message": t.message or "",
+              "page": page_for(t)}
     notify(recipient, NotificationType.TRANSFER_RECEIVED, params=params,
            action_url="/portfolio" if t.asset == UnitTransfer.Asset.UNITS else "/wallet")
     if t.kind != UnitTransfer.Kind.ESTATE:
-        notify(t.sender, NotificationType.TRANSFER_DELIVERED, params=params, action_url="/family-investment")
+        notify(t.sender, NotificationType.TRANSFER_DELIVERED, params=params, action_url=page_for(t))
     if t.family_account_id:
         from apps.family.models import FamilyAccount, FamilyTransaction
 
@@ -412,7 +419,7 @@ def _close(t: UnitTransfer, status: str, reason: str) -> None:
             notify(t.sender, NotificationType.TRANSFER_RETURNED,
                    params={"what": describe(t), "kind": KIND_LABEL[t.kind],
                            "recipient": t.recipient_name or t.recipient_email, "reason": reason},
-                   action_url="/family-investment")
+                   action_url=page_for(t))
 
 
 def cancel(transfer_id, user) -> UnitTransfer:
@@ -456,7 +463,7 @@ def remind_upcoming(today=None) -> int:
         notify(t.sender, NotificationType.GIFT_REMINDER,
                params={"what": describe(t), "recipient": t.recipient_name or t.recipient_email,
                        "date": t.deliver_on.isoformat()},
-               action_url="/family-investment")
+               action_url="/transfers")
         UnitTransfer.objects.filter(pk=t.pk).update(reminder_sent_at=timezone.now())
         n += 1
     return n

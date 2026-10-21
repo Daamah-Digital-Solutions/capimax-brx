@@ -163,7 +163,7 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "heading": "Delivered",
         "intro": "{what} reached {recipient}.",
         "cta_label": "View transfers",
-        "cta_path": "/family-investment",
+        "cta_path": "{page}",
         "outro": "",
     },
     "transfer_waiting": {
@@ -171,7 +171,7 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "heading": "Waiting for the recipient",
         "intro": "{recipient} needs to sign up, confirm their email and verify their identity to receive {what}. We emailed them. If they don't within {days} days, it comes back to you — you can also cancel it any time before.",
         "cta_label": "View transfers",
-        "cta_path": "/family-investment",
+        "cta_path": "{page}",
         "outro": "",
     },
     "transfer_returned": {
@@ -186,8 +186,8 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "subject": "Your gift goes out on {date}",
         "heading": "Gift reminder",
         "intro": "Your gift of {what} to {recipient} will be delivered on {date}. You can still cancel it before then.",
-        "cta_label": "View gifts",
-        "cta_path": "/family-investment",
+        "cta_label": "View transfers",
+        "cta_path": "/transfers",
         "outro": "",
     },
     "estate_claim_decided": {

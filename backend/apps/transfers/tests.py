@@ -156,6 +156,34 @@ class GiftTests(TestCase):
         self.assertTrue(Notification.objects.filter(user=sender, type="transfer_returned").exists())
 
 
+class TransferPageLinkTests(TestCase):
+    """General transfers are followed on the Transfers page; family-member transfers stay on
+    the Family Investment page."""
+
+    def test_gift_notifications_open_the_transfers_page(self):
+        prop = _undeployed_property("lnk")
+        sender = _holder("lnk@ex.com", prop)
+        with self.captureOnCommitCallbacks(execute=True):
+            t = services.create_gift(sender, recipient_email="nobody@ex.com", asset="units",
+                                     property_slug=prop.slug, units=1)
+        n = Notification.objects.get(user=sender, type="transfer_waiting")
+        self.assertEqual(n.action_url, "/transfers")
+        self.assertEqual(n.params["page"], "/transfers")
+        services.cancel(t.pk, sender)
+        self.assertEqual(Notification.objects.get(user=sender, type="transfer_returned").action_url, "/transfers")
+
+    def test_family_transfer_notifications_stay_on_the_family_page(self):
+        owner = _verified("fam-owner@ex.com")
+        credit_user_balance(owner, Decimal("50"), source="test")
+        _verified("fam-son@ex.com")
+        acct = FamilyAccount.objects.create(investor=owner, member_name="Son", member_email="fam-son@ex.com",
+                                            relationship="child")
+        with self.captureOnCommitCallbacks(execute=True):
+            services.create_family_transfer(owner, family_account_id=acct.pk, asset="cash", amount="10")
+        n = Notification.objects.get(user=owner, type="transfer_delivered")
+        self.assertEqual(n.action_url, "/family-investment")
+
+
 class FamilyTransferTests(TestCase):
     def test_family_cash_transfer_delivers_and_logs(self):
         owner = _verified("owner@ex.com")

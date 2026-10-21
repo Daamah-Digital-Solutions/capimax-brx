@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Gift, Loader2 } from "lucide-react";
+import { ArrowLeftRight, Gift, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -18,7 +18,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { transfersApi, type Giftable } from "@/integrations/api/client";
 import { cn } from "@/lib/utils";
 
+const NO_OCCASION = "none";
 const OCCASIONS = [
+  { id: NO_OCCASION, en: "No occasion", ar: "بدون مناسبة" },
   { id: "birthday", en: "Birthday", ar: "عيد ميلاد" },
   { id: "graduation", en: "Graduation", ar: "تخرج" },
   { id: "wedding", en: "Wedding", ar: "زواج" },
@@ -33,17 +35,26 @@ const today = () => new Date().toISOString().slice(0, 10);
  * Give property units or a wallet amount to anyone by email — now or on a chosen date.
  * It is held from the moment it's scheduled and reaches the recipient once they have a
  * verified email and approved KYC (they're emailed an invitation if not yet).
+ *
+ * `mode="transfer"` is the Transfers page wording (a plain transfer, occasion optional);
+ * the default "gift" wording is the Family Investment page's.
  */
 export function GiftDialog({
   open,
   onOpenChange,
   onDone,
+  mode = "gift",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone?: () => void;
+  mode?: "gift" | "transfer";
 }) {
   const { isRTL } = useLanguage();
+  const isTransfer = mode === "transfer";
+  const word = isTransfer
+    ? { ar: "التحويل", en: "Transfer", enLower: "transfer" }
+    : { ar: "الهدية", en: "Gift", enLower: "gift" };
   const [info, setInfo] = useState<Giftable | null>(null);
   const [asset, setAsset] = useState<"units" | "cash">("units");
   const [slug, setSlug] = useState("");
@@ -52,7 +63,7 @@ export function GiftDialog({
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [date, setDate] = useState(today());
-  const [occasion, setOccasion] = useState("birthday");
+  const [occasion, setOccasion] = useState(isTransfer ? NO_OCCASION : "birthday");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -86,15 +97,15 @@ export function GiftDialog({
         asset,
         ...(asset === "units" ? { property_slug: slug, units: n } : { amount: amt }),
         deliver_on: date,
-        occasion,
+        occasion: occasion === NO_OCCASION ? "" : occasion,
         message: message.trim(),
       });
       toast.success(
         t.status === "delivered"
-          ? isRTL ? "تم تسليم الهدية" : "Gift delivered"
+          ? isRTL ? `تم تسليم ${word.ar}` : `${word.en} delivered`
           : t.status === "waiting"
-            ? isRTL ? "الهدية بانتظار تسجيل المستلم وتوثيقه — أرسلنا له دعوة" : "Gift waiting for the recipient to sign up and verify — we invited them"
-            : isRTL ? `تمت جدولة الهدية ليوم ${t.deliver_on}` : `Gift scheduled for ${t.deliver_on}`,
+            ? isRTL ? `${word.ar} بانتظار تسجيل المستلم وتوثيقه — أرسلنا له دعوة` : `${word.en} waiting for the recipient to sign up and verify — we invited them`
+            : isRTL ? `تمت جدولة ${word.ar} ليوم ${t.deliver_on}` : `${word.en} scheduled for ${t.deliver_on}`,
       );
       setUnits("");
       setAmount("");
@@ -104,7 +115,7 @@ export function GiftDialog({
       onOpenChange(false);
       onDone?.();
     } catch (e: any) {
-      toast.error(e?.message || (isRTL ? "تعذّر إرسال الهدية" : "Could not send the gift"));
+      toast.error(e?.message || (isRTL ? `تعذّر إرسال ${word.ar}` : `Could not send the ${word.enLower}`));
     } finally {
       setBusy(false);
     }
@@ -115,13 +126,19 @@ export function GiftDialog({
       <DialogContent dir={isRTL ? "rtl" : "ltr"} className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Gift className="w-5 h-5 text-pink-500" />
-            {isRTL ? "هدية عقارية" : "Property gift"}
+            {isTransfer ? <ArrowLeftRight className="w-5 h-5 text-primary" /> : <Gift className="w-5 h-5 text-pink-500" />}
+            {isTransfer
+              ? isRTL ? "تحويل وحدات أو رصيد" : "Transfer units or balance"
+              : isRTL ? "هدية عقارية" : "Property gift"}
           </DialogTitle>
           <DialogDescription>
-            {isRTL
-              ? `يُحجز ما تهديه فوراً ويصل للمستلم بعد تأكيد بريده وتوثيق هويته. إن لم يستلمه خلال ${info?.claim_days ?? 30} يوماً يعود إليك، ويمكنك إلغاؤه قبل ذلك.`
-              : `What you give is held at once and reaches the recipient after they confirm their email and verify their identity. If not received within ${info?.claim_days ?? 30} days it returns to you — you can cancel before then.`}
+            {isTransfer
+              ? isRTL
+                ? `يُحجز ما تحوّله فوراً، ويصل للمستلم مباشرة إن كان بريده مؤكدًا وهويته موثّقة، وإلا يصله بريد دعوة ويصله التحويل فور توثيقه. إن لم يستلمه خلال ${info?.claim_days ?? 30} يوماً يعود إليك، ويمكنك إلغاؤه قبل ذلك من صفحة التحويلات.`
+                : `What you send is held at once and reaches the recipient right away if their email is confirmed and their identity verified; otherwise they get an invitation and receive it as soon as they verify. If not received within ${info?.claim_days ?? 30} days it returns to you — you can cancel it before then on the Transfers page.`
+              : isRTL
+                ? `يُحجز ما تهديه فوراً ويصل للمستلم بعد تأكيد بريده وتوثيق هويته. إن لم يستلمه خلال ${info?.claim_days ?? 30} يوماً يعود إليك، ويمكنك إلغاؤه قبل ذلك.`
+                : `What you give is held at once and reaches the recipient after they confirm their email and verify their identity. If not received within ${info?.claim_days ?? 30} days it returns to you — you can cancel before then.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -154,7 +171,7 @@ export function GiftDialog({
                   <SelectContent>
                     {info?.positions.map((p) => (
                       <SelectItem key={p.property_slug} value={p.property_slug}>
-                        {p.property_name} ({p.free_units})
+                        {(isRTL && p.property_name_ar) || p.property_name} ({p.free_units})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -178,7 +195,7 @@ export function GiftDialog({
           )}
           {fee > 0 && (
             <p className="text-xs text-muted-foreground">
-              {isRTL ? `رسوم الهدية: $${fee.toFixed(2)}` : `Gift fee: $${fee.toFixed(2)}`}
+              {isRTL ? `رسوم ${word.ar}: $${fee.toFixed(2)}` : `${word.en} fee: $${fee.toFixed(2)}`}
             </p>
           )}
 
@@ -199,13 +216,13 @@ export function GiftDialog({
               <Input type="date" min={today()} value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>{isRTL ? "المناسبة" : "Occasion"}</Label>
+              <Label>{isTransfer ? (isRTL ? "المناسبة (اختياري)" : "Occasion (optional)") : isRTL ? "المناسبة" : "Occasion"}</Label>
               <Select value={occasion} onValueChange={setOccasion}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {OCCASIONS.map((o) => (
+                  {OCCASIONS.filter((o) => isTransfer || o.id !== NO_OCCASION).map((o) => (
                     <SelectItem key={o.id} value={o.id}>
                       {isRTL ? o.ar : o.en}
                     </SelectItem>
@@ -226,8 +243,10 @@ export function GiftDialog({
             {isRTL ? "إلغاء" : "Cancel"}
           </Button>
           <Button onClick={submit} disabled={busy || !valid} className="gap-2">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
-            {date > today() ? (isRTL ? "جدولة الهدية" : "Schedule gift") : isRTL ? "إرسال الهدية" : "Send gift"}
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : isTransfer ? <ArrowLeftRight className="w-4 h-4" /> : <Gift className="w-4 h-4" />}
+            {date > today()
+              ? isRTL ? `جدولة ${word.ar}` : `Schedule ${word.enLower}`
+              : isRTL ? `إرسال ${word.ar}` : `Send ${word.enLower}`}
           </Button>
         </DialogFooter>
       </DialogContent>
