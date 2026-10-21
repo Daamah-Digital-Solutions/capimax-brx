@@ -33,4 +33,8 @@ eth-account>=0.13,<0.14
 reportlab>=4.2
 qrcode>=8.0
 pillow>=11.0
+# Arabic names / property names in PDFs: letter joining + right-to-left order
+# (apps/reports/brand.py, with the bundled DejaVu font).
+arabic-reshaper>=3.0
+python-bidi>=0.4
 stripe==15.2.1

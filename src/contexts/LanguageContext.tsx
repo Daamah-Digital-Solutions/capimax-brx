@@ -1507,6 +1507,7 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.deposit_credited.body": "تمت إضافة {amount} دولار إلى محفظتك (المرجع {reference}).",
     "notif.deposit_rejected.title": "لم تتم الموافقة على التحويل البنكي",
     "notif.deposit_rejected.body": "تعذّر مطابقة تحويلك البنكي بقيمة {amount} دولار (المرجع {reference}). يرجى رفع إثبات واضح أو التواصل مع الدعم.",
+    "nav.inheritanceClaim": "طلب الميراث",
   },
   en: {
     // Navigation
@@ -3005,6 +3006,7 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.deposit_credited.body": "Your deposit of ${amount} is now in your wallet (reference {reference}).",
     "notif.deposit_rejected.title": "Bank transfer not approved",
     "notif.deposit_rejected.body": "We couldn't match your bank transfer of ${amount} (reference {reference}). Please upload a clear proof or contact support.",
+    "nav.inheritanceClaim": "Inheritance claim",
   },
   fr: {
     // French translations - fallback to English with French labels

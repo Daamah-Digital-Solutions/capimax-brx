@@ -408,15 +408,26 @@ export default function Installments() {
                                   <ChevronDown className="w-4 h-4" />
                                 )}
                               </button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-2 shrink-0"
-                                onClick={() => downloadSchedule(plan)}
-                              >
-                                <Download className="w-4 h-4" />
-                                {language === "ar" ? "تحميل الجدول" : "Download"}
-                              </Button>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2"
+                                  disabled={exporting !== null}
+                                  onClick={() => run(`plan-${plan.id}`, () => reportsApi.installmentPlan(plan.id))}
+                                >
+                                  <Download className="w-4 h-4" />
+                                  {language === "ar" ? "الجدول PDF" : "Schedule PDF"}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1 text-muted-foreground"
+                                  onClick={() => downloadSchedule(plan)}
+                                >
+                                  CSV
+                                </Button>
+                              </div>
                             </div>
                             {openSchedule === plan.id && (
                               <div className="rounded-xl border border-border overflow-x-auto">

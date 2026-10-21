@@ -117,6 +117,7 @@ const publicItems: MenuItem[] = [
   { titleKey: "nav.liquidityProvider", icon: Coins, href: "/liquidity-provider" },
   { titleKey: "nav.partners", icon: Handshake, href: "/partners" },
   { titleKey: "nav.verificationCenter", icon: FileCheck, href: "/verification-center" },
+  { titleKey: "nav.inheritanceClaim", icon: FileText, href: "/inheritance-claim" },
   { titleKey: "nav.whyCapimax", icon: Sparkles, href: "/#why-capimax-brx" },
 ];
 

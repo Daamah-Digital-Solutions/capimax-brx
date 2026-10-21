@@ -46,6 +46,7 @@ import BrokerReports from "./pages/BrokerReports";
 import BrokerWallet from "./pages/BrokerWallet";
 import BrokerVerification from "./pages/BrokerVerification";
 import VerificationCenter from "./pages/VerificationCenter";
+import InheritanceClaim from "./pages/InheritanceClaim";
 import Referrals from "./pages/Referrals";
 import Commissions from "./pages/Commissions";
 import PublicReports from "./pages/PublicReports";
@@ -133,6 +134,7 @@ const App = () => (
               (www.capimax.pro), the central authority that verifies every document/
               certificate/record. BRX itself hosts no verification engine — see the page. */}
           <Route path="/verification-center" element={<VerificationCenter />} />
+          <Route path="/inheritance-claim" element={<InheritanceClaim />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/referrals" element={<Referrals />} />
           <Route path="/commissions" element={<Commissions />} />

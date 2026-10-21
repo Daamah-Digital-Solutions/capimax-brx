@@ -97,11 +97,6 @@ export default function BrokerReports() {
   };
 
   const fmtUsd = (n: number | string) => `$${(Number(n) || 0).toLocaleString()}`;
-  const periodLabel = (p: Period) =>
-    p === "month" ? (isAr ? "هذا الشهر" : "Monthly")
-      : p === "quarter" ? (isAr ? "هذا الربع" : "Quarterly")
-      : p === "year" ? (isAr ? "هذا العام" : "Annual")
-      : (isAr ? "كل الفترات" : "All time");
 
   // Period-filter the ledger rows client-side (by date).
   const start = periodStart(period);
@@ -164,7 +159,7 @@ export default function BrokerReports() {
                   disabled={exporting !== null}
                   onClick={() =>
                     runExport("broker", () =>
-                      reportsApi.export("broker-commissions", "pdf", { period: periodLabel(period) }),
+                      reportsApi.export("broker-commissions", "pdf", { period: period === "all" ? "" : period }),
                     )
                   }
                 >

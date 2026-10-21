@@ -1,7 +1,9 @@
 """Reports-export routes — mounted at /api/reports/ (see config/urls.py). Phase 13."""
 from django.urls import path
 
-from .views import DistributionsTaxView, ReceiptListView, ReceiptPdfView, ReportExportView
+from .views import (
+    DistributionsTaxView, InstallmentPlanPdfView, ReceiptListView, ReceiptPdfView, ReportExportView,
+)
 
 app_name = "reports"
 
@@ -11,6 +13,8 @@ urlpatterns = [
     # One PDF receipt per payment / wallet movement (apps/reports/receipts.py).
     path("receipts/", ReceiptListView.as_view(), name="receipts"),
     path("receipts/<str:kind>/<uuid:obj_id>/", ReceiptPdfView.as_view(), name="receipt-pdf"),
+    # One installment plan's schedule (PDF).
+    path("installments/<uuid:plan_id>/pdf/", InstallmentPlanPdfView.as_view(), name="installment-plan-pdf"),
     # Generic self-scoped export: ?format=csv|pdf[&year=YYYY][&period=...].
     path("<str:context>/export/", ReportExportView.as_view(), name="export"),
 ]

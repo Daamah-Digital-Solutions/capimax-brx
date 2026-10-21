@@ -2161,6 +2161,16 @@ export interface ReceiptRow {
   method?: string;
 }
 
+export type ReportContext =
+  | "wallet"
+  | "portfolio"
+  | "analytics"
+  | "distributions"
+  | "installments"
+  | "owner-earnings"
+  | "lp"
+  | "broker-commissions";
+
 export const reportsApi = {
   async download(path: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -2188,16 +2198,23 @@ export const reportsApi = {
   receipt(kind: "ledger" | "payment" | "installment", id: string): Promise<void> {
     return reportsApi.download(`/reports/receipts/${kind}/${id}/`);
   },
-  /** Export a report context as csv|pdf (optional year/period filter). */
+  /** Export a report context as csv|pdf. `period`: month | quarter | year (this one, to
+   * date); or a full `year`; or `start`/`end` dates (YYYY-MM-DD). Nothing → all time. */
   export(
-    context: "wallet" | "distributions" | "installments" | "owner-earnings" | "lp" | "broker-commissions",
+    context: ReportContext,
     fmt: "csv" | "pdf",
-    params?: { year?: number | string; period?: string },
+    params?: { year?: number | string; period?: string; start?: string; end?: string },
   ): Promise<void> {
     const q = new URLSearchParams({ fmt });
     if (params?.year) q.set("year", String(params.year));
     if (params?.period) q.set("period", params.period);
+    if (params?.start) q.set("start", params.start);
+    if (params?.end) q.set("end", params.end);
     return reportsApi.download(`/reports/${context}/export/?${q.toString()}`);
+  },
+  /** One installment plan's schedule (PDF). */
+  installmentPlan(planId: string): Promise<void> {
+    return reportsApi.download(`/reports/installments/${planId}/pdf/`);
   },
   /** Informational annual distribution-income summary (PDF). NOT a tax document. */
   tax(year?: number | string): Promise<void> {

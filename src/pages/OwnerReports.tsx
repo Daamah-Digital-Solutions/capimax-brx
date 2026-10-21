@@ -121,7 +121,7 @@ export default function OwnerReports() {
                   variant="hero"
                   className="gap-2"
                   disabled={exporting !== null}
-                  onClick={() => runExport("owner", () => reportsApi.export("owner-earnings", "pdf"))}
+                  onClick={() => runExport("owner", () => reportsApi.export("owner-earnings", "pdf", { period: period === "all" ? "" : period }))}
                 >
                   <Download className="w-4 h-4" />
                   {language === "ar" ? "تصدير التقرير" : "Export Report"}

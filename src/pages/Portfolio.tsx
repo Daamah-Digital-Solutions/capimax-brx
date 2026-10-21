@@ -139,7 +139,7 @@ export default function Portfolio() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await reportsApi.export("wallet", "pdf");
+      await reportsApi.export("portfolio", "pdf");
     } catch {
       toast.error(isAr ? "تعذر تصدير التقرير" : "Could not export the report");
     } finally {

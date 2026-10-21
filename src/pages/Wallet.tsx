@@ -11,7 +11,6 @@ import {
   Bitcoin,
   Coins,
   Clock,
-  Download,
   Filter,
   RefreshCw,
   ChevronRight,
@@ -51,6 +50,7 @@ import { DepositPayStep } from "@/components/wallet/DepositPayStep";
 import { walletsApi, reportsApi, type BalanceTransactionRow } from "@/integrations/api/client";
 import { useExport } from "@/hooks/useExport";
 import { PaymentReceipts } from "@/components/wallet/PaymentReceipts";
+import { StatementMenu } from "@/components/reports/StatementMenu";
 import { toast } from "sonner";
 
 // Internal-balance ledger source → bilingual label (rendered by source, NOT a stored
@@ -293,16 +293,7 @@ export default function Wallet() {
                           <SelectItem value="distributions">{t("wallet.distributionsFilter")}</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        disabled={exporting !== null}
-                        onClick={() => runExport("wallet", () => reportsApi.export("wallet", "csv"))}
-                      >
-                        <Download className="w-4 h-4" />
-                        {t("wallet.export")}
-                      </Button>
+                      <StatementMenu context="wallet" />
                     </div>
                   </div>
                 </div>

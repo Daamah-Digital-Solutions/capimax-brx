@@ -52,6 +52,62 @@ const reportCategories = [
   { id: "tax", name: "التقارير الضريبية", nameEn: "Tax Reports", icon: FileText },
 ];
 
+// The downloadable documents (apps/reports), grouped under the categories above.
+type DocDef = {
+  id: string;
+  cat: string;
+  ar: string;
+  en: string;
+  descAr: string;
+  descEn: string;
+  get: (period: string) => Promise<void>;
+};
+const periodParam = (p: string) => (p === "all" ? "" : p);
+const DOCUMENTS: DocDef[] = [
+  {
+    id: "analytics", cat: "investment", ar: "تقرير أداء الاستثمار", en: "Investment performance report",
+    descAr: "القيمة والعائد والتوزيع حسب العقار والموقع والدخل الشهري",
+    descEn: "Value, return, allocation by property and location, monthly income",
+    get: (p) => reportsApi.export("analytics", "pdf", { period: periodParam(p) }),
+  },
+  {
+    id: "portfolio", cat: "property", ar: "كشف المحفظة الاستثمارية", en: "Portfolio statement",
+    descAr: "الحصص والتكلفة والقيمة والعقود على البلوك تشين والشهادات",
+    descEn: "Units, cost, value, on-chain contracts and certificates",
+    get: () => reportsApi.export("portfolio", "pdf"),
+  },
+  {
+    id: "valuation", cat: "valuation", ar: "تقييم المحفظة بسعر اليوم", en: "Portfolio valuation at current prices",
+    descAr: "قيمة كل عقار بسعر الوحدة الحالي مقابل التكلفة",
+    descEn: "Each property at the current unit price against its cost",
+    get: () => reportsApi.export("portfolio", "pdf"),
+  },
+  {
+    id: "wallet", cat: "financial", ar: "كشف حساب المحفظة", en: "Wallet account statement",
+    descAr: "الرصيد الافتتاحي والختامي وكل الحركات",
+    descEn: "Opening and closing balance and every movement",
+    get: (p) => reportsApi.export("wallet", "pdf", { period: periodParam(p) }),
+  },
+  {
+    id: "installments", cat: "financial", ar: "كشف خطط الأقساط", en: "Installment plans statement",
+    descAr: "المدفوع والمتبقي وجدول السداد",
+    descEn: "Paid, remaining and the payment schedule",
+    get: (p) => reportsApi.export("installments", "pdf", { period: periodParam(p) }),
+  },
+  {
+    id: "distributions", cat: "distribution", ar: "كشف التوزيعات", en: "Distributions statement",
+    descAr: "دخل الإيجار المضاف إلى محفظتك",
+    descEn: "Rental income credited to your wallet",
+    get: (p) => reportsApi.export("distributions", "pdf", { period: periodParam(p) }),
+  },
+  {
+    id: "tax", cat: "tax", ar: "ملخص الدخل السنوي", en: "Annual income summary",
+    descAr: "ملخص معلوماتي لدخل التوزيعات لهذه السنة (ليس مستندًا ضريبيًا)",
+    descEn: "Informational summary of this year's distribution income (not a tax document)",
+    get: () => reportsApi.tax(),
+  },
+];
+
 // Donut palette (matches the legend order).
 const ALLOC_COLORS = [
   "hsl(var(--primary))",
@@ -155,14 +211,10 @@ export default function Reports() {
     refreshDistributions();
   };
 
-  // "Export Full" fans out to the real per-context exports (wallet + distributions +
-  // tax) — each is a real Phase-13 document. No aggregate endpoint is faked.
+  // "Export All" = the investment performance report for the selected period: value,
+  // return, allocation, monthly income and the on-chain contracts in one document.
   const exportFull = () =>
-    run("full", async () => {
-      await reportsApi.export("wallet", "pdf");
-      await reportsApi.export("distributions", "pdf");
-      await reportsApi.tax();
-    });
+    run("full", () => reportsApi.export("analytics", "pdf", { period: periodParam(period) }));
 
   return (
     <MainLayout>
@@ -410,12 +462,11 @@ export default function Reports() {
                 ))}
             </TabsContent>
 
-            {/* Reports Tab */}
+            {/* Reports Tab — the downloadable documents, by category, for the selected period. */}
             <TabsContent value="reports">
               <div className="grid lg:grid-cols-4 gap-6">
-                {/* Report Categories — counts not derivable (no saved-reports store) → "—". */}
                 <div className="lg:col-span-1 space-y-2">
-                  {reportCategories.map((cat) => (
+                  {[{ id: "all", name: "كل المستندات", nameEn: "All documents", icon: FileText }, ...reportCategories].map((cat) => (
                     <button
                       key={cat.id}
                       onClick={() => setCategory(cat.id)}
@@ -432,42 +483,49 @@ export default function Reports() {
                           {isAr ? cat.name : cat.nameEn}
                         </span>
                       </div>
-                      <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {cat.id === "all" ? DOCUMENTS.length : DOCUMENTS.filter((d) => d.cat === cat.id).length}
+                      </Badge>
                     </button>
                   ))}
                 </div>
 
-                {/* On-demand exports — real Phase-13 reportsApi (no saved-reports catalog). */}
                 <div className="lg:col-span-3">
                   <div className="bg-card rounded-2xl border border-border overflow-hidden">
-                    <div className="p-6 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-                      <h3 className="font-display text-lg font-semibold text-foreground">{isAr ? "أحدث التقارير" : "Latest Reports"}</h3>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Button variant="outline" size="sm" className="gap-2" disabled={exporting !== null}
-                          onClick={() => run("dist", () => reportsApi.export("distributions", "pdf"))}>
-                          <Download className="w-4 h-4" />
-                          {isAr ? "التوزيعات (PDF)" : "Distributions (PDF)"}
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2" disabled={exporting !== null}
-                          onClick={() => run("wallet", () => reportsApi.export("wallet", "pdf"))}>
-                          <Download className="w-4 h-4" />
-                          {isAr ? "كشف المحفظة (PDF)" : "Wallet (PDF)"}
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2" disabled={exporting !== null}
-                          onClick={() => run("tax", () => reportsApi.tax())}>
-                          <FileText className="w-4 h-4" />
-                          {isAr ? "ملخص ضريبي (PDF)" : "Tax summary (PDF)"}
-                        </Button>
-                      </div>
-                    </div>
-                    {/* No saved-reports store — reports are generated on demand (buttons above). */}
-                    <div className="p-10 text-center">
-                      <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                      <p className="text-muted-foreground">
+                    <div className="p-6 border-b border-border">
+                      <h3 className="font-display text-lg font-semibold text-foreground">
+                        {isAr ? "المستندات القابلة للتنزيل" : "Downloadable documents"}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
                         {isAr
-                          ? "لا توجد تقارير محفوظة — يتم إنشاء التقارير عند الطلب."
-                          : "No saved reports — reports are generated on demand."}
+                          ? "تُنشأ من بيانات حسابك لحظة التنزيل، وتتبع فلتر الفترة أعلى الصفحة."
+                          : "Generated from your account records when you download them, for the period chosen above."}
                       </p>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {DOCUMENTS.filter((d) => category === "all" || d.cat === category).map((d) => (
+                        <div key={d.id} className="p-5 flex items-center justify-between gap-4">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-10 h-10 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground">{isAr ? d.ar : d.en}</p>
+                              <p className="text-sm text-muted-foreground">{isAr ? d.descAr : d.descEn}</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 shrink-0"
+                            disabled={exporting !== null}
+                            onClick={() => run(d.id, () => d.get(period))}
+                          >
+                            <Download className="w-4 h-4" />
+                            PDF
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

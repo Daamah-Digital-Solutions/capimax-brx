@@ -16,44 +16,15 @@ from decimal import Decimal
 
 from django.http import Http404
 
-from .adapters import _display_name, _money
-from .pdf import render_statement_pdf
+from .adapters import _money
+from .brand import Col, Doc, day, holder_for, money
 
 RECEIPT_NOTE = (
-    "Receipt generated from Capimax BRX account records (testnet deployment). Keep it for your "
-    "records; it is not a tax invoice."
+    "Receipt generated from Capimax BRX account records. Keep it for your records; it is not a "
+    "tax invoice."
 )
 
-SOURCE_LABELS = {
-    "deposit": "Wallet top-up",
-    "withdrawal": "Withdrawal request",
-    "withdrawal_refund": "Withdrawal not completed — amount returned",
-    "instant_fee_refund": "Instant withdrawal fee returned",
-    "gift_sent": "Gift sent",
-    "gift_received": "Gift received",
-    "gift_returned": "Gift returned",
-    "family_sent": "Family transfer sent",
-    "family_received": "Family transfer received",
-    "family_returned": "Family transfer returned",
-    "estate_sent": "Inheritance distributed",
-    "estate_received": "Inheritance received",
-    "estate_returned": "Inheritance returned",
-    "reinvestment": "Purchase paid from the wallet",
-    "installment": "Installment paid from the wallet",
-    "installment_autodebit": "Installment auto-debited from the wallet",
-    "distribution": "Rental income distribution",
-    "secondary_market_purchase": "Secondary market purchase",
-    "secondary_market_sale": "Secondary market sale proceeds",
-    "lp_market_sale": "Sale to a liquidity provider",
-    "primary_sale": "Primary sale proceeds",
-    "broker_commission": "Referral commission",
-    "purchase_refund": "Purchase refunded to the wallet",
-    "crypto_underpaid_refund": "Crypto payment below the amount due — returned",
-    "crypto_overpaid_credit": "Crypto payment above the amount due — extra credited",
-    "family_accrual_release": "Family allocation released",
-}
-
-PROVIDER_LABELS = {"stripe": "Card (Stripe)", "nowpayments": "Crypto (NOWPayments)", "balance": "Wallet"}
+from .labels import PROVIDER_LABELS, SOURCE_LABELS  # noqa: E402
 
 
 def receipt_number(when, obj_id) -> str:
@@ -61,21 +32,17 @@ def receipt_number(when, obj_id) -> str:
 
 
 def _pdf(*, number, when, user, method, reference, items, total, title="Payment Receipt"):
-    rows = [{"item": label, "amount": value} for label, value in items]
-    rows.append({"item": "Total", "amount": total})
-    return render_statement_pdf(
-        title=title,
-        columns=[("item", "Description"), ("amount", "Amount (USD)")],
-        rows=rows,
-        meta=[
-            ("Receipt no.", number),
-            ("Date", f"{when:%Y-%m-%d %H:%M} UTC"),
-            ("Account", f"{_display_name(user)} ({user.email})"),
-            ("Paid with", method),
-            ("Reference", reference or "—"),
-        ],
-        disclaimer=RECEIPT_NOTE,
-    )
+    d = Doc(title=title, ref=number, subtitle=f"{day(when)}  {when:%H:%M} UTC", note=RECEIPT_NOTE)
+    d.holder(holder_for(user))
+    d.summary([("Amount", f"{money(total)} USD", True), ("Paid with", method),
+               ("Payment date", f"{day(when)} {when:%H:%M} UTC")])
+    d.section("Details")
+    d.table([Col("item", "Description", 3.2, wrap=True),
+             Col("amount", "Amount (USD)", 1.0, "right", fmt="money")],
+            [{"item": label, "amount": value} for label, value in items],
+            totals={"item": "Total", "amount": total})
+    d.kv([("Receipt no.", number), ("Payment reference", reference or "—")])
+    return d.finish()
 
 
 # --------------------------------------------------------------------------- #

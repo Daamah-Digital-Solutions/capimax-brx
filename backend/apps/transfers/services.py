@@ -535,6 +535,7 @@ def set_beneficiaries(holder, rows: list[dict]) -> list[Beneficiary]:
 
 
 def certificate_pdf(holder) -> tuple[str, bytes]:
+    from apps.reports.brand import Col, holder_for
     from apps.reports.pdf import render_statement_pdf
 
     cert = EstateCertificate.objects.filter(holder=holder).first()
@@ -545,12 +546,14 @@ def certificate_pdf(holder) -> tuple[str, bytes]:
     pdf = render_statement_pdf(
         title="Beneficiary Designation Certificate",
         period=f"Certificate {cert.number}",
-        columns=[("name", "Beneficiary"), ("email", "Email"),
-                 ("relationship", "Relationship"), ("share", "Share")],
+        ref=cert.number,
+        holder=holder_for(holder),
+        table_title="Beneficiaries",
+        columns=[Col("name", "Beneficiary", 1.8, wrap=True), Col("email", "Email", 2.0),
+                 Col("relationship", "Relationship", 1.1), Col("share", "Share", 0.7, "right")],
         rows=rows,
-        meta=[("Certificate number", cert.number), ("Holder", display_name(holder)),
-              ("Holder email", holder.email),
-              ("Last updated", timezone.localtime(cert.updated_at).strftime("%Y-%m-%d"))],
+        meta=[("Certificate number", cert.number), ("Beneficiaries", str(len(rows))),
+              ("Last updated", timezone.localtime(cert.updated_at).strftime("%d %b %Y"))],
         disclaimer=("A beneficiary submits a claim with this number and an official death "
                     "certificate. After review, the holder's free property units and wallet "
                     "balance are divided in the shares above."),

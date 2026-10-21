@@ -82,8 +82,19 @@ class CertificatePdfView(APIView):
                 log.exception("lazy certificate PDF generation failed (cert=%s)", cert.pk)
         if not cert.pdf_file:
             raise Http404("PDF could not be generated.")
+        # Drawn fresh from the record so the download always shows the current status
+        # (provisional → final) and the deployed contract; the stored copy is the fallback.
+        try:
+            import io
+
+            from .pdf import render_certificate_pdf
+
+            body = io.BytesIO(render_certificate_pdf(cert))
+        except Exception:  # noqa: BLE001
+            log.exception("certificate PDF render failed (cert=%s)", cert.pk)
+            body = cert.pdf_file.open("rb")
         return FileResponse(
-            cert.pdf_file.open("rb"),
+            body,
             as_attachment=True,
             filename=f"{cert.certificate_id}.pdf",
             content_type="application/pdf",

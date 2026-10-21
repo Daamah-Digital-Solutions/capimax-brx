@@ -96,7 +96,7 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
               variant="outline"
               className="h-auto py-4 flex-col gap-2"
               disabled={exporting !== null}
-              onClick={() => run("monthly", () => reportsApi.export("lp", "pdf", { period: isRTL ? "شهري" : "Monthly" }))}
+              onClick={() => run("monthly", () => reportsApi.export("lp", "pdf", { period: "month" }))}
             >
               <Calendar className="w-5 h-5" />
               <span>{isRTL ? "تقرير شهري" : "Monthly Report"}</span>
@@ -105,7 +105,7 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
               variant="outline"
               className="h-auto py-4 flex-col gap-2"
               disabled={exporting !== null}
-              onClick={() => run("quarterly", () => reportsApi.export("lp", "pdf", { period: isRTL ? "ربع سنوي" : "Quarterly" }))}
+              onClick={() => run("quarterly", () => reportsApi.export("lp", "pdf", { period: "quarter" }))}
             >
               <Calendar className="w-5 h-5" />
               <span>{isRTL ? "تقرير ربع سنوي" : "Quarterly Report"}</span>
@@ -114,7 +114,7 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
               variant="outline"
               className="h-auto py-4 flex-col gap-2"
               disabled={exporting !== null}
-              onClick={() => run("annual", () => reportsApi.export("lp", "pdf", { period: isRTL ? "سنوي" : "Annual" }))}
+              onClick={() => run("annual", () => reportsApi.export("lp", "pdf", { period: "year" }))}
             >
               <Calendar className="w-5 h-5" />
               <span>{isRTL ? "تقرير سنوي" : "Annual Report"}</span>

@@ -4,9 +4,12 @@ into a downloadable CSV or PDF. NO new business logic / figures — adapters reu
 querysets the existing page endpoints serve; this view only chooses the format and streams
 the file. Reuses the certificate `FileResponse` download pattern.
 
-  GET /api/reports/<context>/export?format=csv|pdf[&year=YYYY][&period=...]
-        context ∈ {wallet, distributions, owner-earnings, lp, broker-commissions}
+  GET /api/reports/<context>/export?fmt=csv|pdf[&period=month|quarter|year][&year=YYYY]
+                                       [&start=YYYY-MM-DD&end=YYYY-MM-DD]
+        context ∈ {wallet, portfolio, analytics, distributions, installments,
+                   owner-earnings, lp, broker-commissions}
   GET /api/reports/distributions/tax?year=YYYY      (PDF informational annual summary)
+  GET /api/reports/installments/<plan id>/pdf/      (one plan's schedule)
 """
 import io
 
@@ -17,9 +20,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
 
-from .adapters import ADAPTERS, distributions_tax
+from .adapters import ADAPTERS, distributions_tax, installment_plan, resolve_range
+from .brand import holder_for
 from .export import to_csv
-from .pdf import render_statement_pdf
+from .pdf import render_payload
 
 
 def _filename(context: str, fmt: str) -> str:
@@ -34,16 +38,10 @@ def _stream(data: bytes, filename: str, content_type: str) -> FileResponse:
     )
 
 
-def _build(payload: dict, fmt: str, filename_ctx: str) -> FileResponse:
+def _build(payload: dict, fmt: str, filename_ctx: str, user) -> FileResponse:
     if fmt == "pdf":
-        kwargs = dict(
-            title=payload["title"], period=payload.get("period", ""),
-            columns=payload["columns"], rows=payload["rows"], meta=payload.get("meta"),
-        )
-        # Only override the renderer's default disclaimer when the adapter supplied one.
-        if payload.get("disclaimer"):
-            kwargs["disclaimer"] = payload["disclaimer"]
-        return _stream(render_statement_pdf(**kwargs), _filename(filename_ctx, "pdf"), "application/pdf")
+        pdf = render_payload(payload, holder_for(user))
+        return _stream(pdf, _filename(filename_ctx, "pdf"), "application/pdf")
     csv_bytes = to_csv(payload["columns"], payload["rows"])
     return _stream(csv_bytes, _filename(filename_ctx, "csv"), "text/csv")
 
@@ -65,12 +63,9 @@ class ReportExportView(APIView):
         fmt = (request.query_params.get("fmt") or "csv").lower()
         if fmt not in ("csv", "pdf"):
             fmt = "csv"
-        payload = adapter(
-            request.user,
-            year=request.query_params.get("year"),
-            period=request.query_params.get("period", ""),
-        )
-        return _build(payload, fmt, context)
+        q = request.query_params
+        rng = resolve_range(q.get("period", ""), q.get("year"), q.get("start"), q.get("end"))
+        return _build(adapter(request.user, rng=rng), fmt, context, request.user)
 
 
 class DistributionsTaxView(APIView):
@@ -80,12 +75,19 @@ class DistributionsTaxView(APIView):
 
     def get(self, request):
         payload = distributions_tax(request.user, year=request.query_params.get("year"))
-        pdf = render_statement_pdf(
-            title=payload["title"], period=payload.get("period", ""),
-            columns=payload["columns"], rows=payload["rows"],
-            meta=payload.get("meta"), disclaimer=payload["disclaimer"],
-        )
+        pdf = render_payload(payload, holder_for(request.user))
         return _stream(pdf, _filename("distributions-tax", "pdf"), "application/pdf")
+
+
+class InstallmentPlanPdfView(APIView):
+    """GET /api/reports/installments/<plan id>/pdf/ — one plan's schedule (owner only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, plan_id):
+        payload = installment_plan(request.user, plan_id)
+        pdf = render_payload(payload, holder_for(request.user))
+        return _stream(pdf, _filename("installment-schedule", "pdf"), "application/pdf")
 
 
 class ReceiptListView(APIView):
