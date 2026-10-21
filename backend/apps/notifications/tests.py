@@ -294,6 +294,7 @@ class NotificationPreferenceApiTests(APITestCase):
                 "priceAlerts": False,
                 "marketUpdates": True,
                 "security": True,
+                "emailEnabled": True,
             },
         )
 

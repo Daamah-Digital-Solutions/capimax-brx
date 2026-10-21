@@ -56,7 +56,8 @@ class PrivateMediaTests(TestCase):
 
         for model in apps.get_models():
             for f in model._meta.fields:
-                if isinstance(f, FileField) and not model._meta.app_label == "properties":
+                public = model._meta.app_label == "properties" or (model.__name__, f.name) == ("Profile", "avatar")
+                if isinstance(f, FileField) and not public:
                     self.assertIsInstance(f.upload_to, PrivateUpload, f"{model.__name__}.{f.name}")
                     self.assertIn(f.upload_to.prefix, PRIVATE_PREFIXES)
 

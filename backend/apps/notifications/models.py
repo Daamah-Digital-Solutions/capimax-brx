@@ -62,6 +62,10 @@ class Notification(models.Model):
         DEPOSIT_RECEIVED = "deposit_received", _("Bank transfer received — under review")
         DEPOSIT_CREDITED = "deposit_credited", _("Deposit credited to the wallet")
         DEPOSIT_REJECTED = "deposit_rejected", _("Bank transfer not approved")
+        # Account security (always delivered, always emailed).
+        PASSWORD_CHANGED = "password_changed", _("Password changed")
+        TWO_FACTOR_CHANGED = "two_factor_changed", _("Two-factor authentication changed")
+        ACCOUNT_DEACTIVATED = "account_deactivated", _("Account deactivated")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")
@@ -161,6 +165,8 @@ class NotificationPreference(models.Model):
     price_alerts = models.BooleanField(default=False)      # UI: priceAlerts (preset OFF)
     market_updates = models.BooleanField(default=True)     # UI: marketUpdates
     security = models.BooleanField(default=True)
+    # Email copies of notifications (account-security emails are always sent).
+    email_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

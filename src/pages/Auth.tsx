@@ -23,6 +23,8 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { TwoFactorPrompt, otpErrorMessage } from "@/components/auth/TwoFactorPrompt";
+import { apiErrorCode } from "@/integrations/api/client";
 
 type AuthMode = "login" | "register";
 type UserRole = "investor" | "owner" | "broker" | "lp" | "developer" | "partner";
@@ -57,6 +59,8 @@ export default function Auth() {
   const [disclosureAccepted, setDisclosureAccepted] = useState(false);
   const [referralInput, setReferralInput] = useState(referralCode ?? "");
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  // Two-factor on: the password was right, now the authenticator code is asked for.
+  const [otpOpen, setOtpOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -150,7 +154,9 @@ export default function Auth() {
       } else {
         const { error } = await signIn(formData.email, formData.password);
 
-        if (error) {
+        if (error && apiErrorCode(error) === "otp_required") {
+          setOtpOpen(true);
+        } else if (error) {
           let errorMessage = error.message;
           if (/throttled/i.test(error.message)) {
             errorMessage = tooManyAttemptsMessage;
@@ -656,6 +662,20 @@ export default function Auth() {
               )}
             </Button>
           </form>
+
+          <TwoFactorPrompt
+            open={otpOpen}
+            onOpenChange={setOtpOpen}
+            onSubmit={async (code) => {
+              const { error } = await signIn(formData.email, formData.password, code);
+              if (!error) {
+                setOtpOpen(false);
+                navigate(postAuthTarget);
+                return null;
+              }
+              return otpErrorMessage(apiErrorCode(error), language === "ar", error.message);
+            }}
+          />
 
           {/* Divider */}
           <div className="relative">

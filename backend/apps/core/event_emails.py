@@ -45,6 +45,30 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    "password_changed": {
+        "subject": "Your Capimax BRX password was changed",
+        "heading": "Password changed",
+        "intro": "Your password was just changed and your other devices were signed out. If this wasn't you, reset your password now and contact support.",
+        "cta_label": "Review security settings",
+        "cta_path": "/settings?tab=security",
+        "outro": "",
+    },
+    "two_factor_changed": {
+        "subject": "Two-factor authentication is {state}",
+        "heading": "Two-factor authentication {state}",
+        "intro": "Two-factor sign-in with an authenticator app was turned {state} on your account. If this wasn't you, contact support right away.",
+        "cta_label": "Review security settings",
+        "cta_path": "/settings?tab=security",
+        "outro": "",
+    },
+    "account_deactivated": {
+        "subject": "Your Capimax BRX account was deactivated",
+        "heading": "Account deactivated",
+        "intro": "Your account was deactivated at your request and all devices were signed out. To reactivate it, contact support.",
+        "cta_label": "Contact support",
+        "cta_path": "/support",
+        "outro": "",
+    },
     "deposit_received": {
         "subject": "We received your bank transfer of ${amount}",
         "heading": "Transfer received — under review",

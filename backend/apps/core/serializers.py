@@ -30,6 +30,9 @@ class ProfileSerializer(serializers.ModelSerializer):
             "full_name",
             "phone",
             "avatar_url",
+            "country",
+            "city",
+            "totp_enabled",
             "is_us_citizen",
             "role",
             "role_status",
@@ -38,7 +41,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         )
         # SPEC §5: anti-privilege-escalation — role & its gate can never be written
         # via the API. Only registration sets role (once), only admin changes it after.
-        read_only_fields = ("id", "role", "role_status", "created_at", "updated_at")
+        read_only_fields = ("id", "role", "role_status", "totp_enabled", "created_at", "updated_at")
 
 
 class UserSerializer(serializers.ModelSerializer):

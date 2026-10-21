@@ -1,4 +1,5 @@
 import { Bell, Search, Menu, Globe, LogOut, User, Home, Sun, Moon } from "lucide-react";
+import { isDarkNow, onThemeChange, setThemeMode } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,32 +24,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const { user, signOut } = useAuth();
   const { unreadCount } = useUnreadCount();
   const navigate = useNavigate();
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  const toggleTheme = () => {
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    if (newIsDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  };
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-      setIsDark(true);
-    }
-  }, []);
+  // Shared with Settings › Appearance (src/lib/theme.ts); the toggle picks light/dark.
+  const [isDark, setIsDark] = useState(isDarkNow);
+  useEffect(() => onThemeChange(({ dark }) => setIsDark(dark)), []);
+  const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
 
   const handleSignOut = async () => {
     await signOut();
@@ -112,7 +91,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
             variant="ghost" 
             size="icon" 
             onClick={toggleTheme}
-            title={isDark ? "Light Mode" : "Dark Mode"}
+            title={isDark ? (language === "ar" ? "الوضع الفاتح" : "Light mode") : (language === "ar" ? "الوضع الداكن" : "Dark mode")}
           >
             {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </Button>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,33 +12,41 @@ import { PWASettingsSection } from "@/components/settings/PWASettingsSection";
 import { RoleAccessCard } from "@/components/roles/RoleAccessCard";
 import { KycStatusCard } from "@/components/kyc/KycStatusCard";
 import { Link } from "react-router-dom";
-import { kycApi } from "@/integrations/api/client";
+import { toast } from "sonner";
+import { kycApi, accountApi, apiErrorCode } from "@/integrations/api/client";
+import { countryOptions } from "@/lib/countries";
+import { getThemeMode, setThemeMode, type ThemeMode } from "@/lib/theme";
+import { useNotificationPrefs, type PrefKey } from "@/hooks/useNotificationPrefs";
+import { PasswordCard, TwoFactorCard, SessionsCard } from "@/components/settings/AccountSecurity";
+import { DangerZone } from "@/components/settings/DangerZone";
+import { SavedCardsManager } from "@/components/wallet/SavedCardsManager";
+import { PaymentReceipts } from "@/components/wallet/PaymentReceipts";
 import {
   User,
   Shield,
   Bell,
   Globe,
   CreditCard,
-  Lock,
-  Smartphone,
   Mail,
-  Eye,
-  EyeOff,
   Camera,
   Check,
-  AlertTriangle,
-  LogOut,
-  Trash2,
+  Loader2,
   Monitor,
   Moon,
   Sun,
   Settings2,
+  Trash2,
 } from "lucide-react";
 
-const devices = [
-  { id: "1", name: "iPhone 15 Pro", type: "mobile", locationAr: "دبي، الإمارات", locationEn: "Dubai, UAE", lastActiveAr: "الآن", lastActiveEn: "Now", current: true },
-  { id: "2", name: "MacBook Pro", type: "desktop", locationAr: "دبي، الإمارات", locationEn: "Dubai, UAE", lastActiveAr: "منذ ساعة", lastActiveEn: "1 hour ago", current: false },
-  { id: "3", name: "Windows PC", type: "desktop", locationAr: "أبوظبي، الإمارات", locationEn: "Abu Dhabi, UAE", lastActiveAr: "منذ 3 أيام", lastActiveEn: "3 days ago", current: false },
+// The per-type toggles; `id` matches the backend preference key (same list as the Notifications page).
+const NOTIFICATION_TYPES: { id: PrefKey; labelKey: string }[] = [
+  { id: "distributions", labelKey: "notifications.distributionsNotif" },
+  { id: "installments", labelKey: "notifications.installmentsNotif" },
+  { id: "newProperties", labelKey: "notifications.newProperties" },
+  { id: "reports", labelKey: "notifications.reportsNotif" },
+  { id: "priceAlerts", labelKey: "notifications.priceAlerts" },
+  { id: "marketUpdates", labelKey: "notifications.marketUpdates" },
+  { id: "security", labelKey: "notifications.security" },
 ];
 
 export default function Settings() {
@@ -46,10 +54,15 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(
     () => new URLSearchParams(window.location.search).get("tab") || "profile",
   );
-  const [showPassword, setShowPassword] = useState(false);
 
   // Admin gate — read the real role from the Django session (AuthContext), not Supabase.
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const { prefs, saving: savingPref, toggle: togglePref } = useNotificationPrefs();
+  const [theme, setTheme] = useState<ThemeMode>(getThemeMode);
+  const pickTheme = (mode: ThemeMode) => {
+    setTheme(mode);
+    setThemeMode(mode);
+  };
 
   const isAdmin = user?.profile?.role === 'admin';
 
@@ -80,15 +93,74 @@ export default function Settings() {
   // resolves after mount.
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [emailField, setEmailField] = useState("");
   const [phoneField, setPhoneField] = useState("");
+  const [countryField, setCountryField] = useState("");
+  const [cityField, setCityField] = useState("");
   useEffect(() => {
     const parts = (user?.profile?.full_name || "").trim().split(/\s+/).filter(Boolean);
     setFirstName(parts[0] || "");
     setLastName(parts.slice(1).join(" "));
-    setEmailField(user?.email || "");
-    setPhoneField((user?.profile as { phone?: string | null } | null | undefined)?.phone || "");
+    setPhoneField(user?.profile?.phone || "");
+    setCountryField(user?.profile?.country || "");
+    setCityField(user?.profile?.city || "");
   }, [user]);
+
+  const [savingProfile, setSavingProfile] = useState(false);
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      await accountApi.updateProfile({
+        first_name: firstName, last_name: lastName, phone: phoneField, country: countryField, city: cityField,
+      });
+      await refreshUser();
+      toast.success(isAr ? "تم حفظ التغييرات." : "Changes saved.");
+    } catch (e) {
+      toast.error(
+        apiErrorCode(e) === "name_required"
+          ? isAr ? "اكتب اسمك." : "Enter your name."
+          : isAr ? "تعذر حفظ التغييرات." : "Could not save the changes.",
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const avatarUrl = user?.profile?.avatar_url || null;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const uploadAvatar = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(isAr ? "حجم الصورة يجب ألا يتجاوز 5 ميجابايت." : "The photo must be 5 MB or less.");
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      await accountApi.uploadAvatar(file);
+      await refreshUser();
+      toast.success(isAr ? "تم تحديث الصورة." : "Photo updated.");
+    } catch (e) {
+      toast.error(
+        apiErrorCode(e) === "avatar_type"
+          ? isAr ? "ارفع صورة JPG أو PNG أو WebP." : "Upload a JPG, PNG or WebP image."
+          : isAr ? "تعذر رفع الصورة." : "Could not upload the photo.",
+      );
+    } finally {
+      setAvatarBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+  const removeAvatar = async () => {
+    setAvatarBusy(true);
+    try {
+      await accountApi.removeAvatar();
+      await refreshUser();
+    } catch {
+      toast.error(isAr ? "تعذر حذف الصورة." : "Could not remove the photo.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   return (
     <MainLayout>
@@ -140,15 +212,46 @@ export default function Settings() {
               <CardContent className="space-y-6">
                 {/* Avatar */}
                 <div className="flex items-center gap-6">
-                  <div className="relative">
-                    <div className="w-24 h-24 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
-                      <span className="text-3xl font-bold text-primary-foreground">
-                        {avatarInitial}
-                      </span>
-                    </div>
-                    <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
-                      <Camera className="w-4 h-4 text-primary-foreground" />
+                  <div className="relative shrink-0">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="" className="w-24 h-24 rounded-full object-cover shadow-gold" />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
+                        <span className="text-3xl font-bold text-primary-foreground">
+                          {avatarInitial}
+                        </span>
+                      </div>
+                    )}
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => uploadAvatar(e.target.files?.[0])}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={avatarBusy}
+                      title={isAr ? "تغيير الصورة" : "Change photo"}
+                      className="absolute bottom-0 end-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg"
+                    >
+                      {avatarBusy ? (
+                        <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" />
+                      ) : (
+                        <Camera className="w-4 h-4 text-primary-foreground" />
+                      )}
                     </button>
+                    {avatarUrl && !avatarBusy && (
+                      <button
+                        type="button"
+                        onClick={removeAvatar}
+                        title={isAr ? "حذف الصورة" : "Remove photo"}
+                        className="absolute bottom-0 start-0 w-8 h-8 rounded-full bg-muted border border-border flex items-center justify-center shadow-lg"
+                      >
+                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    )}
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground">
@@ -182,24 +285,39 @@ export default function Settings() {
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.email")}</label>
-                    <Input type="email" value={emailField} onChange={(e) => setEmailField(e.target.value)} />
+                    <Input type="email" value={user?.email || ""} readOnly disabled dir="ltr" />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {isAr ? "لتغيير البريد الإلكتروني تواصل مع الدعم." : "To change your email, contact support."}
+                    </p>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.phone")}</label>
-                    <Input type="tel" value={phoneField} onChange={(e) => setPhoneField(e.target.value)} placeholder="+971 50 000 0000" />
+                    <Input type="tel" dir="ltr" value={phoneField} onChange={(e) => setPhoneField(e.target.value)} placeholder="+971 50 000 0000" />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.country")}</label>
-                    <Input defaultValue={language === "ar" ? "الإمارات العربية المتحدة" : "United Arab Emirates"} />
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                      value={countryField}
+                      onChange={(e) => setCountryField(e.target.value)}
+                    >
+                      <option value="">{isAr ? "اختر الدولة" : "Select a country"}</option>
+                      {countryOptions(language).map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">{t("settings.city")}</label>
-                    <Input defaultValue={language === "ar" ? "دبي" : "Dubai"} />
+                    <Input value={cityField} onChange={(e) => setCityField(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="flex justify-end">
-                  <Button className="bg-gradient-gold hover:opacity-90">{t("settings.saveChanges")}</Button>
+                  <Button className="bg-gradient-gold hover:opacity-90" onClick={saveProfile} disabled={savingProfile}>
+                    {savingProfile && <Loader2 className="w-4 h-4 animate-spin me-2" />}
+                    {t("settings.saveChanges")}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -211,115 +329,9 @@ export default function Settings() {
 
           {/* Security Tab */}
           <TabsContent value="security" className="mt-6 space-y-6">
-            {/* Password */}
-            <Card className="bg-card/50 backdrop-blur border-border/50">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Lock className="w-5 h-5" />
-                  {t("settings.password")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">{t("settings.currentPassword")}</label>
-                  <div className="relative">
-                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" />
-                    <button
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">{t("settings.newPassword")}</label>
-                    <Input type="password" placeholder="••••••••" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">{t("settings.confirmPassword")}</label>
-                    <Input type="password" placeholder="••••••••" />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button variant="outline">{t("settings.changePassword")}</Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 2FA */}
-            <Card className="bg-card/50 backdrop-blur border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Smartphone className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{t("settings.twoFactorAuth")}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {t("settings.twoFactorDesc")}
-                      </p>
-                    </div>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Active Sessions */}
-            <Card className="bg-card/50 backdrop-blur border-border/50">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{t("settings.activeDevices")}</CardTitle>
-                  <Button variant="outline" size="sm" className="text-destructive">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    {t("settings.logoutAll")}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {devices.map((device) => (
-                  <div
-                    key={device.id}
-                    className="flex items-center justify-between p-4 bg-muted/30 rounded-lg"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                        {device.type === "mobile" ? (
-                          <Smartphone className="w-5 h-5" />
-                        ) : (
-                          <Monitor className="w-5 h-5" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-foreground">{device.name}</h4>
-                          {device.current && (
-                            <Badge variant="success" className="text-xs">
-                              {t("settings.currentDevice")}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {language === "ar" ? device.locationAr : device.locationEn} • {language === "ar" ? device.lastActiveAr : device.lastActiveEn}
-                        </p>
-                      </div>
-                    </div>
-                    {!device.current && (
-                      <Button variant="ghost" size="sm" className="text-destructive">
-                        {t("settings.endSession")}
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <PasswordCard />
+            <TwoFactorCard />
+            <SessionsCard />
           </TabsContent>
 
           {/* Notifications Tab */}
@@ -330,21 +342,17 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  {[
-                    { id: "distributions", labelKey: "settings.distributionsNotif", enabled: true },
-                    { id: "installments", labelKey: "settings.installmentsNotif", enabled: true },
-                    { id: "properties", labelKey: "settings.newProperties", enabled: true },
-                    { id: "reports", labelKey: "settings.reportsNotif", enabled: true },
-                    { id: "market", labelKey: "settings.marketAlerts", enabled: false },
-                    { id: "security", labelKey: "settings.securityAlerts", enabled: true },
-                    { id: "marketing", labelKey: "settings.marketing", enabled: false },
-                  ].map((item) => (
+                  {NOTIFICATION_TYPES.map((item) => (
                     <div
                       key={item.id}
                       className="flex items-center justify-between py-3 border-b border-border/30 last:border-0"
                     >
                       <span className="text-foreground">{t(item.labelKey)}</span>
-                      <Switch defaultChecked={item.enabled} />
+                      <Switch
+                        checked={prefs ? !!prefs[item.id] : false}
+                        disabled={!prefs || savingPref === item.id}
+                        onCheckedChange={(v) => togglePref(item.id, v)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -352,26 +360,30 @@ export default function Settings() {
                 <div className="pt-4 border-t border-border/50">
                   <h4 className="font-medium text-foreground mb-4">{t("settings.deliveryChannels")}</h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Mail className="w-5 h-5 text-muted-foreground" />
-                        <span>{t("settings.emailChannel")}</span>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <Bell className="w-5 h-5 text-muted-foreground" />
                         <span>{t("settings.inAppChannel")}</span>
                       </div>
-                      <Switch defaultChecked />
+                      <Switch checked disabled aria-label={t("settings.inAppChannel")} />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <Smartphone className="w-5 h-5 text-muted-foreground" />
-                        <span>{t("settings.smsChannel")}</span>
+                        <Mail className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <span>{t("settings.emailChannel")}</span>
+                          <p className="text-xs text-muted-foreground">
+                            {isAr
+                              ? "تنبيهات الأمان والسحب تصلك بالبريد دائمًا."
+                              : "Security and withdrawal alerts are always emailed."}
+                          </p>
+                        </div>
                       </div>
-                      <Switch />
+                      <Switch
+                        checked={prefs ? prefs.emailEnabled !== false : false}
+                        disabled={!prefs || savingPref === "emailEnabled"}
+                        onCheckedChange={(v) => togglePref("emailEnabled", v)}
+                      />
                     </div>
                   </div>
                 </div>
@@ -401,18 +413,26 @@ export default function Settings() {
                 <div>
                   <label className="text-sm font-medium mb-4 block">{t("settings.appearance")}</label>
                   <div className="grid grid-cols-3 gap-4">
-                    <button className="p-4 rounded-lg border-2 border-primary bg-muted/30 text-center">
-                      <Moon className="w-6 h-6 mx-auto mb-2" />
-                      <span className="text-sm">{t("settings.dark")}</span>
-                    </button>
-                    <button className="p-4 rounded-lg border border-border bg-muted/30 text-center hover:border-primary/50 transition-colors">
-                      <Sun className="w-6 h-6 mx-auto mb-2" />
-                      <span className="text-sm">{t("settings.light")}</span>
-                    </button>
-                    <button className="p-4 rounded-lg border border-border bg-muted/30 text-center hover:border-primary/50 transition-colors">
-                      <Monitor className="w-6 h-6 mx-auto mb-2" />
-                      <span className="text-sm">{t("settings.auto")}</span>
-                    </button>
+                    {([
+                      { mode: "dark", Icon: Moon, label: t("settings.dark") },
+                      { mode: "light", Icon: Sun, label: t("settings.light") },
+                      { mode: "auto", Icon: Monitor, label: t("settings.auto") },
+                    ] as const).map(({ mode, Icon, label }) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => pickTheme(mode)}
+                        aria-pressed={theme === mode}
+                        className={
+                          theme === mode
+                            ? "p-4 rounded-lg border-2 border-primary bg-muted/30 text-center"
+                            : "p-4 rounded-lg border border-border bg-muted/30 text-center hover:border-primary/50 transition-colors"
+                        }
+                      >
+                        <Icon className="w-6 h-6 mx-auto mb-2" />
+                        <span className="text-sm">{label}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -428,41 +448,13 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            {/* Danger Zone */}
-            <Card className="bg-destructive/5 border-destructive/20">
-              <CardHeader>
-                <CardTitle className="text-lg text-destructive flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5" />
-                  {t("settings.dangerZone")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {t("settings.dangerZoneDesc")}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    {t("settings.deactivateAccount")}
-                  </Button>
-                  <Button variant="destructive">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    {t("settings.deleteAccount")}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <DangerZone />
           </TabsContent>
 
           {/* Billing Tab */}
-          <TabsContent value="billing" className="mt-6">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
-              <CardContent className="p-8 text-center">
-                <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t("settings.billing")}</h3>
-                <p className="text-muted-foreground">{t("settings.subtitle")}</p>
-              </CardContent>
-            </Card>
+          <TabsContent value="billing" className="mt-6 space-y-6">
+            <SavedCardsManager />
+            <PaymentReceipts />
           </TabsContent>
 
           {/* Admin Tab */}

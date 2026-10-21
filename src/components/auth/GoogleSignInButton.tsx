@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiErrorCode } from "@/integrations/api/client";
+import { TwoFactorPrompt, otpErrorMessage } from "@/components/auth/TwoFactorPrompt";
 
 // Renders Google's official "Sign in with Google" button (GIS). The browser
 // obtains a signed id_token which we hand to the backend
@@ -59,6 +61,8 @@ export function GoogleSignInButton() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendered = useRef(false); // guard StrictMode double-invoke
   const renderedLang = useRef<string | null>(null);
+  // Google id_token kept while the two-factor code is asked for.
+  const [pendingCredential, setPendingCredential] = useState<string | null>(null);
 
   useEffect(() => {
     if (!CLIENT_ID || renderedLang.current === language) return;
@@ -77,7 +81,9 @@ export function GoogleSignInButton() {
           callback: async (resp: GoogleCredentialResponse) => {
             if (!resp.credential) return;
             const { error } = await loginWithGoogle(resp.credential);
-            if (error) {
+            if (error && apiErrorCode(error) === "otp_required") {
+              setPendingCredential(resp.credential); // two-factor: ask for the code, then retry
+            } else if (error) {
               toast({
                 title: language === "ar" ? "خطأ" : "Error",
                 description: error.message,
@@ -109,5 +115,22 @@ export function GoogleSignInButton() {
 
   if (!CLIENT_ID) return null;
 
-  return <div ref={containerRef} dir={isRTL ? "rtl" : "ltr"} className="flex justify-center" />;
+  return (
+    <>
+      <div ref={containerRef} dir={isRTL ? "rtl" : "ltr"} className="flex justify-center" />
+      <TwoFactorPrompt
+        open={pendingCredential !== null}
+        onOpenChange={(open) => !open && setPendingCredential(null)}
+        onSubmit={async (code) => {
+          if (!pendingCredential) return null;
+          const { error } = await loginWithGoogle(pendingCredential, code);
+          if (!error) {
+            setPendingCredential(null);
+            return null;
+          }
+          return otpErrorMessage(apiErrorCode(error), language === "ar", error.message);
+        }}
+      />
+    </>
+  );
 }

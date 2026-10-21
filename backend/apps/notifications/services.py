@@ -89,8 +89,21 @@ def notify(user, notif_type, *, params: dict | None = None, action_url: str = ""
     # COMMITS (via on_commit), so a rollback sends nothing and a slow SMTP never blocks
     # the event. This single chokepoint makes every notifying event also email the user
     # (client notes 5 & 21); a type with no email copy simply sends nothing.
-    _schedule_event_email(user, notif_type, params)
+    if str(notif_type) in ALWAYS_EMAIL or _email_enabled(user):
+        _schedule_event_email(user, notif_type, params)
     return notif
+
+
+# Security emails go out even if the user turned email copies off.
+ALWAYS_EMAIL = {"password_changed", "two_factor_changed", "account_deactivated", "withdrawal_requested",
+                "withdrawal_completed", "withdrawal_failed"}
+
+
+def _email_enabled(user) -> bool:
+    try:
+        return bool(NotificationPreference.get_for(user).email_enabled)
+    except Exception:  # noqa: BLE001 — fail open
+        return True
 
 
 def _schedule_event_email(user, notif_type, params: dict | None) -> None:

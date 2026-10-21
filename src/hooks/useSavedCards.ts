@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { paymentMethodsApi } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 
 // Client note 11: repointed Supabase → Django (apps/wallets payment-methods). The
@@ -24,6 +25,7 @@ export function useSavedCards() {
   const [cards, setCards] = useState<SavedCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const isAr = useLanguage().language === "ar";
 
   const fetchCards = useCallback(async () => {
     if (!user) {
@@ -36,11 +38,11 @@ export function useSavedCards() {
       const data = await paymentMethodsApi.listCards();
       setCards((data as SavedCard[]) || []);
     } catch {
-      toast({ title: "خطأ", description: "تعذر تحميل البطاقات المحفوظة", variant: "destructive" });
+      toast({ title: isAr ? "خطأ" : "Error", description: isAr ? "تعذر تحميل البطاقات المحفوظة" : "Could not load your saved cards", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [user, toast]);
+  }, [user, toast, isAr]);
 
   useEffect(() => {
     fetchCards();
@@ -49,10 +51,10 @@ export function useSavedCards() {
   const deleteCard = async (cardId: string) => {
     try {
       await paymentMethodsApi.deleteCard(cardId);
-      toast({ title: "تم الحذف", description: "تم حذف البطاقة بنجاح" });
+      toast({ title: isAr ? "تم الحذف" : "Deleted", description: isAr ? "تم حذف البطاقة بنجاح" : "The card was removed" });
       await fetchCards();
     } catch {
-      toast({ title: "خطأ", description: "تعذر حذف البطاقة", variant: "destructive" });
+      toast({ title: isAr ? "خطأ" : "Error", description: isAr ? "تعذر حذف البطاقة" : "Could not remove the card", variant: "destructive" });
     }
   };
 
@@ -60,10 +62,10 @@ export function useSavedCards() {
     if (!user) return;
     try {
       await paymentMethodsApi.setDefaultCard(cardId);
-      toast({ title: "تم التحديث", description: "تم تعيين البطاقة كافتراضية" });
+      toast({ title: isAr ? "تم التحديث" : "Updated", description: isAr ? "تم تعيين البطاقة كافتراضية" : "This card is now your default" });
       await fetchCards();
     } catch {
-      toast({ title: "خطأ", description: "تعذر تعيين البطاقة كافتراضية", variant: "destructive" });
+      toast({ title: isAr ? "خطأ" : "Error", description: isAr ? "تعذر تعيين البطاقة كافتراضية" : "Could not set the default card", variant: "destructive" });
     }
   };
 

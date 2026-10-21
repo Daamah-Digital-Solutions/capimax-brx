@@ -16,6 +16,8 @@ keys are env-driven and inert until supplied. SPEC §5.2 / §6.
 """
 from django.contrib.auth import get_user_model
 from django.db import transaction
+
+from .sessions import issue_tokens
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import generics, status
@@ -65,7 +67,7 @@ class RegisterView(generics.CreateAPIView):
 
         body = {
             "user": UserSerializer(user).data,
-            "session": _token_pair(user),  # immediate session, mirrors Supabase signUp
+            "session": issue_tokens(user, request),  # immediate session, mirrors Supabase signUp
         }
         # Expose the link only in DEBUG to ease local testing; never in prod.
         from django.conf import settings
@@ -76,17 +78,25 @@ class RegisterView(generics.CreateAPIView):
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Login response includes the user+profile alongside the token pair. SPEC §5.2."""
+    """Login response includes the user+profile alongside the token pair. SPEC §5.2.
+    With two-factor on, the authenticator code (`otp`) is required as well."""
 
     def validate(self, attrs):
-        data = super().validate(attrs)
-        return {
-            "user": UserSerializer(self.user).data,
-            "session": {
-                "access_token": data["access"],
-                "refresh_token": data["refresh"],
-            },
-        }
+        from rest_framework import serializers as drf_serializers
+        from rest_framework_simplejwt.serializers import TokenObtainSerializer
+
+        from .account import check_second_factor
+        from .sessions import issue_tokens
+
+        TokenObtainSerializer.validate(self, attrs)  # password check; sets self.user
+        problem = check_second_factor(self.user, self.initial_data.get("otp"))
+        if problem:
+            raise drf_serializers.ValidationError({
+                "code": problem,
+                "detail": "Enter the 6-digit code from your authenticator app."
+                if problem == "otp_required" else "The code is incorrect or expired.",
+            })
+        return {"user": UserSerializer(self.user).data, "session": issue_tokens(self.user, self.context.get("request"))}
 
 
 class LoginView(TokenObtainPairView):
@@ -160,7 +170,10 @@ class SessionView(APIView):
 
 
 class ThrottledTokenRefreshView(TokenRefreshView):
-    """POST /api/auth/token/refresh/ — SimpleJWT refresh with a (generous) per-IP limit."""
+    """POST /api/auth/token/refresh/ — SimpleJWT refresh with a (generous) per-IP limit.
+    Refuses a session the user ended (Settings › Active devices)."""
+
+    from .sessions import SessionTokenRefreshSerializer as serializer_class  # noqa: E402
 
     throttle_classes = [AuthIPThrottle]
     throttle_scope = "auth_token_refresh"
@@ -312,8 +325,20 @@ class GoogleOAuthView(APIView):
                 profile.full_name = full_name
                 profile.save(update_fields=["full_name"])
 
+        if not user.is_active:
+            return Response({"code": "account_inactive", "detail": "This account is deactivated."},
+                            status=status.HTTP_403_FORBIDDEN)
+        from .account import check_second_factor
+
+        problem = check_second_factor(user, request.data.get("otp"))
+        if problem:
+            return Response(
+                {"code": problem, "detail": "Enter the 6-digit code from your authenticator app."
+                 if problem == "otp_required" else "The code is incorrect or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(
-            {"user": UserSerializer(user).data, "session": _token_pair(user)},
+            {"user": UserSerializer(user).data, "session": issue_tokens(user, request)},
             status=status.HTTP_200_OK,
         )
 

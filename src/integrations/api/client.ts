@@ -159,11 +159,27 @@ export interface ApiUser {
   id: string;
   email: string;
   is_email_verified?: boolean;
-  profile?: { role?: string; role_status?: string; full_name?: string | null } | null;
+  profile?: {
+    role?: string;
+    role_status?: string;
+    full_name?: string | null;
+    phone?: string | null;
+    avatar_url?: string | null;
+    country?: string | null;
+    city?: string | null;
+    totp_enabled?: boolean;
+  } | null;
 }
 export interface AuthResult {
   user: ApiUser;
-  session: { access_token: string; refresh_token: string };
+  session: { access_token: string; refresh_token: string; session_id?: string };
+}
+
+/** The machine-readable `code` of an API error (DRF may wrap it in a list). */
+export function apiErrorCode(err: unknown): string | undefined {
+  const data = (err as ApiError | undefined)?.data as { code?: unknown } | undefined;
+  const code = Array.isArray(data?.code) ? data?.code[0] : data?.code;
+  return typeof code === "string" ? code : undefined;
 }
 
 export const authApi = {
@@ -186,10 +202,11 @@ export const authApi = {
     await rawRequest("/auth/register/", { method: "POST", body: payload });
   },
 
-  async login(email: string, password: string): Promise<AuthResult> {
+  /** `otp` = the authenticator code, needed when two-factor is on (error code otp_required). */
+  async login(email: string, password: string, otp?: string): Promise<AuthResult> {
     const data = (await rawRequest("/auth/login/", {
       method: "POST",
-      body: { email, password },
+      body: { email, password, ...(otp ? { otp } : {}) },
     })) as AuthResult;
     tokenStore.set(data.session.access_token, data.session.refresh_token);
     return data;
@@ -238,14 +255,53 @@ export const authApi = {
   },
 
   /** Sign in / up with a Google GIS id_token. Returns the same shape as login. */
-  async googleOAuth(idToken: string, ref?: string | null): Promise<AuthResult> {
+  async googleOAuth(idToken: string, ref?: string | null, otp?: string): Promise<AuthResult> {
     const data = (await rawRequest("/auth/oauth/google/", {
       method: "POST",
-      body: { id_token: idToken, ...(ref ? { ref } : {}) },
+      body: { id_token: idToken, ...(ref ? { ref } : {}), ...(otp ? { otp } : {}) },
     })) as AuthResult;
     tokenStore.set(data.session.access_token, data.session.refresh_token);
     return data;
   },
+};
+
+// --------------------------------------------------------------------------- //
+// Settings › account (apps/core/account.py): profile, photo, password, two-factor,
+// signed-in devices, deactivate / delete.
+// --------------------------------------------------------------------------- //
+export interface DeviceSession {
+  id: string;
+  device: { type: "mobile" | "tablet" | "desktop" | string; os: string; browser: string };
+  created_at: string;
+  last_seen_at: string;
+  current: boolean;
+}
+
+export const accountApi = {
+  updateProfile: (body: { first_name?: string; last_name?: string; phone?: string; country?: string; city?: string }) =>
+    rawRequest("/auth/me/profile/", { method: "PATCH", auth: true, body }) as Promise<ApiUser>,
+  uploadAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("avatar", file);
+    return rawUpload("/auth/me/avatar/", form) as Promise<{ avatar_url: string }>;
+  },
+  removeAvatar: () => rawRequest("/auth/me/avatar/", { method: "DELETE", auth: true }) as Promise<{ avatar_url: null }>,
+  changePassword: (current_password: string, new_password: string) =>
+    rawRequest("/auth/password/change/", { method: "POST", auth: true, body: { current_password, new_password } }),
+  twoFactorSetup: () =>
+    rawRequest("/auth/2fa/setup/", { method: "POST", auth: true }) as Promise<{ secret: string; otpauth_uri: string }>,
+  twoFactorEnable: (code: string) =>
+    rawRequest("/auth/2fa/enable/", { method: "POST", auth: true, body: { code } }) as Promise<{ enabled: boolean }>,
+  twoFactorDisable: (code: string) =>
+    rawRequest("/auth/2fa/disable/", { method: "POST", auth: true, body: { code } }) as Promise<{ enabled: boolean }>,
+  sessions: () => rawRequest("/auth/sessions/", { auth: true }) as Promise<DeviceSession[]>,
+  endSession: (id: string) => rawRequest(`/auth/sessions/${id}/`, { method: "DELETE", auth: true }),
+  endOtherSessions: () =>
+    rawRequest("/auth/sessions/end-others/", { method: "POST", auth: true }) as Promise<{ ended: number }>,
+  deactivate: (password: string) =>
+    rawRequest("/auth/account/deactivate/", { method: "POST", auth: true, body: { password } }),
+  deleteAccount: (password: string, confirm: string) =>
+    rawRequest("/auth/account/delete/", { method: "POST", auth: true, body: { password, confirm } }),
 };
 
 // --------------------------------------------------------------------------- //
@@ -1772,6 +1828,8 @@ export interface NotificationPreferences {
   priceAlerts: boolean;
   marketUpdates: boolean;
   security: boolean;
+  /** Email copies of notifications (account-security emails are always sent). */
+  emailEnabled: boolean;
 }
 
 // --------------------------------------------------------------------------- //

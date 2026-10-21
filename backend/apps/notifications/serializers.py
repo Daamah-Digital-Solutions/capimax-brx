@@ -22,6 +22,7 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
     newProperties = serializers.BooleanField(source="new_properties", required=False)
     priceAlerts = serializers.BooleanField(source="price_alerts", required=False)
     marketUpdates = serializers.BooleanField(source="market_updates", required=False)
+    emailEnabled = serializers.BooleanField(source="email_enabled", required=False)
 
     class Meta:
         model = NotificationPreference
@@ -33,6 +34,7 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
             "priceAlerts",
             "marketUpdates",
             "security",
+            "emailEnabled",
         )
         extra_kwargs = {
             "distributions": {"required": False},

@@ -108,6 +108,16 @@ class Profile(models.Model):
     disclosure_accepted_at = models.DateTimeField(null=True, blank=True)
     phone = models.CharField(max_length=32, blank=True, null=True)
     avatar_url = models.URLField(blank=True, null=True)
+    # Self-service account settings (apps/core/account.py).
+    country = models.CharField(max_length=120, blank=True, default="")
+    city = models.CharField(max_length=120, blank=True, default="")
+    avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+    # Two-factor authentication (TOTP, an authenticator app). The secret is encrypted with
+    # the platform key manager; enabled only after the user proves a code.
+    totp_secret = models.TextField(blank=True, default="")
+    totp_enabled = models.BooleanField(default=False)
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     is_us_citizen = models.BooleanField(default=False)  # collected at signup. SPEC §3.0
 
     role = models.CharField(
@@ -220,3 +230,23 @@ ROLES_REQUIRING_VERIFICATION = frozenset(
         Profile.Role.PARTNER,
     }
 )
+
+
+class LoginSession(models.Model):
+    """One signed-in device (a refresh-token family). Its id travels in every token as `sid`,
+    so ending a session cuts that device off at once (apps/core/sessions.py)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="login_sessions")
+    user_agent = models.CharField(max_length=400, blank=True, default="")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    refresh_jti = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+
+    def __str__(self):
+        return f"{self.user_id} · {self.user_agent[:40]}"

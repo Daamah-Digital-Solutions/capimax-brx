@@ -29,9 +29,11 @@ interface AuthContextType {
     password: string,
     metadata?: { full_name?: string; first_name?: string; last_name?: string; phone?: string; is_us_citizen?: boolean; role?: string; ref?: string; terms_accepted?: boolean; disclosure_accepted?: boolean }
   ) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  // `otp`: the authenticator code when two-factor is on (the error's code is
+  // otp_required / otp_invalid — read it with apiErrorCode).
+  signIn: (email: string, password: string, otp?: string) => Promise<{ error: Error | null }>;
   // Exchange a Google GIS id_token (obtained by the browser) for a backend session.
-  loginWithGoogle: (idToken: string) => Promise<{ error: Error | null }>;
+  loginWithGoogle: (idToken: string, otp?: string) => Promise<{ error: Error | null }>;
   signInWithApple: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   /** Re-read the current user (e.g. after the email was confirmed in another tab). */
@@ -105,9 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, otp?: string) => {
     try {
-      const result = await authApi.login(email, password);
+      const result = await authApi.login(email, password, otp);
       setUser(toAuthUser(result.user));
       setSession({ access_token: result.session.access_token });
       return { error: null };
@@ -119,11 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Google Sign-In: the browser (GIS button) obtains a signed id_token and hands
   // it here; the backend verifies it and returns the same { user, session } as
   // login. First sign-in creates the account (baseline investor). SPEC §6.
-  const loginWithGoogle = async (idToken: string) => {
+  const loginWithGoogle = async (idToken: string, otp?: string) => {
     try {
       // A broker referral (?ref= / stored link) is kept for Google sign-ups too.
       const ref = new URLSearchParams(window.location.search).get("ref") || localStorage.getItem("capimax_ref");
-      const result = await authApi.googleOAuth(idToken, ref);
+      const result = await authApi.googleOAuth(idToken, ref, otp);
       localStorage.removeItem("capimax_ref");
       setUser(toAuthUser(result.user));
       setSession({ access_token: result.session.access_token });
@@ -151,6 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       await authApi.logout();
+    } catch {
+      /* the server already ended this session (e.g. account closed) — still sign out here */
     } finally {
       setUser(null);
       setSession(null);

@@ -202,7 +202,8 @@ SOCIALACCOUNT_PROVIDERS = {
 # --------------------------------------------------------------------------- #
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # JWT + "ended session" check (Settings › Active devices; apps/core/sessions.py).
+        "apps.core.sessions.SessionJWTAuthentication",
     ),
     # SECURITY-FIRST: deny by default; public endpoints opt in with AllowAny.
     "DEFAULT_PERMISSION_CLASSES": (
