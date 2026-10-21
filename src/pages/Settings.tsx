@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { PWASettingsSection } from "@/components/settings/PWASettingsSection";
 import { RoleAccessCard } from "@/components/roles/RoleAccessCard";
+import { KycStatusCard } from "@/components/kyc/KycStatusCard";
 import { Link } from "react-router-dom";
 import { kycApi } from "@/integrations/api/client";
 import {
@@ -42,7 +43,9 @@ const devices = [
 
 export default function Settings() {
   const { t, language, setLanguage } = useLanguage();
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState(
+    () => new URLSearchParams(window.location.search).get("tab") || "profile",
+  );
   const [showPassword, setShowPassword] = useState(false);
 
   // Admin gate — read the real role from the Django session (AuthContext), not Supabase.
@@ -201,25 +204,8 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            {/* KYC Status */}
-            <Card className="bg-emerald-500/5 border-emerald-500/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <Shield className="w-6 h-6 text-emerald-500" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{t("settings.kycVerification")}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {t("settings.kycVerified")} 15 {language === "ar" ? "يناير" : "January"} 2024
-                      </p>
-                    </div>
-                  </div>
-                  <Badge variant="success">{t("settings.complete")}</Badge>
-                </div>
-              </CardContent>
-            </Card>
+            {/* KYC Status — the user's real verification state */}
+            <KycStatusCard />
             {user && <RoleAccessCard />}
           </TabsContent>
 

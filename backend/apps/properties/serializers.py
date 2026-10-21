@@ -498,6 +498,42 @@ class _PropertyBaseSerializer(serializers.ModelSerializer):
         source="construction_progress", allow_null=True
     )
 
+    # Live progress (list AND detail): the HIGHER of the seeded value or the real
+    # minted-investment figure — a fresh listing shows a real figure that grows as units
+    # sell, while seeded showcase numbers are never reduced.
+    funded = serializers.SerializerMethodField()
+    investors = serializers.SerializerMethodField()
+
+    def get_funded(self, obj):
+        supply = int(obj.token_supply or 0)
+        sold = 0
+        if supply:
+            from django.db.models import Sum
+            from apps.investments.models import RESALE_PAYMENT_METHODS, Investment
+
+            # Primary sales only — resales move already-sold tokens and must not
+            # inflate the funded %.
+            sold = (
+                Investment.objects.filter(property=obj, tokens_minted=True)
+                .exclude(payment_method__in=RESALE_PAYMENT_METHODS)
+                .aggregate(s=Sum("token_amount"))["s"]
+                or 0
+            )
+        # Two decimals, so a young offering shows e.g. 0.04% instead of rounding to 0%.
+        live = max(0.0, min(100.0, round(sold / supply * 100, 2))) if supply else 0.0
+        return max(float(obj.funded or 0), live)
+
+    def get_investors(self, obj):
+        from apps.investments.models import Investment
+
+        live = (
+            Investment.objects.filter(property=obj, tokens_minted=True)
+            .values("user")
+            .distinct()
+            .count()
+        )
+        return max(int(obj.investors or 0), live)
+
     class Meta:
         model = Property
         fields = _COMMON_FIELDS
@@ -540,11 +576,6 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     financials = serializers.SerializerMethodField()
     documents = PropertyDocumentSerializer(many=True, read_only=True)
     fees = serializers.SerializerMethodField()
-    # Live progress (detail view only): the HIGHER of the seeded value or the real
-    # minted-investment figure — so a fresh listing shows a real 0% that grows as tokens
-    # sell, while the seeded demo/showcase numbers are never reduced.
-    funded = serializers.SerializerMethodField()
-    investors = serializers.SerializerMethodField()
     developer = serializers.SerializerMethodField()
     insurance = serializers.SerializerMethodField()
     market = serializers.SerializerMethodField()
@@ -648,35 +679,6 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             # The frontend mirrors this so the charged total equals the displayed total.
             "pronovaDiscount": float(obj.fee_pronova_discount),
         }
-
-    def get_funded(self, obj):
-        supply = int(obj.token_supply or 0)
-        sold = 0
-        if supply:
-            from django.db.models import Sum
-            from apps.investments.models import RESALE_PAYMENT_METHODS, Investment
-
-            # Primary sales only — resales move already-sold tokens and must not
-            # inflate the funded %.
-            sold = (
-                Investment.objects.filter(property=obj, tokens_minted=True)
-                .exclude(payment_method__in=RESALE_PAYMENT_METHODS)
-                .aggregate(s=Sum("token_amount"))["s"]
-                or 0
-            )
-        live = max(0, min(100, round(sold / supply * 100))) if supply else 0
-        return max(int(obj.funded or 0), live)
-
-    def get_investors(self, obj):
-        from apps.investments.models import Investment
-
-        live = (
-            Investment.objects.filter(property=obj, tokens_minted=True)
-            .values("user")
-            .distinct()
-            .count()
-        )
-        return max(int(obj.investors or 0), live)
 
     def get_installmentTerms(self, obj):
         """The plans this property offers — only when it actually sells by installments."""

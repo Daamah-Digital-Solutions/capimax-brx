@@ -439,7 +439,7 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
   const [copied, setCopied] = useState(false);
   if (!value) return null;
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0">
+    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-border last:border-0">
       <span className="text-xs text-muted-foreground shrink-0">{label}</span>
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-sm font-medium text-foreground truncate" dir="ltr">{value}</span>

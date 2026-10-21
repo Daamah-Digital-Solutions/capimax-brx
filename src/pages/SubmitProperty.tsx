@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { countryOptions } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -492,28 +493,20 @@ export default function SubmitProperty() {
                       onChange={(e) => set("country", e.target.value)}
                     >
                       <option value="">{isArabic ? "اختر الدولة..." : "Select Country..."}</option>
-                      <option value="USA">{isArabic ? "الولايات المتحدة" : "United States"}</option>
-                      <option value="UAE">{isArabic ? "الإمارات العربية المتحدة" : "United Arab Emirates"}</option>
-                      <option value="UK">{isArabic ? "المملكة المتحدة" : "United Kingdom"}</option>
-                      <option value="SA">{isArabic ? "المملكة العربية السعودية" : "Saudi Arabia"}</option>
-                      <option value="EG">{isArabic ? "مصر" : "Egypt"}</option>
+                      {countryOptions(language).map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">
                       {isArabic ? "المدينة" : "City"}
                     </label>
-                    <select
-                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                    <Input
+                      placeholder={isArabic ? "اكتب اسم المدينة" : "Enter the city"}
                       value={form.city}
                       onChange={(e) => set("city", e.target.value)}
-                    >
-                      <option value="">{isArabic ? "اختر المدينة..." : "Select City..."}</option>
-                      <option value="newyork">{isArabic ? "نيويورك" : "New York"}</option>
-                      <option value="miami">{isArabic ? "ميامي" : "Miami"}</option>
-                      <option value="dubai">{isArabic ? "دبي" : "Dubai"}</option>
-                      <option value="london">{isArabic ? "لندن" : "London"}</option>
-                    </select>
+                    />
                   </div>
                 </div>
 

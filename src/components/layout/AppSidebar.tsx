@@ -57,6 +57,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_LABELS, useRoles } from "@/hooks/useRoles";
 import { rolesApi, type RoleKey } from "@/integrations/api/client";
 import { toast } from "sonner";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import {
   Select,
   SelectContent,
@@ -279,7 +280,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const { t, language } = useLanguage();
   const { unreadCount } = useUnreadCount();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, signOut } = useAuth();
   const navigate = useNavigate();
   // Multi-role: the roles this account holds; switching changes the CURRENT role
   // (apps/roles). Separate from the "View as Role" preview below, which stays as it is.
@@ -407,7 +408,8 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-0 z-50 h-full bg-sidebar border-border transition-all duration-300 flex flex-col",
+          // pb-16 on phones: the bottom navigation bar must not cover the sidebar's own bottom
+          "fixed top-0 z-50 h-full pb-16 lg:pb-0 bg-sidebar border-border transition-all duration-300 flex flex-col",
           language === "ar" ? "right-0 border-l" : "left-0 border-r",
           isOpen ? "w-72" : "w-0 lg:w-16"
         )}
@@ -997,20 +999,60 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           !isOpen && "hidden lg:flex lg:justify-center lg:p-2"
         )}>
           {isOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-gold flex items-center justify-center">
-                <span className="text-sm font-bold text-primary-foreground">
-                  {footerInitial}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {footerName}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {footerRole}
-                </p>
-              </div>
+            <div className="space-y-3">
+              <NavLink to={user ? "/settings?tab=profile" : "/auth"} className="flex items-center gap-3 rounded-lg hover:bg-sidebar-accent/50 -m-1 p-1">
+                <div className="w-10 h-10 rounded-full bg-gradient-gold flex items-center justify-center">
+                  <span className="text-sm font-bold text-primary-foreground">
+                    {footerInitial}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {footerName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {footerRole}
+                  </p>
+                </div>
+              </NavLink>
+              {user ? (
+                <div className="grid grid-cols-1 gap-1.5">
+                  <Button variant="outline" size="sm" className="w-full justify-start gap-2" asChild>
+                    <NavLink to="/settings?tab=profile">
+                      <UserCircle className="w-4 h-4" />
+                      {isAr ? "الحساب" : "Account"}
+                    </NavLink>
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start gap-2" asChild>
+                    <NavLink to="/settings?tab=preferences">
+                      <Settings className="w-4 h-4" />
+                      {isAr ? "الإعدادات" : "Settings"}
+                    </NavLink>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start gap-2 text-destructive hover:text-destructive"
+                    onClick={async () => {
+                      await signOut();
+                      navigate("/");
+                    }}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    {isAr ? "خروج" : "Log out"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-1.5">
+                  <Button variant="gold-outline" size="sm" asChild>
+                    <NavLink to="/auth">{isAr ? "تسجيل الدخول" : "Log in"}</NavLink>
+                  </Button>
+                  <Button variant="hero" size="sm" asChild>
+                    <NavLink to="/auth?mode=register">{isAr ? "إنشاء حساب" : "Get started"}</NavLink>
+                  </Button>
+                </div>
+              )}
+              <InstallAppButton variant="outline" className="w-full" alwaysShowLabel />
             </div>
           ) : (
             <div className="w-8 h-8 rounded-full bg-gradient-gold flex items-center justify-center">

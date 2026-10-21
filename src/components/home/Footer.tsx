@@ -61,18 +61,11 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8">
           {/* Brand Column */}
           <div className="col-span-2 md:col-span-4 lg:col-span-1 mb-8 lg:mb-0">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-gold rounded-xl flex items-center justify-center shadow-gold">
-                <Landmark className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h3 className="font-display text-lg font-bold text-foreground">Capimax BRX</h3>
-                <p className="text-xs text-muted-foreground">{t("footer.tagline")}</p>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-              {t("footer.description")}
-            </p>
+            {/* Official Capimax BRX logo (navy on light, white on dark) */}
+            <a href="/" className="inline-flex mb-6" aria-label="Capimax BRX">
+              <img src="/capimax-brx-logo-dark.svg" alt="Capimax BRX" className="h-12 w-auto dark:hidden" />
+              <img src="/capimax-brx-logo-light.svg" alt="Capimax BRX" className="h-12 w-auto hidden dark:block" />
+            </a>
 
             {/* Institutional Contact Block */}
             <div className="space-y-4 text-sm">

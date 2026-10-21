@@ -45,6 +45,30 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    "deposit_received": {
+        "subject": "We received your bank transfer of ${amount}",
+        "heading": "Transfer received — under review",
+        "intro": "We received your bank transfer proof for ${amount} (reference {reference}). Our team is matching it with the bank statement; your wallet is credited as soon as it is approved.",
+        "cta_label": "Open your wallet",
+        "cta_path": "/wallet",
+        "outro": "",
+    },
+    "deposit_credited": {
+        "subject": "${amount} was added to your wallet",
+        "heading": "Deposit credited",
+        "intro": "Your {method} deposit of ${amount} (reference {reference}) is now in your Capimax BRX wallet.",
+        "cta_label": "Open your wallet",
+        "cta_path": "/wallet",
+        "outro": "",
+    },
+    "deposit_rejected": {
+        "subject": "Your bank transfer of ${amount} wasn't approved",
+        "heading": "Bank transfer not approved",
+        "intro": "We couldn't match your bank transfer of ${amount} (reference {reference}). Please check the transfer and upload a clear proof again, or contact support.",
+        "cta_label": "Open your wallet",
+        "cta_path": "/wallet",
+        "outro": "",
+    },
     "role_approved": {
         "subject": "Your {role} role is active",
         "heading": "You're now a {role}",

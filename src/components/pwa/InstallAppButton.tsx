@@ -23,12 +23,15 @@ interface InstallAppButtonProps {
   /** Show the "Install app" label next to the icon (defaults to sm+ only). */
   showLabel?: boolean;
   className?: string;
+  /** Show the label on phones too (the sidebar has room for it). */
+  alwaysShowLabel?: boolean;
 }
 
 export function InstallAppButton({
   variant = "ghost",
   showLabel = true,
   className,
+  alwaysShowLabel = false,
 }: InstallAppButtonProps) {
   const { isInstalled, isInstallable, promptInstall } = usePWAInstall();
   const language = useOptionalLanguage();
@@ -52,7 +55,9 @@ export function InstallAppButton({
     setShowHelp(true); // iOS / prompt not captured → manual instructions
   };
 
-  const label = isArabic ? "تثبيت التطبيق" : "Install app";
+  const label = alwaysShowLabel
+    ? isArabic ? "ثبّت المنصة كتطبيق" : "Install as App"
+    : isArabic ? "تثبيت التطبيق" : "Install app";
 
   return (
     <>
@@ -65,7 +70,7 @@ export function InstallAppButton({
         className={className}
       >
         <Download className="w-4 h-4" />
-        {showLabel && <span className="hidden sm:inline">{label}</span>}
+        {showLabel && <span className={alwaysShowLabel ? "inline" : "hidden sm:inline"}>{label}</span>}
       </Button>
 
       <Dialog open={showHelp} onOpenChange={setShowHelp}>

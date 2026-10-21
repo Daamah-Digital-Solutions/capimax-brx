@@ -12,7 +12,6 @@ import { TrustSection } from "@/components/home/TrustSection";
 import { CTASection } from "@/components/home/CTASection";
 import { PronovaNovaSection } from "@/components/home/PronovaNovaSection";
 import { NotificationsSection } from "@/components/home/NotificationsSection";
-import { PlatformDisclaimer } from "@/components/home/PlatformDisclaimer";
 import { Footer } from "@/components/home/Footer";
 import { LegalDisclaimer } from "@/components/home/LegalDisclaimer";
 
@@ -31,7 +30,6 @@ const Index = () => {
       <LiquidityProviderSection />
       <TrustSection />
       <CTASection />
-      <PlatformDisclaimer />
       <Footer />
       <LegalDisclaimer />
     </MainLayout>

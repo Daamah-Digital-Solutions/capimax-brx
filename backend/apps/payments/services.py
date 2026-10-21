@@ -216,7 +216,20 @@ def _credit_deposit(deposit_id) -> bool:
         deposit.status = Deposit.Status.COMPLETED
         deposit.credited_at = timezone.now()
         deposit.save(update_fields=["credited", "status", "credited_at", "updated_at"])
+        from apps.notifications.services import NotificationType, notify
+
+        notify(
+            deposit.user, NotificationType.DEPOSIT_CREDITED,
+            params={"amount": str(deposit.amount), "method": _method_label(deposit.payment_method),
+                    "reference": deposit.reference or str(deposit.id)[:8].upper()},
+            action_url="/liquidity-provider" if credited_lp else "/wallet",
+        )
     return True
+
+
+def _method_label(method: str) -> str:
+    return {"card": "card", "stripe": "card", "crypto": "crypto", "nowpayments": "crypto",
+            "bank": "bank transfer"}.get((method or "").lower(), method or "")
 
 
 def approve_bank_deposit(deposit) -> bool:
@@ -240,6 +253,13 @@ def reject_bank_deposit(deposit) -> None:
         return  # already credited — cannot un-credit via a reject
     deposit.status = Deposit.Status.FAILED
     deposit.save(update_fields=["status", "updated_at"])
+    from apps.notifications.services import NotificationType, notify
+
+    notify(
+        deposit.user, NotificationType.DEPOSIT_REJECTED,
+        params={"amount": str(deposit.amount), "reference": deposit.reference or ""},
+        action_url="/wallet",
+    )
 
 
 def _fail_payment(payment: Payment, *, reason: str = "") -> None:

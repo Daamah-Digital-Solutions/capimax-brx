@@ -105,7 +105,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
         {/* Right Section */}
         <div className="flex items-center gap-2">
           {/* Install app — persistent, available any time (self-hides once installed) */}
-          <InstallAppButton variant="gold-outline" />
+          <InstallAppButton variant="gold-outline" className="hidden sm:inline-flex" />
 
           {/* Theme Toggle */}
           <Button 
@@ -193,11 +193,16 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </Button>
 
           {/* Auth Actions */}
-          <div className="hidden sm:flex items-center gap-2 ml-2">
+          <div className="flex items-center gap-2 ms-1 sm:ms-2">
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="relative rounded-full border-primary/40"
+                    aria-label={language === "ar" ? "الحساب" : "Account"}
+                  >
                     <User className="w-5 h-5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -206,10 +211,17 @@ export function Header({ onMenuToggle }: HeaderProps) {
                     {user.email}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/settings?tab=profile")}>
+                    <User className="w-4 h-4 me-2" />
+                    {language === "ar" ? "الحساب" : "Account"}
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/dashboard")}>
                     {t("nav.dashboard")}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/settings")}>
+                  <DropdownMenuItem onClick={() => navigate("/kyc")}>
+                    {language === "ar" ? "توثيق الهوية (KYC)" : "Identity verification (KYC)"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/settings?tab=preferences")}>
                     {t("nav.settings")}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -224,8 +236,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
                 <Button variant="gold-outline" size="sm" asChild>
                   <Link to="/auth">{t("auth.login")}</Link>
                 </Button>
-                <Button variant="hero" size="sm" asChild>
-                  <Link to="/auth">{language === "ar" ? "سجّل الآن" : "Register Now"}</Link>
+                <Button variant="hero" size="sm" asChild className="hidden sm:inline-flex">
+                  <Link to="/auth?mode=register">{language === "ar" ? "سجّل الآن" : "Register Now"}</Link>
                 </Button>
               </>
             )}

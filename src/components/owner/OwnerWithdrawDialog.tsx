@@ -288,7 +288,7 @@ export function OwnerWithdrawDialog({
                   </Button>
                 </div>
               )}
-              {isAuto && (
+              {(isAuto || !autoReady) && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     {(["standard", "instant"] as const).map((sp) => (
@@ -318,7 +318,20 @@ export function OwnerWithdrawDialog({
                       </button>
                     ))}
                   </div>
-                  {numeric > 0 && (
+                  {!instantOk && (
+                    <p className="text-xs text-muted-foreground">
+                      {!autoReady
+                        ? isAr
+                          ? "السحب الفوري يتاح بعد ربط حسابك البنكي عبر Stripe، ويحتاج كارت خصم يدعمه (غير متاح في كل الدول)."
+                          : "Instant withdrawal is available after you link your bank with Stripe and add a debit card that supports it (not available in every country)."
+                        : !payout.instant_enabled
+                          ? isAr ? "السحب الفوري غير متاح حالياً." : "Instant withdrawal isn't available right now."
+                          : isAr
+                            ? `السحب الفوري حتى $${payout.instant_max.toLocaleString()} للعملية.`
+                            : `Instant withdrawal is limited to $${payout.instant_max.toLocaleString()} per request.`}
+                    </p>
+                  )}
+                  {numeric > 0 && isAuto && (
                     <p className="text-xs text-muted-foreground">
                       {isInstant
                         ? isAr

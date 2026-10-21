@@ -196,31 +196,16 @@ export default function Fees() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-foreground p-4 rounded-lg bg-primary/5 border border-primary/20">
+              {isRTL
+                ? "يتحمل المستثمر رسوم وسيلة الدفع المستخدمة، وفقًا للرسوم المطبقة على الطريقة التي يختارها عند الدفع."
+                : "The investor bears the fees of the payment method used, according to the fees that apply to the method chosen at checkout."}
+            </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {paymentMethods.map((method, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center justify-between p-4 rounded-lg ${
-                    method.fee.includes("-")
-                      ? "bg-emerald-500/10 border border-emerald-500/20"
-                      : "bg-muted/30"
-                  }`}
-                >
-                  <div>
-                    <h4 className="font-medium text-foreground">{method.name}</h4>
-                  </div>
-                  <Badge
-                    variant={
-                      method.fee === "0%"
-                        ? "success"
-                        : method.fee.includes("-")
-                          ? "gold"
-                          : "outline"
-                    }
-                  >
-                    {method.fee}
-                  </Badge>
+                <div key={index} className="flex items-center p-4 rounded-lg bg-muted/30">
+                  <h4 className="font-medium text-foreground">{method.name}</h4>
                 </div>
               ))}
             </div>

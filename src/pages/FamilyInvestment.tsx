@@ -536,10 +536,6 @@ const FamilyInvestment = () => {
                   </DialogContent>
                 </Dialog>
                 
-                <Button variant="outline" size="lg" className="gap-2">
-                  <FileText className="w-5 h-5" />
-                  {isRTL ? "دليل الاستخدام" : "User Guide"}
-                </Button>
               </div>
             </div>
             
@@ -586,26 +582,26 @@ const FamilyInvestment = () => {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="members" className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5">
-            <TabsTrigger value="members" className="gap-2">
+          <TabsList className="flex w-full max-w-2xl h-auto overflow-x-auto justify-start sm:grid sm:grid-cols-5">
+            <TabsTrigger value="members" className="gap-2 shrink-0">
               <Users className="w-4 h-4" />
-              <span className="hidden sm:inline">{isRTL ? "الأعضاء" : "Members"}</span>
+              <span>{isRTL ? "الأعضاء" : "Members"}</span>
             </TabsTrigger>
-            <TabsTrigger value="banking" className="gap-2">
+            <TabsTrigger value="banking" className="gap-2 shrink-0">
               <Building className="w-4 h-4" />
-              <span className="hidden sm:inline">{isRTL ? "البنوك" : "Banking"}</span>
+              <span>{isRTL ? "البنوك" : "Banking"}</span>
             </TabsTrigger>
-            <TabsTrigger value="allocations" className="gap-2">
+            <TabsTrigger value="allocations" className="gap-2 shrink-0">
               <Gift className="w-4 h-4" />
-              <span className="hidden sm:inline">{isRTL ? "التخصيصات" : "Allocations"}</span>
+              <span>{isRTL ? "التخصيصات" : "Allocations"}</span>
             </TabsTrigger>
-            <TabsTrigger value="transfers" className="gap-2">
+            <TabsTrigger value="transfers" className="gap-2 shrink-0">
               <ArrowRightLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">{isRTL ? "التحويلات" : "Transfers"}</span>
+              <span>{isRTL ? "التحويلات" : "Transfers"}</span>
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2">
+            <TabsTrigger value="history" className="gap-2 shrink-0">
               <History className="w-4 h-4" />
-              <span className="hidden sm:inline">{isRTL ? "السجل" : "History"}</span>
+              <span>{isRTL ? "السجل" : "History"}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1159,31 +1155,6 @@ const FamilyInvestment = () => {
             <TransactionHistory transactions={transactions} isLoading={isLoading} />
           </TabsContent>
         </Tabs>
-
-        {/* Info Banner */}
-        <Card className="mt-8 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/20">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
-                <Shield className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="flex-1 text-center md:text-start">
-                <h3 className="text-lg font-semibold text-foreground mb-1">
-                  {isRTL ? "الأمان والخصوصية" : "Security & Privacy"}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {isRTL
-                    ? "تُسجَّل جميع عمليات العائلة في سجل نشاط شفاف، ويُخزَّن فقط آخر 4 أرقام من المعلومات البنكية. (تنفيذ التحويلات الفعلي يأتي في إصدار لاحق.)"
-                    : "All family actions are recorded in a transparent activity log, and only the last 4 digits of bank information are stored. (Actual transfer execution comes in a later release.)"}
-                </p>
-              </div>
-              <Button variant="outline" className="shrink-0">
-                {isRTL ? "معرفة المزيد" : "Learn More"}
-                <ArrowIcon className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Demo Member Page Dialog */}
         <Dialog open={!!selectedDemoMember} onOpenChange={(open) => {

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { KycStatusCard } from "@/components/kyc/KycStatusCard";
 import {
   TrendingUp,
   Wallet,
@@ -160,6 +161,8 @@ export default function Dashboard() {
         </div>
 
         <div className="container py-8">
+          {/* Identity verification prompt — only until KYC is approved */}
+          <KycStatusCard hideWhenVerified className="mb-8" />
           {/* Reinvestment Banner — real available balance; null when zero */}
           <ReinvestmentBanner availableReturns={availableReturns} className="mb-8" />
 

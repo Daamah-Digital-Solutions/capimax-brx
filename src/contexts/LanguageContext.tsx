@@ -1501,6 +1501,12 @@ const translations: Record<Language, Record<string, string>> = {
     "promo.novaFinancingTitle": "تمويل نوفا",
     "nav.reinvestment": "إعادة الاستثمار",
     "nav.exitsHub": "مركز التخارج المباشر",
+    "notif.deposit_received.title": "استلمنا تحويلك البنكي",
+    "notif.deposit_received.body": "استلمنا إثبات تحويل بقيمة {amount} دولار (المرجع {reference}). سيُضاف المبلغ لمحفظتك بعد مراجعته.",
+    "notif.deposit_credited.title": "تم إيداع {amount} دولار",
+    "notif.deposit_credited.body": "تمت إضافة {amount} دولار إلى محفظتك (المرجع {reference}).",
+    "notif.deposit_rejected.title": "لم تتم الموافقة على التحويل البنكي",
+    "notif.deposit_rejected.body": "تعذّر مطابقة تحويلك البنكي بقيمة {amount} دولار (المرجع {reference}). يرجى رفع إثبات واضح أو التواصل مع الدعم.",
   },
   en: {
     // Navigation
@@ -2993,6 +2999,12 @@ const translations: Record<Language, Record<string, string>> = {
     "promo.novaFinancingTitle": "Nova Financing",
     "nav.reinvestment": "Re Investment",
     "nav.exitsHub": "Live Exits Hub",
+    "notif.deposit_received.title": "Bank transfer received",
+    "notif.deposit_received.body": "We received your transfer proof for ${amount} (reference {reference}). Your wallet is credited once it is approved.",
+    "notif.deposit_credited.title": "${amount} added to your wallet",
+    "notif.deposit_credited.body": "Your deposit of ${amount} is now in your wallet (reference {reference}).",
+    "notif.deposit_rejected.title": "Bank transfer not approved",
+    "notif.deposit_rejected.body": "We couldn't match your bank transfer of ${amount} (reference {reference}). Please upload a clear proof or contact support.",
   },
   fr: {
     // French translations - fallback to English with French labels

@@ -58,6 +58,10 @@ class Notification(models.Model):
         # Role applications (apps/roles). params.role(/dashboard | note/apply_path).
         ROLE_APPROVED = "role_approved", _("Role approved")
         ROLE_REJECTED = "role_rejected", _("Role application rejected")
+        # Wallet top-ups. params.amount/method(/reference).
+        DEPOSIT_RECEIVED = "deposit_received", _("Bank transfer received — under review")
+        DEPOSIT_CREDITED = "deposit_credited", _("Deposit credited to the wallet")
+        DEPOSIT_REJECTED = "deposit_rejected", _("Bank transfer not approved")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

@@ -125,15 +125,17 @@ export default function WhitePaper() {
                 
                 <div className="grid md:grid-cols-3 gap-4 mt-6">
                   <div className="p-4 rounded-lg bg-muted/50 text-center">
-                    <div className="text-3xl font-bold text-primary mb-2">$1,000</div>
+                    <div className="text-3xl font-bold text-primary mb-2">$100</div>
                     <div className="text-sm text-muted-foreground">
                       {language === 'ar' ? 'الحد الأدنى للاستثمار' : 'Minimum Investment'}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/50 text-center">
-                    <div className="text-3xl font-bold text-primary mb-2">8-12%</div>
+                    <div className="text-xl font-bold text-primary mb-2">
+                      {language === 'ar' ? 'إيجار + نمو القيمة' : 'Rental + Appreciation'}
+                    </div>
                     <div className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'العائد السنوي المتوقع' : 'Expected Annual Yield'}
+                      {language === 'ar' ? 'العوائد المحتملة' : 'Potential Returns'}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/50 text-center">
@@ -143,6 +145,11 @@ export default function WhitePaper() {
                     </div>
                   </div>
                 </div>
+                <p className="text-sm text-muted-foreground mt-4">
+                  {language === 'ar'
+                    ? 'تشمل العوائد المحتملة عوائد الإيجار وزيادة قيمة العقار (نمو رأس المال)، دون تحديد نسبة عائد. تبدأ عوائد الإيجار بعد اكتمال العقار وتسليمه وتأجيره، بينما ترتبط زيادة القيمة بارتفاع سعر العقار.'
+                    : 'Potential returns include rental income and capital appreciation, with no fixed rate of return. Rental income starts once the property is completed, handed over and leased, while appreciation depends on the property’s price rising.'}
+                </p>
               </CardContent>
             </Card>
 

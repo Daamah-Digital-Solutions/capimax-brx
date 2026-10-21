@@ -700,6 +700,13 @@ class CreateBankDepositView(APIView):
         # Human reference the user quotes in the transfer so the admin can match it.
         deposit.reference = f"DEP-{str(deposit.id).split('-')[0].upper()}"
         deposit.save(update_fields=["reference", "updated_at"])
+        from apps.notifications.services import NotificationType, notify
+
+        notify(
+            request.user, NotificationType.DEPOSIT_RECEIVED,
+            params={"amount": str(deposit.amount), "reference": deposit.reference},
+            action_url="/wallet",
+        )
         from apps.notifications.admin_alerts import notify_admins
 
         notify_admins(
