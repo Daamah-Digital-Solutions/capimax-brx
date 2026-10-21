@@ -34,7 +34,7 @@ export function PaymentReceipts() {
         {rows.map((r) => (
           <div key={r.id} className="p-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="font-medium text-foreground truncate">{r.title}</div>
+              <div className="font-medium text-foreground truncate">{(isAr && r.title_ar) || r.title}</div>
               <div className="text-xs text-muted-foreground" dir="ltr">
                 {r.number} · {new Date(r.date).toLocaleDateString(isAr ? "ar" : "en")}
                 {r.method ? ` · ${r.method}` : ""}

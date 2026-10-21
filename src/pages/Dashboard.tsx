@@ -29,6 +29,7 @@ import { renderNotificationCopy, relativeTime } from "@/lib/notifications";
 import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard";
 import { ReinvestmentBanner } from "@/components/dashboard/ReinvestmentBanner";
 import { ExitOptionsCard } from "@/components/portfolio/ExitOptionsCard";
+import { QuickActions } from "@/components/dashboard/QuickActions";
 
 // Real, derived per-property donut colors (cycled). The token model has NO property
 // type/category, so the allocation is by REAL per-property VALUE SHARE (token_value_usd
@@ -448,36 +449,8 @@ export default function Dashboard() {
                 style={{ animationDelay: "0.42s" }}
               />
 
-              {/* Quick Actions */}
-              <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.45s" }}>
-                <h3 className="font-semibold text-foreground mb-4">{t("dashboard.quickActions")}</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <Link to="/wallet" className="contents">
-                    <Button variant="outline" className="flex-col h-auto py-4 gap-2">
-                      <Wallet className="w-5 h-5" />
-                      <span className="text-xs">{t("dashboard.deposit")}</span>
-                    </Button>
-                  </Link>
-                  <Link to="/secondary-market" className="contents">
-                    <Button variant="outline" className="flex-col h-auto py-4 gap-2">
-                      <TrendingUp className="w-5 h-5" />
-                      <span className="text-xs">{t("nav.secondaryMarket")}</span>
-                    </Button>
-                  </Link>
-                  <Link to="/reinvestment" className="contents">
-                    <Button variant="outline" className="flex-col h-auto py-4 gap-2">
-                      <RefreshCw className="w-5 h-5" />
-                      <span className="text-xs">{isAr ? "إعادة استثمار" : "Reinvest"}</span>
-                    </Button>
-                  </Link>
-                  <Link to="/documents" className="contents">
-                    <Button variant="outline" className="flex-col h-auto py-4 gap-2">
-                      <FileText className="w-5 h-5" />
-                      <span className="text-xs">{t("nav.documents")}</span>
-                    </Button>
-                  </Link>
-                </div>
-              </div>
+              {/* Quick Actions — every service one tap away (client review §13). */}
+              <QuickActions />
             </div>
           </div>
         </div>

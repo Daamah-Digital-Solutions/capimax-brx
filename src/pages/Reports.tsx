@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { propertyLabel } from "@/lib/propertyLabels";
 import {
   BarChart3,
@@ -125,6 +126,7 @@ export default function Reports() {
   const [period, setPeriod] = useState("all");
   const [property, setProperty] = useState("all");
   const [category, setCategory] = useState("all");
+  const tabParam = useSearchParams()[0].get("tab");
 
   // Real sources (same as Portfolio / Distributions).
   const { wallet } = useUserWallet();
@@ -281,7 +283,7 @@ export default function Reports() {
             </div>
           </div>
 
-          <Tabs defaultValue="analytics" className="space-y-6">
+          <Tabs defaultValue={tabParam === "reports" || tabParam === "performance" ? tabParam : "analytics"} className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <TabsList className="bg-muted/50">
                 <TabsTrigger value="analytics">{isAr ? "التحليلات" : "Analytics"}</TabsTrigger>

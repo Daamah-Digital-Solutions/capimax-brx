@@ -34,3 +34,38 @@ PROVIDER_LABELS = {"stripe": "Card (Stripe)", "nowpayments": "Crypto (NOWPayment
 
 def source_label(source: str) -> str:
     return SOURCE_LABELS.get(source, (source or "").replace("_", " ").capitalize())
+
+
+# Arabic names for the same sources (receipt titles on the Arabic site).
+SOURCE_LABELS_AR = {
+    "deposit": "شحن المحفظة",
+    "withdrawal": "طلب سحب",
+    "withdrawal_refund": "سحب لم يكتمل — أُعيد المبلغ",
+    "instant_fee_refund": "استرداد رسوم السحب الفوري",
+    "gift_sent": "هدية مُرسلة",
+    "gift_received": "هدية مُستلمة",
+    "gift_returned": "هدية مُعادة",
+    "family_sent": "تحويل عائلي مُرسل",
+    "family_received": "تحويل عائلي مُستلم",
+    "family_returned": "تحويل عائلي مُعاد",
+    "estate_sent": "توزيع ميراث",
+    "estate_received": "ميراث مُستلم",
+    "estate_returned": "ميراث مُعاد",
+    "reinvestment": "شراء من المحفظة",
+    "installment": "قسط مدفوع من المحفظة",
+    "installment_autodebit": "خصم قسط تلقائي من المحفظة",
+    "distribution": "توزيع دخل الإيجار",
+    "secondary_market_purchase": "شراء من السوق الثانوي",
+    "secondary_market_sale": "عائدات بيع في السوق الثانوي",
+    "lp_market_sale": "بيع لمزود سيولة",
+    "primary_sale": "عائدات البيع الأولي",
+    "broker_commission": "عمولة إحالة",
+    "purchase_refund": "استرداد مبلغ شراء للمحفظة",
+    "crypto_underpaid_refund": "دفعة كريبتو أقل من المستحق — أُعيدت",
+    "crypto_overpaid_credit": "دفعة كريبتو أعلى من المستحق — أُضيف الفرق",
+    "family_accrual_release": "تحرير مخصص عائلي",
+}
+
+
+def source_label_ar(source: str) -> str:
+    return SOURCE_LABELS_AR.get(source, source_label(source))

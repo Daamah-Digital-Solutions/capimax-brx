@@ -2156,6 +2156,8 @@ export interface ReceiptRow {
   number: string;
   date: string;
   title: string;
+  /** The same title in Arabic (for the Arabic site). */
+  title_ar?: string;
   amount: number;
   direction: "credit" | "debit";
   method?: string;

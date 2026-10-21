@@ -24,7 +24,7 @@ RECEIPT_NOTE = (
     "tax invoice."
 )
 
-from .labels import PROVIDER_LABELS, SOURCE_LABELS  # noqa: E402
+from .labels import PROVIDER_LABELS, SOURCE_LABELS, source_label_ar  # noqa: E402
 
 
 def receipt_number(when, obj_id) -> str:
@@ -106,6 +106,25 @@ def _payment_items(payment) -> list[tuple[str, str]]:
     return items
 
 
+def _name_ar(prop, fallback: str) -> str:
+    return (getattr(prop, "name_ar", "") or "").strip() or fallback
+
+
+def _payment_title_ar(payment) -> str:
+    if payment.deposit_id:
+        return "شحن المحفظة"
+    if payment.installment_payment_id:
+        ip = payment.installment_payment
+        plan = ip.plan
+        if payment.is_installment_payoff:
+            return f"سداد مبكر لأقساط {_name_ar(plan.property, plan.property_name)}"
+        return f"القسط {ip.sequence}/{plan.number_of_installments} — {_name_ar(plan.property, plan.property_name)}"
+    inv = payment.investment
+    if inv.is_installment:
+        return f"دفعة مقدمة — {inv.token_amount} وحدة من {_name_ar(inv.property, inv.property_name)}"
+    return f"{inv.token_amount} وحدة من {_name_ar(inv.property, inv.property_name)}"
+
+
 def payment_receipt(user, payment_id) -> tuple[str, bytes]:
     from apps.payments.models import Payment, PaymentState
 
@@ -167,6 +186,7 @@ def list_receipts(user, limit: int = 200) -> list[dict]:
             "kind": "ledger", "id": str(tx.pk), "number": receipt_number(tx.created_at, tx.pk),
             "date": tx.created_at.isoformat(),
             "title": SOURCE_LABELS.get(tx.source, tx.source.replace("_", " ").capitalize()),
+            "title_ar": source_label_ar(tx.source),
             "amount": float(tx.amount), "direction": tx.entry_type,
         })
     from django.db.models import Q
@@ -186,6 +206,7 @@ def list_receipts(user, limit: int = 200) -> list[dict]:
         out.append({
             "kind": "payment", "id": str(p.pk), "number": receipt_number(p.updated_at, p.pk),
             "date": p.updated_at.isoformat(), "title": _payment_items(p)[0][0],
+            "title_ar": _payment_title_ar(p),
             "amount": float(p.amount), "direction": "debit",
             "method": PROVIDER_LABELS.get(p.provider, p.provider),
         })
