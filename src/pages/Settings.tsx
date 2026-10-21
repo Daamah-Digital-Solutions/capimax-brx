@@ -436,15 +436,6 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium mb-2 block">{t("settings.defaultCurrency")}</label>
-                  <select className="w-full h-10 rounded-md border border-input bg-background px-3">
-                    <option value="USD">USD - {language === "ar" ? "دولار أمريكي" : "US Dollar"}</option>
-                    <option value="AED">AED - {language === "ar" ? "درهم إماراتي" : "UAE Dirham"}</option>
-                    <option value="EUR">EUR - {language === "ar" ? "يورو" : "Euro"}</option>
-                    <option value="GBP">GBP - {language === "ar" ? "جنيه استرليني" : "British Pound"}</option>
-                  </select>
-                </div>
               </CardContent>
             </Card>
 
