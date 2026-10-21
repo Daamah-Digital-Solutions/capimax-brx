@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Gift, Loader2 } from "lucide-react";
+import { ArrowLeftRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -52,9 +52,9 @@ export function GiftDialog({
 }) {
   const { isRTL } = useLanguage();
   const isTransfer = mode === "transfer";
-  const word = isTransfer
-    ? { ar: "التحويل", en: "Transfer", enLower: "transfer" }
-    : { ar: "الهدية", en: "Gift", enLower: "gift" };
+  // Title, button and messages say "transfer" everywhere (the gift wording stays only in
+  // the Family Investment description and its occasion default).
+  const word = { ar: "التحويل", en: "Transfer", enLower: "transfer" };
   const [info, setInfo] = useState<Giftable | null>(null);
   const [asset, setAsset] = useState<"units" | "cash">("units");
   const [slug, setSlug] = useState("");
@@ -126,10 +126,8 @@ export function GiftDialog({
       <DialogContent dir={isRTL ? "rtl" : "ltr"} className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isTransfer ? <ArrowLeftRight className="w-5 h-5 text-primary" /> : <Gift className="w-5 h-5 text-pink-500" />}
-            {isTransfer
-              ? isRTL ? "تحويل وحدات أو رصيد" : "Transfer units or balance"
-              : isRTL ? "هدية عقارية" : "Property gift"}
+            <ArrowLeftRight className="w-5 h-5 text-primary" />
+            {isRTL ? "تحويل وحدات أو رصيد" : "Transfer units or balance"}
           </DialogTitle>
           <DialogDescription>
             {isTransfer
@@ -243,7 +241,7 @@ export function GiftDialog({
             {isRTL ? "إلغاء" : "Cancel"}
           </Button>
           <Button onClick={submit} disabled={busy || !valid} className="gap-2">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : isTransfer ? <ArrowLeftRight className="w-4 h-4" /> : <Gift className="w-4 h-4" />}
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowLeftRight className="w-4 h-4" />}
             {date > today()
               ? isRTL ? `جدولة ${word.ar}` : `Schedule ${word.enLower}`
               : isRTL ? `إرسال ${word.ar}` : `Send ${word.enLower}`}
