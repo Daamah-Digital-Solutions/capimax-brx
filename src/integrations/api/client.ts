@@ -874,7 +874,16 @@ export const supportApi = {
   /** Submit a new ticket (the New-Ticket form). */
   create: (payload: { subject: string; category: string; priority: string; details: string }) =>
     rawRequest("/support/tickets/", { method: "POST", auth: true, body: payload }) as Promise<SupportTicketRow>,
+  /** One ticket with its conversation. */
+  detail: (id: string) => rawRequest(`/support/tickets/${id}/`, { auth: true }) as Promise<SupportTicketThread>,
+  /** Reply on a ticket (reopens it for the support team). */
+  reply: (id: string, body: string) =>
+    rawRequest(`/support/tickets/${id}/messages/`, { method: "POST", auth: true, body: { body } }) as Promise<SupportTicketThread>,
 };
+
+export interface SupportTicketThread extends SupportTicketRow {
+  messages: { id: string; from_support: boolean; body: string; created_at: string }[];
+}
 
 // --------------------------------------------------------------------------- //
 // Wallet + KYC API (Phase 4) — authenticated. SPEC §3.4 / §3.2.

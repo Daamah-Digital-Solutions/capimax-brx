@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 
 from apps.core.permissions import IsAdminRole
 
-from .models import SupportTicket
+from .models import SupportTicket, SupportTicketMessage
 from .serializers import (
     SupportTicketAdminUpdateSerializer,
     SupportTicketCreateSerializer,
@@ -77,14 +77,43 @@ class SupportTicketsView(APIView):
         return Response(_ticket_dict(ticket), status=status.HTTP_201_CREATED)
 
 
+def _thread(ticket: SupportTicket) -> dict:
+    out = _ticket_dict(ticket)
+    out["messages"] = [
+        {"id": str(m.id), "from_support": m.is_staff, "body": m.body, "created_at": m.created_at.isoformat()}
+        for m in ticket.messages.all()
+    ]
+    return out
+
+
 class SupportTicketDetailView(APIView):
-    """Read one of the caller's OWN tickets (self-scoped → 404 for anyone else)."""
+    """One of the caller's OWN tickets with its conversation (self-scoped → 404 for anyone else)."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request, ticket_id):
         ticket = get_object_or_404(SupportTicket, id=ticket_id, user=request.user)
-        return Response(_ticket_dict(ticket))
+        return Response(_thread(ticket))
+
+
+class SupportTicketReplyView(APIView):
+    """POST /api/support/tickets/<id>/messages/ {body} — the user replies (reopens the ticket)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, ticket_id):
+        ticket = get_object_or_404(SupportTicket, id=ticket_id, user=request.user)
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return Response({"detail": "Write your reply."}, status=status.HTTP_400_BAD_REQUEST)
+        SupportTicketMessage.objects.create(ticket=ticket, author=request.user, body=body[:5000])
+        ticket.status = SupportTicket.Status.OPEN
+        ticket.save(update_fields=["status", "updated_at"])
+        from apps.notifications.admin_alerts import notify_admins
+
+        notify_admins("support_ticket", obj=ticket,
+                      summary=f"{request.user.email} replied on ticket {ticket.reference}: {ticket.subject}")
+        return Response(_thread(ticket), status=status.HTTP_201_CREATED)
 
 
 class SupportTicketAdminView(APIView):

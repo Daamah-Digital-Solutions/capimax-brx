@@ -84,3 +84,24 @@ class SupportTicket(models.Model):
 
     def __str__(self):
         return f"{self.reference} [{self.status}] {self.subject} ({self.user_id})"
+
+
+class SupportTicketMessage(models.Model):
+    """A reply in a ticket's conversation — from the user or from the support team."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+    )
+    is_staff = models.BooleanField(default=False)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+        verbose_name = _("reply")
+        verbose_name_plural = _("replies")
+
+    def __str__(self):
+        return f"{self.ticket.reference} reply"

@@ -68,6 +68,9 @@ class Notification(models.Model):
         ACCOUNT_DEACTIVATED = "account_deactivated", _("Account deactivated")
         # A message from the platform team in the user's inbox (params.subject).
         PLATFORM_MESSAGE = "platform_message", _("Message from the platform")
+        # Support tickets: the team replied / the ticket was resolved (params.reference, subject).
+        SUPPORT_REPLY = "support_reply", _("Support replied")
+        SUPPORT_RESOLVED = "support_resolved", _("Support ticket resolved")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

@@ -45,6 +45,22 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    "support_reply": {
+        "subject": "Support replied to your ticket {reference}",
+        "heading": "We replied to your ticket",
+        "intro": "Our support team replied to your ticket {reference} — “{subject}”. Open it to read the reply and answer if needed.",
+        "cta_label": "Open the ticket",
+        "cta_path": "/support?tab=tickets",
+        "outro": "",
+    },
+    "support_resolved": {
+        "subject": "Your ticket {reference} is resolved",
+        "heading": "Ticket resolved",
+        "intro": "Your ticket {reference} — “{subject}” — was marked resolved. If you still need help, reply on the ticket and it reopens.",
+        "cta_label": "Open the ticket",
+        "cta_path": "/support?tab=tickets",
+        "outro": "",
+    },
     "platform_message": {
         "subject": "{subject}",
         "heading": "{subject}",

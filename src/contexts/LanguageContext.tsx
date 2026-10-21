@@ -1516,6 +1516,10 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.account_deactivated.body": "تم تعطيل حسابك بناءً على طلبك. لإعادة تفعيله تواصل مع الدعم.",
     "notif.platform_message.title": "رسالة جديدة من المنصة",
     "notif.platform_message.body": "{subject}",
+    "notif.support_reply.title": "رد فريق الدعم على تذكرتك",
+    "notif.support_reply.body": "التذكرة {reference} — {subject}. افتحها لقراءة الرد.",
+    "notif.support_resolved.title": "تم حل تذكرتك",
+    "notif.support_resolved.body": "التذكرة {reference} — {subject}. إن احتجت مساعدة أخرى رد عليها لتُفتح من جديد.",
   },
   en: {
     // Navigation
@@ -3023,6 +3027,10 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.account_deactivated.body": "Your account was deactivated at your request. Contact support to reactivate it.",
     "notif.platform_message.title": "New message from the platform",
     "notif.platform_message.body": "{subject}",
+    "notif.support_reply.title": "Support replied to your ticket",
+    "notif.support_reply.body": "Ticket {reference} — {subject}. Open it to read the reply.",
+    "notif.support_resolved.title": "Your ticket is resolved",
+    "notif.support_resolved.body": "Ticket {reference} — {subject}. If you still need help, reply and it reopens.",
   },
   fr: {
     // French translations - fallback to English with French labels

@@ -1,3 +1,4 @@
+import { OPEN_ASSISTANT_EVENT } from "@/lib/assistant";
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, Loader2, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,13 @@ export function ChatWidget() {
   const sessionIdRef = useRef<string>("");
 
   const tr = (en: string, ar: string) => (isArabic ? ar : en);
+
+  // Other pages (Support) open the assistant with openAssistant() (src/lib/assistant.ts).
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_ASSISTANT_EVENT, show);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, show);
+  }, []);
 
   // Seed the greeting the first time the panel opens; focus the input.
   useEffect(() => {
