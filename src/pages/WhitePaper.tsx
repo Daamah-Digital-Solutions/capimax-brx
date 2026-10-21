@@ -58,11 +58,7 @@ export default function WhitePaper() {
           <div className="flex flex-wrap justify-center gap-4">
             <Button size="lg" className="gap-2">
               <Download className="h-5 w-5" />
-              {language === 'ar' ? 'تحميل PDF (العربية)' : 'Download PDF (English)'}
-            </Button>
-            <Button size="lg" variant="outline" className="gap-2">
-              <FileText className="h-5 w-5" />
-              {language === 'ar' ? 'تحميل PDF (الإنجليزية)' : 'Download PDF (Arabic)'}
+              {language === 'ar' ? 'تحميل PDF (الإنجليزية)' : 'Download PDF (English)'}
             </Button>
           </div>
         </div>
