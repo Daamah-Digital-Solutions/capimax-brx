@@ -21,5 +21,13 @@ class TransactionError(ChainError):
     """A transaction failed to send, reverted, or its receipt showed status 0."""
 
 
+class NonceConflictError(TransactionError):
+    """The node refused the transaction's nonce (another tx from the same signer won)."""
+
+
+class TokenPausedError(ChainError):
+    """The property token is paused (emergency stop) — no mints or transfers."""
+
+
 class AlreadyDeployedError(ChainError):
     """A PropertyToken already exists for the property (idempotency guard)."""

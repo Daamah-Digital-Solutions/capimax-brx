@@ -297,6 +297,10 @@ CHAIN_ID = env.int("CHAIN_ID", default=97)
 DEPLOYER_PRIVATE_KEY = env("DEPLOYER_PRIVATE_KEY", default="")
 # Address of the deployed PropertyTokenFactory (set after the JS deploy script runs).
 PROPERTY_TOKEN_FACTORY_ADDRESS = env("PROPERTY_TOKEN_FACTORY_ADDRESS", default="")
+# Owner of a NEW factory and admin / controller of every token it deploys — the platform
+# multisig (Safe) on mainnet. Empty = the deployer key (test networks only). The deployer
+# key stays the hot minter + operator. Audit 2026-10-21, H-1.
+CHAIN_ADMIN_ADDRESS = env("CHAIN_ADMIN_ADDRESS", default="")
 # Compiled-contract artifacts produced by Hardhat (ABI + bytecode).
 BLOCKCHAIN_ARTIFACTS_DIR = BASE_DIR / "blockchain" / "artifacts" / "contracts"
 

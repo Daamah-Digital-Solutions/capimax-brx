@@ -27,6 +27,12 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Factory deployed."))
         self.stdout.write(f"  address: {result['factory_address']}")
+        self.stdout.write(f"  owner (admin of every token): {result['owner']}")
+        self.stdout.write(f"  minter + operator (this server key): {result['minter']}")
+        if result["owner"] == result["minter"]:
+            self.stdout.write(self.style.WARNING(
+                "  CHAIN_ADMIN_ADDRESS is not set: the server key holds every power. "
+                "Fine on a test network — on mainnet set it to the multisig first."))
         self.stdout.write(f"  tx:      {result['tx_hash']}")
         self.stdout.write(f"  explorer:{result['explorer_address']}")
         self.stdout.write("")

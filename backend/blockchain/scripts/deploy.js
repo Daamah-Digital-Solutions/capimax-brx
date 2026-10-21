@@ -3,7 +3,13 @@
 // independent of the Django app.
 //
 // Usage:
-//   npm run deploy:testnet            # deploy factory (+ demo token)
+//   npm run deploy:testnet                       # deploy the factory only
+//   DEPLOY_DEMO_TOKEN=1 npm run deploy:testnet   # + one demo token (test networks only)
+//
+// Roles (audit 2026-10-21, H-1): the factory OWNER — and admin of every token it
+// deploys — is CHAIN_ADMIN_ADDRESS (the multisig). The deployer key becomes the hot
+// minter and the operator. Without CHAIN_ADMIN_ADDRESS the deployer holds every seat,
+// which is acceptable on a test network only.
 //
 // SAFETY: targets the `bscTestnet` network only (see hardhat.config.js). The RPC
 // URL and deployer key come from backend/.env (BSC_TESTNET_RPC_URL,
@@ -32,15 +38,24 @@ async function main() {
     );
   }
 
-  // 1) Factory (owned by the deployer / platform).
+  // 1) Factory: owner = multisig (or the deployer on a test network), minter + operator = deployer.
+  const owner = process.env.CHAIN_ADMIN_ADDRESS || deployer.address;
+  if (!ethers.isAddress(owner)) throw new Error("CHAIN_ADMIN_ADDRESS is not a valid address.");
+  console.log("Owner / admin:   ", owner, owner === deployer.address ? "(deployer — test network only)" : "(multisig)");
   console.log("\nDeploying PropertyTokenFactory...");
   const Factory = await ethers.getContractFactory("PropertyTokenFactory");
-  const factory = await Factory.deploy(deployer.address);
+  const factory = await Factory.deploy(owner, deployer.address, deployer.address);
   await factory.waitForDeployment();
   const factoryAddress = await factory.getAddress();
   const factoryTx = factory.deploymentTransaction();
   console.log("  PropertyTokenFactory:", factoryAddress);
   console.log("  tx:", factoryTx.hash);
+
+  if (!process.env.DEPLOY_DEMO_TOKEN) {
+    console.log("\nAdd to backend/.env:");
+    console.log(`PROPERTY_TOKEN_FACTORY_ADDRESS=${factoryAddress}`);
+    return;
+  }
 
   // 2) One demo PropertyToken via the factory (proves the per-property path).
   const demoSlug = process.env.DEMO_PROPERTY_SLUG || "1";

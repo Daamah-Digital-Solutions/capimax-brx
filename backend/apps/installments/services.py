@@ -17,6 +17,7 @@ FINAL installment.
 from __future__ import annotations
 
 import calendar
+import logging
 from datetime import date, timedelta
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
@@ -34,6 +35,8 @@ from .models import (
     InstallmentPlan,
     InstallmentPlanStatus,
 )
+
+log = logging.getLogger(__name__)
 
 _CENTS = Decimal("0.01")
 _FREQUENCY_STEP_MONTHS = {
@@ -696,6 +699,32 @@ def forfeiture_enabled() -> bool:
     return bool(getattr(settings, "INSTALLMENT_FORFEIT_ENABLED", False))
 
 
+def _burn_forfeited_on_chain(prop, wallet_id, units: int, plan_id) -> None:
+    """Burn the forfeited units on chain so the chain matches the ledger (audit H-2) —
+    when the property's token has a clawback and the server key holds its controller role.
+    Otherwise (older token, or the controller is the multisig) the ledger change stands
+    and the burn is left to the multisig; this is logged for them."""
+    from apps.chain import service as chain_service
+    from apps.chain.client import deployer_address
+    from apps.investments.services import _deployed_on_this_chain
+    from apps.wallets.models import UserWallet
+
+    contract = _deployed_on_this_chain(prop)
+    wallet = UserWallet.objects.filter(pk=wallet_id).first()
+    if not contract or wallet is None or units <= 0:
+        return
+    if chain_service.is_paused(contract) is None or not chain_service.has_role(
+        contract, "controller", deployer_address()
+    ):
+        log.warning(
+            "Plan %s forfeited %s units of %s in the ledger; the on-chain burn needs the "
+            "multisig (clawback %s → 0x0).", plan_id, units, prop.slug, wallet.wallet_address,
+        )
+        return
+    chain_service.clawback(contract, wallet.wallet_address, None, units,
+                           f"installment-forfeit:{plan_id}")
+
+
 def default_plan(plan_id) -> dict:
     """
     Default ONE plan: forfeit the LOCKED (unpaid) tokens, KEEP the RELEASED (paid) ones,
@@ -771,6 +800,7 @@ def default_plan(plan_id) -> dict:
                         "token_amount", "locked_amount", "token_value_usd",
                         "ownership_percentage", "updated_at",
                     ])
+                    _burn_forfeited_on_chain(prop, wallet_id, forfeited, plan.id)
                 # Free the forfeited supply: the linked COMPLETED investment now reflects
                 # only the kept tokens (investments.sold_tokens → availability recovers).
                 inv.token_amount = kept

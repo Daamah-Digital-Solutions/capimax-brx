@@ -83,3 +83,14 @@ def get_deployer_account() -> LocalAccount:
 def deployer_address() -> str:
     """Public address of the deployer (safe to log/report)."""
     return get_deployer_account().address
+
+
+def admin_address() -> str:
+    """The multisig that owns the factory and administers every token (CHAIN_ADMIN_ADDRESS),
+    or the deployer itself when none is configured (test networks)."""
+    configured = (getattr(settings, "CHAIN_ADMIN_ADDRESS", "") or "").strip()
+    if not configured:
+        return deployer_address()
+    if not Web3.is_address(configured):
+        raise ChainConfigError("CHAIN_ADMIN_ADDRESS is not a valid address.")
+    return Web3.to_checksum_address(configured)
