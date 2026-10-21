@@ -229,3 +229,94 @@ class BrokerCommission(models.Model):
     def __str__(self):
         rate = "—" if self.rate_applied is None else f"{self.rate_applied}%"
         return f"BrokerCommission {self.commission} ({rate}) → {self.broker_id}"
+
+
+class BrokerLead(models.Model):
+    """A referral the broker makes by hand (client review §20).
+
+    client   — a person the broker invites: they get an email with the broker's link;
+               invited → joined (they signed up through it) | cancelled.
+    property — a property / project the broker brings, with its owner's details. Listing needs
+               the owner's authorization: a signed authorization the broker uploads, or the
+               owner's own confirmation through an emailed link. The broker may register the
+               property first and complete the authorization later.
+               awaiting_authorization → under_review → contacted → listed | declined
+               (withdrawn by the broker before it is listed).
+    """
+
+    class Kind(models.TextChoices):
+        CLIENT = "client", _("Client")
+        PROPERTY = "property", _("Property")
+
+    class Status(models.TextChoices):
+        INVITED = "invited", _("Invited")
+        JOINED = "joined", _("Joined")
+        CANCELLED = "cancelled", _("Cancelled")
+        AWAITING_AUTHORIZATION = "awaiting_authorization", _("Awaiting owner authorization")
+        UNDER_REVIEW = "under_review", _("Under review")
+        CONTACTED = "contacted", _("Owner contacted")
+        LISTED = "listed", _("Listed")
+        DECLINED = "declined", _("Not listed")
+        WITHDRAWN = "withdrawn", _("Withdrawn")
+
+    class Authorization(models.TextChoices):
+        NONE = "none", _("Not yet")
+        REQUESTED = "requested", _("Sent to the owner")
+        UPLOADED = "uploaded", _("Signed authorization uploaded")
+        CONFIRMED = "confirmed", _("Confirmed by the owner")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    broker = models.ForeignKey(BrokerProfile, on_delete=models.CASCADE, related_name="leads")
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    status = models.CharField(max_length=24, choices=Status.choices, db_index=True)
+    # client: the person · property: the title, with the OWNER's contact in email / phone
+    name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=40, blank=True, default="")
+    details = models.JSONField(default=dict, blank=True)
+    authorization = models.CharField(max_length=12, choices=Authorization.choices, default=Authorization.NONE)
+    auth_token = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    auth_requested_at = models.DateTimeField(null=True, blank=True)
+    auth_confirmed_at = models.DateTimeField(null=True, blank=True)
+    auth_confirmed_name = models.CharField(max_length=200, blank=True, default="")
+    auth_confirmed_ip = models.GenericIPAddressField(null=True, blank=True)
+    property = models.ForeignKey(
+        "properties.Property", null=True, blank=True, on_delete=models.SET_NULL, related_name="broker_leads",
+    )
+    admin_note = models.TextField(blank=True, default="")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = _("broker referral")
+        verbose_name_plural = _("broker referrals")
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.name}"
+
+    def is_authorized(self) -> bool:
+        return self.authorization in (self.Authorization.UPLOADED, self.Authorization.CONFIRMED)
+
+
+class BrokerLeadDocument(models.Model):
+    """A file attached to a property referral (deed, brochure, valuation …) or the owner's
+    signed authorization. Private: the broker downloads through the API, staff in the admin."""
+
+    class Kind(models.TextChoices):
+        DOCUMENT = "document", _("Document")
+        AUTHORIZATION = "authorization", _("Owner authorization")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lead = models.ForeignKey(BrokerLead, on_delete=models.CASCADE, related_name="documents")
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.DOCUMENT)
+    file = models.FileField(upload_to=PrivateUpload("broker_leads"))
+    original_name = models.CharField(max_length=255, blank=True, default="")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("uploaded_at",)
+
+    def __str__(self):
+        return self.original_name or str(self.id)

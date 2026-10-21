@@ -1,3 +1,4 @@
+import { BrokerLeads } from "@/components/broker/BrokerLeads";
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import {
   Users,
   UserPlus,
+  Building2,
   DollarSign,
   TrendingUp,
   Search,
@@ -39,6 +41,8 @@ interface Referral {
 }
 
 export default function Referrals() {
+  const [clientOpen, setClientOpen] = useState(false);
+  const [propertyOpen, setPropertyOpen] = useState(false);
   const { t, language } = useLanguage();
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -141,16 +145,28 @@ export default function Referrals() {
             </h1>
             <p className="text-muted-foreground mt-1">{t("referrals.subtitle")}</p>
           </div>
-          {/* Brokers refer via the referral LINK (no manual-add backend), so this is the
-              real share action — reuses shareLink (native share + copy fallback). */}
-          <Button
-            className="bg-gradient-gold hover:opacity-90 shadow-gold"
-            onClick={shareLink}
-            disabled={!hasLink}
-          >
-            <Share2 className="w-4 h-4 mr-2" />
-            {language === "ar" ? "مشاركة رابط الإحالة" : "Share Referral Link"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {hasLink && (
+              <>
+                <Button variant="outline" onClick={() => setClientOpen(true)}>
+                  <UserPlus className="w-4 h-4 me-2" />
+                  {language === "ar" ? "إحالة عميل" : "Refer a client"}
+                </Button>
+                <Button variant="outline" onClick={() => setPropertyOpen(true)}>
+                  <Building2 className="w-4 h-4 me-2" />
+                  {language === "ar" ? "إحالة عقار" : "Refer a property"}
+                </Button>
+              </>
+            )}
+            <Button
+              className="bg-gradient-gold hover:opacity-90 shadow-gold"
+              onClick={shareLink}
+              disabled={!hasLink}
+            >
+              <Share2 className="w-4 h-4 me-2" />
+              {language === "ar" ? "مشاركة رابط الإحالة" : "Share Referral Link"}
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -222,7 +238,17 @@ export default function Referrals() {
           </CardContent>
         </Card>
 
-        {/* Search & Filter */}
+        {/* Referrals made by hand: invited clients and properties with the owner's authorization. */}
+        {hasLink && (
+          <BrokerLeads
+            clientOpen={clientOpen}
+            setClientOpen={setClientOpen}
+            propertyOpen={propertyOpen}
+            setPropertyOpen={setPropertyOpen}
+          />
+        )}
+
+        {/* Search */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -233,9 +259,6 @@ export default function Referrals() {
               className="pl-10"
             />
           </div>
-          <Button variant="outline" size="icon" disabled>
-            <Filter className="w-4 h-4" />
-          </Button>
         </div>
 
         {/* Referrals List */}

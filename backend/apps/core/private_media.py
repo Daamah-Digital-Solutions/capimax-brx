@@ -24,6 +24,7 @@ from django.http import FileResponse, Http404
 from django.utils.deconstruct import deconstructible
 
 PRIVATE_PREFIXES = (
+    "broker_leads",
     "broker_licenses",
     "certificates",
     "deliverable_documents",

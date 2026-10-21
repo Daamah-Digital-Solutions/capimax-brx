@@ -71,6 +71,8 @@ class Notification(models.Model):
         # Support tickets: the team replied / the ticket was resolved (params.reference, subject).
         SUPPORT_REPLY = "support_reply", _("Support replied")
         SUPPORT_RESOLVED = "support_resolved", _("Support ticket resolved")
+        # A broker's property / client referral moved on (params.title, status, note).
+        BROKER_LEAD_UPDATE = "broker_lead_update", _("Referral update")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")

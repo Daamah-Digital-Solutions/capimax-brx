@@ -349,8 +349,9 @@ class NoMoneyModelTests(TestCase):
         # Wave A owned only BrokerProfile. Broker Listings adds BrokerCommission — a
         # STRUCTURED, append-only commission RECORD (the money still moves via the wallets
         # BalanceTransaction; this app holds no balance/escrow of its own).
+        # Referrals by hand (BrokerLead + its documents) carry no money either.
         names = {m._meta.model_name for m in django_apps.get_app_config("broker").get_models()}
-        self.assertEqual(names, {"brokerprofile", "brokercommission"})
+        self.assertEqual(names, {"brokerprofile", "brokercommission", "brokerlead", "brokerleaddocument"})
 
 
 class DevCommandTests(TestCase):

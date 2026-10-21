@@ -2115,6 +2115,49 @@ export interface BrokerCommissions {
   commissions: BrokerCommissionRow[];
 }
 
+// Broker referrals made by hand (apps/broker/leads.py): invite a client, or bring a property
+// with its owner's authorization (uploaded, or confirmed by the owner from an emailed link).
+export interface BrokerLeadRow {
+  id: string;
+  kind: "client" | "property";
+  status: string;
+  name: string;
+  email: string;
+  phone: string;
+  details: Record<string, string>;
+  authorization: "none" | "requested" | "uploaded" | "confirmed";
+  auth_confirmed_at: string | null;
+  auth_requested_at: string | null;
+  admin_note: string;
+  property_slug: string | null;
+  documents: { id: string; kind: "document" | "authorization"; name: string }[];
+  created_at: string;
+}
+
+export const brokerLeadsApi = {
+  list: () => rawRequest("/broker/leads/", { auth: true }) as Promise<BrokerLeadRow[]>,
+  inviteClient: (body: { name: string; email: string; phone?: string; notes?: string }) =>
+    rawRequest("/broker/leads/clients/", { method: "POST", auth: true, body }) as Promise<BrokerLeadRow>,
+  referProperty: (form: FormData) => rawUpload("/broker/leads/properties/", form) as Promise<BrokerLeadRow>,
+  uploadAuthorization: (id: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return rawUpload(`/broker/leads/${id}/authorization/upload/`, form) as Promise<BrokerLeadRow>;
+  },
+  requestAuthorization: (id: string) =>
+    rawRequest(`/broker/leads/${id}/authorization/request/`, { method: "POST", auth: true }) as Promise<BrokerLeadRow>,
+  cancel: (id: string) => rawRequest(`/broker/leads/${id}/cancel/`, { method: "POST", auth: true }) as Promise<BrokerLeadRow>,
+  downloadDocument: (id: string, docId: string, name: string) =>
+    downloadKybDocumentBlob(`/broker/leads/${id}/documents/${docId}/download/`, name),
+  /** PUBLIC — what the owner is asked to confirm (from the emailed link). */
+  ownerRequest: (token: string) => publicGet(`/broker/authorize/${token}/`) as Promise<{
+    property: string; location: string; property_type: string; owner_name: string;
+    broker_name: string; broker_license: string; confirmed: boolean; confirmed_at: string | null;
+  }>,
+  ownerConfirm: (token: string, name: string) =>
+    rawRequest(`/broker/authorize/${token}/`, { method: "POST", body: { name, confirm: true } }) as Promise<{ confirmed: boolean }>,
+};
+
 export const brokerApi = {
   /** The caller's broker profile, or null when none exists yet (404). */
   profile: async (): Promise<BrokerProfile | null> => {

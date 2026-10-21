@@ -45,6 +45,14 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    "broker_lead_update": {
+        "subject": "Your referral “{title}”: {status}",
+        "heading": "Referral update",
+        "intro": "Your referral “{title}” is now: {status}. {note}",
+        "cta_label": "Open your referrals",
+        "cta_path": "/referrals",
+        "outro": "",
+    },
     "support_reply": {
         "subject": "Support replied to your ticket {reference}",
         "heading": "We replied to your ticket",

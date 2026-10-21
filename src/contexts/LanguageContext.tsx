@@ -1520,6 +1520,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.support_reply.body": "التذكرة {reference} — {subject}. افتحها لقراءة الرد.",
     "notif.support_resolved.title": "تم حل تذكرتك",
     "notif.support_resolved.body": "التذكرة {reference} — {subject}. إن احتجت مساعدة أخرى رد عليها لتُفتح من جديد.",
+    "notif.broker_lead_update.title": "تحديث على إحالتك",
+    "notif.broker_lead_update.body": "إحالتك «{title}» أصبحت: {status}. {note}",
   },
   en: {
     // Navigation
@@ -3031,6 +3033,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.support_reply.body": "Ticket {reference} — {subject}. Open it to read the reply.",
     "notif.support_resolved.title": "Your ticket is resolved",
     "notif.support_resolved.body": "Ticket {reference} — {subject}. If you still need help, reply and it reopens.",
+    "notif.broker_lead_update.title": "Referral update",
+    "notif.broker_lead_update.body": "Your referral “{title}” is now: {status}. {note}",
   },
   fr: {
     // French translations - fallback to English with French labels

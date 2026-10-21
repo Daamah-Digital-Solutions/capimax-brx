@@ -14,7 +14,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.template.response import TemplateResponse
 
-from .models import BrokerCommission, BrokerProfile
+from .models import BrokerLead, BrokerLeadDocument, BrokerCommission, BrokerProfile
 from .services import LicenseNotApprovable, approve_license, reject_license
 
 
@@ -130,3 +130,76 @@ class BrokerCommissionAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False  # append-only; stamped at conversion, never edited
+
+
+class BrokerLeadDocumentInline(admin.TabularInline):
+    model = BrokerLeadDocument
+    extra = 0
+    fields = ("kind", "file", "original_name", "uploaded_at")
+    readonly_fields = ("kind", "file", "original_name", "uploaded_at")
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BrokerLead)
+class BrokerLeadAdmin(admin.ModelAdmin):
+    """Broker referrals. Property referrals: contact the owner, then mark listed (linked to the
+    published property — needs the owner's authorization) or not listed (with a note the broker
+    sees). The broker is told at every step."""
+
+    list_display = ("name", "kind", "status", "authorization", "broker", "email", "created_at")
+    list_filter = ("kind", "status", "authorization")
+    search_fields = ("name", "email", "broker__user__email")
+    readonly_fields = (
+        "id", "broker", "kind", "status", "name", "email", "phone", "details", "authorization",
+        "auth_requested_at", "auth_confirmed_at", "auth_confirmed_name", "auth_confirmed_ip",
+        "decided_at", "created_at", "updated_at",
+    )
+    fields = readonly_fields[:9] + ("auth_requested_at", "auth_confirmed_at", "auth_confirmed_name",
+                                    "auth_confirmed_ip", "property", "admin_note", "decided_at",
+                                    "created_at", "updated_at")
+    autocomplete_fields = ("property",)
+    inlines = [BrokerLeadDocumentInline]
+    actions = ("mark_contacted", "mark_listed", "mark_declined")
+
+    def _decide(self, request, qs, status, check=None):
+        from django.contrib import messages
+        from django.utils import timezone
+
+        from .leads import notify_broker
+
+        done = 0
+        for lead in qs.filter(kind=BrokerLead.Kind.PROPERTY):
+            problem = check(lead) if check else None
+            if problem:
+                messages.error(request, f"{lead.name}: {problem}")
+                continue
+            lead.status = status
+            lead.decided_at = timezone.now()
+            lead.save()
+            notify_broker(lead)
+            done += 1
+        if done:
+            messages.success(request, f"{done} referral(s) updated and the broker told.")
+
+    @admin.action(description="Owner contacted")
+    def mark_contacted(self, request, qs):
+        self._decide(request, qs, BrokerLead.Status.CONTACTED)
+
+    @admin.action(description="Listed (set the property first, needs the owner's authorization)")
+    def mark_listed(self, request, qs):
+        def check(lead):
+            if not lead.is_authorized():
+                return "the owner's authorization isn't complete yet."
+            if not lead.property_id:
+                return "choose the published property on the referral first."
+            return None
+
+        self._decide(request, qs, BrokerLead.Status.LISTED, check)
+
+    @admin.action(description="Not listed (write the reason in the admin note first)")
+    def mark_declined(self, request, qs):
+        self._decide(request, qs, BrokerLead.Status.DECLINED,
+                     lambda lead: None if lead.admin_note.strip() else "write the reason in the admin note first.")

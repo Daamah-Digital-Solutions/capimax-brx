@@ -153,6 +153,9 @@ def attribute_referral(profile: Profile, code: str) -> BrokerProfile | None:
         return None
     profile.referred_by_broker = broker
     profile.save(update_fields=["referred_by_broker", "updated_at"])
+    from .leads import mark_joined
+
+    mark_joined(broker, profile.user)  # their invitation (if any) is now "joined"
     log.info("Referral attributed: profile %s → broker %s", profile.pk, broker.pk)
     return broker
 
