@@ -205,6 +205,10 @@ export default function Support() {
                 <h3 className="font-semibold text-foreground">{isAr ? "خدمة العملاء" : "Customer service"}</h3>
               </div>
               <div className="space-y-2 text-sm">
+                <button type="button" onClick={openAssistant} className="flex items-center gap-2 text-foreground hover:text-primary">
+                  <MessageCircle className="w-4 h-4 text-emerald-500" />
+                  {isAr ? "راسلنا عبر المحادثة" : "Chat with us"}
+                </button>
                 {SUPPORT_WHATSAPP && (
                   <a href={whatsappHref(waText)} target="_blank" rel="noopener noreferrer"
                      className="flex items-center gap-2 text-foreground hover:text-primary">

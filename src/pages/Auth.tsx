@@ -227,12 +227,12 @@ export default function Auth() {
   ];
 
   const features = language === "ar" ? [
-    "ملكية جزئية تبدأ من 1,000 دولار",
+    "ملكية جزئية تبدأ من 100 دولار",
     "شفافية كاملة مع تقنية البلوكتشين",
     "عوائد دورية مباشرة إلى محفظتك",
     "سوق ثانوي للسيولة المحسنة",
   ] : [
-    "Fractional ownership starting from $1,000",
+    "Fractional ownership starting from $100",
     "Complete transparency with blockchain",
     "Regular returns directly to your wallet",
     "Secondary market for enhanced liquidity",
