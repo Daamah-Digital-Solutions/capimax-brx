@@ -1818,6 +1818,24 @@ export const notificationsApi = {
     rawRequest("/notifications/preferences/", { method: "PATCH", auth: true, body: patch }) as Promise<NotificationPreferences>,
 };
 
+// Inbox — messages from the platform team (apps/notifications/inbox.py).
+export interface InboxMessage {
+  id: string;
+  subject: string;
+  created_at: string;
+  read: boolean;
+  preview: string;
+  body?: string;
+}
+
+export const inboxApi = {
+  list: () =>
+    rawRequest("/notifications/messages/", { auth: true }) as Promise<{ messages: InboxMessage[]; unread: number }>,
+  /** One message (opening it marks it read). */
+  get: (id: string) => rawRequest(`/notifications/messages/${id}/`, { auth: true }) as Promise<InboxMessage>,
+  readAll: () => rawRequest("/notifications/messages/read-all/", { method: "POST", auth: true }),
+};
+
 // The 7 per-type toggles the Notifications settings column persists (in-app only).
 // Channel (email/SMS) + digest toggles are NOT here — no mailer/SMS/scheduler exists.
 export interface NotificationPreferences {

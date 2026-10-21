@@ -1508,6 +1508,14 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.deposit_rejected.title": "لم تتم الموافقة على التحويل البنكي",
     "notif.deposit_rejected.body": "تعذّر مطابقة تحويلك البنكي بقيمة {amount} دولار (المرجع {reference}). يرجى رفع إثبات واضح أو التواصل مع الدعم.",
     "nav.inheritanceClaim": "طلب الميراث",
+    "notif.password_changed.title": "تم تغيير كلمة المرور",
+    "notif.password_changed.body": "تم تغيير كلمة مرور حسابك وتسجيل الخروج من الأجهزة الأخرى. إن لم تكن أنت، أعد تعيينها وتواصل مع الدعم.",
+    "notif.two_factor_changed.title": "تم تغيير التحقق بخطوتين",
+    "notif.two_factor_changed.body": "تم تشغيل أو إيقاف التحقق بخطوتين على حسابك. إن لم تكن أنت، تواصل مع الدعم فورًا.",
+    "notif.account_deactivated.title": "تم تعطيل الحساب",
+    "notif.account_deactivated.body": "تم تعطيل حسابك بناءً على طلبك. لإعادة تفعيله تواصل مع الدعم.",
+    "notif.platform_message.title": "رسالة جديدة من المنصة",
+    "notif.platform_message.body": "{subject}",
   },
   en: {
     // Navigation
@@ -3007,6 +3015,14 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.deposit_rejected.title": "Bank transfer not approved",
     "notif.deposit_rejected.body": "We couldn't match your bank transfer of ${amount} (reference {reference}). Please upload a clear proof or contact support.",
     "nav.inheritanceClaim": "Inheritance claim",
+    "notif.password_changed.title": "Password changed",
+    "notif.password_changed.body": "Your password was changed and your other devices were signed out. If this wasn't you, reset it and contact support.",
+    "notif.two_factor_changed.title": "Two-factor authentication changed",
+    "notif.two_factor_changed.body": "Two-factor sign-in was turned on or off on your account. If this wasn't you, contact support right away.",
+    "notif.account_deactivated.title": "Account deactivated",
+    "notif.account_deactivated.body": "Your account was deactivated at your request. Contact support to reactivate it.",
+    "notif.platform_message.title": "New message from the platform",
+    "notif.platform_message.body": "{subject}",
   },
   fr: {
     // French translations - fallback to English with French labels

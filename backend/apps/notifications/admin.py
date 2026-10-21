@@ -2,7 +2,7 @@
 layer at event points, never created or edited by hand."""
 from django.contrib import admin
 
-from .models import Notification, NotificationPreference
+from .models import MessageBroadcast, Notification, NotificationPreference, PlatformMessage
 
 
 @admin.register(Notification)
@@ -36,4 +36,45 @@ class NotificationPreferenceAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MessageBroadcast)
+class MessageBroadcastAdmin(admin.ModelAdmin):
+    """Write a message to one user or to everyone with a role. Saving sends it (inbox +
+    notification + email); a sent message can't be edited."""
+
+    list_display = ("subject", "audience", "user", "recipients", "created_by", "created_at")
+    list_filter = ("audience",)
+    search_fields = ("subject", "body", "user__email")
+    autocomplete_fields = ("user",)
+    fields = ("audience", "user", "subject", "body", "recipients", "created_by", "created_at")
+    readonly_fields = ("recipients", "created_by", "created_at")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj is not None:
+            return ("audience", "user", "subject", "body", "recipients", "created_by", "created_at")
+        return self.readonly_fields
+
+    def save_model(self, request, obj, form, change):
+        from django.contrib import messages
+
+        if change:
+            return
+        obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+        from .inbox import deliver
+
+        n = deliver(obj)
+        messages.success(request, f"Sent to {n} user(s).")
+
+
+@admin.register(PlatformMessage)
+class PlatformMessageAdmin(admin.ModelAdmin):
+    list_display = ("subject", "recipient", "read_at", "created_at")
+    list_filter = ("read_at",)
+    search_fields = ("subject", "recipient__email")
+    readonly_fields = ("recipient", "broadcast", "subject", "body", "read_at", "created_at")
+
+    def has_add_permission(self, request):
         return False

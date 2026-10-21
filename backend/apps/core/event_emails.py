@@ -45,6 +45,14 @@ def _abs_url(path: str) -> str:
 # `subject` are format strings over the notification `params`. Any type NOT listed here
 # sends no email (e.g. partner_deliverable_submitted, which targets the admin).
 EVENT_EMAIL_COPY: dict[str, dict] = {
+    "platform_message": {
+        "subject": "{subject}",
+        "heading": "{subject}",
+        "intro": "{body}",
+        "cta_label": "Open your inbox",
+        "cta_path": "/messages",
+        "outro": "This message is from the Capimax BRX team.",
+    },
     "password_changed": {
         "subject": "Your Capimax BRX password was changed",
         "heading": "Password changed",

@@ -20,6 +20,7 @@ import {
   Send
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { PlatformMessagesCard } from "@/components/owner/PlatformMessagesCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -430,30 +431,8 @@ export default function OwnerDashboard() {
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Platform Messages — an admin→owner inbox. No announcements/messaging
-                  backend exists yet (same gap as the /messages link), so this is an
-                  honest "Coming soon" placeholder, NOT the notifications feed (that's the
-                  Recent Updates card below). Card + section kept, nothing faked. */}
-              <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-primary" />
-                    <h3 className="font-semibold text-foreground">{isAr ? "رسائل المنصة" : "Platform Messages"}</h3>
-                  </div>
-                  <Badge variant="outline" className="text-[10px]">{t("support.comingSoon")}</Badge>
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <MessageSquare className="w-8 h-8 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {isAr ? "لا توجد رسائل بعد" : "No messages yet"}
-                  </p>
-                </div>
-
-                <Button variant="ghost" className="w-full mt-4" disabled>
-                  {isAr ? "عرض كل الرسائل" : "View all messages"}
-                </Button>
-              </div>
+              {/* Platform Messages — the latest messages from the platform team (inbox). */}
+              <PlatformMessagesCard />
 
               {/* Recent Updates — the owner's REAL in-app notification feed (Phase 10),
                   latest few. Type→category icon + i18n copy mirror Notifications.tsx. */}

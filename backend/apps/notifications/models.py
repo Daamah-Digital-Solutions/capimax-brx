@@ -66,6 +66,8 @@ class Notification(models.Model):
         PASSWORD_CHANGED = "password_changed", _("Password changed")
         TWO_FACTOR_CHANGED = "two_factor_changed", _("Two-factor authentication changed")
         ACCOUNT_DEACTIVATED = "account_deactivated", _("Account deactivated")
+        # A message from the platform team in the user's inbox (params.subject).
+        PLATFORM_MESSAGE = "platform_message", _("Message from the platform")
         # Money in.
         EARNINGS_CREDITED = "earnings_credited", _("Primary-sale earnings credited")
         DISTRIBUTION_CREDITED = "distribution_credited", _("Distribution credited")
@@ -183,3 +185,70 @@ class NotificationPreference(models.Model):
 
     def __str__(self):
         return f"NotificationPreference[{self.user_id}]"
+
+
+class MessageBroadcast(models.Model):
+    """A message the platform team writes in the admin — to one user or to everyone with a
+    role. Saving it delivers one PlatformMessage per recipient (their inbox)."""
+
+    class Audience(models.TextChoices):
+        USER = "user", _("One user")
+        OWNERS = "owners", _("All property owners")
+        DEVELOPERS = "developers", _("All developers")
+        BROKERS = "brokers", _("All brokers")
+        LPS = "lps", _("All liquidity providers")
+        PARTNERS = "partners", _("All strategic partners")
+        EVERYONE = "everyone", _("Everyone")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    audience = models.CharField(max_length=16, choices=Audience.choices, default=Audience.USER)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="+", help_text=_("Only for “One user”."),
+    )
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+    )
+    recipients = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = _("message to users")
+        verbose_name_plural = _("messages to users")
+
+    def __str__(self):
+        return self.subject
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.audience == self.Audience.USER and self.user_id is None:
+            raise ValidationError({"user": _("Choose the user to send this message to.")})
+
+
+class PlatformMessage(models.Model):
+    """One message in a user's inbox (owners, developers, brokers … read them on /messages)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="platform_messages",
+    )
+    broadcast = models.ForeignKey(
+        MessageBroadcast, null=True, blank=True, on_delete=models.SET_NULL, related_name="messages",
+    )
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["recipient", "read_at"])]
+        verbose_name = _("inbox message")
+        verbose_name_plural = _("inbox messages")
+
+    def __str__(self):
+        return f"{self.subject} → {self.recipient_id}"
