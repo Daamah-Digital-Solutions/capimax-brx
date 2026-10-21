@@ -46,7 +46,6 @@ export function LegalDisclaimer() {
               <Link to="/privacy-policy" className={linkCls}>سياسة الخصوصية</Link>. لا يستثني أي شيء في إخلاء
               المسؤولية هذا مسؤوليةً لا يجوز استثناؤها قانوناً.
             </p>
-            <p>حقوق النشر © 2026 Capimax Real Estate Technologies LLC. جميع الحقوق محفوظة.</p>
           </div>
         ) : (
           <div className="space-y-2.5 text-[11px] sm:text-xs leading-relaxed text-muted-foreground">
@@ -77,7 +76,6 @@ export function LegalDisclaimer() {
               <Link to="/privacy-policy" className={linkCls}>Privacy Policy</Link>. Nothing in this disclaimer
               excludes liability that cannot lawfully be excluded.
             </p>
-            <p>Copyright © 2026 Capimax Real Estate Technologies LLC. All rights reserved.</p>
           </div>
         )}
       </div>

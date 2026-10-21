@@ -694,11 +694,6 @@ export default function SubmitProperty() {
                               </p>
                             )}
                           </div>
-                          {doc.required && (
-                            <Badge variant="destructive" className="text-xs">
-                              {isArabic ? "مطلوب" : "Required"}
-                            </Badge>
-                          )}
                         </div>
                         <input
                           ref={(el) => (fileInputs.current[doc.id] = el)}
