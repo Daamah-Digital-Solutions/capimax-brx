@@ -1,3 +1,5 @@
+import { LPBankAccountForm } from "@/components/liquidity/LPBankAccountForm";
+import type { LPBankDetails } from "@/hooks/useLiquidityProvider";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +25,7 @@ interface LPWithdrawalsProps {
   lpProfile: LiquidityProvider;
   transactions: LPTransaction[];
   onWithdraw: (data: { amount: number; withdrawal_method: "bank" | "crypto"; notes?: string }) => Promise<{ success: boolean }>;
-  onUpdateBank: (data: { bank_name: string; bank_account_number: string; bank_iban: string; bank_swift: string }) => Promise<{ success: boolean }>;
+  onUpdateBank: (data: LPBankDetails) => Promise<{ success: boolean }>;
   onUpdateCrypto: (data: { crypto_wallet_address: string; crypto_network: string }) => Promise<{ success: boolean }>;
   isRTL: boolean;
 }
@@ -42,14 +44,6 @@ export function LPWithdrawals({
   const [loading, setLoading] = useState(false);
   const [showBankForm, setShowBankForm] = useState(false);
   const [showCryptoForm, setShowCryptoForm] = useState(false);
-
-  // Bank details form
-  const [bankData, setBankData] = useState({
-    bank_name: lpProfile.bank_name || "",
-    bank_account_number: lpProfile.bank_account_number || "",
-    bank_iban: lpProfile.bank_iban || "",
-    bank_swift: lpProfile.bank_swift || "",
-  });
 
   // Crypto details form
   const [cryptoData, setCryptoData] = useState({
@@ -83,12 +77,10 @@ export function LPWithdrawals({
     setLoading(false);
   };
 
-  const handleUpdateBank = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const result = await onUpdateBank(bankData);
+  const handleUpdateBank = async (data: LPBankDetails) => {
+    const result = await onUpdateBank(data);
     if (result.success) setShowBankForm(false);
-    setLoading(false);
+    return result;
   };
 
   const handleUpdateCrypto = async (e: React.FormEvent) => {
@@ -115,7 +107,7 @@ export function LPWithdrawals({
     );
   };
 
-  const hasBankDetails = lpProfile.bank_name && lpProfile.bank_iban;
+  const hasBankDetails = lpProfile.bank_name && (lpProfile.bank_iban || lpProfile.bank_account_number);
   const hasCryptoDetails = lpProfile.crypto_wallet_address;
 
   return (
@@ -292,49 +284,24 @@ export function LPWithdrawals({
             </CardHeader>
             <CardContent>
               {showBankForm ? (
-                <form onSubmit={handleUpdateBank} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>{isRTL ? "اسم البنك" : "Bank Name"}</Label>
-                      <Input
-                        value={bankData.bank_name}
-                        onChange={(e) => setBankData({ ...bankData, bank_name: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{isRTL ? "رقم الحساب" : "Account Number"}</Label>
-                      <Input
-                        value={bankData.bank_account_number}
-                        onChange={(e) => setBankData({ ...bankData, bank_account_number: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>IBAN</Label>
-                      <Input
-                        value={bankData.bank_iban}
-                        onChange={(e) => setBankData({ ...bankData, bank_iban: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>SWIFT</Label>
-                      <Input
-                        value={bankData.bank_swift}
-                        onChange={(e) => setBankData({ ...bankData, bank_swift: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <Button type="submit" disabled={loading} className="w-full">
-                    {isRTL ? "حفظ" : "Save"}
-                  </Button>
-                </form>
+                <LPBankAccountForm profile={lpProfile} onSave={handleUpdateBank} />
               ) : hasBankDetails ? (
-                <div className="space-y-2 text-sm">
+                <div className="space-y-1.5 text-sm">
+                  {lpProfile.bank_account_holder && (
+                    <div><span className="text-muted-foreground">{isRTL ? "صاحب الحساب:" : "Holder:"}</span> {lpProfile.bank_account_holder}</div>
+                  )}
                   <div><span className="text-muted-foreground">{isRTL ? "البنك:" : "Bank:"}</span> {lpProfile.bank_name}</div>
-                  <div><span className="text-muted-foreground">IBAN:</span> {lpProfile.bank_iban}</div>
+                  {lpProfile.bank_iban ? (
+                    <div><span className="text-muted-foreground">IBAN:</span> <span dir="ltr">{lpProfile.bank_iban}</span></div>
+                  ) : (
+                    <div><span className="text-muted-foreground">{isRTL ? "رقم الحساب:" : "Account:"}</span> <span dir="ltr">{lpProfile.bank_account_number}</span></div>
+                  )}
+                  {lpProfile.bank_swift && (
+                    <div><span className="text-muted-foreground">SWIFT:</span> <span dir="ltr">{lpProfile.bank_swift}</span></div>
+                  )}
+                  {lpProfile.bank_currency && (
+                    <div><span className="text-muted-foreground">{isRTL ? "العملة:" : "Currency:"}</span> {lpProfile.bank_currency}</div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

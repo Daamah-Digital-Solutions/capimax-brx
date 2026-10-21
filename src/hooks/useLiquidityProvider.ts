@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { lpApi } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 
 // Phase 6 Wave 1: repointed Supabase → Django (apps/lp). The hook's exported
@@ -8,6 +9,21 @@ import { toast } from "sonner";
 // LPRegistrationFlow render exactly as before. KYB approval is automatic via the
 // signed Sumsub webhook (business level); until keys land the form/dev path drives
 // the flow. The LP secondary market (lp_holdings) is a later wave and untouched.
+
+/** A complete payout bank account (client review §18). */
+export interface LPBankDetails {
+  bank_account_holder: string;
+  bank_name: string;
+  bank_country: string;
+  bank_currency: string;
+  bank_iban: string;
+  bank_account_number: string;
+  bank_routing_code: string;
+  bank_swift: string;
+  bank_intermediary_swift: string;
+  bank_address: string;
+  beneficiary_address: string;
+}
 
 export interface LiquidityProvider {
   id: string;
@@ -27,6 +43,13 @@ export interface LiquidityProvider {
   bank_account_number: string | null;
   bank_iban: string | null;
   bank_swift: string | null;
+  bank_account_holder?: string;
+  bank_country?: string;
+  bank_currency?: string;
+  bank_routing_code?: string;
+  bank_address?: string;
+  bank_intermediary_swift?: string;
+  beneficiary_address?: string;
   crypto_wallet_address: string | null;
   crypto_network: string | null;
   total_deposited: number;
@@ -105,6 +128,7 @@ interface KYBData {
 
 export function useLiquidityProvider() {
   const { user } = useAuth();
+  const isAr = useLanguage().language === "ar";
   const [lpProfile, setLpProfile] = useState<LiquidityProvider | null>(null);
   const [transactions, setTransactions] = useState<LPTransaction[]>([]);
   const [documents, setDocuments] = useState<LPDocument[]>([]);
@@ -168,7 +192,7 @@ export function useLiquidityProvider() {
       })) as LiquidityProvider;
 
       setLpProfile(result);
-      toast.success("Application submitted successfully!");
+      toast.success((isAr ? "تم إرسال الطلب بنجاح" : "Application submitted successfully!"));
       return { success: true, data: result };
     } catch (err: any) {
       const errorMsg = err.message || "Failed to submit application";
@@ -177,23 +201,18 @@ export function useLiquidityProvider() {
     }
   }
 
-  async function updateBankDetails(bankData: {
-    bank_name: string;
-    bank_account_number: string;
-    bank_iban: string;
-    bank_swift: string;
-  }) {
+  async function updateBankDetails(bankData: LPBankDetails) {
     if (!user || !lpProfile) {
       return { success: false, error: "No LP profile found" };
     }
 
     try {
-      const updated = (await lpApi.updateBankDetails(bankData)) as LiquidityProvider;
+      const updated = (await lpApi.updateBankDetails({ ...bankData })) as LiquidityProvider;
       setLpProfile({ ...lpProfile, ...updated });
-      toast.success("Bank details updated successfully!");
+      toast.success((isAr ? "تم حفظ الحساب البنكي" : "Bank details updated successfully!"));
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Failed to update bank details");
+      toast.error(err.message || (isAr ? "تعذّر حفظ الحساب البنكي" : "Failed to update bank details"));
       return { success: false, error: err.message };
     }
   }
@@ -209,10 +228,10 @@ export function useLiquidityProvider() {
     try {
       const updated = (await lpApi.updateCryptoDetails(cryptoData)) as LiquidityProvider;
       setLpProfile({ ...lpProfile, ...updated });
-      toast.success("Crypto wallet updated successfully!");
+      toast.success((isAr ? "تم حفظ المحفظة الرقمية" : "Crypto wallet updated successfully!"));
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Failed to update crypto wallet");
+      toast.error(err.message || (isAr ? "تعذّر حفظ المحفظة الرقمية" : "Failed to update crypto wallet"));
       return { success: false, error: err.message };
     }
   }
@@ -223,8 +242,8 @@ export function useLiquidityProvider() {
     }
 
     if (data.amount > lpProfile.current_balance) {
-      toast.error("Insufficient balance");
-      return { success: false, error: "Insufficient balance" };
+      toast.error((isAr ? "الرصيد غير كافٍ" : "Insufficient balance"));
+      return { success: false, error: (isAr ? "الرصيد غير كافٍ" : "Insufficient balance") };
     }
 
     try {
@@ -235,10 +254,10 @@ export function useLiquidityProvider() {
       })) as LPTransaction;
 
       setTransactions([result, ...transactions]);
-      toast.success("Withdrawal request submitted!");
+      toast.success((isAr ? "تم إرسال طلب السحب" : "Withdrawal request submitted!"));
       return { success: true, data: result };
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit withdrawal");
+      toast.error(err.message || (isAr ? "تعذّر إرسال طلب السحب" : "Failed to submit withdrawal"));
       return { success: false, error: err.message };
     }
   }
@@ -251,10 +270,10 @@ export function useLiquidityProvider() {
     try {
       const doc = (await lpApi.uploadDocument(file, documentType, documentName)) as LPDocument;
       setDocuments([doc, ...documents]);
-      toast.success("Document uploaded successfully!");
+      toast.success((isAr ? "تم رفع المستند" : "Document uploaded successfully!"));
       return { success: true, data: doc };
     } catch (err: any) {
-      toast.error(err.message || "Failed to upload document");
+      toast.error(err.message || (isAr ? "تعذّر رفع المستند" : "Failed to upload document"));
       return { success: false, error: err.message };
     }
   }
@@ -274,7 +293,7 @@ export function useLiquidityProvider() {
 
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Failed to download document");
+      toast.error(err.message || (isAr ? "تعذّر تنزيل المستند" : "Failed to download document"));
       return { success: false, error: err.message };
     }
   }
@@ -286,10 +305,10 @@ export function useLiquidityProvider() {
     try {
       await lpApi.deleteDocument(docId);
       setDocuments(documents.filter((d) => d.id !== docId));
-      toast.success("Document deleted successfully!");
+      toast.success((isAr ? "تم حذف المستند" : "Document deleted successfully!"));
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete document");
+      toast.error(err.message || (isAr ? "تعذّر حذف المستند" : "Failed to delete document"));
       return { success: false, error: err.message };
     }
   }
@@ -312,10 +331,10 @@ export function useLiquidityProvider() {
 
       setLpProfile(updated);
 
-      toast.success("KYB information submitted for review!");
+      toast.success((isAr ? "تم إرسال بيانات التحقق للمراجعة" : "KYB information submitted for review!"));
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit KYB");
+      toast.error(err.message || (isAr ? "تعذّر إرسال بيانات التحقق" : "Failed to submit KYB"));
       return { success: false, error: err.message };
     }
   }
@@ -336,7 +355,7 @@ export function useLiquidityProvider() {
 
       return { success: true, data: doc };
     } catch (err: any) {
-      toast.error(err.message || "Failed to upload KYB document");
+      toast.error(err.message || (isAr ? "تعذّر رفع مستند التحقق" : "Failed to upload KYB document"));
       return { success: false, error: err.message };
     }
   }

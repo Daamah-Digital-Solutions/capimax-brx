@@ -7,6 +7,7 @@ strings) because the frontend does arithmetic on them (balance checks, totals).
 No Sumsub ids are exposed; payout/bank details are returned to the OWNER only
 (this serializer is only ever used for the caller's own profile).
 """
+import re
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -45,6 +46,8 @@ class LiquidityProviderSerializer(serializers.ModelSerializer):
             "investment_amount", "status",
             "applied_at", "approved_at", "rejected_at", "rejection_reason",
             "bank_name", "bank_account_number", "bank_iban", "bank_swift",
+            "bank_account_holder", "bank_country", "bank_currency", "bank_routing_code",
+            "bank_address", "bank_intermediary_swift", "beneficiary_address",
             "crypto_wallet_address", "crypto_network",
             "total_deposited", "total_withdrawn", "total_earnings", "current_balance",
             "kyb_status", "business_type", "business_registration_number", "tax_id",
@@ -76,11 +79,59 @@ class LPApplySerializer(serializers.Serializer):
     )
 
 
+_SWIFT = re.compile(r"^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$")
+
+
+def _iban_ok(iban: str) -> bool:
+    """ISO 13616 check: country + check digits + BBAN, mod-97 == 1."""
+    s = iban.replace(" ", "").upper()
+    if not (15 <= len(s) <= 34) or not s[:2].isalpha() or not s[2:4].isdigit() or not s.isalnum():
+        return False
+    moved = s[4:] + s[:4]
+    return int("".join(str(int(ch, 36)) for ch in moved)) % 97 == 1
+
+
 class LPBankDetailsSerializer(serializers.Serializer):
+    """A complete payout bank account. Required: holder, bank, country, and an IBAN or an
+    account number. IBAN and SWIFT codes are checked when given."""
+
     bank_name = serializers.CharField(allow_blank=True, max_length=255)
     bank_account_number = serializers.CharField(allow_blank=True, max_length=64)
     bank_iban = serializers.CharField(allow_blank=True, max_length=64)
     bank_swift = serializers.CharField(allow_blank=True, max_length=32)
+    bank_account_holder = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    bank_country = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    bank_currency = serializers.CharField(required=False, allow_blank=True, max_length=8)
+    bank_routing_code = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    bank_address = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    bank_intermediary_swift = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    beneficiary_address = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate(self, data):
+        data = {k: (v.strip() if isinstance(v, str) else v) for k, v in data.items()}
+        errors = {}
+        for f in ("bank_swift", "bank_intermediary_swift"):
+            if data.get(f):
+                data[f] = data[f].replace(" ", "").upper()
+                if not _SWIFT.match(data[f]):
+                    errors[f] = "Enter a valid SWIFT / BIC code (8 or 11 characters)."
+        if data.get("bank_iban"):
+            data["bank_iban"] = data["bank_iban"].replace(" ", "").upper()
+            if not _iban_ok(data["bank_iban"]):
+                errors["bank_iban"] = "This IBAN is not valid — check it again."
+        if data.get("bank_currency"):
+            data["bank_currency"] = data["bank_currency"].upper()
+        if "bank_account_holder" in self.initial_data:  # the full form (older clients send 4 fields)
+            for f, msg in (("bank_account_holder", "Enter the account holder's name."),
+                           ("bank_name", "Enter the bank name."),
+                           ("bank_country", "Choose the bank's country.")):
+                if not data.get(f):
+                    errors[f] = msg
+            if not data.get("bank_iban") and not data.get("bank_account_number"):
+                errors["bank_iban"] = "Enter the IBAN, or the account number if your country doesn't use IBAN."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
 
 
 class LPCryptoDetailsSerializer(serializers.Serializer):

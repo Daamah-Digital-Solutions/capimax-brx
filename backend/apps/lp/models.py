@@ -80,6 +80,16 @@ class LiquidityProvider(models.Model):
     bank_account_number = models.CharField(max_length=64, blank=True, null=True)
     bank_iban = models.CharField(max_length=64, blank=True, null=True)
     bank_swift = models.CharField(max_length=32, blank=True, null=True)
+    # The rest of a complete payout account (client review §18). The local routing code is
+    # the country's bank / branch code: US ABA routing number, UK sort code, India IFSC,
+    # Australia BSB, Canada transit + institution number, …
+    bank_account_holder = models.CharField(max_length=255, blank=True, default="")
+    bank_country = models.CharField(max_length=64, blank=True, default="")
+    bank_currency = models.CharField(max_length=8, blank=True, default="USD")
+    bank_routing_code = models.CharField(max_length=64, blank=True, default="")
+    bank_address = models.CharField(max_length=500, blank=True, default="")
+    bank_intermediary_swift = models.CharField(max_length=32, blank=True, default="")
+    beneficiary_address = models.CharField(max_length=500, blank=True, default="")
     crypto_wallet_address = models.CharField(max_length=128, blank=True, null=True)
     crypto_network = models.CharField(max_length=64, blank=True, null=True)
 
