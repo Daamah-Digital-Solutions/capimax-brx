@@ -26,8 +26,6 @@ import { useDistributions } from "@/hooks/useDistributions";
 import { useReinvestments } from "@/hooks/useReinvestments";
 import { useNotifications } from "@/hooks/useNotifications";
 import { renderNotificationCopy, relativeTime } from "@/lib/notifications";
-import { ReinvestReturnsCard } from "@/components/dashboard/ReinvestReturnsCard";
-import { ReinvestmentBanner } from "@/components/dashboard/ReinvestmentBanner";
 import { ExitOptionsCard } from "@/components/portfolio/ExitOptionsCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 
@@ -164,8 +162,18 @@ export default function Dashboard() {
         <div className="container py-8">
           {/* Identity verification prompt — only until KYC is approved */}
           <KycStatusCard hideWhenVerified className="mb-8" />
-          {/* Reinvestment Banner — real available balance; null when zero */}
-          <ReinvestmentBanner availableReturns={availableReturns} className="mb-8" />
+
+          {/* Every service first, with the exit options beside it (client review: the
+              shortcuts lead the dashboard; reinvesting is one of them, not a banner). */}
+          <div className="grid lg:grid-cols-3 gap-6 mb-8">
+            <QuickActions className="lg:col-span-2 min-w-0 animate-fade-in" />
+            <ExitOptionsCard
+              compact
+              planUnits={holdings.reduce((sum, h) => sum + h.planUnits, 0)}
+              className="bg-card rounded-2xl border border-border p-6 min-w-0 animate-fade-in"
+              style={{ animationDelay: "0.05s" }}
+            />
+          </div>
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -434,23 +442,6 @@ export default function Dashboard() {
                 </Link>
               </div>
 
-              {/* Reinvest Returns Card — real available balance, no fake bonus figures */}
-              <ReinvestReturnsCard
-                availableReturns={availableReturns}
-                className="animate-fade-in"
-                style={{ animationDelay: "0.4s" }}
-              />
-
-              {/* Exit Options Card */}
-              <ExitOptionsCard
-                compact
-                planUnits={holdings.reduce((sum, h) => sum + h.planUnits, 0)}
-                className="bg-card rounded-2xl border border-border p-6 animate-fade-in"
-                style={{ animationDelay: "0.42s" }}
-              />
-
-              {/* Quick Actions — every service one tap away (client review §13). */}
-              <QuickActions />
             </div>
           </div>
         </div>

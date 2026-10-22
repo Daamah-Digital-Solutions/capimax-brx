@@ -44,7 +44,7 @@ export function QuickActions({ className }: { className?: string }) {
   return (
     <div className={cn("bg-card rounded-2xl border border-border p-6", className)}>
       <h3 className="font-semibold text-foreground mb-4">{isAr ? "إجراءات سريعة" : "Quick actions"}</h3>
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2.5">
         {actions.map((a) => {
           const body = (
             <>
