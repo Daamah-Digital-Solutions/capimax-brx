@@ -723,11 +723,6 @@ export default function SubmitProperty() {
                   <p className="text-sm text-foreground">
                     {isArabic ? "PDF، DOC، DOCX بحد أقصى 25 ميجابايت لكل ملف" : "PDF, DOC, DOCX up to 25MB per file"}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {isArabic
-                      ? "سند الملكية وتقرير التقييم والمستندات القانونية مطلوبة لإتمام الإرسال"
-                      : "Title Deed, Valuation Report & Legal Documents are required to submit"}
-                  </p>
                 </div>
               </>
             )}
