@@ -364,6 +364,11 @@ def settle_installment_payment(installment_payment_id) -> dict:
         if completed:
             plan.status = InstallmentPlanStatus.COMPLETED
             plan.save(update_fields=["status", "updated_at"])
+            # Fully paid → the plan's ownership certificate becomes final.
+            from apps.certificates.services import sync_certificate
+
+            for plan_inv in plan.investments.all():
+                sync_certificate(plan_inv)
 
         if listing is not None:
             from apps.secondary_market.services import (

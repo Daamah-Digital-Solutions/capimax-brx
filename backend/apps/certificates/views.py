@@ -18,9 +18,20 @@ from apps.investments.models import Investment
 
 from .models import Certificate
 from .serializers import CertificatePublicSerializer, CertificateSerializer
-from .services import generate_certificate
+from .services import generate_certificate, sync_certificate
 
 log = logging.getLogger(__name__)
+
+
+def paid_certificates():
+    """Certificates of confirmed purchases — one made for a failed or unpaid attempt is hidden."""
+    from django.db.models import Q
+
+    from apps.investments.models import PaymentStatus
+
+    return Certificate.objects.filter(
+        Q(investment__isnull=True) | Q(investment__payment_status=PaymentStatus.COMPLETED)
+    )
 
 
 class CertificateGenerateView(APIView):
@@ -44,7 +55,12 @@ class CertificateGenerateView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        cert = generate_certificate(investment, status=request.data.get("status"))
+        cert = generate_certificate(investment)
+        if cert is None:
+            return Response(
+                {"success": False, "error": "The certificate is issued once the payment is confirmed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(
             {"success": True, "certificate": CertificateSerializer(cert).data},
             status=status.HTTP_200_OK,
@@ -57,7 +73,7 @@ class CertificateListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Certificate.objects.filter(user=request.user)
+        qs = paid_certificates().filter(user=request.user)
         return Response(CertificateSerializer(qs, many=True).data)
 
 
@@ -68,16 +84,19 @@ class CertificatePdfView(APIView):
 
     def get(self, request, pk):
         try:
-            cert = Certificate.objects.get(pk=pk, user=request.user)
+            cert = paid_certificates().get(pk=pk, user=request.user)
         except Certificate.DoesNotExist:
             raise Http404
         # Generate the PDF on first download (idempotent) so the button always works —
         # certificates are created provisionally and the PDF is rendered lazily. This
         # fixes the client-reported "download does nothing" (the file simply wasn't
         # rendered until someone opened it).
+        if cert.investment_id:
+            sync_certificate(cert.investment)  # a settled purchase downloads as final
+            cert.refresh_from_db()
         if not cert.pdf_file and cert.investment_id:
             try:
-                cert = generate_certificate(cert.investment)
+                cert = generate_certificate(cert.investment) or cert
             except Exception:  # noqa: BLE001 — surface as 404, never a 500
                 log.exception("lazy certificate PDF generation failed (cert=%s)", cert.pk)
         if not cert.pdf_file:
@@ -112,7 +131,7 @@ class CertificateVerifyView(APIView):
 
     def get(self, request, code):
         try:
-            cert = Certificate.objects.get(verification_code=code)
+            cert = paid_certificates().get(verification_code=code)
         except Certificate.DoesNotExist:
             return Response(
                 {"detail": "Certificate not found."}, status=status.HTTP_404_NOT_FOUND

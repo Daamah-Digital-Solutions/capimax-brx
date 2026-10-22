@@ -18,7 +18,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 
-from apps.certificates.services import create_provisional_certificate
+from apps.certificates.services import sync_certificate
 from apps.chain import service as chain_service
 from apps.chain.exceptions import ChainError
 from apps.notifications.services import NotificationType, notify
@@ -496,8 +496,9 @@ def create_investment(
             investment.payment_status = PaymentStatus.COMPLETED
             investment.save(update_fields=["payment_status", "updated_at"])
 
-        # Provisional certificate with REAL property/SPV/fee data (no PDF — Wave 3).
-        certificate = create_provisional_certificate(investment)
+        # Certificate with REAL property/SPV/fee data (no PDF — Wave 3): issued now only when
+        # the payment is already confirmed; a deferred payment gets it when it settles.
+        certificate = sync_certificate(investment)
 
     # Auto-mint AFTER commit (mint does its own network call + atomic recording).
     # For deferred-payment methods (card) we do NOT mint here — the webhook will,
@@ -852,6 +853,10 @@ def mint_investment(investment: Investment) -> dict:
 
             mark_down_payment_settled(inv.installment_plan)
 
+        # The certificate follows the settlement: final now for a fully paid purchase, still
+        # provisional while installments are owed or units are pledged to Nova Finance.
+        sync_certificate(inv)
+
         # Phase 7 Wave D: a COMPLETED primary sale → credit the property owner the token
         # value actually paid at this settlement (the full price for a normal buy, the
         # down-payment for an installment). Buyer-borne fees (Option A): the fee was
@@ -987,6 +992,7 @@ def settle_investment(investment: Investment) -> dict:
         if inv.payment_status != PaymentStatus.COMPLETED:
             inv.payment_status = PaymentStatus.COMPLETED
             inv.save(update_fields=["payment_status", "updated_at"])
+        sync_certificate(inv)  # paid → the certificate is issued even if the mint is delayed
     return mint_investment(inv)
 
 

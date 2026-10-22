@@ -84,6 +84,46 @@ def create_provisional_certificate(investment) -> Certificate:
     )
 
 
+def is_settled(investment) -> bool:
+    """
+    A purchase is fully settled — its certificate final — once it is paid, its units are
+    recorded (minted), nothing is still owed on an installment plan and no units are still
+    pledged to Nova Finance.
+    """
+    from apps.investments.models import PaymentStatus
+
+    if investment.payment_status != PaymentStatus.COMPLETED or not investment.tokens_minted:
+        return False
+    if investment.is_installment and investment.installment_plan_id:
+        from apps.installments.models import InstallmentPlanStatus
+
+        if investment.installment_plan.status != InstallmentPlanStatus.COMPLETED:
+            return False
+    if investment.payment_method == "sukuk":
+        from apps.payments.nova_pledge import active_pledge
+
+        if active_pledge(investment) is not None:
+            return False
+    return True
+
+
+def sync_certificate(investment):
+    """
+    Keep an investment's certificate in step with its settlement: issued (provisional) once
+    the payment is confirmed — never for a failed or unpaid attempt — and made final once
+    the purchase is fully settled. A revoked certificate is never touched. Idempotent.
+    Returns the certificate, or None while the payment is not confirmed.
+    """
+    from apps.investments.models import PaymentStatus
+
+    if investment.payment_status != PaymentStatus.COMPLETED:
+        return Certificate.objects.filter(investment=investment).first()
+    cert = create_provisional_certificate(investment)
+    if cert.status == CertificateStatus.PROVISIONAL and is_settled(investment):
+        cert.mark_final()
+    return cert
+
+
 def _signature_hash(cert) -> str:
     """Tamper-evident digest over the certificate's material fields (SHA-256)."""
     canonical = "|".join(
@@ -97,23 +137,24 @@ def _signature_hash(cert) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def generate_certificate(investment, status=None):
+def generate_certificate(investment):
     """
-    Port of generate-certificate (SPEC §4.1): ensure the provisional record exists,
-    then render the real PDF + QR. IDEMPOTENT — if the PDF already exists, returns the
-    certificate unchanged (no regen).
+    Port of generate-certificate (SPEC §4.1): ensure the certificate exists (paid purchases
+    only) with its current status, then render the real PDF + QR. IDEMPOTENT — if the PDF
+    already exists, returns the certificate unchanged (no regen). Returns None while the
+    payment is not confirmed. The status always follows the settlement (sync_certificate);
+    it is never taken from the caller.
 
     All data comes from the real Investment/Property/SPV record. The QR encodes the
     public verification URL {FRONTEND_URL}/verify/{code}.
     """
-    cert = create_provisional_certificate(investment)
+    cert = sync_certificate(investment)
+    if cert is None:
+        return None
 
     # Idempotent: a generated PDF already exists → return as-is.
     if cert.pdf_file:
         return cert
-
-    if status in (CertificateStatus.PROVISIONAL, CertificateStatus.FINAL):
-        cert.status = status
 
     # Verification URL + QR payload + signatory + signature.
     frontend = getattr(settings, "FRONTEND_URL", "").rstrip("/")

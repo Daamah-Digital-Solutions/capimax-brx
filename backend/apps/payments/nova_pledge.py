@@ -61,6 +61,10 @@ def release_pledge(pledge_id, *, reference: str, by=None) -> NovaPledge:
         pledge.released_by = by
         pledge.released_at = timezone.now()
         pledge.save(update_fields=["status", "release_reference", "released_by", "released_at"])
+        # Clearance received → the ownership certificate becomes final.
+        from apps.certificates.services import sync_certificate
+
+        sync_certificate(pledge.investment)
         notify(
             pledge.investment.user, NotificationType.NOVA_PLEDGE_RELEASED,
             params={"property": pledge.investment.property_name, "tokens": pledge.units},

@@ -179,12 +179,17 @@ class TokenEconomicsTests(TestCase):
 
         self.assertEqual(UserBalance.objects.get(user=self.user).current_balance, inv.settlement_amount)
 
-    def test_provisional_certificate_uses_real_location_not_hardcoded(self):
+    def test_certificate_waits_for_the_payment_and_uses_real_data(self):
         prop = _make_property("pcert", total_value=1_000_000, token_price=100)
-        create_investment(user=self.user, prop=prop, token_amount=5, payment_method="card")
+        result = create_investment(user=self.user, prop=prop, token_amount=5, payment_method="card")
         from apps.certificates.models import Certificate
+        from .services import settle_investment
+
+        # An unpaid card attempt holds no certificate …
+        self.assertFalse(Certificate.objects.filter(investment__property=prop).exists())
+        # … it is issued once the payment is confirmed.
+        settle_investment(result["investment"])
         cert = Certificate.objects.get(investment__property=prop, user=self.user)
-        self.assertEqual(cert.status, "provisional")
         self.assertEqual(cert.property_location, prop.location)  # real, not "Dubai, UAE"
         self.assertNotEqual(cert.platform_fee, Decimal("0"))  # real fee, not 0
         self.assertEqual(cert.units_purchased, 5)
