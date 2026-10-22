@@ -854,6 +854,7 @@ function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // ─────────────────────────────────────────────────────────────
 function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
+  const [videoOpen, setVideoOpen] = useState(false);
   if (p.status !== "construction") return null;
   const sitePhotos = p.sitePhotos ?? [];
   const progress = p.constructionProgress ?? 0;
@@ -878,7 +879,9 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
     sitePhotos.length
       ? { icon: Camera, en: `Site Photos (${sitePhotos.length})`, ar: `صور الموقع (${sitePhotos.length})`, onClick: () => setPhotoIndex(0) }
       : { icon: Camera, en: "Site Photos", ar: "صور الموقع", href: p.sitePhotosUrl },
-    { icon: Video, en: "Drone Footage", ar: "فيديو من الدرون", href: p.droneVideoUrl },
+    p.droneVideoFile
+      ? { icon: Video, en: "Drone Footage", ar: "فيديو من الدرون", onClick: () => setVideoOpen(true) }
+      : { icon: Video, en: "Drone Footage", ar: "فيديو من الدرون", href: p.droneVideoUrl },
     { icon: ClipboardCheck, en: "Inspection Reports", ar: "تقارير الفحص", href: inspectionUrl },
   ];
 
@@ -925,7 +928,7 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
                 <Icon className="w-4 h-4 text-primary" />
                 <span className="text-xs">{isAr ? t.ar : t.en}</span>
                 {t.href && <ExternalLink className="w-3 h-3 text-muted-foreground ms-auto" />}
-                {t.onClick && <ImageIcon className="w-3 h-3 text-muted-foreground ms-auto" />}
+                {t.onClick && <Eye className="w-3 h-3 text-muted-foreground ms-auto" />}
               </>
             );
             if (t.onClick) {
@@ -957,6 +960,19 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
             );
           })}
         </div>
+
+        {p.droneVideoFile && (
+          <Dialog open={videoOpen} onOpenChange={setVideoOpen}>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>{isAr ? "فيديو من الدرون" : "Drone Footage"}</DialogTitle>
+              </DialogHeader>
+              {videoOpen && (
+                <video src={p.droneVideoFile} controls autoPlay playsInline className="w-full max-h-[70vh] rounded-lg bg-black" />
+              )}
+            </DialogContent>
+          </Dialog>
+        )}
 
         <Dialog open={photoIndex !== null} onOpenChange={(open) => !open && setPhotoIndex(null)}>
           <DialogContent className="max-w-4xl">

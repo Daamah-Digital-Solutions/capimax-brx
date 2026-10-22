@@ -26,6 +26,7 @@ from .admin_widgets import (
     StickyFormFileField,
     StickyFormImageField,
     StickyImageInput,
+    StickyVideoInput,
 )
 
 from .models import (
@@ -66,7 +67,8 @@ STICKY_UPLOADS = {
     db_models.ImageField: {"widget": StickyImageInput, "form_class": StickyFormImageField},
     db_models.FileField: {"widget": StickyFileInput, "form_class": StickyFormFileField},
 }
-UPLOAD_MAX_BYTES = 20 * 1024 * 1024  # nginx client_max_body_size
+UPLOAD_MAX_MB = 30  # nginx allows a little more on the upload URL (multipart overhead)
+UPLOAD_MAX_BYTES = UPLOAD_MAX_MB * 1024 * 1024
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 
@@ -401,6 +403,8 @@ class PropertyAdmin(admin.ModelAdmin):
         return PropertyForm
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "drone_video_file":
+            kwargs.update(widget=StickyVideoInput, form_class=StickyFormFileField)
         if db_field.name == "city":
             kwargs["widget"] = DatalistTextInput(
                 lambda: Property.objects.exclude(city="").order_by("city")
@@ -458,9 +462,9 @@ class PropertyAdmin(admin.ModelAdmin):
         if upload is None:
             return JsonResponse({"error": "No file was received."}, status=400)
         if upload.size > UPLOAD_MAX_BYTES:
-            return JsonResponse({"error": "The file is larger than 20 MB."}, status=400)
+            return JsonResponse({"error": f"The file is larger than {UPLOAD_MAX_MB} MB."}, status=400)
         ext = os.path.splitext(upload.name)[1].lower()
-        from .models import DOCUMENT_EXTENSIONS
+        from .models import DOCUMENT_EXTENSIONS, VIDEO_EXTENSIONS
 
         is_image = ext in IMAGE_EXTENSIONS
         if kind == "image":
@@ -471,6 +475,9 @@ class PropertyAdmin(admin.ModelAdmin):
             except forms.ValidationError:
                 return JsonResponse({"error": "This file is not a valid image."}, status=400)
             upload.seek(0)
+        elif kind == "video":
+            if ext.lstrip(".") not in VIDEO_EXTENSIONS:
+                return JsonResponse({"error": "Choose a video (MP4, MOV or WebM)."}, status=400)
         elif ext.lstrip(".") not in DOCUMENT_EXTENSIONS:
             return JsonResponse(
                 {"error": "Choose a PDF, Word, Excel, CSV or image file."}, status=400
@@ -687,7 +694,7 @@ class PropertyAdmin(admin.ModelAdmin):
                 "Construction",
                 {
                     "description": "Upload the site photos in the \"Site photos\" section below.",
-                    "fields": ("construction_progress", "drone_video_url"),
+                    "fields": ("construction_progress", "drone_video_file"),
                 },
             ),
         ]
@@ -698,6 +705,8 @@ class PropertyAdmin(admin.ModelAdmin):
             legacy.append("images")
         if obj is not None and obj.site_photos_url:
             legacy.append("site_photos_url")
+        if obj is not None and obj.drone_video_url:
+            legacy.append("drone_video_url")
         if legacy:
             sets.append((
                 "Older image links (this property was added with links)",

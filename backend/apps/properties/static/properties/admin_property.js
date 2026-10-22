@@ -79,7 +79,7 @@
       })
         .then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (j) {
-            if (r.status === 413) throw new Error("The file is larger than 20 MB.");
+            if (r.status === 413) throw new Error("The file is larger than 30 MB.");
             if (!r.ok) throw new Error(j.error || "Upload failed (" + r.status + ").");
             return j;
           });
@@ -94,7 +94,10 @@
         .catch(function (e) {
           input.value = "";
           if (status) {
-            status.innerHTML = '<span class="sticky-error">' + esc(e.message) + " Choose the file again.</span>";
+            var kept = token.value && token.dataset.label
+              ? " The earlier file (" + esc(token.dataset.label) + ") is still kept."
+              : " Choose the file again.";
+            status.innerHTML = '<span class="sticky-error">' + esc(e.message) + kept + "</span>";
           }
         })
         .then(function () { busy -= 1; });

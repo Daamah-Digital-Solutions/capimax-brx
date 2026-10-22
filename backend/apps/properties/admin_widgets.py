@@ -20,8 +20,8 @@ class StickyFileInput(AdminFileWidget):
 
     def __init__(self, attrs=None):
         attrs = {**(attrs or {}), "data-sticky": self.kind}
-        if self.kind == "image":
-            attrs.setdefault("accept", "image/*")
+        if self.kind in ("image", "video"):
+            attrs.setdefault("accept", f"{self.kind}/*")
         super().__init__(attrs)
 
     @staticmethod
@@ -77,6 +77,10 @@ class StickyFileInput(AdminFileWidget):
 
 class StickyImageInput(StickyFileInput):
     kind = "image"
+
+
+class StickyVideoInput(StickyFileInput):
+    kind = "video"
 
 
 def _pending(token):

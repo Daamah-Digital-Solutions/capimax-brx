@@ -243,3 +243,33 @@ class ListingAdminTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.post(UPLOAD_URL, {"file": _png(), "kind": "image"}).status_code, 302)
         self.assertFalse(PendingUpload.objects.exists())
+
+    def test_drone_video_uploads_and_reaches_the_page(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        video = SimpleUploadedFile("drone.mp4", b"\x00\x00\x00\x18ftypmp42" + b"0" * 64, content_type="video/mp4")
+        resp = self.client.post(UPLOAD_URL, {"file": video, "kind": "video"})
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = self._form(ADD_URL, **self._essentials(
+            image_file__pending=self._upload(), drone_video_file__pending=resp.json()["token"], _publish="1",
+        ))
+        resp = self.client.post(ADD_URL, data)
+        self.assertEqual(resp.status_code, 302, resp.content[:3000])
+        prop = Property.objects.get(name="Harbour Lofts")
+        self.assertTrue(prop.drone_video_file.name.startswith("property_videos/"))
+        body = self.client.get(f"/api/properties/{prop.slug}/").json()
+        self.assertTrue(body["droneVideoFile"].endswith(".mp4"))
+
+    def test_upload_limit_is_30_mb_and_video_needs_a_video_file(self):
+        from unittest import mock
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        bad = self.client.post(UPLOAD_URL, {"file": _png(), "kind": "video"})
+        self.assertEqual(bad.status_code, 400)
+        with mock.patch("apps.properties.admin.UPLOAD_MAX_BYTES", 10):
+            big = self.client.post(UPLOAD_URL, {
+                "file": SimpleUploadedFile("drone.mp4", b"0" * 64, content_type="video/mp4"), "kind": "video",
+            })
+        self.assertEqual(big.status_code, 400)
+        self.assertIn("30 MB", big.json()["error"])

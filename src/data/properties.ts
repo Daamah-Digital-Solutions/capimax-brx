@@ -210,6 +210,8 @@ export interface Property {
   /** Construction-site photos uploaded in the admin (API detail). */
   sitePhotos?: string[];
   droneVideoUrl?: string;
+  /** Drone footage uploaded in the admin (API detail) — played on the page. */
+  droneVideoFile?: string | null;
   // Off-plan §4 (API detail): how investors pay + the installment plans offered + their fee %.
   offplanPayment?: "installments" | "full" | "both";
   /** Expected completion / handover as set in the admin (e.g. "Q4 2027"). */

@@ -609,6 +609,8 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
     # Uploaded construction-site photos (absolute URLs), in the admin's order.
     sitePhotos = serializers.SerializerMethodField()
     droneVideoUrl = serializers.CharField(source="drone_video_url")
+    # Uploaded drone footage (absolute URL) — played on the page; wins over the link.
+    droneVideoFile = serializers.SerializerMethodField()
     # Off-plan §4: how investors pay (installments / full / both) + the offered plans.
     offplanPayment = serializers.CharField(source="offplan_payment")
     expectedCompletion = serializers.SerializerMethodField()
@@ -644,6 +646,7 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "sitePhotosUrl",
             "sitePhotos",
             "droneVideoUrl",
+            "droneVideoFile",
             "offplanPayment",
             "expectedCompletion",
             "expectedCompletionAr",
@@ -652,6 +655,11 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         )
 
     expectedCompletionAr = serializers.SerializerMethodField()
+
+    def get_droneVideoFile(self, obj):
+        from .models import public_media_url
+
+        return public_media_url(obj.drone_video_file, self.context.get("request")) or None
 
     def get_sitePhotos(self, obj):
         from .models import public_media_url

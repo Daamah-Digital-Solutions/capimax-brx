@@ -70,6 +70,8 @@ def public_media_url(field_file, request=None) -> str:
 # Uploadable data-room file types. No HTML/SVG: these are served from the API origin, where
 # an uploaded page or SVG could run script.
 DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "jpg", "jpeg", "png", "webp"]
+# Drone footage uploaded from the admin (played on the property page).
+VIDEO_EXTENSIONS = ["mp4", "mov", "webm", "m4v"]
 
 
 # --------------------------------------------------------------------------- #
@@ -292,6 +294,13 @@ class Property(models.Model):
     drone_video_url = models.CharField(
         max_length=500, blank=True, validators=[validate_image_ref],
         help_text="Link to the drone footage (e.g. YouTube).",
+    )
+    # Uploaded drone footage (wins over the older link above).
+    drone_video_file = models.FileField(
+        upload_to="property_videos/", blank=True,
+        validators=[FileExtensionValidator(VIDEO_EXTENSIONS)],
+        verbose_name="drone video",
+        help_text="Upload the drone footage (MP4, MOV or WebM, up to 30 MB).",
     )
 
     # fees (frontend shows these on the detail financials tab; constants today)
