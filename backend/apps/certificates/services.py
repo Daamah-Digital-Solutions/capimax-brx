@@ -121,6 +121,16 @@ def sync_certificate(investment):
     cert = create_provisional_certificate(investment)
     if cert.status == CertificateStatus.PROVISIONAL and is_settled(investment):
         cert.mark_final()
+        from apps.notifications.services import NotificationType, notify
+
+        notify(
+            investment.user, NotificationType.CERTIFICATE_FINAL,
+            params={
+                "property": cert.property_name, "certificate_id": cert.certificate_id,
+                "tokens": cert.units_purchased,
+            },
+            action_url="/portfolio?tab=certificates",
+        )
     return cert
 
 

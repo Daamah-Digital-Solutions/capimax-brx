@@ -113,6 +113,9 @@ class Notification(models.Model):
         SUKUK_REJECTED = "sukuk_rejected", _("Nova certificate rejected")
         # Nova Finance's clearance arrived: the pledged units are unlocked. params.property/tokens.
         NOVA_PLEDGE_RELEASED = "nova_pledge_released", _("Nova pledge released")
+        # The purchase is fully settled: its ownership certificate is now final.
+        # params.property/certificate_id/tokens.
+        CERTIFICATE_FINAL = "certificate_final", _("Ownership certificate final")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

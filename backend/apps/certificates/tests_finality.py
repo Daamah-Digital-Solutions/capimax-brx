@@ -100,3 +100,14 @@ class CertificateFinalityTests(TestCase):
         cert = Certificate.objects.get(investment=inv)
         cert.revoke("test")
         self.assertEqual(sync_certificate(inv).status, "revoked")
+
+    def test_the_holder_is_notified_once_when_it_becomes_final(self):
+        from apps.notifications.models import Notification
+
+        inv = self._buy()["investment"]
+        sync_certificate(inv)  # already final → no second notice
+        notices = Notification.objects.filter(user=self.user, type="certificate_final")
+        self.assertEqual(notices.count(), 1)
+        cert = Certificate.objects.get(investment=inv)
+        self.assertEqual(notices.first().params["certificate_id"], cert.certificate_id)
+        self.assertEqual(notices.first().action_url, "/portfolio?tab=certificates")

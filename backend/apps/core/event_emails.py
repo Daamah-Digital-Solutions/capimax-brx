@@ -326,6 +326,14 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
         "cta_path": "/wallet",
         "outro": "",
     },
+    "certificate_final": {
+        "subject": "Your ownership certificate for {property} is now final",
+        "heading": "Ownership certificate final",
+        "intro": "Your purchase of {tokens} unit(s) of {property} is fully settled, so your ownership certificate {certificate_id} is now final. You can download it from your portfolio.",
+        "cta_label": "View your certificates",
+        "cta_path": "/portfolio?tab=certificates",
+        "outro": "",
+    },
     "nova_pledge_released": {
         "subject": "Your {property} units are released by Nova Finance",
         "heading": "Nova pledge released",

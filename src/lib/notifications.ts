@@ -42,6 +42,8 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   installment_defaulted: "alert",
   // Nova certificate (sukuk) payment rejected by the admin reviewer.
   sukuk_rejected: "alert",
+  // The purchase is fully settled → the ownership certificate is final.
+  certificate_final: "investment",
 };
 
 export function categoryOf(type: string): NotificationCategory {

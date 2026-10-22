@@ -1523,6 +1523,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_lead_update.title": "تحديث على إحالتك",
     "notif.broker_lead_update.body": "إحالتك «{title}» أصبحت: {status}. {note}",
     "nav.transfers": "التحويلات",
+    "notif.certificate_final.title": "شهادة ملكيتك أصبحت نهائية",
+    "notif.certificate_final.body": "اكتمل شراؤك لـ {tokens} وحدة في {property}، وأصبحت شهادة ملكيتك {certificate_id} نهائية. يمكنك تحميلها من محفظتك الاستثمارية.",
   },
   en: {
     // Navigation
@@ -3037,6 +3039,8 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.broker_lead_update.title": "Referral update",
     "notif.broker_lead_update.body": "Your referral “{title}” is now: {status}. {note}",
     "nav.transfers": "Transfers",
+    "notif.certificate_final.title": "Ownership Certificate Final",
+    "notif.certificate_final.body": "Your purchase of {tokens} unit(s) of {property} is fully settled — certificate {certificate_id} is now final. Download it from your portfolio.",
   },
   fr: {
     // French translations - fallback to English with French labels
