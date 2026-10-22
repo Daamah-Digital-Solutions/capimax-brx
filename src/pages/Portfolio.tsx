@@ -245,7 +245,7 @@ export default function Portfolio() {
           {/* Tabs for Portfolio Views */}
           <Tabs value={tab} onValueChange={setTab} className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <TabsList className="bg-muted/50">
+              <TabsList className="bg-muted/50 h-auto max-w-full flex-wrap justify-start">
                 <TabsTrigger value="holdings">{t("portfolio.ownedAssets")}</TabsTrigger>
                 <TabsTrigger value="wallet">{language === "ar" ? "المحفظة" : "Wallet"}</TabsTrigger>
                 <TabsTrigger value="certificates">{language === "ar" ? "الشهادات" : "Certificates"}</TabsTrigger>

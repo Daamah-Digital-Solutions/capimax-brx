@@ -220,7 +220,7 @@ export default function Wallet() {
         <div className="container py-8">
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2 space-y-8 min-w-0">
               {/* Balance Cards */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="p-8 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl border border-primary/30 animate-fade-in">
@@ -279,7 +279,7 @@ export default function Wallet() {
                 <div className="p-6 border-b border-border">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <h2 className="font-display text-xl font-semibold text-foreground">{t("wallet.transactionHistory")}</h2>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Select value={filter} onValueChange={setFilter}>
                         <SelectTrigger className="w-40">
                           <Filter className="w-4 h-4 mr-2" />
@@ -314,17 +314,17 @@ export default function Wallet() {
                     filteredTransactions.map((transaction) => {
                       const amt = signedAmount(transaction);
                       return (
-                      <div key={transaction.id} className="p-4 hover:bg-muted/30 transition-colors flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                      <div key={transaction.id} className="p-4 hover:bg-muted/30 transition-colors flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-4 min-w-0">
                           <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center",
+                            "w-10 h-10 shrink-0 rounded-xl flex items-center justify-center",
                             amt > 0 ? "bg-success/10" : "bg-muted"
                           )}>
                             {getTransactionIcon(transaction)}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="font-medium text-foreground">{getTransactionLabel(transaction)}</div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                               <span>{new Date(transaction.created_at).toLocaleDateString(isAr ? "ar" : "en")}</span>
                               {transaction.reference && (
                                 <>
@@ -335,9 +335,9 @@ export default function Wallet() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3 sm:gap-4 ms-auto">
                           <div className={cn(
-                            "text-lg font-semibold",
+                            "text-lg font-semibold whitespace-nowrap",
                             amt > 0 ? "text-success" : "text-foreground"
                           )}>
                             {amt > 0 ? "+" : ""}{amt.toLocaleString()} USD
@@ -370,7 +370,7 @@ export default function Wallet() {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0">
               {/* Real internal balance (no clamp; mirrors Portfolio). */}
               <ReinvestReturnsCard availableReturns={balance} />
 

@@ -28,7 +28,7 @@ export function OwnerDeveloperSection() {
       <div className="container">
         <div className="grid lg:grid-cols-2 gap-8">
           {/* For Property Owners */}
-          <div className="relative p-8 rounded-3xl bg-gradient-to-br from-card to-card/50 border border-border hover:border-primary/30 transition-all duration-300 animate-fade-in">
+          <div className="relative min-w-0 overflow-hidden p-5 sm:p-8 rounded-3xl bg-gradient-to-br from-card to-card/50 border border-border hover:border-primary/30 transition-all duration-300 animate-fade-in">
             <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
             
             <Badge variant="gold" className="mb-4">{t("ownerDev.ownerBadge")}</Badge>
@@ -50,14 +50,14 @@ export function OwnerDeveloperSection() {
               ))}
             </div>
 
-            <Button variant="hero" size="lg" className="group" onClick={() => navigate("/submit-property")}>
+            <Button variant="hero" size="lg" className="group w-full sm:w-auto whitespace-normal h-auto min-h-11" onClick={() => navigate("/submit-property")}>
               {t("ownerDev.listPropertyNow")}
               <ArrowIcon className={`w-5 h-5 group-hover:translate-x-1 transition-transform ${isRTL ? "group-hover:-translate-x-1" : ""}`} />
             </Button>
           </div>
 
           {/* For Developers */}
-          <div className="relative p-8 rounded-3xl bg-gradient-to-br from-card to-card/50 border border-border hover:border-primary/30 transition-all duration-300 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <div className="relative min-w-0 overflow-hidden p-5 sm:p-8 rounded-3xl bg-gradient-to-br from-card to-card/50 border border-border hover:border-primary/30 transition-all duration-300 animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="absolute top-0 left-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
             
             <Badge variant="gold" className="mb-4">{t("ownerDev.developerBadge")}</Badge>
@@ -79,7 +79,7 @@ export function OwnerDeveloperSection() {
               ))}
             </div>
 
-            <Button variant="hero-outline" size="lg" className="group" onClick={() => navigate("/submit-property")}>
+            <Button variant="hero-outline" size="lg" className="group w-full sm:w-auto whitespace-normal h-auto min-h-11" onClick={() => navigate("/submit-property")}>
               <Hammer className="w-4 h-4 mr-2" />
               {t("ownerDev.contactDevelopers")}
               <ArrowIcon className={`w-5 h-5 group-hover:translate-x-1 transition-transform ${isRTL ? "group-hover:-translate-x-1" : ""}`} />

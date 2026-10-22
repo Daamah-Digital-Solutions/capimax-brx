@@ -143,7 +143,7 @@ export default function Dashboard() {
                 </h1>
                 <p className="text-muted-foreground">{t("dashboard.overview")}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Link to="/reports">
                   <Button variant="outline" className="gap-2">
                     <FileText className="w-4 h-4" />
@@ -218,7 +218,7 @@ export default function Dashboard() {
 
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2 space-y-8 min-w-0">
               {/* Holdings */}
               <div className="bg-card rounded-2xl border border-border p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
                 <div className="flex items-center justify-between mb-6">
@@ -373,7 +373,7 @@ export default function Dashboard() {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0">
               {/* Upcoming Payments — section kept. Distributions are declared ad-hoc by
                   admin (no scheduled-distributions endpoint), so this shows an honest empty
                   state instead of a fabricated schedule. */}

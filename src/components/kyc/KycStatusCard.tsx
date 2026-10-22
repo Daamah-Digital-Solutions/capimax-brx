@@ -19,10 +19,24 @@ export function KycStatusCard({ className, hideWhenVerified = false }: { classNa
   const isAr = language === "ar";
   const [kyc, setKyc] = useState<KycStatus | null>(null);
 
+  // Follows the real status: re-read when the user comes back to the tab, and every minute
+  // until it is approved (client review §22 — "updated automatically when it changes").
+  const verified = kyc?.status === "approved";
   useEffect(() => {
     if (!user) return;
-    kycApi.me().then(setKyc).catch(() => setKyc(null));
-  }, [user]);
+    const load = () => kycApi.me().then(setKyc).catch(() => undefined);
+    load();
+    if (verified) return; // nothing more to watch once approved
+    const onFocus = () => document.visibilityState === "visible" && load();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [user, verified]);
 
   if (!user) return null;
   const status = kyc?.status ?? "pending";

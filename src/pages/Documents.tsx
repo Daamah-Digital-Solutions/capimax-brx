@@ -223,14 +223,14 @@ export default function Documents() {
                 : "All your documents in one place: certificates, statements, receipts, schedules and your properties' documents."}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-auto">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder={isAr ? "ابحث في المستندات..." : "Search documents..."}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="ps-10 w-64"
+                className="ps-10 w-full sm:w-64"
               />
             </div>
             <Link to="/verification-center">
@@ -259,7 +259,7 @@ export default function Documents() {
         </div>
 
         <div className="grid lg:grid-cols-4 gap-6">
-          <Card className="lg:col-span-1 bg-card/50 backdrop-blur border-border/50 h-fit">
+          <Card className="lg:col-span-1 min-w-0 bg-card/50 backdrop-blur border-border/50 h-fit">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{isAr ? "التصنيفات" : "Categories"}</CardTitle>
             </CardHeader>
@@ -282,7 +282,7 @@ export default function Documents() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-3 bg-card/50 backdrop-blur border-border/50">
+          <Card className="lg:col-span-3 min-w-0 bg-card/50 backdrop-blur border-border/50">
             <CardContent className="p-0 divide-y divide-border/50">
               {!user ? (
                 <div className="p-10 text-center">
@@ -301,8 +301,8 @@ export default function Documents() {
                 </div>
               ) : (
                 shown.map((d) => (
-                  <div key={d.key} className="p-4 flex items-center justify-between gap-4">
-                    <div className="flex items-start gap-3 min-w-0">
+                  <div key={d.key} className="p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1 basis-56">
                       <div className="w-10 h-10 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
                         <FileText className="w-5 h-5 text-primary" />
                       </div>

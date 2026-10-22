@@ -278,18 +278,18 @@ export default function Referrals() {
                 {filteredReferrals.map((referral) => (
                   <div
                     key={referral.id}
-                    className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
+                    className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-muted/30 transition-colors"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-12 h-12 shrink-0 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
                         <span className="text-lg font-bold text-primary-foreground">
                           {referral.name.charAt(0)}
                         </span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h4 className="font-medium text-foreground">{referral.name}</h4>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1 break-all">
                             <Mail className="w-3 h-3" />
                             {referral.email}
                           </span>
@@ -303,7 +303,7 @@ export default function Referrals() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex flex-wrap items-center gap-4 sm:gap-6 ms-auto">
                       {referral.investmentAmount && (
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">{t("referrals.investment")}</p>

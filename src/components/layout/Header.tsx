@@ -86,10 +86,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
           {/* Install app — persistent, available any time (self-hides once installed) */}
           <InstallAppButton variant="gold-outline" className="hidden sm:inline-flex" />
 
-          {/* Theme Toggle */}
+          {/* Theme Toggle (signed-out phones hide it to make room for Login + Get started) */}
           <Button 
             variant="ghost" 
             size="icon" 
+            className={user ? undefined : "hidden sm:inline-flex"}
             onClick={toggleTheme}
             title={isDark ? (language === "ar" ? "الوضع الفاتح" : "Light mode") : (language === "ar" ? "الوضع الداكن" : "Dark mode")}
           >
@@ -215,8 +216,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
                 <Button variant="gold-outline" size="sm" asChild>
                   <Link to="/auth">{t("auth.login")}</Link>
                 </Button>
-                <Button variant="hero" size="sm" asChild className="hidden sm:inline-flex">
-                  <Link to="/auth?mode=register">{language === "ar" ? "سجّل الآن" : "Register Now"}</Link>
+                <Button variant="hero" size="sm" asChild>
+                  <Link to="/auth?mode=register">
+                    <span className="sm:hidden">{language === "ar" ? "ابدأ الآن" : "Get started"}</span>
+                    <span className="hidden sm:inline">{language === "ar" ? "سجّل الآن" : "Register Now"}</span>
+                  </Link>
                 </Button>
               </>
             )}

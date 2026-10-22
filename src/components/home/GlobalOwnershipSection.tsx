@@ -83,7 +83,7 @@ export function GlobalOwnershipSection() {
 
           {/* Products CTA */}
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Button variant="hero" size="xl" className="group" asChild>
+            <Button variant="hero" size="xl" className="group max-w-full whitespace-normal h-auto min-h-14 py-3 px-6 sm:px-10" asChild>
               <Link to="/products">
                 {ar ? "اكتشف أنواع الفرص" : "Explore Opportunity Types"}
                 <ArrowIcon className={cn("w-5 h-5 group-hover:translate-x-1 transition-transform", isRTL && "rotate-180 group-hover:-translate-x-1")} />

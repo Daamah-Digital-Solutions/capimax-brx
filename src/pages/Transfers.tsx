@@ -232,7 +232,7 @@ export default function Transfers() {
                             <div className="min-w-0">
                               <p className="font-medium text-foreground">
                                 {sent ? (isAr ? "إلى " : "To ") : (isAr ? "من " : "From ")}
-                                <span dir="auto">{t.counterparty}</span>
+                                <span dir="auto" className="break-all">{t.counterparty}</span>
                               </p>
                               <p className="text-sm text-foreground/80">{what(t)}</p>
                             </div>

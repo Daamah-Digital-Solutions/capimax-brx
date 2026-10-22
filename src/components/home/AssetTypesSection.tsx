@@ -93,17 +93,17 @@ export function AssetTypesSection() {
           {assetTypes.map((type, index) => (
             <div
               key={index}
-              className={`group relative p-6 rounded-2xl border ${type.borderColor} bg-gradient-to-br ${type.color} hover:shadow-lg transition-all duration-300 animate-fade-in`}
+              className={`group relative min-w-0 p-5 sm:p-6 rounded-2xl border ${type.borderColor} bg-gradient-to-br ${type.color} hover:shadow-lg transition-all duration-300 animate-fade-in`}
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div className="flex items-start gap-5">
+              <div className="flex items-start gap-4 sm:gap-5">
                 {/* Icon */}
-                <div className="w-16 h-16 bg-background/50 rounded-xl flex items-center justify-center shrink-0">
-                  <type.icon className="w-8 h-8 text-primary" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-background/50 rounded-xl flex items-center justify-center shrink-0">
+                  <type.icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
                 </div>
 
                 {/* Content */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-display text-xl font-semibold text-foreground">
                       {t(type.titleKey)}
@@ -122,7 +122,7 @@ export function AssetTypesSection() {
                   </div>
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border/50">
                     <div>
                       <div className="text-2xl font-bold text-gradient-gold">{type.yield}</div>
                       <div className="text-xs text-muted-foreground">{t(type.yieldLabelKey)}</div>

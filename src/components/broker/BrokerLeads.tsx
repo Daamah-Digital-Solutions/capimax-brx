@@ -116,7 +116,7 @@ export function BrokerLeads({ clientOpen, setClientOpen, propertyOpen, setProper
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-base">{isAr ? "إحالاتي المباشرة" : "My direct referrals"}</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" className="gap-2" onClick={() => setClientOpen(true)}>
                 <UserPlus className="w-4 h-4" />{isAr ? "إحالة عميل" : "Refer a client"}
               </Button>

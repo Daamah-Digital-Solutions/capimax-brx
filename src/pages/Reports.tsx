@@ -285,7 +285,7 @@ export default function Reports() {
 
           <Tabs defaultValue={tabParam === "reports" || tabParam === "performance" ? tabParam : "analytics"} className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <TabsList className="bg-muted/50">
+              <TabsList className="bg-muted/50 h-auto max-w-full flex-wrap justify-start">
                 <TabsTrigger value="analytics">{isAr ? "التحليلات" : "Analytics"}</TabsTrigger>
                 <TabsTrigger value="reports">{isAr ? "التقارير" : "Reports"}</TabsTrigger>
                 <TabsTrigger value="performance">{isAr ? "أداء العقارات" : "Property Performance"}</TabsTrigger>
