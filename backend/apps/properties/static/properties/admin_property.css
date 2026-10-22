@@ -1,0 +1,27 @@
+/* Property editor (Django admin) — see admin_property.js */
+.sticky-status { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 12px; }
+.sticky-status img { height: 44px; width: 60px; object-fit: cover; border-radius: 4px; }
+.sticky-status span { color: #1a7f37; }
+.sticky-status .sticky-busy { color: #57606a; }
+.sticky-status .sticky-error { color: #ba2121; }
+.sticky-remove { color: #ba2121 !important; }
+
+.multi-upload { margin: 8px 0 10px; }
+
+.error-summary { margin: -10px 0 20px; padding: 10px 14px 10px 32px; border: 1px solid #ba2121;
+  border-top: 0; background: #fff5f5; }
+.error-summary li { margin: 3px 0; }
+.error-summary a { color: #ba2121; text-decoration: underline; }
+
+.draft-banner { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #d4a72c; background: #fff8c5;
+  color: #3b2300; border-radius: 4px; }
+.draft-banner .button { margin-left: 6px; }
+
+.property-submit-row { align-items: center; }
+.pub-status { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #fff;
+  margin-right: 6px; }
+.pub-status.pub-published { background: #1a7f37; }
+.pub-status.pub-unpublished { background: #9a6700; }
+.pub-status.pub-draft { background: #57606a; }
+.submit-row input.pub-publish { background: #1a7f37; }
+.submit-row input.pub-unpublish { background: #9a6700; }

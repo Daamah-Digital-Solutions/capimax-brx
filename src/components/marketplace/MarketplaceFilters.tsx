@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { propertyLabel } from "@/lib/propertyLabels";
 import type { Property, PropertyCategory } from "@/data/properties";
 
 interface FilterSectionProps {
@@ -157,6 +158,13 @@ export function MarketplaceFilters({
     { id: "bahrain", label: language === "ar" ? "البحرين" : "Bahrain", labelEn: "Bahrain" },
     { id: "oman", label: language === "ar" ? "عمان" : "Oman", labelEn: "Oman" },
   ];
+  // Properties can be listed in any country — add every other country that has some.
+  Object.keys(countryCounts)
+    .filter((id) => id && !countries.some((c) => c.id === id))
+    .sort((a, b) => countryCounts[b] - countryCounts[a])
+    .forEach((id) =>
+      countries.push({ id, label: propertyLabel(id, language === "ar"), labelEn: propertyLabel(id, false) }),
+    );
 
   const assetTypes = [
     { id: "residential", label: t("property.residential"), labelEn: "Residential" },

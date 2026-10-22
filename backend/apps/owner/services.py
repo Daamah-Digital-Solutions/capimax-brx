@@ -252,6 +252,20 @@ _STATUS_MAP = {
 # carry; the admin picks/overrides the country during review. UAE/SA map cleanly.
 _COUNTRY_MAP = {"UAE": "uae", "SA": "ksa"}
 
+
+def _country_code(raw: str) -> str:
+    """The property country code for a submission's country (any country; UAE if unknown)."""
+    from apps.properties.countries import COUNTRY_CHOICES
+
+    raw = (raw or "").strip()
+    if raw in _COUNTRY_MAP:
+        return _COUNTRY_MAP[raw]
+    low = raw.lower()
+    for code, name in COUNTRY_CHOICES:
+        if low in (code, name.lower()):
+            return code
+    return "uae"
+
 # A neutral placeholder image so a one-click publish yields a valid (URLField) Property;
 # the admin overrides it with the real hero image during review.
 _PLACEHOLDER_IMAGE = "https://placehold.co/800x600?text=Property"
@@ -289,7 +303,7 @@ def _property_defaults_from(submission: PropertySubmission) -> dict:
         "name_ar": submission.name or "Untitled property",          # admin refines
         "location": location,
         "location_ar": location,                                    # admin refines
-        "country": _COUNTRY_MAP.get(submission.country, "uae"),     # admin can override
+        "country": _country_code(submission.country),     # admin can override
         "city": city or "—",
         "image": _PLACEHOLDER_IMAGE,                                # admin replaces
         "asset_type": _ASSET_TYPE_MAP.get(submission.property_type, "residential"),

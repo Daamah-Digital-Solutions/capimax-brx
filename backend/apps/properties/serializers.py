@@ -35,6 +35,21 @@ from .models import (
 )
 
 
+class ArText(serializers.Field):
+    """
+    An Arabic text field that falls back to its English twin when no Arabic was entered —
+    Arabic is optional in the admin (client review §3), and the Arabic site then shows the
+    English text instead of a blank.
+    """
+
+    def __init__(self, ar, en, **kwargs):
+        self.ar_attr, self.en_attr = ar, en
+        super().__init__(source="*", read_only=True, **kwargs)
+
+    def to_representation(self, obj):
+        return getattr(obj, self.ar_attr, "") or getattr(obj, self.en_attr, "") or ""
+
+
 # --------------------------------------------------------------------------- #
 # Nested model blocks (camelCase to match properties.ts sub-interfaces)
 # --------------------------------------------------------------------------- #
@@ -63,7 +78,7 @@ class InstallmentScheduleSerializer(serializers.ModelSerializer):
 
 
 class PhaseSerializer(serializers.ModelSerializer):
-    nameAr = serializers.CharField(source="name_ar")
+    nameAr = ArText("name_ar", "name")
     tokenPrice = serializers.DecimalField(
         source="token_price", max_digits=12, decimal_places=2
     )
@@ -114,7 +129,7 @@ class OptionContractSerializer(serializers.ModelSerializer):
         source="estimated_future_value", max_digits=12, decimal_places=2
     )
     exerciseConditions = serializers.CharField(source="exercise_conditions")
-    exerciseConditionsAr = serializers.CharField(source="exercise_conditions_ar")
+    exerciseConditionsAr = ArText("exercise_conditions_ar", "exercise_conditions")
 
     class Meta:
         model = OptionContract
@@ -140,7 +155,7 @@ class SharedOwnershipSerializer(serializers.ModelSerializer):
     profitSplit = serializers.CharField(source="profit_split")
     revenueDistribution = serializers.CharField(source="revenue_distribution")
     transferProcess = serializers.CharField(source="transfer_process")
-    transferProcessAr = serializers.CharField(source="transfer_process_ar")
+    transferProcessAr = ArText("transfer_process_ar", "transfer_process")
 
     class Meta:
         model = SharedOwnership
@@ -157,7 +172,7 @@ class SharedOwnershipSerializer(serializers.ModelSerializer):
 
 class PortfolioAssetSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="asset_slug")  # frontend id e.g. "p1-a"
-    nameAr = serializers.CharField(source="name_ar")
+    nameAr = ArText("name_ar", "name")
     assetType = serializers.CharField(source="asset_type")
 
     class Meta:
@@ -166,7 +181,7 @@ class PortfolioAssetSerializer(serializers.ModelSerializer):
 
 
 class DeveloperReportSerializer(serializers.ModelSerializer):
-    titleAr = serializers.CharField(source="title_ar")
+    titleAr = ArText("title_ar", "title")
 
     class Meta:
         model = DeveloperReport
@@ -182,8 +197,8 @@ class ValuationReportSerializer(serializers.ModelSerializer):
 # --- detail / data-room extras (SPEC §3.1) -------------------------------- #
 class SPVSerializer(serializers.ModelSerializer):
     registrationNumber = serializers.CharField(source="registration_number")
-    complianceAr = serializers.CharField(source="compliance_ar")
-    custodyAr = serializers.CharField(source="custody_ar")
+    complianceAr = ArText("compliance_ar", "compliance")
+    custodyAr = ArText("custody_ar", "custody")
 
     class Meta:
         model = SPVRecord
@@ -299,6 +314,7 @@ class FinancialsSerializer(serializers.ModelSerializer):
 
 
 class PropertyDocumentSerializer(serializers.ModelSerializer):
+    name = ArText("name", "name_en")  # Arabic name (optional)
     nameEn = serializers.CharField(source="name_en")
     type = serializers.CharField(source="doc_type")
     # Uploaded file (absolute API URL) if any, else the stored link.
@@ -314,12 +330,12 @@ class PropertyDocumentSerializer(serializers.ModelSerializer):
 
 # --- data-room section content (admin-managed) ---------------------------- #
 class DeveloperInfoSerializer(serializers.ModelSerializer):
-    nameAr = serializers.CharField(source="name_ar")
-    overviewAr = serializers.CharField(source="overview_ar")
+    nameAr = ArText("name_ar", "name")
+    overviewAr = ArText("overview_ar", "overview")
     yearsExperience = serializers.IntegerField(source="years_experience")
     completedProjects = serializers.IntegerField(source="completed_projects")
     ongoingProjects = serializers.IntegerField(source="ongoing_projects")
-    locationAr = serializers.CharField(source="location_ar")
+    locationAr = ArText("location_ar", "location")
     relatedProjects = serializers.JSONField(source="related_projects")
 
     class Meta:
@@ -365,7 +381,7 @@ class MarketDataSerializer(serializers.ModelSerializer):
 
 class AmenitySerializer(serializers.ModelSerializer):
     nameEn = serializers.CharField(source="name_en")
-    nameAr = serializers.CharField(source="name_ar")
+    nameAr = ArText("name_ar", "name_en")
 
     class Meta:
         model = Amenity
@@ -374,7 +390,7 @@ class AmenitySerializer(serializers.ModelSerializer):
 
 class LandmarkSerializer(serializers.ModelSerializer):
     nameEn = serializers.CharField(source="name_en")
-    nameAr = serializers.CharField(source="name_ar")
+    nameAr = ArText("name_ar", "name_en")
 
     class Meta:
         model = Landmark
@@ -383,7 +399,7 @@ class LandmarkSerializer(serializers.ModelSerializer):
 
 class RiskFactorSerializer(serializers.ModelSerializer):
     textEn = serializers.CharField(source="text_en")
-    textAr = serializers.CharField(source="text_ar")
+    textAr = ArText("text_ar", "text_en")
 
     class Meta:
         model = RiskFactor
@@ -392,7 +408,7 @@ class RiskFactorSerializer(serializers.ModelSerializer):
 
 class ConstructionMilestoneSerializer(serializers.ModelSerializer):
     nameEn = serializers.CharField(source="name_en")
-    nameAr = serializers.CharField(source="name_ar")
+    nameAr = ArText("name_ar", "name_en")
 
     class Meta:
         model = ConstructionMilestone
@@ -401,7 +417,7 @@ class ConstructionMilestoneSerializer(serializers.ModelSerializer):
 
 class PostHandoverBenefitSerializer(serializers.ModelSerializer):
     textEn = serializers.CharField(source="text_en")
-    textAr = serializers.CharField(source="text_ar")
+    textAr = ArText("text_ar", "text_en")
 
     class Meta:
         model = PostHandoverBenefit
@@ -410,9 +426,9 @@ class PostHandoverBenefitSerializer(serializers.ModelSerializer):
 
 class PropertyFAQSerializer(serializers.ModelSerializer):
     questionEn = serializers.CharField(source="question_en")
-    questionAr = serializers.CharField(source="question_ar")
+    questionAr = ArText("question_ar", "question_en")
     answerEn = serializers.CharField(source="answer_en")
-    answerAr = serializers.CharField(source="answer_ar")
+    answerAr = ArText("answer_ar", "answer_en")
 
     class Meta:
         model = PropertyFAQ
@@ -464,8 +480,8 @@ class _PropertyBaseSerializer(serializers.ModelSerializer):
     """Common camelCase mapping for both list and detail."""
 
     id = serializers.CharField(source="slug")  # UI uses string ids; resolve by slug
-    nameAr = serializers.CharField(source="name_ar")
-    locationAr = serializers.CharField(source="location_ar")
+    nameAr = ArText("name_ar", "name")
+    locationAr = ArText("location_ar", "location")
     # Uploaded hero/gallery files resolve to absolute API URLs; URL/path entries pass through.
     image = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
@@ -489,11 +505,11 @@ class _PropertyBaseSerializer(serializers.ModelSerializer):
         source="broker_commission_rate", max_digits=5, decimal_places=2, allow_null=True
     )
     openForPromotion = serializers.BooleanField(source="open_for_promotion")
-    durationAr = serializers.CharField(source="duration_ar")
+    durationAr = ArText("duration_ar", "duration")
     exitEligible = serializers.BooleanField(source="exit_eligible")
     exitAvailability = serializers.CharField(source="exit_availability")
     insuranceActive = serializers.BooleanField(source="insurance_active")
-    descriptionAr = serializers.CharField(source="description_ar")
+    descriptionAr = ArText("description_ar", "description")
     constructionProgress = serializers.IntegerField(
         source="construction_progress", allow_null=True
     )
@@ -590,6 +606,8 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         source="post_handover_benefits", many=True, read_only=True
     )
     sitePhotosUrl = serializers.CharField(source="site_photos_url")
+    # Uploaded construction-site photos (absolute URLs), in the admin's order.
+    sitePhotos = serializers.SerializerMethodField()
     droneVideoUrl = serializers.CharField(source="drone_video_url")
     # Off-plan §4: how investors pay (installments / full / both) + the offered plans.
     offplanPayment = serializers.CharField(source="offplan_payment")
@@ -624,6 +642,7 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
             "constructionMilestones",
             "postHandoverBenefits",
             "sitePhotosUrl",
+            "sitePhotos",
             "droneVideoUrl",
             "offplanPayment",
             "expectedCompletion",
@@ -633,6 +652,12 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         )
 
     expectedCompletionAr = serializers.SerializerMethodField()
+
+    def get_sitePhotos(self, obj):
+        from .models import public_media_url
+
+        request = self.context.get("request")
+        return [public_media_url(ph.image, request) for ph in obj.site_photos.all() if ph.image]
 
     def get_expectedCompletion(self, obj):
         return obj.expected_completion or None  # None → the page's own fallback
@@ -713,15 +738,15 @@ class FundedPropertySerializer(serializers.ModelSerializer):
     """Exact shape FundedProperties.tsx renders (its inline `fundedProperties` item)."""
 
     id = serializers.CharField(source="slug")
-    nameAr = serializers.CharField(source="name_ar")
-    locationAr = serializers.CharField(source="location_ar")
+    nameAr = ArText("name_ar", "name")
+    locationAr = ArText("location_ar", "location")
     assetType = serializers.CharField(source="asset_type")
     fundedDate = serializers.DateField(source="funded_date")
     totalValue = serializers.DecimalField(source="total_value", max_digits=16, decimal_places=2)
     expectedYield = serializers.DecimalField(
         source="expected_yield", max_digits=6, decimal_places=2, allow_null=True
     )
-    durationAr = serializers.CharField(source="duration_ar")
+    durationAr = ArText("duration_ar", "duration")
     image = serializers.SerializerMethodField()
 
     def get_image(self, obj):

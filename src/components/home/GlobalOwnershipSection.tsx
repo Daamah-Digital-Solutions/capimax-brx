@@ -41,6 +41,13 @@ const COUNTRY_FLAG: Record<string, string> = {
   oman: "🇴🇲",
 };
 
+/** The flag for a property's country: the launch codes above, else its ISO code ("eg" → 🇪🇬). */
+const flagFor = (country: string) =>
+  COUNTRY_FLAG[country] ??
+  (/^[a-z]{2}$/i.test(country)
+    ? String.fromCodePoint(...country.toUpperCase().split("").map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
+    : undefined);
+
 export function GlobalOwnershipSection() {
   const { language, isRTL } = useLanguage();
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
@@ -124,7 +131,7 @@ export function GlobalOwnershipSection() {
                       <Icon className="w-3 h-3" />
                       {ar ? meta.stageAr : meta.stageEn}
                     </Badge>
-                    <span className="text-2xl drop-shadow">{COUNTRY_FLAG[s.country] ?? "🌍"}</span>
+                    <span className="text-2xl drop-shadow">{flagFor(s.country) ?? "🌍"}</span>
                   </div>
                 </div>
                 <div className="p-4">

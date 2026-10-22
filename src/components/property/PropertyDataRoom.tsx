@@ -44,8 +44,10 @@ import {
   CircleDollarSign,
   Shield,
   ExternalLink,
+  ChevronLeft,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -851,7 +853,9 @@ function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // 6. Construction progress (under-construction only)
 // ─────────────────────────────────────────────────────────────
 function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
+  const [photoIndex, setPhotoIndex] = useState<number | null>(null);
   if (p.status !== "construction") return null;
+  const sitePhotos = p.sitePhotos ?? [];
   const progress = p.constructionProgress ?? 0;
   // Admin-set milestones (Construction milestones) win; else the default five.
   const milestones = p.constructionMilestones?.length
@@ -869,8 +873,11 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
       ];
   // Media tiles become links when the admin set them; otherwise they stay as labels.
   const inspectionUrl = latestDocUrl(p, "construction");
-  const mediaTiles = [
-    { icon: Camera, en: "Site Photos", ar: "صور الموقع", href: p.sitePhotosUrl },
+  // Uploaded site photos open in a viewer; older properties may still link to an album.
+  const mediaTiles: { icon: typeof Camera; en: string; ar: string; href?: string; onClick?: () => void }[] = [
+    sitePhotos.length
+      ? { icon: Camera, en: `Site Photos (${sitePhotos.length})`, ar: `صور الموقع (${sitePhotos.length})`, onClick: () => setPhotoIndex(0) }
+      : { icon: Camera, en: "Site Photos", ar: "صور الموقع", href: p.sitePhotosUrl },
     { icon: Video, en: "Drone Footage", ar: "فيديو من الدرون", href: p.droneVideoUrl },
     { icon: ClipboardCheck, en: "Inspection Reports", ar: "تقارير الفحص", href: inspectionUrl },
   ];
@@ -918,8 +925,21 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
                 <Icon className="w-4 h-4 text-primary" />
                 <span className="text-xs">{isAr ? t.ar : t.en}</span>
                 {t.href && <ExternalLink className="w-3 h-3 text-muted-foreground ms-auto" />}
+                {t.onClick && <ImageIcon className="w-3 h-3 text-muted-foreground ms-auto" />}
               </>
             );
+            if (t.onClick) {
+              return (
+                <button
+                  key={t.en}
+                  type="button"
+                  onClick={t.onClick}
+                  className="p-3 rounded-lg bg-muted/40 border border-border flex items-center gap-2 hover:border-primary/50 transition-colors text-start"
+                >
+                  {inner}
+                </button>
+              );
+            }
             return t.href ? (
               <a
                 key={t.en}
@@ -937,6 +957,70 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
             );
           })}
         </div>
+
+        <Dialog open={photoIndex !== null} onOpenChange={(open) => !open && setPhotoIndex(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>
+                {isAr ? "صور الموقع" : "Site Photos"}
+                {photoIndex !== null && (
+                  <span className="ms-2 text-sm font-normal text-muted-foreground">
+                    {photoIndex + 1} / {sitePhotos.length}
+                  </span>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+            {photoIndex !== null && sitePhotos[photoIndex] && (
+              <div className="space-y-3">
+                <div className="relative">
+                  <img
+                    src={sitePhotos[photoIndex]}
+                    alt={isAr ? "صورة من موقع البناء" : "Construction site photo"}
+                    className="w-full max-h-[65vh] object-contain rounded-lg bg-muted"
+                  />
+                  {sitePhotos.length > 1 && (
+                    <>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="absolute start-2 top-1/2 -translate-y-1/2"
+                        aria-label={isAr ? "السابقة" : "Previous"}
+                        onClick={() => setPhotoIndex((photoIndex - 1 + sitePhotos.length) % sitePhotos.length)}
+                      >
+                        <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="absolute end-2 top-1/2 -translate-y-1/2"
+                        aria-label={isAr ? "التالية" : "Next"}
+                        onClick={() => setPhotoIndex((photoIndex + 1) % sitePhotos.length)}
+                      >
+                        <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+                {sitePhotos.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {sitePhotos.map((src, i) => (
+                      <button
+                        key={src}
+                        type="button"
+                        onClick={() => setPhotoIndex(i)}
+                        className={`shrink-0 rounded-md overflow-hidden border-2 ${i === photoIndex ? "border-primary" : "border-transparent"}`}
+                      >
+                        <img src={src} alt="" className="w-20 h-14 object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {p.developerReports && p.developerReports.length > 0 && (
           <div>

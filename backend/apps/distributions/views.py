@@ -52,7 +52,7 @@ class DistributionsView(APIView):
 
         def name_ar(slug, fallback):
             prop = props.get(slug)
-            return prop.name_ar if prop else (fallback or slug)
+            return (prop.name_ar or prop.name) if prop else (fallback or slug)
 
         def yield_pct(slug):
             prop = props.get(slug)

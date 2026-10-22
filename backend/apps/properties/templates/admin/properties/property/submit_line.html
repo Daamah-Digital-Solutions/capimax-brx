@@ -1,0 +1,37 @@
+{% load i18n admin_urls %}
+{# Property editor buttons: draft / publish / unpublish (client review §9, §11). #}
+<div class="submit-row property-submit-row">
+{% with status=original.publication_status|default:"draft" %}
+<span class="pub-status pub-{{ status }}" title="Draft: not on the platform yet · Published: visible on the platform · Unpublished: hidden, everything kept">
+  {% if status == "published" %}Published{% elif status == "unpublished" %}Unpublished{% else %}Draft{% endif %}
+</span>
+{% if show_save or show_save_and_continue %}
+  {% if status == "published" %}
+    <input type="submit" value="Save" class="default" name="_continue">
+    <input type="submit" value="Save and close" name="_save">
+    <input type="submit" value="Unpublish" name="_unpublish" class="pub-unpublish"
+           title="Hides the property from the platform. All its data, images and documents stay here, and you can publish it again.">
+  {% elif status == "unpublished" %}
+    <input type="submit" value="Save (stays hidden)" class="default" name="_continue"
+           title="Saves everything; the property stays hidden from the platform.">
+    <input type="submit" value="Publish again" name="_publish" class="pub-publish"
+           title="Saves and shows the property on the platform again.">
+    <input type="submit" value="Save and close" name="_save">
+  {% else %}
+    <input type="submit" value="Save draft" class="default" name="_continue"
+           title="Saves everything without showing the property on the platform.">
+    <input type="submit" value="Save and publish" name="_publish" class="pub-publish"
+           title="Saves and shows the property on the platform.">
+    <input type="submit" value="Save and close" name="_save">
+  {% endif %}
+{% endif %}
+{% endwith %}
+{% if show_close %}
+    {% url opts|admin_urlname:'changelist' as changelist_url %}
+    <a href="{% add_preserved_filters changelist_url %}" class="closelink">{% translate 'Close' %}</a>
+{% endif %}
+{% if show_delete_link and original %}
+    {% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}
+    <a href="{% add_preserved_filters delete_url %}" class="deletelink">{% translate "Delete" %}</a>
+{% endif %}
+</div>

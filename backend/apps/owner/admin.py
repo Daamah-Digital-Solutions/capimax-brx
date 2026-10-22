@@ -13,9 +13,9 @@ from django.core.exceptions import ValidationError
 from django.template.response import TemplateResponse
 from django.utils import timezone
 
+from apps.properties.countries import COUNTRY_CHOICES
 from apps.properties.models import (
     AssetType,
-    Country,
     ExitAvailability,
     PropertyModelType,
     PropertyStatus,
@@ -124,12 +124,12 @@ class PublishSubmissionForm(forms.Form):
     model = forms.ChoiceField(
         choices=PropertyModelType.choices, label="Investment model (assigned by reviewer)"
     )
-    name_ar = forms.CharField(max_length=200, label="Name (Arabic)")
+    name_ar = forms.CharField(max_length=200, label="Name (Arabic, optional)", required=False)
     image = forms.URLField(label="Hero image URL", max_length=500)
     location = forms.CharField(max_length=200)
-    location_ar = forms.CharField(max_length=200, label="Location (Arabic)")
+    location_ar = forms.CharField(max_length=200, label="Location (Arabic, optional)", required=False)
     description_ar = forms.CharField(widget=forms.Textarea, label="Description (Arabic)", required=False)
-    country = forms.ChoiceField(choices=Country.choices)
+    country = forms.ChoiceField(choices=COUNTRY_CHOICES)
     city = forms.CharField(max_length=80)
     asset_type = forms.ChoiceField(choices=AssetType.choices)
     status = forms.ChoiceField(choices=PropertyStatus.choices)

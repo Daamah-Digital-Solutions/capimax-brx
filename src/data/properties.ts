@@ -207,6 +207,8 @@ export interface Property {
   constructionProgress?: number;
   constructionMilestones?: { nameEn: string; nameAr: string; threshold: number }[];
   sitePhotosUrl?: string;
+  /** Construction-site photos uploaded in the admin (API detail). */
+  sitePhotos?: string[];
   droneVideoUrl?: string;
   // Off-plan §4 (API detail): how investors pay + the installment plans offered + their fee %.
   offplanPayment?: "installments" | "full" | "both";

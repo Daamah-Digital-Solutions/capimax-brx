@@ -89,7 +89,7 @@ class InvestmentSerializer(serializers.ModelSerializer):
 
     def get_property_name_ar(self, obj):
         prop = getattr(obj, "property", None)
-        return (getattr(prop, "name_ar", "") or "") if prop else ""
+        return (getattr(prop, "name_ar", "") or getattr(prop, "name", "") or "") if prop else ""
 
     def get_sukuk(self, obj):
         cert = getattr(obj, "sukuk_certificate", None)

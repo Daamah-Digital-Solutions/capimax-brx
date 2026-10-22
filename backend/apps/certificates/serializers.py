@@ -18,7 +18,7 @@ class CertificateSerializer(serializers.ModelSerializer):
     def get_property_name_ar(self, obj):
         inv = getattr(obj, "investment", None)
         prop = getattr(inv, "property", None) if inv else None
-        return (getattr(prop, "name_ar", "") or "") if prop else ""
+        return (getattr(prop, "name_ar", "") or getattr(prop, "name", "") or "") if prop else ""
 
     """Owner view — matches the frontend `Certificate` shape (useCertificates.ts)."""
 
@@ -67,7 +67,7 @@ class CertificatePublicSerializer(serializers.ModelSerializer):
     def get_property_name_ar(self, obj):
         inv = getattr(obj, "investment", None)
         prop = getattr(inv, "property", None) if inv else None
-        return (getattr(prop, "name_ar", "") or "") if prop else ""
+        return (getattr(prop, "name_ar", "") or getattr(prop, "name", "") or "") if prop else ""
 
     class Meta:
         model = Certificate

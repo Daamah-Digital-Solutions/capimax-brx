@@ -204,9 +204,9 @@ class AssignmentAdmin(admin.ModelAdmin):
             prop = obj.property
             if prop is not None:
                 obj.property_name = getattr(prop, "name", "") or ""
-                obj.property_name_ar = getattr(prop, "name_ar", "") or ""
+                obj.property_name_ar = getattr(prop, "name_ar", "") or getattr(prop, "name", "") or ""
                 obj.location = getattr(prop, "location", "") or ""
-                obj.location_ar = getattr(prop, "location_ar", "") or ""
+                obj.location_ar = getattr(prop, "location_ar", "") or getattr(prop, "location", "") or ""
             obj.assigned_by = request.user
         super().save_model(request, obj, form, change)
 

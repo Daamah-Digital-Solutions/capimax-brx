@@ -18,6 +18,8 @@ Modeling notes:
   portfolio_assets / developer_reports / valuation_reports / documents (FK),
   plus spv / token_metadata / financials (OneToOne) for the detail/data-room view.
 """
+import datetime
+import os
 import uuid
 from decimal import Decimal
 
@@ -30,7 +32,11 @@ from django.core.validators import (
     URLValidator,
 )
 from django.db import models
+from django.utils import timezone
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+
+from .countries import COUNTRY_CHOICES
 
 
 def validate_image_ref(value):
@@ -71,6 +77,8 @@ DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "jpg", "jpeg"
 # emits/accepts exactly what the frontend uses (filters compare these strings).
 # --------------------------------------------------------------------------- #
 class Country(models.TextChoices):
+    """The launch countries (kept as named constants); every country is in COUNTRY_CHOICES."""
+
     UAE = "uae", _("UAE")
     KSA = "ksa", _("KSA")
     QATAR = "qatar", _("Qatar")
@@ -182,15 +190,17 @@ class Property(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # Frontend string id ("1","10","p1-a"); the API resolves + serializes this as `id`.
-    slug = models.SlugField(max_length=64, unique=True, db_index=True)
+    # Created automatically from the English name on the first save (client review: the
+    # admin never types it).
+    slug = models.SlugField(max_length=64, unique=True, db_index=True, blank=True)
 
-    # identity (bilingual)
+    # identity (bilingual — Arabic is optional; the API falls back to the English text)
     name = models.CharField(max_length=200)
-    name_ar = models.CharField(max_length=200)
-    location = models.CharField(max_length=200)
-    location_ar = models.CharField(max_length=200)
-    country = models.CharField(max_length=16, choices=Country.choices)
-    city = models.CharField(max_length=80)
+    name_ar = models.CharField(max_length=200, blank=True, default="")
+    location = models.CharField(max_length=200, blank=True, default="")
+    location_ar = models.CharField(max_length=200, blank=True, default="")
+    country = models.CharField(max_length=16, choices=COUNTRY_CHOICES, blank=True, default="")
+    city = models.CharField(max_length=80, blank=True, default="")
     # Hero image: an uploaded file wins; otherwise the URL / site path. One of the two is
     # required (enforced in clean()).
     image = models.CharField(
@@ -199,7 +209,7 @@ class Property(models.Model):
     )
     image_file = models.ImageField(
         upload_to="property_images/", blank=True,
-        help_text="Upload the main image. Overrides the URL above when set.",
+        help_text="The main image shown on the marketplace card and the property page.",
     )
     images = models.JSONField(
         default=list, blank=True,
@@ -208,15 +218,22 @@ class Property(models.Model):
     )  # optional gallery (string[])
 
     # classification
-    asset_type = models.CharField(max_length=16, choices=AssetType.choices)
-    model = models.CharField(max_length=24, choices=PropertyModelType.choices)
-    category = models.CharField(max_length=24, choices=PropertyCategory.choices)
-    status = models.CharField(max_length=16, choices=PropertyStatus.choices)
-    yield_type = models.CharField(max_length=16, choices=YieldType.choices)
-    risk_level = models.CharField(max_length=8, choices=RiskLevel.choices)
+    asset_type = models.CharField(
+        max_length=16, choices=AssetType.choices, default=AssetType.RESIDENTIAL
+    )
+    model = models.CharField(
+        max_length=24, choices=PropertyModelType.choices, blank=True, default="",
+        verbose_name="investment type",
+    )
+    category = models.CharField(max_length=24, choices=PropertyCategory.choices, blank=True, default="")
+    # Empty → set from the investment type on save (ready → Ready / Rental, otherwise
+    # Under construction / Appreciation).
+    status = models.CharField(max_length=16, choices=PropertyStatus.choices, blank=True, default="")
+    yield_type = models.CharField(max_length=16, choices=YieldType.choices, blank=True, default="")
+    risk_level = models.CharField(max_length=8, choices=RiskLevel.choices, default=RiskLevel.MEDIUM)
 
     # economics
-    total_value = models.DecimalField(max_digits=16, decimal_places=2)
+    total_value = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     token_price = models.DecimalField(max_digits=12, decimal_places=2, default=100)
     # SPEC §7C.6: supply makes ownership % derivable server-side (≈ total_value/token_price).
     token_supply = models.PositiveIntegerField(default=0)
@@ -237,8 +254,8 @@ class Property(models.Model):
     funded = models.PositiveSmallIntegerField(default=0)  # 0..100
     investors = models.PositiveIntegerField(default=0)
     min_investment = models.DecimalField(max_digits=12, decimal_places=2, default=100)
-    duration = models.CharField(max_length=40)
-    duration_ar = models.CharField(max_length=40)
+    duration = models.CharField(max_length=40, blank=True, default="")
+    duration_ar = models.CharField(max_length=40, blank=True, default="")
     # Expected completion / handover, as shown on the page (e.g. "Q4 2027", "June 2028").
     expected_completion = models.CharField(
         max_length=40, blank=True, default="",
@@ -255,16 +272,19 @@ class Property(models.Model):
 
     # exit & liquidity
     exit_eligible = models.BooleanField(default=False)
-    exit_availability = models.CharField(max_length=16, choices=ExitAvailability.choices)
+    exit_availability = models.CharField(
+        max_length=16, choices=ExitAvailability.choices, default=ExitAvailability.SECONDARY
+    )
     insurance_active = models.BooleanField(default=False)
 
     # narrative
-    description = models.TextField()
-    description_ar = models.TextField()
+    description = models.TextField(blank=True, default="")
+    description_ar = models.TextField(blank=True, default="")
 
     # construction (any under-construction model)
     construction_progress = models.PositiveSmallIntegerField(null=True, blank=True)
     # Construction tab media tiles (link or site path; empty → the tile shows as a label).
+    # Site photos are uploaded now (PropertySitePhoto); this older album link still works.
     site_photos_url = models.CharField(
         max_length=500, blank=True, validators=[validate_image_ref],
         help_text="Link to the site photo album.",
@@ -305,6 +325,9 @@ class Property(models.Model):
 
     # catalogue management
     is_published = models.BooleanField(default=True, db_index=True)  # admin unpublish
+    # First time it went live. Not published + never published = a draft; not published
+    # after that = unpublished (hidden from the platform, everything kept).
+    published_at = models.DateTimeField(null=True, blank=True, editable=False)
     is_featured = models.BooleanField(default=False, db_index=True)  # Index featured
     # Owner→Property link (Phase 7 Wave C). Set when this Property was materialized from
     # an owner's reviewed PropertySubmission; NULL for the existing admin-seeded catalog
@@ -346,6 +369,12 @@ class Property(models.Model):
         derived_category = MODEL_CATEGORY_MAP.get(self.model)
         if derived_category:
             self.category = derived_category
+        if self.category:
+            building = self.category in CONSTRUCTION_CATEGORIES
+            if not self.status:
+                self.status = PropertyStatus.CONSTRUCTION if building else PropertyStatus.READY
+            if not self.yield_type:
+                self.yield_type = YieldType.APPRECIATION if building else YieldType.RENTAL
         # Once tokens are sold or a price has been recorded, the supply is FIXED: a price
         # change must never rescale it (that would silently change every holder's ownership
         # %). From then on the price only moves via properties.pricing.record_price.
@@ -400,8 +429,8 @@ class Property(models.Model):
             errors["broker_commission_rate"] = (
                 f"Broker commission % must be between 0 and 100 (got {self.broker_commission_rate})."
             )
-        if not self.image and not self.image_file:
-            errors["image"] = "Upload a main image or enter an image URL."
+        if self.is_published:
+            errors.update(self.missing_to_publish())
         if (self.slug or "").strip() in ("1", "2"):
             errors["slug"] = 'The slugs "1" and "2" are reserved for the demo pages — choose another.'
         if self.images not in (None, "") and (
@@ -415,11 +444,60 @@ class Property(models.Model):
             raise ValidationError(errors)
         # Derive after validation so the (read-only) admin fields reflect the saved values.
         self._sync_derived()
+        self._ensure_slug()
+
+    # What a property needs before it can go live. Everything else is optional or has a
+    # sensible default, so a draft can be saved with just a name (client review §10).
+    PUBLISH_REQUIRED = (
+        ("name", "Name"),
+        ("location", "Address / location"),
+        ("country", "Country"),
+        ("city", "City"),
+        ("model", "Investment type"),
+        ("description", "Description"),
+    )
+
+    def missing_to_publish(self) -> dict:
+        """Field → message for every essential still missing (empty = ready to publish)."""
+        missing = {
+            field: f"{label} is required to publish."
+            for field, label in self.PUBLISH_REQUIRED
+            if not str(getattr(self, field) or "").strip()
+        }
+        if not self.total_value or self.total_value <= 0:
+            missing["total_value"] = "Total value is required to publish."
+        if not self.image and not self.image_file:
+            missing["image_file"] = "Upload a main image to publish."
+        return missing
+
+    @property
+    def publication_status(self) -> str:
+        if self.is_published:
+            return "published"
+        return "unpublished" if self.published_at else "draft"
+
+    def _ensure_slug(self):
+        """Give a new property its link id from the English name (unique; never "1"/"2")."""
+        if self.slug:
+            return
+        base = slugify(self.name or "")[:56].strip("-") or "property"
+        if base in ("1", "2"):
+            base = f"property-{base}"
+        slug, n = base, 2
+        while Property.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+            slug = f"{base}-{n}"
+            n += 1
+        self.slug = slug
 
     def save(self, *args, **kwargs):
         # Always keep derived fields consistent, even for non-form saves (seed/shell)
         # which bypass clean(). Validation itself runs via full_clean() in the admin.
         self._sync_derived()
+        self._ensure_slug()
+        if self.is_published and self.published_at is None:
+            self.published_at = timezone.now()
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "published_at"}
         super().save(*args, **kwargs)
         # Wave 2 policy #4: the data-room display supply MUST track the authoritative
         # token_supply (fixes the 5,000-vs-50,000 mismatch). Resync any TokenMetadata.
@@ -513,7 +591,7 @@ class OptionContract(models.Model):
     validity_months = models.PositiveIntegerField()
     estimated_future_value = models.DecimalField(max_digits=12, decimal_places=2)
     exercise_conditions = models.TextField()
-    exercise_conditions_ar = models.TextField()
+    exercise_conditions_ar = models.TextField(blank=True, default="")
 
     def __str__(self):
         return f"Option · {self.property.slug}"
@@ -533,7 +611,7 @@ class SharedOwnership(models.Model):
         max_length=16, choices=RevenueDistribution.choices
     )
     transfer_process = models.TextField()
-    transfer_process_ar = models.TextField()
+    transfer_process_ar = models.TextField(blank=True, default="")
 
     def __str__(self):
         return f"Shared · {self.property.slug}"
@@ -547,7 +625,7 @@ class PropertyPhase(models.Model):
     )
     number = models.PositiveIntegerField()
     name = models.CharField(max_length=120)
-    name_ar = models.CharField(max_length=120)
+    name_ar = models.CharField(max_length=120, blank=True, default="")
     token_price = models.DecimalField(max_digits=12, decimal_places=2)
     start_date = models.DateField()
     end_date = models.DateField()
@@ -569,7 +647,7 @@ class PortfolioAsset(models.Model):
     )
     asset_slug = models.CharField(max_length=64)  # frontend id e.g. "p1-a"
     name = models.CharField(max_length=120)
-    name_ar = models.CharField(max_length=120)
+    name_ar = models.CharField(max_length=120, blank=True, default="")
     city = models.CharField(max_length=80)
     weight = models.DecimalField(max_digits=5, decimal_places=2)  # % of portfolio
     asset_type = models.CharField(max_length=16, choices=AssetType.choices)
@@ -589,7 +667,7 @@ class DeveloperReport(models.Model):
     )
     date = models.DateField()
     title = models.CharField(max_length=200)
-    title_ar = models.CharField(max_length=200)
+    title_ar = models.CharField(max_length=200, blank=True, default="")
     progress = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -757,10 +835,12 @@ class PropertyDocument(models.Model):
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="documents"
     )
-    name = models.CharField(max_length=200)  # Arabic name (frontend `name`)
-    name_en = models.CharField(max_length=200)
-    date = models.DateField()
-    doc_type = models.CharField(max_length=16, choices=DocType.choices)
+    name = models.CharField(  # Arabic name (frontend `name`); optional
+        max_length=200, blank=True, default="", verbose_name="name (Arabic)"
+    )
+    name_en = models.CharField(max_length=200, verbose_name="name")
+    date = models.DateField(default=datetime.date.today)
+    doc_type = models.CharField(max_length=16, choices=DocType.choices, verbose_name="document type")
     # Downloadable file. A real, resolvable URL (backend media on the API host, or an
     # external store) — blank keeps the legacy metadata-only rows valid. This is what
     # makes the data-room documents ACTUALLY download (was metadata-only before).
@@ -844,6 +924,51 @@ class PropertyImage(models.Model):
 
     def __str__(self):
         return f"{self.property.slug} · image {self.order}"
+
+
+class PropertySitePhoto(models.Model):
+    """A construction-site photo uploaded from the admin (the Construction tab's Site Photos)."""
+
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="site_photos")
+    image = models.ImageField(upload_to="property_site_photos/")
+    order = models.PositiveIntegerField(default=0, help_text="Lower numbers show first.")
+
+    class Meta:
+        ordering = ("order", "id")
+        verbose_name = _("site photo")
+        verbose_name_plural = _("site photos")
+
+    def __str__(self):
+        return f"{self.property.slug} · site photo {self.order}"
+
+
+def _pending_path(instance, filename):
+    ext = os.path.splitext(filename)[1].lower()[:10]
+    return f"admin_pending/{uuid.uuid4().hex}{ext}"
+
+
+class PendingUpload(models.Model):
+    """
+    A file picked in the property admin, stored the moment it is chosen. The form carries
+    only its id, so a validation error or a later edit never loses the file (client review
+    §7-8); it is copied onto the property when the form saves, then deleted.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file = models.FileField(upload_to=_pending_path)
+    original_name = models.CharField(max_length=255)
+    is_image = models.BooleanField(default=False)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self):
+        return self.original_name
+
+    def delete(self, *args, **kwargs):
+        self.file.delete(save=False)
+        return super().delete(*args, **kwargs)
 
 
 # --------------------------------------------------------------------------- #

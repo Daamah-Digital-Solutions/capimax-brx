@@ -7,11 +7,26 @@ Per-model detail is edited inline on the Property page: the OneToOne blocks
 (installment/future/option/shared/spv/token/financials) as stacked inlines, and the
 repeating blocks (phases/portfolio assets/reports/documents) as tabular inlines.
 """
+import os
+from datetime import timedelta
+
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
+from django.db import models as db_models
+from django.http import JsonResponse
+from django.urls import path
+from django.utils import timezone
 from django.utils.html import format_html
 
 from . import pricing
+from .admin_widgets import (
+    DatalistTextInput,
+    StickyFileInput,
+    StickyFormFileField,
+    StickyFormImageField,
+    StickyImageInput,
+)
 
 from .models import (
     Amenity,
@@ -25,6 +40,7 @@ from .models import (
     Landmark,
     MarketData,
     OptionContract,
+    PendingUpload,
     PortfolioAsset,
     PostHandoverBenefit,
     Property,
@@ -34,6 +50,7 @@ from .models import (
     PropertyImage,
     PropertyPhase,
     PropertyPrice,
+    PropertySitePhoto,
     PropertyUnitPrice,
     RiskFactor,
     SharedOwnership,
@@ -41,6 +58,16 @@ from .models import (
     TokenMetadata,
     ValuationReport,
 )
+
+
+# Every image / document on the property page is uploaded the moment it is picked and kept
+# across errors and edits (admin_widgets.StickyFileInput; client review §4-8).
+STICKY_UPLOADS = {
+    db_models.ImageField: {"widget": StickyImageInput, "form_class": StickyFormImageField},
+    db_models.FileField: {"widget": StickyFileInput, "form_class": StickyFormFileField},
+}
+UPLOAD_MAX_BYTES = 20 * 1024 * 1024  # nginx client_max_body_size
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 
 # --- OneToOne detail (stacked) ------------------------------------------- #
@@ -121,7 +148,15 @@ class ValuationReportInline(admin.TabularInline):
 class PropertyDocumentInline(admin.TabularInline):
     model = PropertyDocument
     extra = 0
-    fields = ("name_en", "name", "doc_type", "date", "file", "url")
+    formfield_overrides = STICKY_UPLOADS
+    verbose_name = "Document"
+    verbose_name_plural = "Documents — upload from your device"
+
+    def get_fields(self, request, obj=None):
+        # Upload only; the old link column shows just for properties that already use links.
+        if obj is not None and obj.documents.exclude(url="").exists():
+            return ("name_en", "name", "doc_type", "date", "file", "url")
+        return ("name_en", "name", "doc_type", "date", "file")
 
 
 def _thumb(url, height=70):
@@ -135,14 +170,31 @@ def _thumb(url, height=70):
 
 
 class PropertyImageInline(admin.TabularInline):
-    """Gallery uploads — shown on the property page after the URL list in `images`."""
+    """Gallery uploads — shown on the property page after any older image links."""
 
     model = PropertyImage
-    extra = 1
+    extra = 0
     fields = ("image", "preview", "order")
     readonly_fields = ("preview",)
+    formfield_overrides = STICKY_UPLOADS
     verbose_name = "Gallery image"
     verbose_name_plural = "Gallery — upload images"
+
+    @admin.display(description="Preview")
+    def preview(self, obj):
+        return _thumb(obj.image.url if obj and obj.image else "")
+
+
+class PropertySitePhotoInline(admin.TabularInline):
+    """Construction-site photos (the Construction tab's "Site Photos")."""
+
+    model = PropertySitePhoto
+    extra = 0
+    fields = ("image", "preview", "order")
+    readonly_fields = ("preview",)
+    formfield_overrides = STICKY_UPLOADS
+    verbose_name = "Site photo"
+    verbose_name_plural = "Site photos — upload from your device (Construction tab)"
 
     @admin.display(description="Preview")
     def preview(self, obj):
@@ -214,34 +266,226 @@ class PostHandoverBenefitInline(admin.TabularInline):
     fields = ("text_en", "text_ar", "order")
 
 
+class PublicationFilter(admin.SimpleListFilter):
+    title = "publication"
+    parameter_name = "publication"
+
+    def lookups(self, request, model_admin):
+        return (("draft", "Draft"), ("published", "Published"), ("unpublished", "Unpublished"))
+
+    def queryset(self, request, queryset):
+        if self.value() == "published":
+            return queryset.filter(is_published=True)
+        if self.value() == "draft":
+            return queryset.filter(is_published=False, published_at__isnull=True)
+        if self.value() == "unpublished":
+            return queryset.filter(is_published=False, published_at__isnull=False)
+        return queryset
+
+
+PUBLICATION_COLORS = {"published": "#1a7f37", "unpublished": "#9a6700", "draft": "#57606a"}
+
+
+def _publish_intent(post) -> bool | None:
+    """True / False when the editor pressed Publish / Unpublish, else None."""
+    if "_publish" in post:
+        return True
+    if "_unpublish" in post:
+        return False
+    return None
+
+
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
     list_display = (
         "name",
-        "slug",
+        "publication_badge",
         "country",
+        "city",
         "model",
-        "category",
         "status",
         "funded",
         "expected_yield",
-        "is_published",
         "is_featured",
+        "updated_at",
     )
     list_filter = (
+        PublicationFilter,
         "country",
         "model",
         "category",
         "asset_type",
         "status",
         "risk_level",
-        "is_published",
         "is_featured",
     )
-    search_fields = ("name", "name_ar", "location", "location_ar", "slug")
-    list_editable = ("is_published", "is_featured")
+    search_fields = ("name", "name_ar", "location", "location_ar", "city", "slug")
+    list_editable = ("is_featured",)
     ordering = ("display_order", "name")
-    actions = ["deploy_token_contract"]
+    actions = ["publish_selected", "unpublish_selected", "deploy_token_contract"]
+    save_on_top = True
+    formfield_overrides = STICKY_UPLOADS
+
+    class Media:
+        css = {"all": ("properties/admin_property.css",)}
+        js = ("properties/admin_property.js",)
+
+    # --- publication ------------------------------------------------------- #
+    @admin.display(description="Status", ordering="is_published")
+    def publication_badge(self, obj):
+        status = obj.publication_status
+        return format_html(
+            '<span style="color:#fff;background:{};padding:2px 8px;border-radius:10px;'
+            'font-size:11px;font-weight:600">{}</span>',
+            PUBLICATION_COLORS[status], status.capitalize(),
+        )
+
+    @admin.action(description="Publish selected properties")
+    def publish_selected(self, request, queryset):
+        done = 0
+        for prop in queryset.filter(is_published=False):
+            missing = prop.missing_to_publish()
+            if missing:
+                self.message_user(
+                    request,
+                    f"'{prop.name}' was not published — still needed: "
+                    + " ".join(missing.values()),
+                    messages.ERROR,
+                )
+                continue
+            prop.is_published = True
+            prop.save(update_fields=["is_published", "updated_at"])
+            done += 1
+        if done:
+            self.message_user(request, f"{done} propert{'y' if done == 1 else 'ies'} published — now visible on the platform.", messages.SUCCESS)
+
+    @admin.action(description="Unpublish selected properties (hide, keep everything)")
+    def unpublish_selected(self, request, queryset):
+        done = queryset.filter(is_published=True).update(is_published=False, updated_at=timezone.now())
+        self.message_user(
+            request,
+            f"{done} propert{'y' if done == 1 else 'ies'} unpublished — hidden from the platform; "
+            "all data, images and documents are kept and can be published again.",
+            messages.SUCCESS,
+        )
+
+    @admin.display(description="Property link")
+    def property_link(self, obj):
+        if obj is None or not obj.pk or not obj.slug:
+            return "Created automatically from the name when you save."
+        url = f"{settings.FRONTEND_URL.rstrip('/')}/property/{obj.slug}"
+        if obj.is_published:
+            return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', url, url)
+        return format_html("{} <span style=\"color:#57606a\">(live once published)</span>", url)
+
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        form_class = super().get_form(request, obj, change=change, **kwargs)
+        intent = _publish_intent(request.POST) if request.method == "POST" else None
+
+        class PropertyForm(form_class):
+            def clean(self):
+                data = super().clean()
+                # Applied before the model validates, so publishing checks the essentials
+                # and a draft saves with whatever is filled in.
+                if intent is not None:
+                    self.instance.is_published = intent
+                elif self.instance._state.adding:
+                    self.instance.is_published = False  # a new property starts as a draft
+                return data
+
+        # Mark what publishing needs (everything else is optional).
+        for name in [f for f, _ in Property.PUBLISH_REQUIRED] + ["total_value", "image_file"]:
+            field = PropertyForm.base_fields.get(name)
+            if field is not None:
+                field.label = f"{field.label} *"
+        return PropertyForm
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "city":
+            kwargs["widget"] = DatalistTextInput(
+                lambda: Property.objects.exclude(city="").order_by("city")
+                .values_list("city", flat=True).distinct()[:300],
+                attrs={"autocomplete": "off", "placeholder": "Type any city"},
+            )
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        intent = _publish_intent(request.POST)
+        super().save_model(request, obj, form, change)
+        if intent is True:
+            self.message_user(request, "Published — the property is now visible on the platform.", messages.SUCCESS)
+        elif intent is False:
+            self.message_user(
+                request,
+                "Unpublished — hidden from the platform. All data, images and documents are kept.",
+                messages.SUCCESS,
+            )
+        elif not obj.is_published:
+            self.message_user(request, "Saved as a draft — not visible on the platform until you publish it.", messages.INFO)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        # The picked files are now copied onto the property — drop the temporary copies.
+        tokens = [v for k, v in request.POST.items() if k.endswith("__pending") and v]
+        for pending in PendingUpload.objects.filter(pk__in=[t for t in tokens if _is_uuid(t)]):
+            pending.delete()
+
+    def _stay_on_page(self, request):
+        # Publish / Unpublish keep the editor open like "Save draft".
+        if _publish_intent(request.POST) is not None and "_continue" not in request.POST:
+            request.POST = request.POST.copy()
+            request.POST["_continue"] = "1"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        if request.method == "POST":
+            self._stay_on_page(request)
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    # --- upload on pick ---------------------------------------------------- #
+    def get_urls(self):
+        return [
+            path("upload/", self.admin_site.admin_view(self.upload_view), name="properties_property_upload"),
+        ] + super().get_urls()
+
+    def upload_view(self, request):
+        """Store one picked file right away; the form then only carries its id."""
+        if request.method != "POST":
+            return JsonResponse({"error": "POST a file."}, status=405)
+        if not (self.has_add_permission(request) or self.has_change_permission(request)):
+            return JsonResponse({"error": "You are not allowed to edit properties."}, status=403)
+        upload = request.FILES.get("file")
+        kind = request.POST.get("kind", "document")
+        if upload is None:
+            return JsonResponse({"error": "No file was received."}, status=400)
+        if upload.size > UPLOAD_MAX_BYTES:
+            return JsonResponse({"error": "The file is larger than 20 MB."}, status=400)
+        ext = os.path.splitext(upload.name)[1].lower()
+        from .models import DOCUMENT_EXTENSIONS
+
+        is_image = ext in IMAGE_EXTENSIONS
+        if kind == "image":
+            if not is_image:
+                return JsonResponse({"error": "Choose an image (JPG, PNG, WebP or GIF)."}, status=400)
+            try:
+                forms.ImageField().clean(upload)
+            except forms.ValidationError:
+                return JsonResponse({"error": "This file is not a valid image."}, status=400)
+            upload.seek(0)
+        elif ext.lstrip(".") not in DOCUMENT_EXTENSIONS:
+            return JsonResponse(
+                {"error": "Choose a PDF, Word, Excel, CSV or image file."}, status=400
+            )
+        # Tidy up copies that were never saved with a property.
+        for stale in PendingUpload.objects.filter(created_at__lt=timezone.now() - timedelta(days=14))[:50]:
+            stale.delete()
+        pending = PendingUpload.objects.create(
+            file=upload, original_name=os.path.basename(upload.name)[:255],
+            is_image=is_image, uploaded_by=request.user,
+        )
+        return JsonResponse({
+            "token": str(pending.pk), "name": pending.original_name,
+            "url": pending.file.url, "isImage": is_image,
+        })
 
     @admin.display(description="Current main image")
     def hero_preview(self, obj):
@@ -293,8 +537,8 @@ class PropertyAdmin(admin.ModelAdmin):
     # category + token_supply are AUTO-DERIVED on save (from model / total_value) so
     # they can never desync — they are read-only here. See Property._sync_derived.
     readonly_fields = (
-        "id", "category", "token_supply", "created_at", "updated_at", "hero_preview",
-        "price_lock_note", "page_checklist",
+        "id", "slug", "category", "token_supply", "created_at", "updated_at", "hero_preview",
+        "price_lock_note", "page_checklist", "property_link", "publication_badge",
     )
     raw_id_fields = ("submitted_by",)
 
@@ -316,7 +560,7 @@ class PropertyAdmin(admin.ModelAdmin):
         checks = [
             ("Main image", bool(obj.image or obj.image_file)),
             ("Gallery", bool(obj.images) or obj.gallery.exists()),
-            ("Description (EN / AR)", bool(obj.description and obj.description_ar)),
+            ("Description", bool(obj.description)),
             ("Expected completion", bool(obj.expected_completion), "the page uses the installment activation date or the duration"),
             ("Financials", one("financials")),
             ("Developer", one("developer_info")),
@@ -330,6 +574,7 @@ class PropertyAdmin(admin.ModelAdmin):
             ("Risk factors", obj.risk_factors.exists()),
             ("FAQs", obj.faqs.exists()),
             ("Construction milestones (under-construction properties)", obj.construction_milestones.exists()),
+            ("Site photos (under-construction properties)", obj.site_photos.exists() or bool(obj.site_photos_url)),
             ("Post-handover benefits (off-plan properties)", obj.post_handover_benefits.exists()),
             ("On-chain token (\"Deploy token contract\" action)", bool(getattr(rel("token_metadata"), "deployed_contract_address", "") if one("token_metadata") else ""), "not deployed yet — the page shows \"tokenization pending\""),
         ]
@@ -341,6 +586,8 @@ class PropertyAdmin(admin.ModelAdmin):
         return format_html('<ul style="margin:0;padding-left:1.2em;line-height:1.7">{}</ul>', rows)
     inlines = [
         PropertyImageInline,
+        PropertySitePhotoInline,
+        PropertyDocumentInline,
         InstallmentTermInline,
         InstallmentScheduleInline,
         FutureContractInline,
@@ -353,7 +600,6 @@ class PropertyAdmin(admin.ModelAdmin):
         SPVRecordInline,
         TokenMetadataInline,
         PropertyFinancialsInline,
-        PropertyDocumentInline,
         DeveloperInfoInline,
         InsuranceInfoInline,
         MarketDataInline,
@@ -364,96 +610,147 @@ class PropertyAdmin(admin.ModelAdmin):
         ConstructionMilestoneInline,
         PostHandoverBenefitInline,
     ]
-    fieldsets = (
-        (
-            "Property page checklist",
-            {"fields": ("page_checklist",)},
-        ),
-        (
-            "Identity",
-            {
-                "fields": (
-                    "slug",
-                    ("name", "name_ar"),
-                    ("location", "location_ar"),
-                    ("country", "city"),
-                    ("image_file", "hero_preview"),
-                    "image",
-                    "images",
-                )
-            },
-        ),
-        (
-            "Classification",
-            {
-                "description": "Category is auto-derived from the investment model (read-only).",
-                "fields": (
-                    ("asset_type", "model", "category"),
-                    ("status", "yield_type", "risk_level"),
-                ),
-            },
-        ),
-        (
-            "Economics",
-            {
-                "description": (
-                    "Token supply is auto-derived as total value ÷ token price (read-only). "
-                    "Expected yield/growth and funded % must be between 0 and 100."
-                ),
-                "fields": (
-                    ("total_value", "token_price", "token_supply"),
-                    "price_lock_note",
-                    ("future_token_price", "min_investment"),
-                    ("expected_yield", "expected_growth"),
-                    ("funded", "investors"),
-                    ("duration", "duration_ar"),
-                    ("expected_completion", "expected_completion_ar"),
-                    "offplan_payment",
-                ),
-            },
-        ),
-        (
-            "Exit & liquidity",
-            {"fields": (("exit_eligible", "exit_availability", "insurance_active"),)},
-        ),
-        (
-            "Narrative",
-            {
-                "fields": (
-                    "description", "description_ar", "construction_progress",
-                    ("site_photos_url", "drone_video_url"),
-                )
-            },
-        ),
-        ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount", "fee_installment"))}),
-        (
-            "Broker program",
-            {
-                "description": "Commission % a referring broker earns on this property "
-                               "(empty = the broker's own rate), and whether brokers can promote it.",
-                "fields": (("broker_commission_rate", "open_for_promotion"),),
-            },
-        ),
-        (
-            "Owner",
-            {
-                "description": "Link the owner/developer account that is credited with this "
-                               "property's sales (leave empty for a platform-owned property).",
-                "fields": ("submitted_by",),
-            },
-        ),
-        (
-            "Catalogue management",
-            {"fields": (("is_published", "is_featured"), ("funded_date", "display_order"))},
-        ),
-        ("System", {"classes": ("collapse",), "fields": ("id", "created_at", "updated_at")}),
-    )
+    def get_fieldsets(self, request, obj=None):
+        """
+        Essentials first (only they are needed to publish), Arabic optional and collapsed,
+        everything else optional with defaults (client review §3, §10). The older link
+        fields appear only on properties that already use them.
+        """
+        sets = []
+        if obj is not None and obj.pk:
+            sets.append(("Property page checklist", {"fields": ("page_checklist",)}))
+        sets += [
+            (
+                "Essentials — needed to publish",
+                {
+                    "description": (
+                        "Fields marked * are needed to publish — nothing else is. Everything "
+                        "below is optional or filled in automatically. Save a draft any time "
+                        "and finish later."
+                    ),
+                    "fields": (
+                        "name",
+                        "property_link",
+                        "location",
+                        ("country", "city"),
+                        "model",
+                        ("total_value", "token_price", "token_supply"),
+                        "price_lock_note",
+                        ("image_file", "hero_preview"),
+                        "description",
+                    ),
+                },
+            ),
+            (
+                "Arabic (optional)",
+                {
+                    "classes": ("collapse",),
+                    "description": "Leave empty to show the English text on the Arabic site.",
+                    "fields": (
+                        "name_ar", "location_ar", "description_ar", "duration_ar",
+                        "expected_completion_ar",
+                    ),
+                },
+            ),
+            (
+                "Classification",
+                {
+                    "description": (
+                        "Category is set from the investment type. Status and yield type are "
+                        "set automatically when left empty."
+                    ),
+                    "fields": (
+                        ("asset_type", "category"),
+                        ("status", "yield_type", "risk_level"),
+                    ),
+                },
+            ),
+            (
+                "Economics",
+                {
+                    "description": (
+                        "Token supply = total value ÷ token price (automatic). "
+                        "Expected yield/growth and funded % must be between 0 and 100."
+                    ),
+                    "fields": (
+                        ("future_token_price", "min_investment"),
+                        ("expected_yield", "expected_growth"),
+                        ("funded", "investors"),
+                        "duration",
+                        "expected_completion",
+                        "offplan_payment",
+                    ),
+                },
+            ),
+            ("Exit & liquidity", {"fields": (("exit_eligible", "exit_availability", "insurance_active"),)}),
+            (
+                "Construction",
+                {
+                    "description": "Upload the site photos in the \"Site photos\" section below.",
+                    "fields": ("construction_progress", "drone_video_url"),
+                },
+            ),
+        ]
+        legacy = []
+        if obj is not None and obj.image and not obj.image_file:
+            legacy.append("image")
+        if obj is not None and obj.images:
+            legacy.append("images")
+        if obj is not None and obj.site_photos_url:
+            legacy.append("site_photos_url")
+        if legacy:
+            sets.append((
+                "Older image links (this property was added with links)",
+                {
+                    "classes": ("collapse",),
+                    "description": "Kept so the current images stay. Uploads above replace them.",
+                    "fields": tuple(legacy),
+                },
+            ))
+        sets += [
+            ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount", "fee_installment"))}),
+            (
+                "Broker program",
+                {
+                    "description": "Commission % a referring broker earns on this property "
+                                   "(empty = the broker's own rate), and whether brokers can promote it.",
+                    "fields": (("broker_commission_rate", "open_for_promotion"),),
+                },
+            ),
+            (
+                "Owner",
+                {
+                    "description": "Link the owner/developer account that is credited with this "
+                                   "property's sales (leave empty for a platform-owned property).",
+                    "fields": ("submitted_by",),
+                },
+            ),
+            (
+                "Catalogue management",
+                {
+                    "description": "Publish / unpublish with the buttons at the top or bottom of the page.",
+                    "fields": (("is_featured", "display_order"), "funded_date"),
+                },
+            ),
+            ("System", {"classes": ("collapse",), "fields": ("slug", "id", "created_at", "updated_at")}),
+        ]
+        return sets
 
 
 # --------------------------------------------------------------------------- #
 # Unit prices (off-plan model §3.2) — the only way to change a live property's price.
 # Full admins only. Each save appends to the immutable price history.
 # --------------------------------------------------------------------------- #
+def _is_uuid(value) -> bool:
+    import uuid
+
+    try:
+        uuid.UUID(str(value))
+        return True
+    except ValueError:
+        return False
+
+
 class PriceHistoryInline(admin.TabularInline):
     model = PropertyPrice
     extra = 0

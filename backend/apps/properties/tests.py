@@ -296,10 +296,12 @@ class PropertyImageReferenceTests(TestCase):
         with self.assertRaises(ValidationError):
             Property(**_valid_property_kwargs(image="//evil.example.com/a.jpg")).full_clean()
 
-    def test_image_or_upload_is_required(self):
+    def test_image_or_upload_is_required_to_publish(self):
         with self.assertRaises(ValidationError) as ctx:
             Property(**_valid_property_kwargs(image="")).full_clean()
-        self.assertIn("image", ctx.exception.message_dict)
+        self.assertIn("image_file", ctx.exception.message_dict)
+        # A draft may be saved before the image is uploaded.
+        Property(**_valid_property_kwargs(image="", is_published=False)).full_clean()
 
     @override_settings(MEDIA_ROOT=_TMP_MEDIA)
     def test_upload_alone_satisfies_the_image_requirement(self):

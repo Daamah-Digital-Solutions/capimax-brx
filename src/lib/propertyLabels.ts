@@ -60,12 +60,23 @@ const LABELS: Record<string, Pair> = {
 
 const titleCase = (s: string) => s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** A two-letter ISO country code's name ("eg" → "Egypt" / "مصر"), or null. */
+export function countryName(code: string, isAr: boolean): string | null {
+  if (!/^[a-z]{2}$/i.test(code)) return null;
+  try {
+    const name = new Intl.DisplayNames([isAr ? "ar" : "en"], { type: "region", fallback: "none" }).of(code.toUpperCase());
+    return name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The label for a property code in the current language. */
 export function propertyLabel(value: string | null | undefined, isAr: boolean): string {
   if (!value) return "—";
   const hit = LABELS[String(value).toLowerCase().replace(/\s+/g, "")] ?? LABELS[String(value).toLowerCase()];
   if (hit) return isAr ? hit.ar : hit.en;
-  return titleCase(String(value));
+  return countryName(String(value), isAr) ?? titleCase(String(value));
 }
 
 /** A record's property name in the site language (the API sends `property_name_ar` when it has one). */

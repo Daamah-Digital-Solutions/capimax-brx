@@ -82,7 +82,7 @@ class InstallmentPlansView(APIView):
             prop = props.get(plan.property_id)
             slug = prop.slug if prop else ""
             name_en = prop.name if prop else plan.property_name
-            name_ar = prop.name_ar if prop else plan.property_name
+            name_ar = (prop.name_ar or prop.name) if prop else plan.property_name
 
             payments = sorted(plan.payments.all(), key=lambda p: p.sequence)
             paid_installments = sum(

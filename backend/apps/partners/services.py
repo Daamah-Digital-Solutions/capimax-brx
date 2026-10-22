@@ -270,7 +270,7 @@ def create_assignment(
         partner=partner,
         property=prop,
         property_name=getattr(prop, "name", "") or "",
-        property_name_ar=getattr(prop, "name_ar", "") or "",
+        property_name_ar=getattr(prop, "name_ar", "") or getattr(prop, "name", "") or "",
         location=getattr(prop, "location", "") or "",
         location_ar=getattr(prop, "location_ar", "") or "",
         service_type=service_type,
