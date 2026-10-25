@@ -189,6 +189,8 @@ export interface Property {
     name: string; nameAr: string; overview: string; overviewAr: string;
     yearsExperience: number; completedProjects: number; ongoingProjects: number; rating: number;
     location: string; locationAr: string; email: string; phone: string;
+    /** The developer's website (admin-set; empty → not shown). */
+    website?: string;
     relatedProjects: { en: string; ar: string }[];
   };
   insurance?: { provider: string; policyNumber: string; coverageAmount: number; reinsurer: string; valuationFirm: string };

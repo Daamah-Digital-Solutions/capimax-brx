@@ -111,3 +111,42 @@ class CertificateFinalityTests(TestCase):
         cert = Certificate.objects.get(investment=inv)
         self.assertEqual(notices.first().params["certificate_id"], cert.certificate_id)
         self.assertEqual(notices.first().action_url, "/portfolio?tab=certificates")
+
+
+class ReceivedUnitsCertificateTests(TestCase):
+    """Units received by a market purchase, transfer or gift get their certificate at once."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="receiver@example.com", password="pw12345!")
+        self.prop = _make_property("received", total_value=1_000_000, token_price=100)
+
+    def test_transfer_gift_and_market_purchases_get_a_final_certificate(self):
+        from apps.investments.services import record_acquisition_cost
+        from apps.notifications.models import Notification
+
+        for source in ("gift", "family_transfer", "secondary_market", "lp_market"):
+            inv = record_acquisition_cost(
+                user=self.user, property_slug=self.prop.slug, property_name=self.prop.name,
+                token_symbol="RCV", token_amount=4, amount_paid=Decimal("400"), source=source,
+            )
+            cert = Certificate.objects.get(investment=inv)
+            self.assertEqual(cert.status, "final", source)
+            self.assertEqual(cert.platform_fee, Decimal("0.00"))  # no primary-sale fee
+            self.assertEqual(cert.ownership_percentage, Decimal("0.040000"))  # 4 of 10,000 units
+        self.assertEqual(Notification.objects.filter(user=self.user, type="certificate_final").count(), 4)
+
+    def test_backfill_issues_missing_ones_without_notifying(self):
+        from django.core.management import call_command
+
+        from apps.notifications.models import Notification
+
+        inv = Investment.objects.create(
+            user=self.user, property=self.prop, property_name=self.prop.name, amount_invested=Decimal("200"),
+            token_amount=2, token_symbol="RCV", price_per_token=Decimal("100"), ownership_percentage=Decimal("0"),
+            payment_method="gift", payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
+        )
+        call_command("issue_missing_certificates", stdout=__import__("io").StringIO())
+        self.assertEqual(Certificate.objects.get(investment=inv).status, "final")
+        self.assertFalse(Notification.objects.filter(user=self.user, type="certificate_final").exists())
+        call_command("issue_missing_certificates", stdout=__import__("io").StringIO())  # idempotent
+        self.assertEqual(Certificate.objects.filter(investment=inv).count(), 1)

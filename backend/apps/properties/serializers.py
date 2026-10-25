@@ -343,7 +343,7 @@ class DeveloperInfoSerializer(serializers.ModelSerializer):
         fields = (
             "name", "nameAr", "overview", "overviewAr", "yearsExperience",
             "completedProjects", "ongoingProjects", "rating", "location",
-            "locationAr", "email", "phone", "relatedProjects",
+            "locationAr", "email", "phone", "website", "relatedProjects",
         )
 
 

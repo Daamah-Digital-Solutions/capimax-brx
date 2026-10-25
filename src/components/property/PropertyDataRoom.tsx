@@ -299,6 +299,7 @@ function DeveloperSection({ p, isAr }: { p: Property; isAr: boolean }) {
         locationAr: d.locationAr || d.location,
         email: d.email,
         phone: d.phone,
+        website: d.website || "",
         related: (d.relatedProjects || []).map((r) => ({ en: r.en, ar: r.ar || r.en })),
       }
     : {
@@ -316,6 +317,7 @@ function DeveloperSection({ p, isAr }: { p: Property; isAr: boolean }) {
     locationAr: "مركز دبي المالي العالمي",
     email: "investors@capimax-developer.com",
     phone: "+971 4 000 0000",
+    website: "",
     related: [
       { en: "Marina Bay Tower", ar: "برج مارينا باي" },
       { en: "Riyadh Logistics Hub", ar: "محور الرياض اللوجستي" },
@@ -373,6 +375,16 @@ function DeveloperSection({ p, isAr }: { p: Property; isAr: boolean }) {
             <p className="text-xs text-muted-foreground flex items-center gap-2">
               <Phone className="w-3.5 h-3.5" /> {developer.phone}
             </p>
+            {developer.website && (
+              <a
+                href={developer.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-2 break-all"
+              >
+                <Globe className="w-3.5 h-3.5 shrink-0" /> {developer.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </a>
+            )}
           </div>
           <div className="p-4 rounded-lg bg-muted/40 border border-border">
             <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">

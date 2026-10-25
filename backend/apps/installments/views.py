@@ -69,7 +69,7 @@ class InstallmentPlansView(APIView):
         props = {
             prop.pk: prop
             for prop in Property.objects.filter(pk__in=prop_pks).only(
-                "pk", "slug", "name", "name_ar", "token_price"
+                "pk", "slug", "name", "name_ar", "token_price", "image", "image_file"
             )
         }
 
@@ -171,6 +171,8 @@ class InstallmentPlansView(APIView):
                     "propertyId": slug,
                     "property": name_ar,
                     "propertyEn": name_en,
+                    # The property's main image (uploaded file or link), for the plan card.
+                    "image": (prop.hero_image_url(request) or None) if prop else None,
                     "status": plan.status,
                     "totalAmount": float(plan.total_amount),
                     "downPayment": float(plan.down_payment_amount),
@@ -613,3 +615,77 @@ class InstallmentPreviewView(APIView):
                 "rows": rows,
             }
         )
+
+
+class InstallmentPreviewPdfView(InstallmentPreviewView):
+    """
+    The same live plan preview as a branded PDF (client review: download the schedule as a
+    PDF at payment, not a spreadsheet). Same body as POST /installments/preview/ — the
+    figures are THAT preview's, so the file matches what checkout charges. PUBLIC.
+    """
+
+    def post(self, request):
+        resp = super().post(request)
+        if resp.status_code != 200:
+            return resp
+        from django.http import HttpResponse
+
+        from apps.reports.brand import Col, Doc, money
+
+        p = resp.data
+        prop = Property.objects.filter(slug=p["property"]).first()
+        name = prop.name if prop else p["property"]
+        from django.utils import timezone
+
+        today = timezone.now().date()
+        d = Doc(
+            title="Installment Plan",
+            ref=f"PLAN-{p['property']}-{p['units']}U-{p['termMonths']}M".upper()[:60],
+            subtitle=name,
+            note="Preview of the plan you are about to start — confirmed at checkout. Amounts in USD.",
+        )
+        d.summary([
+            ("Property", name),
+            ("Units", f"{p['units']:,}"),
+            ("Unit price", f"{money(p['unitPrice'])} USD"),
+            ("Total price", f"{money(p['total'])} USD", True),
+            ("Down payment", f"{money(p['downPayment'])} USD ({p['downPaymentPercent']:g}%)"),
+            ("Due today", f"{money(p['amountDueNow'])} USD", True),
+            ("Monthly installment", f"{money(p['installmentAmount'])} USD"),
+            ("Installments", f"{p['numberOfInstallments']} monthly"),
+            ("Installment fee", f"{p['feeRate']:g}%"),
+        ])
+        d.section("Payment schedule", "The down payment today, then one installment a month.")
+        down_own = round(p["downPaymentPercent"], 2)
+        rows = [{
+            "sequence": "0", "label": "Down payment", "due": today.isoformat(),
+            "amount": p["downPayment"], "fee": p["fee"], "charge": p["amountDueNow"],
+            "balance": max(0.0, p["total"] - p["downPayment"]), "own": f"{down_own:g}%",
+        }] + [{
+            "sequence": str(r["sequence"]), "label": f"Installment {r['sequence']}",
+            "due": r["dueDate"], "amount": r["amount"], "fee": r["fee"], "charge": r["charge"],
+            "balance": r["balance"], "own": f"{r['ownershipPercent']:g}%",
+        } for r in p["rows"]]
+        total_fee = p["fee"] + sum(r["fee"] for r in p["rows"])
+        d.table(
+            [
+                Col("sequence", "#", 0.4),
+                Col("label", "Payment", 1.4),
+                Col("due", "Due date", 1.0, fmt="date"),
+                Col("amount", "Amount (USD)", 1.1, "right", fmt="money"),
+                Col("fee", "Fee (USD)", 0.9, "right", fmt="money"),
+                Col("charge", "To pay (USD)", 1.1, "right", fmt="money"),
+                Col("balance", "Remaining (USD)", 1.2, "right", fmt="money"),
+                Col("own", "Ownership", 0.9, "right"),
+            ],
+            rows,
+            totals={"label": "Total", "amount": p["total"], "fee": total_fee,
+                    "charge": p["total"] + total_fee},
+        )
+        d.paragraph(
+            "Ownership grows with every payment: the units are recorded at once and released as "
+            "they are paid. Installments are charged on their due dates from the method you choose."
+        )
+        out = HttpResponse(d.finish(), content_type="application/pdf")
+        out["Content-Disposition"] = f'attachment; filename="{p["property"]}-installment-plan.pdf"'
+        return out

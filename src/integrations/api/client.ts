@@ -398,6 +398,8 @@ export const investmentsApi = {
     expected_unit_price?: number;
     /** Wallet purchase: "family" asks for the family reinvestment rate (eligible owners only). */
     reinvest_mode?: "standard" | "family";
+    /** True only on the "Reinvest returns" path — the one purchase that gets the discount. */
+    reinvest?: boolean;
   }) =>
     rawRequest("/investments/", {
       method: "POST",
@@ -410,6 +412,8 @@ export const investmentsApi = {
       discount_percent: number;
       family_discount_percent: number;
       family_eligible: boolean;
+      /** Returns not yet reinvested — the most the discount applies to. */
+      available_returns: number;
     }>,
   /** Mint tokens for an already-paid investment (when the wallet came later). */
   mint: (investmentId: string) =>
@@ -1596,6 +1600,7 @@ export interface InstallmentPlanRow {
   propertyId: string;               // Property.slug (links to /property/:slug)
   property: string;                 // AR name
   propertyEn: string;               // EN name
+  image?: string | null;            // the property's main image (null if none)
   status: "draft" | "active" | "completed" | "defaulted";
   totalAmount: number;
   downPayment: number;
@@ -1742,6 +1747,25 @@ export const installmentsApi = {
       method: "POST",
       body: params,
     }) as Promise<InstallmentPreview>,
+  /** The same preview as a branded PDF, saved to the device (PUBLIC, writes nothing). */
+  async downloadPreviewPdf(params: InstallmentPreviewParams, filename: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/installments/preview/pdf/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      throw buildError(`Plan PDF failed (${res.status})`, res.status);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
   /** The caller's own installment plans + schedules. */
   plans: () =>
     rawRequest("/installments/plans/", { auth: true }) as Promise<InstallmentsResponse>,

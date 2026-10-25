@@ -1002,6 +1002,7 @@ class DeveloperInfo(models.Model):
     location_ar = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=40, blank=True)
+    website = models.URLField(max_length=300, blank=True, help_text="The developer's website, e.g. https://example.com")
     related_projects = models.JSONField(
         default=list, blank=True,
         help_text='List of projects, e.g. [{"en": "Marina Heights", "ar": "مارينا هايتس"}]',

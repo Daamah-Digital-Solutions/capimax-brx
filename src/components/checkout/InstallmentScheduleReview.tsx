@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -134,65 +135,21 @@ export function InstallmentScheduleReview({
     return rows;
   };
 
-  // Download the full plan as a CSV (dep-free, offline). Mirrors the property-page planner's
-  // export shape; a UTF-8 BOM keeps Arabic property names intact in Excel.
-  const downloadCsv = () => {
-    if (!preview) return;
-    const rows = buildRows(preview);
-    const meta: string[][] = [
-      [isAr ? "العقار" : "Property", isAr ? propertyNameAr : propertyName],
-      [isAr ? "عدد الوحدات" : "Units", String(preview.units)],
-      [isAr ? "سعر الوحدة" : "Unit price", String(preview.unitPrice)],
-      [isAr ? "قيمة المركز" : "Position value", String(preview.total)],
-      preview.feeRate
-        ? [
-            isAr ? `رسوم التقسيط (${preview.feeRate}%) على المقدّم` : `Installment fee (${preview.feeRate}%) on the down payment`,
-            String(preview.fee),
-          ]
-        : [isAr ? "رسوم المنصة والإدارة" : "Platform + management fee", String(preview.fee)],
-      [isAr ? "الدفعة المقدمة %" : "Down payment %", `${preview.downPaymentPercent}%`],
-      [isAr ? "قيمة الدفعة المقدمة" : "Down payment", String(preview.downPayment)],
-      [isAr ? "المستحق الآن" : "Due now (down payment + fee)", String(preview.amountDueNow)],
-      [isAr ? "الرصيد الممول" : "Financed balance", String(preview.total - preview.downPayment)],
-      [isAr ? "قيمة القسط" : "Per installment", String(preview.installmentAmount)],
-      [isAr ? "عدد الأقساط" : "Number of installments", String(preview.numberOfInstallments)],
-      [isAr ? "التكرار" : "Frequency", freqLabel(preview.frequency)],
-      [],
-    ];
-    const head = [
-      isAr ? "البند" : "Item",
-      isAr ? "التاريخ" : "Date",
-      isAr ? "المبلغ (USD)" : "Amount (USD)",
-      isAr ? "الرسوم (USD)" : "Fee (USD)",
-      isAr ? "المتراكم" : "Cumulative",
-      isAr ? "الرصيد المتبقي" : "Remaining balance",
-      isAr ? "نسبة الملكية %" : "Ownership %",
-    ];
-    const body = rows.map((r) => [
-      r.label,
-      r.date,
-      r.amount.toFixed(2),
-      r.fee.toFixed(2),
-      r.cumulative.toFixed(2),
-      r.balance.toFixed(2),
-      r.ownership.toFixed(2) + "%",
-    ]);
-    const esc = (c: string) => `"${String(c).replace(/"/g, '""')}"`;
-    const csv = [...meta, head, ...body]
-      .map((r) => r.map(esc).join(","))
-      .join("\r\n");
-    const slug = (propertyName || "installment")
-      .replace(/[^a-z0-9]+/gi, "-")
-      .toLowerCase();
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${slug}-installment-plan.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // Download the full plan as a branded PDF — drawn by the server from the SAME preview, so
+  // the file matches what checkout charges (client review: PDF, not a spreadsheet).
+  const [downloading, setDownloading] = useState(false);
+  const downloadPdf = async () => {
+    setDownloading(true);
+    try {
+      await installmentsApi.downloadPreviewPdf(
+        { property: propertyId, units, down_payment_percent: downPct, n_installments: nInstallments, frequency },
+        `${(propertyName || "installment").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-installment-plan.pdf`,
+      );
+    } catch {
+      toast.error(isAr ? "تعذّر تنزيل الخطة، حاول مرة أخرى." : "Could not download the plan — please try again.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   // Loading / error: keep it quiet and non-blocking — the summary panel already shows "due now".
@@ -262,9 +219,9 @@ export function InstallmentScheduleReview({
           <ListChecks className="w-4 h-4" />
           {isAr ? "مراجعة جدول الأقساط الكامل" : "Review Full Installment Schedule"}
         </Button>
-        <Button variant="outline" className="gap-2" onClick={downloadCsv}>
+        <Button variant="outline" className="gap-2" onClick={downloadPdf} disabled={downloading}>
           <Download className="w-4 h-4" />
-          {isAr ? "تنزيل الخطة" : "Download plan"}
+          {isAr ? "تنزيل الخطة (PDF)" : "Download plan (PDF)"}
         </Button>
       </div>
 
@@ -370,9 +327,9 @@ export function InstallmentScheduleReview({
               </p>
             </div>
 
-            <Button className="w-full gap-2" onClick={downloadCsv}>
+            <Button className="w-full gap-2" onClick={downloadPdf} disabled={downloading}>
               <Download className="w-4 h-4" />
-              {isAr ? "تنزيل الخطة الكاملة (CSV)" : "Download the full plan (CSV)"}
+              {isAr ? "تنزيل الخطة الكاملة (PDF)" : "Download the full plan (PDF)"}
             </Button>
           </div>
         </DialogContent>

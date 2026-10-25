@@ -173,6 +173,11 @@ class ReadEndpointTests(APITestCase):
         self.assertEqual(resp.data["stats"]["totalCommitment"], 1000.0)
         self.assertEqual(resp.data["stats"]["totalPaid"], 0.0)
 
+    def test_plan_carries_the_property_image(self):
+        self.client.force_authenticate(self.alice)
+        row = self.client.get("/api/installments/plans/").data["plans"][0]
+        self.assertEqual(row["image"], self.prop.image)
+
     def test_other_user_sees_no_plans(self):
         self.client.force_authenticate(self.bob)
         resp = self.client.get("/api/installments/plans/")
@@ -395,9 +400,9 @@ class FeesBuyerBorneTests(TestCase):
             user=self.investor, prop=ledger, token_amount=10, payment_method="balance",
         )
         inv = res["investment"]
-        # Buyer pays value + fee − 5% reinvestment discount (1000 + 20 − 50) from balance.
+        # Paying from the wallet is a normal purchase: value + fee, no reinvestment discount.
         debit = BalanceTransaction.objects.get(source="reinvestment", reference=str(inv.id))
-        self.assertEqual(debit.amount, Decimal("970.00"))
+        self.assertEqual(debit.amount, Decimal("1020.00"))
         # Owner still credited the FULL token value.
         bt = BalanceTransaction.objects.get(source="primary_sale", reference=str(inv.id))
         self.assertEqual(bt.amount, Decimal("1000.00"))
@@ -1057,6 +1062,18 @@ class PreviewEndpointTests(APITestCase):
 
     def _preview(self, **body):
         return self.client.post("/api/installments/preview/", body, format="json")
+
+    def test_preview_as_pdf(self):
+        resp = self.client.post("/api/installments/preview/pdf/", {
+            "property": "inst-preview", "units": 10, "down_payment_percent": 30,
+            "n_installments": 3, "frequency": "monthly",
+        }, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+        self.assertIn("installment-plan.pdf", resp["Content-Disposition"])
+        bad = self.client.post("/api/installments/preview/pdf/", {"property": "nope", "units": 1}, format="json")
+        self.assertEqual(bad.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_preview_is_public_no_auth_required(self):
         resp = self._preview(

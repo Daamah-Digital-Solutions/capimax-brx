@@ -92,6 +92,10 @@ class Investment(models.Model):
     # Set at create time from the property's admin rate (Property.fee_pronova_discount). The
     # platform's net for the sale = fee_amount − discount_amount (UNCAPPED — may be negative).
     discount_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    # Reinvestment: the part of the unit value funded from the investor's own returns
+    # (distributions) — the only part the reinvestment discount applies to. Counted against
+    # their returns so the same returns are never discounted twice.
+    reinvested_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     installment_plan = models.ForeignKey(
         "installments.InstallmentPlan",
         on_delete=models.SET_NULL,

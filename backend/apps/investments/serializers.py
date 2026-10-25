@@ -56,6 +56,9 @@ class InvestmentCreateSerializer(serializers.Serializer):
     reinvest_mode = serializers.ChoiceField(
         choices=["standard", "family"], required=False, default="standard"
     )
+    # True only when the investor came through "Reinvest returns" — the one path that gets
+    # the reinvestment discount (on the part covered by their returns).
+    reinvest = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs):
         try:

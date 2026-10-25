@@ -38,6 +38,12 @@ class PropertyAdminCompletenessTests(TestCase):
         self.assertEqual(token["contractAddress"], "0x" + "ab" * 20)
         self.assertTrue(token["verified"])
 
+    def test_developer_website_reaches_the_page(self):
+        from .models import DeveloperInfo
+
+        DeveloperInfo.objects.create(property=self.prop, name="Dev Co", website="https://dev.example.com")
+        self.assertEqual(self._detail()["developer"]["website"], "https://dev.example.com")
+
     def test_amenities_follow_the_admin_order(self):
         Amenity.objects.create(property=self.prop, name_en="Pool", order=2)
         Amenity.objects.create(property=self.prop, name_en="Gym", order=1)

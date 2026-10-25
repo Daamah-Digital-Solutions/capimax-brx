@@ -7,7 +7,7 @@ import {
   BarChart3,
   Calendar,
   FolderOpen,
-  Gift,
+  Send,
   HelpCircle,
   LogOut,
   RefreshCw,
@@ -27,7 +27,7 @@ export function QuickActions({ className }: { className?: string }) {
   const actions: Action[] = [
     { ar: "إيداع", en: "Deposit", icon: ArrowDownToLine, to: "/wallet", tone: "text-emerald-500" },
     { ar: "سحب", en: "Withdraw", icon: ArrowUpFromLine, to: "/wallet" },
-    { ar: "تحويل حصص", en: "Transfer units", icon: Gift, to: "/transfers", tone: "text-primary" },
+    { ar: "تحويل", en: "Transfer", icon: Send, to: "/transfers", tone: "text-primary" },
     { ar: "الشهادات", en: "Certificates", icon: Award, to: "/portfolio?tab=certificates" },
     { ar: "مركز المستندات", en: "Document center", icon: FolderOpen, to: "/documents" },
     { ar: "مركز التحقق", en: "Verification center", icon: ShieldCheck, to: "/verification-center" },

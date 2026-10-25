@@ -122,6 +122,7 @@ export default function Checkout() {
     discount_percent: number;
     family_discount_percent: number;
     family_eligible: boolean;
+    available_returns: number;
   } | null>(null);
   const [familyReinvest, setFamilyReinvest] = useState(false);
   useEffect(() => {
@@ -310,16 +311,18 @@ export default function Checkout() {
     selectedMethod === "pronova"
       ? Math.round(chargedSubtotal * pronovaRate * 100) / 100
       : 0;
-  // Reinvestment: a FULL purchase paid from the wallet is discounted on its unit value (the
-  // server's reinvest_discount_for) — 5%, or the family rate for a family-account owner who
-  // picks it. Mirrored here so the total shown is what the wallet is charged.
+  // Reinvestment (client rules): paying from the wallet is a normal purchase — full price
+  // and fees. Only the explicit "Reinvest returns" path (?reinvest=true) is discounted, and
+  // only on the part of the unit value the investor's own returns cover. Mirrors the
+  // server's create_investment so the total shown is what the wallet is charged.
   const reinvestRate =
-    selectedMethod === "balance" && !installmentTerms && reinvestSettings
+    reinvestMode && selectedMethod === "balance" && !installmentTerms && reinvestSettings
       ? familyReinvest && reinvestSettings.family_eligible
         ? reinvestSettings.family_discount_percent
         : reinvestSettings.discount_percent
       : 0;
-  const reinvestDiscount = Math.round(investment.investmentAmount * reinvestRate) / 100;
+  const reinvestedPart = Math.min(investment.investmentAmount, reinvestSettings?.available_returns ?? 0);
+  const reinvestDiscount = Math.round(reinvestedPart * reinvestRate) / 100;
   // The amount CHARGED now = the charged subtotal LESS any Pronova / reinvestment discount.
   const finalAmount = chargedSubtotal - pronovaDiscount - reinvestDiscount;
 
@@ -375,8 +378,8 @@ export default function Checkout() {
         token_amount: units,
         payment_method: selectedMethod || "card",
         expected_unit_price: unitPrice || undefined,
-        ...(selectedMethod === "balance" && !installmentTerms && familyReinvest
-          ? { reinvest_mode: "family" as const }
+        ...(reinvestMode && selectedMethod === "balance" && !installmentTerms
+          ? { reinvest: true, ...(familyReinvest ? { reinvest_mode: "family" as const } : {}) }
           : {}),
         ...(installmentTerms
           ? {
@@ -892,6 +895,7 @@ export default function Checkout() {
                 onSelectMethod={setSelectedMethod}
                 availableBalance={availableBalance}
                 balanceChargeAmount={chargedSubtotal}
+                reinvest={reinvestMode}
                 selectedPanel={selectedMethodPanel}
               />
 

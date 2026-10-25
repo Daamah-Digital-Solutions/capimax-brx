@@ -112,11 +112,25 @@ def create_customer(*, email: str, user_id: str) -> str:
         raise StripeError("Could not create the customer.") from exc
 
 
+def _field(obj, key, default=None):
+    """
+    One field of a Stripe object (or a plain dict). Stripe's SDK 15 objects are no longer
+    dicts — `.get()` raises — so every read goes through item access with a default.
+    """
+    if obj is None:
+        return default
+    try:
+        value = obj[key]
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return default
+    return default if value is None else value
+
+
 def customer_exists(customer_id: str) -> bool:
     stripe = _stripe()
     try:
         c = stripe.Customer.retrieve(customer_id)
-        return not c.get("deleted")
+        return not _field(c, "deleted", False)
     except Exception:
         return False
 
@@ -138,11 +152,11 @@ def retrieve_setup_intent(setup_intent_id: str) -> dict:
         si = stripe.SetupIntent.retrieve(setup_intent_id)
     except Exception as exc:
         raise StripeError("Card setup not found.") from exc
-    pm = si.get("payment_method")
+    pm = _field(si, "payment_method")
     return {
-        "customer": si.get("customer") or "",
-        "status": si.get("status") or "",
-        "payment_method": pm if isinstance(pm, str) else (pm or {}).get("id", ""),
+        "customer": _field(si, "customer", ""),
+        "status": _field(si, "status", ""),
+        "payment_method": pm if isinstance(pm, str) else _field(pm, "id", ""),
     }
 
 
@@ -152,13 +166,13 @@ def retrieve_card(payment_method_id: str) -> dict:
         pm = stripe.PaymentMethod.retrieve(payment_method_id)
     except Exception as exc:
         raise StripeError("Card not found.") from exc
-    card = pm.get("card") or {}
+    card = _field(pm, "card", {})
     return {
-        "brand": card.get("brand") or "card",
-        "last4": card.get("last4") or "",
-        "exp_month": int(card.get("exp_month") or 0),
-        "exp_year": int(card.get("exp_year") or 0),
-        "name": ((pm.get("billing_details") or {}).get("name") or ""),
+        "brand": _field(card, "brand") or "card",
+        "last4": _field(card, "last4", ""),
+        "exp_month": int(_field(card, "exp_month", 0)),
+        "exp_year": int(_field(card, "exp_year", 0)),
+        "name": _field(_field(pm, "billing_details"), "name", ""),
     }
 
 
@@ -217,8 +231,8 @@ def retrieve_account(account_id: str) -> dict:
     except Exception as exc:
         raise StripeError("Payout account not found.") from exc
     return {
-        "payouts_enabled": bool(acct.get("payouts_enabled")),
-        "details_submitted": bool(acct.get("details_submitted")),
+        "payouts_enabled": bool(_field(acct, "payouts_enabled", False)),
+        "details_submitted": bool(_field(acct, "details_submitted", False)),
     }
 
 
@@ -229,8 +243,8 @@ def has_instant_destination(account_id: str) -> bool:
         ext = stripe.Account.list_external_accounts(account_id, limit=10)
     except Exception:
         return False
-    for item in ext.get("data", []):
-        if "instant" in (item.get("available_payout_methods") or []):
+    for item in _field(ext, "data", []):
+        if "instant" in (_field(item, "available_payout_methods") or []):
             return True
     return False
 

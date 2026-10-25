@@ -50,11 +50,22 @@ def create_provisional_certificate(investment) -> Certificate:
     spv_name = getattr(spv, "name", "") or ""
     spv_ref = getattr(spv, "registration_number", "") or ""
 
-    # Real platform fee amount from the property's configured rate.
+    # Real platform fee amount from the property's configured rate. Units received by a
+    # market purchase, transfer or gift carry no platform purchase fee.
+    from apps.investments.models import RESALE_PAYMENT_METHODS
+
     fee_rate = Decimal(str(getattr(prop, "fee_platform", 0) or 0))
     platform_fee = (investment.amount_invested * fee_rate / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
+    if investment.payment_method in RESALE_PAYMENT_METHODS:
+        platform_fee = Decimal("0.00")
+    # Ownership share of these units (records of received units don't store one).
+    ownership = investment.ownership_percentage
+    if not ownership and prop.token_supply:
+        ownership = (Decimal(investment.token_amount) * 100 / Decimal(prop.token_supply)).quantize(
+            Decimal("0.000001"), rounding=ROUND_HALF_UP
+        )
 
     year = timezone.now().year
     prop_token = "".join(c for c in prop.slug if c.isalnum()).upper()[:4] or "PROP"
@@ -77,7 +88,7 @@ def create_provisional_certificate(investment) -> Certificate:
         investment_amount=investment.amount_invested,
         units_purchased=investment.token_amount,
         unit_price=investment.price_per_token,
-        ownership_percentage=investment.ownership_percentage,
+        ownership_percentage=ownership,
         platform_fee=platform_fee,
         verification_code=verification_code,
         verification_url="",  # set when the PDF is generated (Wave 3)
@@ -107,7 +118,7 @@ def is_settled(investment) -> bool:
     return True
 
 
-def sync_certificate(investment):
+def sync_certificate(investment, *, notify_holder: bool = True):
     """
     Keep an investment's certificate in step with its settlement: issued (provisional) once
     the payment is confirmed — never for a failed or unpaid attempt — and made final once
@@ -121,6 +132,8 @@ def sync_certificate(investment):
     cert = create_provisional_certificate(investment)
     if cert.status == CertificateStatus.PROVISIONAL and is_settled(investment):
         cert.mark_final()
+        if not notify_holder:
+            return cert
         from apps.notifications.services import NotificationType, notify
 
         notify(

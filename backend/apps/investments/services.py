@@ -178,11 +178,33 @@ def family_reinvest_eligible(user) -> bool:
     return FamilyAccount.objects.filter(investor=user, status="active").exists()
 
 
+def available_returns(user) -> Decimal:
+    """
+    The investor's returns not yet reinvested: every distribution credited to their wallet,
+    less the part of earlier reinvestments already funded from returns. Deposits, sale
+    proceeds and refunds are not returns.
+    """
+    from django.db.models import Sum
+
+    from apps.distributions.services import DISTRIBUTION_SOURCE
+    from apps.wallets.models import BalanceTransaction
+
+    earned = BalanceTransaction.objects.filter(
+        balance__user=user, entry_type=BalanceTransaction.EntryType.CREDIT, source=DISTRIBUTION_SOURCE,
+    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    used = Investment.objects.filter(user=user).exclude(
+        payment_status=PaymentStatus.FAILED
+    ).aggregate(s=Sum("reinvested_amount"))["s"] or Decimal("0")
+    return max(Decimal("0"), Decimal(earned) - Decimal(used))
+
+
 def reinvest_discount_for(user, value, *, family: bool) -> tuple[Decimal, Decimal]:
     """
-    (rate %, discount) for a full purchase paid from the wallet: REINVEST_DISCOUNT_PERCENT on
-    the unit value, or FAMILY_REINVEST_DISCOUNT_PERCENT for a family-account owner who asks
-    for it. Platform-absorbed like the Pronova discount (the owner still gets the full value).
+    (rate %, discount) for a REINVESTMENT — a full purchase paid from the wallet through the
+    explicit "Reinvest returns" path: REINVEST_DISCOUNT_PERCENT on the unit value, or
+    FAMILY_REINVEST_DISCOUNT_PERCENT for a family-account owner who asks for it.
+    Platform-absorbed like the Pronova discount (the owner still gets the full value).
+    `value` is the part funded from returns (see available_returns).
     """
     if family:
         if not family_reinvest_eligible(user):
@@ -264,6 +286,7 @@ def create_investment(
     expected_unit_price=None,
     term_months=None,
     reinvest_mode: str = "standard",
+    reinvest: bool = False,
 ) -> dict:
     """
     Create an investment per the LOCKED token-economics policy, simulate payment,
@@ -383,11 +406,16 @@ def create_investment(
                 down_payment_amount if is_installment and down_payment_amount is not None else amount
             )
             discount_amount = pronova_discount_for(locked_prop, charged_basis + fee_amount)
-        # Reinvestment: a full purchase paid from the wallet is discounted on its unit value.
-        if payment_method == BALANCE_METHOD and not is_installment:
-            _rate, discount_amount = reinvest_discount_for(
-                user, amount, family=(reinvest_mode == "family"),
-            )
+        # Reinvestment (client rules): paying from the wallet is just a payment method — full
+        # price and fees. The discount applies only when the investor explicitly chose
+        # "Reinvest returns", and only on the part of the unit value their returns cover.
+        reinvested_amount = Decimal("0")
+        if reinvest and payment_method == BALANCE_METHOD and not is_installment:
+            reinvested_amount = min(amount, available_returns(user))
+            if reinvested_amount > 0:
+                _rate, discount_amount = reinvest_discount_for(
+                    user, reinvested_amount, family=(reinvest_mode == "family"),
+                )
 
         # One-active-per-property. First EXPIRE a genuinely-abandoned webhook-gated
         # (card/crypto/Pronova) attempt that never confirmed, so a retry can proceed; sukuk
@@ -435,6 +463,7 @@ def create_investment(
             down_payment_amount=down_payment_amount,
             fee_amount=fee_amount,
             discount_amount=discount_amount,
+            reinvested_amount=reinvested_amount,
             installment_plan=installment_plan,
             # Webhook-settled (PSP) buys hold the price for the reservation window only.
             reserved_until=(
@@ -461,11 +490,14 @@ def create_investment(
                 debit_user_balance(
                     user, investment.settlement_amount, source=REINVESTMENT_SOURCE,
                     reference=str(investment.id),
-                    memo=f"Reinvestment: {token_amount} {symbol} of {locked_prop.slug}",
+                    memo=(
+                        f"{'Reinvestment' if reinvested_amount > 0 else 'Purchase'}: "
+                        f"{token_amount} {symbol} of {locked_prop.slug}"
+                    ),
                 )
             except InsufficientBalance:
                 raise ValidationError(
-                    {"payment_method": "Insufficient balance to reinvest this amount."}
+                    {"payment_method": "Insufficient wallet balance for this purchase."}
                 )
 
         # Phase 5 Wave 1: REAL payment for the card method — AND the Pronova rail, which
@@ -1019,7 +1051,7 @@ def record_acquisition_cost(
     prop = Property.objects.filter(slug=property_slug).first()
     if prop is None:
         return None
-    return Investment.objects.create(
+    inv = Investment.objects.create(
         user=user,
         property=prop,
         property_name=property_name,
@@ -1034,3 +1066,7 @@ def record_acquisition_cost(
         minted_at=timezone.now(),
         wallet=wallet,
     )
+    # Units that reach the investor by a market purchase, transfer or gift get their
+    # ownership certificate at once — already fully paid, so it is final.
+    sync_certificate(inv)
+    return inv

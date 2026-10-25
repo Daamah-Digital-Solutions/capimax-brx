@@ -424,7 +424,8 @@ export default function PropertyDetail() {
             {/* Description */}
             <div className="p-6 bg-card rounded-2xl border border-border">
               <h3 className="font-display text-xl font-semibold mb-3">{t("propertyDetail.description")}</h3>
-              <p className="text-muted-foreground leading-relaxed">{cpDesc}</p>
+              {/* Keeps the paragraphs and line breaks typed in the admin. */}
+              <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{cpDesc}</p>
             </div>
 
             {/* Model-specific template */}
@@ -907,7 +908,7 @@ export default function PropertyDetail() {
                     <h3 className="font-display text-xl font-semibold text-foreground mb-4">
                       {t("propertyDetail.description")}
                     </h3>
-                    <p className="text-muted-foreground leading-relaxed">
+                    <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
                       {propertyDescription}
                     </p>
                   </div>

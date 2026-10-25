@@ -64,6 +64,7 @@ class InvestmentCreateView(APIView):
             expected_unit_price=data.get("expected_unit_price"),
             term_months=data.get("term_months"),
             reinvest_mode=data.get("reinvest_mode", "standard"),
+            reinvest=bool(data.get("reinvest", False)),
         )
         investment = result["investment"]
         return Response(
@@ -228,10 +229,12 @@ class ReinvestSettingsView(APIView):
     def get(self, request):
         from django.conf import settings
 
-        from .services import family_reinvest_eligible
+        from .services import available_returns, family_reinvest_eligible
 
         return Response({
             "discount_percent": float(settings.REINVEST_DISCOUNT_PERCENT),
             "family_discount_percent": float(settings.FAMILY_REINVEST_DISCOUNT_PERCENT),
             "family_eligible": family_reinvest_eligible(request.user),
+            # Returns not yet reinvested — the most the discount can apply to.
+            "available_returns": float(available_returns(request.user)),
         })

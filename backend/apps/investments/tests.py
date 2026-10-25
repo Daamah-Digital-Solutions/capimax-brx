@@ -491,7 +491,7 @@ class ReinvestmentTests(TestCase):
         with mock.patch("apps.investments.services.chain_service.mint", side_effect=_fake_mint):
             return create_investment(
                 user=self.investor, prop=self.prop, token_amount=tokens,
-                payment_method="balance",
+                payment_method="balance", reinvest=True,  # the "Reinvest returns" path
             )
 
     def _balance(self):

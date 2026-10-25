@@ -26,7 +26,7 @@ import {
   Layers,
   Sparkles,
 } from "lucide-react";
-import type { InstallmentPreview } from "@/integrations/api/client";
+import { installmentsApi, type InstallmentPreview } from "@/integrations/api/client";
 import {
   type InstallmentTerms,
   installmentCheckoutQuery,
@@ -192,6 +192,30 @@ export function DynamicInstallmentPlanner({
         ? "bg-primary text-primary-foreground border-primary shadow-sm"
         : "bg-background hover:bg-accent border-border"
     }`;
+
+  // The plan as a branded PDF from the engine preview (same figures checkout charges); the
+  // CSV below is only the fallback when no preview is available (e.g. the demo pages).
+  const downloadPlan = async () => {
+    if (preview) {
+      try {
+        await installmentsApi.downloadPreviewPdf(
+          {
+            property: property.id,
+            units,
+            down_payment_percent: downPct,
+            n_installments: preview.numberOfInstallments,
+            frequency: "monthly",
+            ...(useOffered ? { term_months: termMonths } : {}),
+          },
+          `payment-plan-${property.id}-${downPct}pct-${useOffered ? `${termMonths}m` : `${years}y`}.pdf`,
+        );
+        return;
+      } catch {
+        // fall through to the offline CSV
+      }
+    }
+    downloadCsv();
+  };
 
   const downloadCsv = () => {
     const header = [
@@ -534,7 +558,7 @@ export function DynamicInstallmentPlanner({
                   </p>
                 </div>
 
-                <Button onClick={downloadCsv} className="w-full gap-2">
+                <Button onClick={downloadPlan} className="w-full gap-2">
                   <Download className="h-4 w-4" />
                   {isAr ? "تنزيل خطة السداد" : "Download Payment Plan"}
                 </Button>
@@ -542,7 +566,7 @@ export function DynamicInstallmentPlanner({
             </DialogContent>
           </Dialog>
 
-          <Button variant="outline" onClick={downloadCsv} className="gap-2">
+          <Button variant="outline" onClick={downloadPlan} className="gap-2">
             <Download className="h-4 w-4" />
             {isAr ? "تنزيل خطة السداد" : "Download Payment Plan"}
           </Button>

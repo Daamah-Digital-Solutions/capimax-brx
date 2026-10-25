@@ -111,14 +111,14 @@ export function InvestmentSummaryPanel({
         ) : (
           <>
         <div className="flex items-center justify-between py-2 border-t border-border">
-          <span className="text-muted-foreground">{t("checkout.platformFee")} (1.5%)</span>
+          <span className="text-muted-foreground">{t("checkout.platformFee")}</span>
           <span className="text-foreground">
             ${investment.platformFee.toLocaleString()}
           </span>
         </div>
 
         <div className="flex items-center justify-between py-2 border-t border-border">
-          <span className="text-muted-foreground">{t("checkout.managementFee")} (0.5%)</span>
+          <span className="text-muted-foreground">{t("checkout.managementFee")}</span>
           <span className="text-foreground">
             ${investment.managementFee.toLocaleString()}
           </span>

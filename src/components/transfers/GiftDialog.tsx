@@ -128,7 +128,7 @@ export function GiftDialog({
           <DialogTitle className="flex items-center gap-2">
             {isTransfer ? <ArrowLeftRight className="w-5 h-5 text-primary" /> : <Gift className="w-5 h-5 text-pink-500" />}
             {isTransfer
-              ? isRTL ? "تحويل وحدات أو رصيد" : "Transfer units or balance"
+              ? isRTL ? "تحويل" : "Transfer"
               : isRTL ? "هدية عقارية" : "Property gift"}
           </DialogTitle>
           <DialogDescription>

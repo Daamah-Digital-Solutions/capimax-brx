@@ -244,9 +244,18 @@ export default function Installments() {
                       style={{ animationDelay: `${(index + 3) * 0.05}s` }}
                     >
                       <div className="flex flex-col lg:flex-row">
-                        {/* Property visual (no image in the plan payload — gradient placeholder) */}
-                        <div className="lg:w-64 h-48 lg:h-auto relative bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                          <Building2 className="w-12 h-12 text-primary/40" />
+                        {/* Property image (gradient placeholder when the property has none) */}
+                        <div className="lg:w-64 h-48 lg:h-auto relative bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center overflow-hidden">
+                          {plan.image ? (
+                            <img
+                              src={plan.image}
+                              alt={language === "ar" ? plan.property : plan.propertyEn}
+                              className="absolute inset-0 w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Building2 className="w-12 h-12 text-primary/40" />
+                          )}
+                          {plan.image && <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />}
                           <div className="absolute bottom-4 right-4 left-4">
                             <Badge variant="construction" className="mb-2">{t("installments.underConstruction")}</Badge>
                             <div className="flex items-center gap-2">

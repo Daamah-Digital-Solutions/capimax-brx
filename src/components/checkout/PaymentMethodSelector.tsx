@@ -23,6 +23,8 @@ interface PaymentMethodSelectorProps {
   // price). When provided, a "Pay from balance" method is offered (disabled if insufficient).
   availableBalance?: number | null;
   balanceChargeAmount?: number;
+  /** True on the "Reinvest returns" path — only then is paying from the wallet a reinvestment. */
+  reinvest?: boolean;
   // The SELECTED method's real payment panel (input + terms + pay), rendered inline in its
   // own expanded container. Computed by Checkout; the selector only places it here.
   selectedPanel?: ReactNode;
@@ -33,6 +35,7 @@ export function PaymentMethodSelector({
   onSelectMethod,
   availableBalance,
   balanceChargeAmount = 0,
+  reinvest = false,
   selectedPanel,
 }: PaymentMethodSelectorProps) {
   const { t, language, isRTL } = useLanguage();
@@ -50,7 +53,8 @@ export function PaymentMethodSelector({
     highlight?: boolean;
     disabled?: boolean;
   }> = [
-    // Reinvestment: spend accrued returns (no PSP). Shown first when a balance exists.
+    // The wallet balance (no PSP). Shown first when a balance exists. It is just a payment
+    // method — a reinvestment only on the "Reinvest returns" path.
     ...(hasBalance && (availableBalance as number) > 0
       ? [{
           id: "balance" as PaymentMethod,
@@ -58,9 +62,9 @@ export function PaymentMethodSelector({
           icon: Wallet,
           description:
             language === "ar"
-              ? `متاح: $${(availableBalance as number).toLocaleString()} — إعادة استثمار عوائدك`
-              : `Available: $${(availableBalance as number).toLocaleString()} — reinvest your returns`,
-          badge: language === "ar" ? "إعادة استثمار" : "Reinvest",
+              ? `متاح: $${(availableBalance as number).toLocaleString()}${reinvest ? " — إعادة استثمار عوائدك" : ""}`
+              : `Available: $${(availableBalance as number).toLocaleString()}${reinvest ? " — reinvest your returns" : ""}`,
+          badge: reinvest ? (language === "ar" ? "إعادة استثمار" : "Reinvest") : undefined,
           disabled: !balanceEnough,
         }]
       : []),
