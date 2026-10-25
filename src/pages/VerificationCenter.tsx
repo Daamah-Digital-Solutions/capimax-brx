@@ -3,9 +3,13 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ExternalLink, BadgeCheck, Building2, Landmark, Scale, FileCheck } from "lucide-react";
 import capimaxTrustLogo from "@/assets/capimax-trust-logo.png";
+import { VerificationPartners } from "@/components/verification/VerificationPartners";
 
 /**
  * Verification Center — a GATEWAY page, not a verification engine.
+ *
+ * Lists the designated partner that verifies each kind of record (VerificationPartners — the same
+ * five as on Capimax PropShare), then hands off to Capimax Trust.
  *
  * Group policy: every Capimax platform (BRX, RT, PropShare, Asset, Nova) exposes a single
  * "Verification Center" that routes the user to Capimax Trust (www.capimax.pro), the ONE
@@ -62,6 +66,9 @@ export default function VerificationCenter() {
 
         <div className="container py-12 sm:py-16">
           <div className="max-w-3xl mx-auto space-y-10">
+            {/* The designated partner for each kind of record (client's "Verify Your Documents") */}
+            <VerificationPartners />
+
             {/* Capimax Trust gateway card */}
             <div className="rounded-3xl border border-border bg-card p-8 sm:p-12 text-center shadow-sm">
               {/* Official Capimax Trust logo. Kept on a white panel in BOTH themes so the
