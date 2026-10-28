@@ -24,6 +24,7 @@ investor who registers via that link is PERMANENTLY linked to the broker via
 broker wins). That durable link is what Wave B's commission will read.
 """
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -109,8 +110,8 @@ class BrokerProfile(models.Model):
     # (default 5%, PLATFORM-borne, on a referred investor's completed primary sale, at
     # the mint/settlement point, idempotent, via UserBalance/Withdrawal).
     commission_rate = models.DecimalField(
-        max_digits=5, decimal_places=2, default=5,
-        help_text="Percent commission (Wave B). Default 5%.",
+        max_digits=5, decimal_places=2, default=Decimal("1.5"),
+        help_text="Fallback commission % — used only for a property with no rate of its own. Default 1.5%.",
     )
     total_commission_earned = models.DecimalField(
         max_digits=18, decimal_places=2, default=0

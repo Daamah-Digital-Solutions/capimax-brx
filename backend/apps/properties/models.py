@@ -327,8 +327,10 @@ class Property(models.Model):
     # so a later change here never alters past deals. `open_for_promotion` scopes the
     # broker-listable set (default True → no behaviour change today).
     broker_commission_rate = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, default=5,
-        help_text="Per-property broker commission %. Null → fall back to the broker's own rate.",
+        max_digits=5, decimal_places=2, null=True, blank=True, default=Decimal("1.5"),
+        verbose_name="broker commission %",
+        help_text="% of what the investor pays, credited to the referring broker (paid by the "
+                  "platform, not taken from the fees). Set per property; new properties start at 1.5%.",
     )
     open_for_promotion = models.BooleanField(default=True, db_index=True)
 

@@ -101,6 +101,12 @@ class ListingModelTests(TestCase):
             Property(**_valid_property_kwargs(country="zz")).full_clean()
         self.assertIn("country", ctx.exception.message_dict)
 
+    def test_broker_commission_defaults_to_one_and_a_half_percent(self):
+        from apps.broker.models import BrokerProfile
+
+        self.assertEqual(Property(name="New").broker_commission_rate, Decimal("1.5"))
+        self.assertEqual(BrokerProfile._meta.get_field("commission_rate").default, Decimal("1.5"))
+
     def test_status_and_yield_type_follow_the_investment_type(self):
         ready = Property.objects.create(**_valid_property_kwargs(slug="r", status="", yield_type=""))
         self.assertEqual((ready.status, ready.yield_type), ("ready", "rental"))

@@ -309,6 +309,7 @@ class PropertyAdmin(admin.ModelAdmin):
         "funded",
         "expected_yield",
         "is_featured",
+        "broker_commission_rate",
         "updated_at",
     )
     list_filter = (
@@ -649,6 +650,17 @@ class PropertyAdmin(admin.ModelAdmin):
                 },
             ),
             (
+                "Broker commission",
+                {
+                    "description": (
+                        "The % of what the investor pays that the referring broker earns on this "
+                        "property — set per property (new properties start at 1.5%). Paid by the "
+                        "platform, not taken from the fees; installments earn it on each payment."
+                    ),
+                    "fields": (("broker_commission_rate", "open_for_promotion"),),
+                },
+            ),
+            (
                 "Arabic (optional)",
                 {
                     "classes": ("collapse",),
@@ -718,14 +730,6 @@ class PropertyAdmin(admin.ModelAdmin):
             ))
         sets += [
             ("Fees", {"fields": (("fee_platform", "fee_management", "fee_exit"), ("fee_pronova_discount", "fee_installment"))}),
-            (
-                "Broker program",
-                {
-                    "description": "Commission % a referring broker earns on this property "
-                                   "(empty = the broker's own rate), and whether brokers can promote it.",
-                    "fields": (("broker_commission_rate", "open_for_promotion"),),
-                },
-            ),
             (
                 "Owner",
                 {

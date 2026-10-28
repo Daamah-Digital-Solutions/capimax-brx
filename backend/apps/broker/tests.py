@@ -195,7 +195,7 @@ class LicenseHingeTests(TestCase):
         self.broker.refresh_from_db()
         self.assertEqual(str(self.broker.total_commission_earned), "0.00")
         self.assertEqual(str(self.broker.pending_commission), "0.00")
-        self.assertEqual(str(self.broker.commission_rate), "5.00")
+        self.assertEqual(str(self.broker.commission_rate), "1.50")  # platform default
 
 
 class AttributionTests(TestCase):
@@ -602,14 +602,14 @@ class BrokerListingsTests(APITestCase):
         from apps.broker.models import BrokerCommission
 
         broker = _approved_broker("lbk2@ex.com")
-        self.assertEqual(broker.commission_rate, _D("5.00"))  # default
+        self.assertEqual(broker.commission_rate, _D("1.50"))  # default
         prop = self._prop("lprop2", rate=None)  # no per-property rate
         buyer = User.objects.create_user(email="lbuy2@ex.com", password="pw-12345-strong")
         inv = _completed_investment(buyer, prop, 10, broker=broker)
         res = mint_investment(inv)
-        self.assertEqual(res["broker_credited"], "50.00")  # 5% broker fallback
+        self.assertEqual(res["broker_credited"], "15.00")  # 1.5% broker fallback on $1,000
         bc = BrokerCommission.objects.get(investment=inv)
-        self.assertEqual(bc.rate_applied, _D("5.00"))  # the fallback rate IS stamped
+        self.assertEqual(bc.rate_applied, _D("1.50"))  # the fallback rate IS stamped
 
     def test_idempotent_via_balance_transaction(self, _m):
         from django.db import transaction
@@ -764,7 +764,7 @@ class BrokerListingsTests(APITestCase):
         self.assertEqual(stats["raised"], 1000.0)        # only I1's amount, NOT 2200
         self.assertEqual(stats["commission"], "50.00")   # B1's stamped commission only
         self.assertIsNone(stats["leads"])                # Phase 2 → frontend "—"
-        self.assertEqual(res.data["broker_rate"], "5.00")
+        self.assertEqual(res.data["broker_rate"], "1.50")
 
     def test_property_stats_denies_non_broker(self, _m):
         plain = User.objects.create_user(email="lplain@ex.com", password="pw-12345-strong")

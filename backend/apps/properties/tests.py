@@ -41,6 +41,9 @@ def _valid_property_kwargs(**overrides):
         exit_availability="both",
         description="x",
         description_ar="x",
+        # The commission tests check the mechanics at a round 5%; the platform default (1.5%)
+        # is checked in tests_listing.
+        broker_commission_rate=Decimal("5"),
     )
     data.update(overrides)
     return data
