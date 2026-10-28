@@ -340,8 +340,8 @@ export default function PropertyDetail() {
           </div>
 
           <div className="container py-8">
-            <div className="grid lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-8 min-w-0">
             {/* Hero — on mobile the box is near-square, so a stronger bottom scrim keeps the
                 (smaller) title readable over the cropped photo instead of it climbing into a
                 bright area. Padding + title scale down on phones. */}
@@ -508,7 +508,7 @@ export default function PropertyDetail() {
             />
 
             {/* Exit & disclosures */}
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-5 rounded-xl bg-card border border-border">
                 <h4 className="font-semibold mb-2 flex items-center gap-2"><Shield className="w-4 h-4 text-primary" />{language === "ar" ? "خيارات التخارج" : "Exit Options"}</h4>
                 <p className="text-sm text-muted-foreground">
@@ -536,7 +536,7 @@ export default function PropertyDetail() {
               <h2 className="font-display text-2xl font-bold mb-1">{language === "ar" ? "إتمام الاستثمار" : "Complete your investment"}</h2>
               <p className="text-sm text-muted-foreground mb-6">{language === "ar" ? "اختر طريقة الدفع وأكمل العملية بأمان." : "Choose your payment method and complete securely."}</p>
 
-              <div className="grid md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="p-5 rounded-xl bg-card border border-border hover:border-primary/40 transition-colors">
                   <Wallet className="w-6 h-6 text-primary mb-2" />
                   <h4 className="font-semibold">{language === "ar" ? "محفظة المنصة" : "Platform Wallet"}</h4>
@@ -819,9 +819,9 @@ export default function PropertyDetail() {
         </div>
 
         <div className="container py-8">
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2 space-y-8 min-w-0">
               {/* Gallery */}
               <div className="space-y-4 animate-fade-in">
                 <div className="relative h-56 sm:h-72 md:h-96 rounded-2xl overflow-hidden">
@@ -914,7 +914,7 @@ export default function PropertyDetail() {
                   </div>
 
                   {/* Key Metrics */}
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-5 bg-card rounded-xl border border-border">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -974,7 +974,7 @@ export default function PropertyDetail() {
 
                 {/* Financials Tab */}
                 <TabsContent value="financials" className="mt-6 space-y-6">
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-6 bg-card rounded-2xl border border-border">
                       <h3 className="font-semibold text-foreground mb-4">{t("propertyDetail.keyFinancials")}</h3>
                       <div className="space-y-4">
@@ -1052,7 +1052,7 @@ export default function PropertyDetail() {
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Investment Structure */}
                       <div className="p-4 bg-card rounded-xl">
                         <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -1114,7 +1114,7 @@ export default function PropertyDetail() {
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         {[
                           { label: t("propertyDetail.companyName"), labelEn: "Company Name", value: currentProperty.spvDetails.name },
@@ -1189,7 +1189,7 @@ export default function PropertyDetail() {
                       </div>
 
                       {/* Token Details Grid */}
-                      <div className="grid md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="p-4 bg-muted rounded-xl">
                           <div className="flex items-center gap-2 mb-2">
                             <Globe className="w-4 h-4 text-muted-foreground" />
@@ -1229,7 +1229,7 @@ export default function PropertyDetail() {
                       </div>
 
                       {/* Token Value Info */}
-                      <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-4 bg-gradient-gold/10 rounded-xl border border-primary/20">
                           <div className="flex items-center gap-2 mb-2">
                             <DollarSign className="w-4 h-4 text-primary" />
@@ -1271,7 +1271,7 @@ export default function PropertyDetail() {
                       <ShieldCheck className="w-6 h-6 text-primary" />
                       <h3 className="font-semibold text-foreground">{t("propertyDetail.transparency")}</h3>
                     </div>
-                    <div className="grid md:grid-cols-2 gap-4 text-sm text-muted-foreground">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
                       <div className="flex items-start gap-2">
                         <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                         <span>{t("propertyDetail.transparencyItem1")}</span>
@@ -1304,7 +1304,7 @@ export default function PropertyDetail() {
                     </div>
 
                     {/* Insurance Notices */}
-                    <div className="grid md:grid-cols-2 gap-3 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                       <div className="flex items-start gap-3 p-4 rounded-xl border border-success/30 bg-success/5">
                         <ShieldCheck className="w-5 h-5 text-success mt-0.5 shrink-0" />
                         <div>
@@ -1379,7 +1379,7 @@ export default function PropertyDetail() {
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {[
                         { icon: BarChart3, title: t("propertyDetail.financialReport"), titleEn: "Financial Report", date: "Q4 2024" },
                         { icon: PieChart, title: t("propertyDetail.investmentReport"), titleEn: "Investment Report", date: language === "ar" ? "ديسمبر 2024" : "December 2024" },

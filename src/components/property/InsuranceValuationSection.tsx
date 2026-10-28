@@ -151,7 +151,7 @@ export function InsuranceValuationSection({
       </div>
 
       {/* ───────── Insurance Block ───────── */}
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 border-success/30 bg-gradient-to-br from-success/5 to-transparent">
           <CardContent className="p-6">
             <div className="flex items-start gap-4 mb-5">
@@ -184,7 +184,7 @@ export function InsuranceValuationSection({
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-4 rounded-xl border bg-card">
                 <p className="text-xs text-muted-foreground mb-1">
                   {language === "ar" ? "شركة التأمين" : "Insurance Provider"}
@@ -297,7 +297,7 @@ export function InsuranceValuationSection({
           </div>
 
           {/* Valuation snapshot */}
-          <div className="grid md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="p-5 rounded-xl border bg-gradient-to-br from-primary/5 to-transparent">
               <p className="text-xs text-muted-foreground mb-1">
                 {language === "ar" ? "التقييم الحالي" : "Current Valuation"}
@@ -380,7 +380,7 @@ export function InsuranceValuationSection({
             <p className="font-medium text-sm mb-3">
               {language === "ar" ? "المعايير المعتمدة في التقييم" : "Valuation Methodology Factors"}
             </p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {valuationFactors.map((f) => {
                 const Icon = f.icon;
                 return (
@@ -398,7 +398,7 @@ export function InsuranceValuationSection({
           </div>
 
           {/* Market comparison */}
-          <div className="mt-6 grid md:grid-cols-3 gap-4">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl border bg-card">
               <p className="text-xs text-muted-foreground">
                 {language === "ar" ? "متوسط السوق المحلي" : "Local Market Average"}

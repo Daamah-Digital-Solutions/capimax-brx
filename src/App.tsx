@@ -132,9 +132,9 @@ const App = () => (
               pages; send the orphan /broker-dashboard to verification — no dead route, no
               404 for old links/notifications that pointed here. */}
           <Route path="/broker-dashboard" element={<Navigate to="/broker-verification" replace />} />
-          {/* Verification Center — group-wide gateway that hands off to Capimax Trust
-              (www.capimax.pro), the central authority that verifies every document/
-              certificate/record. BRX itself hosts no verification engine — see the page. */}
+          {/* Verification Center — BRX certificates are verified here by their QR code
+              (/verify/:code); the designated partners, the Wyoming SPV / digital asset
+              registries and the Capimax Trust gateway (www.capimax.pro) cover the rest. */}
           <Route path="/verification-center" element={<VerificationCenter />} />
           <Route path="/inheritance-claim" element={<InheritanceClaim />} />
           <Route path="/transfers" element={<Transfers />} />

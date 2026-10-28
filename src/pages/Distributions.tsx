@@ -156,7 +156,7 @@ export default function Distributions() {
           </div>
 
           <Tabs defaultValue="history" className="space-y-6">
-            <TabsList className="bg-muted/50">
+            <TabsList className="bg-muted/50 max-w-full overflow-x-auto justify-start">
               <TabsTrigger value="history">{t("distributions.history")}</TabsTrigger>
               <TabsTrigger value="properties">{t("distributions.byProperty")}</TabsTrigger>
               <TabsTrigger value="schedule">{t("distributions.schedule")}</TabsTrigger>
@@ -168,7 +168,7 @@ export default function Distributions() {
                 <div className="p-6 border-b border-border">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <h2 className="font-display text-lg font-semibold text-foreground">{t("distributions.history")}</h2>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Select value={filter} onValueChange={setFilter}>
                         <SelectTrigger className="w-36">
                           <SelectValue placeholder={t("distributions.status")} />
@@ -255,7 +255,7 @@ export default function Distributions() {
 
             {/* By Property */}
             <TabsContent value="properties">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {propertyDistributions.map((property, index) => (
                   <div 
                     key={property.id}

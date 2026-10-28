@@ -105,7 +105,7 @@ export function GlobalOwnershipSection() {
         </div>
 
         {/* Showcase Grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {showcases.map((s, i) => {
             const meta = STATUS_META[s.status] ?? STATUS_META.ready;
             const Icon = meta.icon;

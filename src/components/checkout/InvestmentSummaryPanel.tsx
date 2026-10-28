@@ -85,7 +85,7 @@ export function InvestmentSummaryPanel({
             {t("checkout.numberOfUnits")}
           </span>
           <span className="font-semibold text-foreground">
-            {investment.units} {language === "ar" ? "وحدات" : "units"}
+            {investment.units} {language === "ar" ? "وحدات" : investment.units === 1 ? "unit" : "units"}
           </span>
         </div>
 

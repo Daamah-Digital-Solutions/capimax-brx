@@ -220,7 +220,7 @@ export default function SecondaryMarket() {
 
         <div className="container py-8">
           <Tabs defaultValue="browse" className="space-y-6">
-            <TabsList className="bg-muted/50 p-1 rounded-xl">
+            <TabsList className="bg-muted/50 p-1 rounded-xl max-w-full overflow-x-auto justify-start">
               <TabsTrigger value="browse" className="rounded-lg gap-2">
                 <Coins className="w-4 h-4" />
                 {t("secondaryMarket.browseListings")}
@@ -245,7 +245,7 @@ export default function SecondaryMarket() {
                   {isAr ? "لا توجد قوائم متاحة حالياً" : "No listings available right now"}
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {listings.map((l) => (
                     <div key={l.id} className="p-5 bg-card rounded-xl border border-border hover:border-primary/50 transition-all">
                       <div className="flex items-start justify-between mb-4">

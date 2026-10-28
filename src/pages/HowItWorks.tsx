@@ -156,7 +156,7 @@ export default function HowItWorks() {
             <h2 className="text-2xl font-bold text-foreground mb-2">{t("howItWorks.benefitsForAll")}</h2>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Investor Benefits */}
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardContent className="p-6">
@@ -230,7 +230,7 @@ export default function HowItWorks() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {investorSteps.map((step, index) => (
               <div key={step.step} className="relative">
                 <Card className="bg-card/50 backdrop-blur border-border/50 h-full hover:shadow-lg transition-shadow">
@@ -275,7 +275,7 @@ export default function HowItWorks() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {ownerSteps.map((step, index) => (
               <div key={step.step} className="relative">
                 <Card className="bg-card/50 backdrop-blur border-border/50 h-full hover:shadow-lg transition-shadow">
@@ -315,7 +315,7 @@ export default function HowItWorks() {
             <h2 className="text-2xl font-bold text-foreground mb-2">{t("howItWorks.benefitsTitle")}</h2>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {benefits.map((benefit, index) => (
               <Card
                 key={index}
@@ -388,7 +388,7 @@ export default function HowItWorks() {
           <p className="text-muted-foreground mb-6">
             {t("howItWorks.ctaSubtitle")}
           </p>
-          <div className={`flex justify-center gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
+          <div className={`flex flex-wrap justify-center gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
             <Link to="/marketplace">
               <Button size="lg" className="bg-gradient-gold hover:opacity-90 shadow-gold">
                 {t("howItWorks.browseOpportunities")}

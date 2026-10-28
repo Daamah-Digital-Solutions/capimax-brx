@@ -166,7 +166,7 @@ export function SukukPayment(props: SukukPaymentProps) {
       </div>
 
       {/* Reviewer metadata */}
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="sukukId">{isArabic ? "رقم الصك" : "Certificate ID"}</Label>
           <Input id="sukukId" value={sukukId} onChange={(e) => setSukukId(e.target.value)} dir="ltr" placeholder="NOVA-..." />

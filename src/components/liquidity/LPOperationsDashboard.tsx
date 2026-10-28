@@ -124,7 +124,7 @@ export function LPOperationsDashboard({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-muted/30 rounded-lg">
               <p className="text-sm text-muted-foreground">
                 {isRTL ? "مبلغ الاستثمار الأولي" : "Initial Investment Amount"}
@@ -147,7 +147,7 @@ export function LPOperationsDashboard({
           {showDetails && (
             <div className="pt-4 border-t space-y-3">
               <h4 className="font-medium">{isRTL ? "معلومات الحساب" : "Account Information"}</h4>
-              <div className="grid sm:grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-muted-foreground">{isRTL ? "الاسم:" : "Name:"}</span>{" "}
                   <span className="font-medium">{lpProfile.contact_name}</span>

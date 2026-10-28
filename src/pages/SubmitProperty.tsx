@@ -444,7 +444,7 @@ export default function SubmitProperty() {
                   <label className="text-sm font-medium mb-2 block">
                     {isArabic ? "حالة البناء" : "Construction Status"}
                   </label>
-                  <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {constructionStatus.map((status) => (
                       <button
                         key={status.id}
@@ -482,7 +482,7 @@ export default function SubmitProperty() {
             {/* Step 2: Location */}
             {currentStep === 2 && (
               <>
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
                       {isArabic ? "الدولة" : "Country"}
@@ -540,7 +540,7 @@ export default function SubmitProperty() {
                 </div>
 
                 {/* Coordinates — captured by manual entry NOW (real, persisted). */}
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
                       {isArabic ? "خط العرض (Latitude)" : "Latitude"}
@@ -589,7 +589,7 @@ export default function SubmitProperty() {
             {/* Step 3: Financial Details */}
             {currentStep === 3 && (
               <>
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
                       {isArabic ? "قيمة العقار (USD)" : "Property Value (USD)"}
@@ -614,7 +614,7 @@ export default function SubmitProperty() {
                   </div>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
                       {isArabic ? "العائد المتوقع (% سنوياً)" : "Expected Yield (Annual %)"}

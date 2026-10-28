@@ -140,7 +140,7 @@ export default function BrokerWallet() {
 
           {/* Payout methods */}
           <Tabs defaultValue="bank" className="space-y-6">
-            <TabsList className="bg-muted/50">
+            <TabsList className="bg-muted/50 max-w-full overflow-x-auto justify-start">
               <TabsTrigger value="bank" className="gap-2">
                 <Building className="w-4 h-4" />
                 {isAr ? "الحسابات البنكية" : "Bank Accounts"}

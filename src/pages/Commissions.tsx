@@ -168,11 +168,11 @@ export default function Commissions() {
           </Card>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <div className="flex items-center justify-between mb-4">
-                <TabsList className="bg-muted/50 p-1">
+                <TabsList className="bg-muted/50 p-1 max-w-full overflow-x-auto justify-start">
                   <TabsTrigger value="all">
                     {t("commissions.all")}
                     <Badge variant="outline" className="ml-2">

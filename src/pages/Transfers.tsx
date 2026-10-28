@@ -143,7 +143,7 @@ export default function Transfers() {
           )}
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {steps.map((s, i) => (
             <Card key={i} className="bg-card/50 backdrop-blur border-border/50">
               <CardContent className="p-4 flex gap-3">

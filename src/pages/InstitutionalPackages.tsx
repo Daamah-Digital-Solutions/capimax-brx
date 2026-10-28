@@ -70,7 +70,7 @@ export default function InstitutionalPackages() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {tiers.map((t) => (
             <Card key={t.name} className={`${t.tone} relative transition-transform hover:-translate-y-1`}>
               {t.featured && (
@@ -113,7 +113,7 @@ export default function InstitutionalPackages() {
           <CardHeader>
             <CardTitle>{isAr ? "كيفية الانضمام" : "How to onboard"}</CardTitle>
           </CardHeader>
-          <CardContent className="grid md:grid-cols-4 gap-4 text-sm">
+          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
             {[
               isAr ? "اتصل بنا لمناقشة احتياجاتك" : "Contact us to scope your mandate",
               isAr ? "KYB كامل وفحص الأموال" : "Full KYB and source-of-funds review",

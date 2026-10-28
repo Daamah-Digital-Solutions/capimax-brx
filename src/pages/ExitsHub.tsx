@@ -129,7 +129,7 @@ export default function ExitsHub() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="border-primary/20">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">

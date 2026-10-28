@@ -92,7 +92,7 @@ export function PasswordCard() {
               {isAr ? "إذا كنت تدخل بحساب Google فقط، اتركها فارغة." : "If you only sign in with Google, leave this empty."}
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium mb-2 block">{t("settings.newPassword")}</label>
               <Input type={show ? "text" : "password"} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
@@ -287,7 +287,7 @@ export function TwoFactorCard() {
 // --------------------------------------------------------------------------- //
 // Signed-in devices
 // --------------------------------------------------------------------------- //
-function timeAgo(iso: string, lang: "ar" | "en") {
+function timeAgo(iso: string, lang: "ar" | "en" | "fr") {
   const secs = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
   const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
   const abs = Math.abs(secs);
@@ -335,7 +335,7 @@ export function SessionsCard() {
   };
 
   const others = (rows ?? []).filter((r) => !r.current).length;
-  const lang = isAr ? "ar" : "en";
+  const lang = isAr ? "ar" : language === "fr" ? "fr" : "en";
 
   return (
     <Card className={cardClass}>

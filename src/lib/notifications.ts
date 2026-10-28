@@ -2,6 +2,7 @@
 // `params` (no display strings); we map each type to a UI category (for the existing
 // tabs/icons) and render EN/AR copy from the i18n layer, interpolating params.
 import type { ApiNotification } from "@/integrations/api/client";
+import { translateValue } from "@/lib/i18n/frenchLayer";
 
 export type NotificationCategory =
   | "financial"
@@ -53,7 +54,8 @@ export function categoryOf(type: string): NotificationCategory {
 function interpolate(template: string, params: Record<string, unknown>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => {
     const v = params?.[key];
-    return v === undefined || v === null ? "" : String(v);
+    // The server's values are English ("gift", "3 units of …"); in French they are swapped too.
+    return v === undefined || v === null ? "" : translateValue(String(v));
   });
 }
 
@@ -74,7 +76,7 @@ export function relativeTime(iso: string, language: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const diffSec = Math.round((then - Date.now()) / 1000); // negative = past
-  const rtf = new Intl.RelativeTimeFormat(language === "ar" ? "ar" : "en", {
+  const rtf = new Intl.RelativeTimeFormat(language === "ar" || language === "fr" ? language : "en", {
     numeric: "auto",
   });
   const abs = Math.abs(diffSec);

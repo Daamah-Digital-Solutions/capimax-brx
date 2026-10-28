@@ -237,13 +237,13 @@ function SpecsSection({ p, isAr }: { p: Property; isAr: boolean }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-x-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
           {specs.map((s) => (
             <KV key={s.en} label={s.en} labelAr={s.ar} value={s.v as React.ReactNode} isAr={isAr} />
           ))}
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
           <div>
             <h4 className="font-semibold mb-3 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
@@ -363,7 +363,7 @@ function DeveloperSection({ p, isAr }: { p: Property; isAr: boolean }) {
           ))}
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 rounded-lg bg-muted/40 border border-border space-y-2">
             <h4 className="text-sm font-semibold">{isAr ? "بيانات الاتصال" : "Contact"}</h4>
             <p className="text-xs text-muted-foreground flex items-center gap-2">
@@ -434,7 +434,7 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <Layers className="w-4 h-4 text-primary" />
@@ -705,7 +705,7 @@ function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="grid md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {g.items.map((doc, i) => {
                       const label = isAr ? (doc.name || doc.nameEn) : (doc.nameEn || doc.name);
                       return (
@@ -853,7 +853,7 @@ function DataRoomSection({ p, isAr }: { p: Property; isAr: boolean }) {
                 </span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="grid md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {g.items.map((item) => (
                     <div
                       key={item.en}
@@ -969,7 +969,7 @@ function ConstructionSection({ p, isAr }: { p: Property; isAr: boolean }) {
           ))}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {mediaTiles.map((t) => {
             const Icon = t.icon;
             const inner = (
@@ -1392,7 +1392,7 @@ function InsuranceRiskSection({ p, isAr }: { p: Property; isAr: boolean }) {
           {isAr ? "التأمين والمخاطر" : "Insurance & Risk Disclosure"}
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid md:grid-cols-2 gap-4">
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20 space-y-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -1605,7 +1605,7 @@ function PostConstructionPaymentPlan({
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Summary tiles */}
-        <div className="grid md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="p-4 rounded-xl border bg-muted/30">
             <p className="text-xs text-muted-foreground">{isAr ? "إجمالي القيمة" : "Total Value"}</p>
             <p className="text-lg font-bold">{fmtMoney(totalValue)}</p>
@@ -1660,7 +1660,7 @@ function PostConstructionPaymentPlan({
         </div>
 
         {/* Benefits */}
-        <div className="grid sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {benefits.map((b) => (
             <div key={b.en} className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 border">
               <CheckCircle2 className="w-4 h-4 text-success shrink-0" />

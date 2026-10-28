@@ -25,6 +25,7 @@ const misses = new Set<string>();
 // translated again.
 const written = new WeakMap<Node, string>();
 let observer: MutationObserver | null = null;
+let enabled = false;
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -53,6 +54,26 @@ function build(dict: Record<string, string>) {
   templates.sort((a, b) => b.re.source.length - a.re.source.length);
 }
 
+// Dates the pages format in English ("Jun 10, 2026", "October 28, 2026 at 17:25", "Oct 2026").
+const MONTHS = ([
+  ["Jan(?:uary)?", "janv."], ["Feb(?:ruary)?", "févr."], ["Mar(?:ch)?", "mars"], ["Apr(?:il)?", "avr."],
+  ["May", "mai"], ["June?", "juin"], ["July?", "juil."], ["Aug(?:ust)?", "août"],
+  ["Sep(?:t(?:ember)?)?", "sept."], ["Oct(?:ober)?", "oct."], ["Nov(?:ember)?", "nov."], ["Dec(?:ember)?", "déc."],
+] as [string, string][]).map(([en, fr]): [RegExp, string] => [new RegExp(`^(?:${en})\\.?$`), fr]);
+const MONTH = "(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?";
+const frMonth = (m: string) => MONTHS.find(([re]) => re.test(m))?.[1] ?? m;
+
+/** The text with its English dates in French; the same text if it has none. */
+function frenchDates(text: string): string {
+  if (MONTHS.some(([re]) => re.test(text))) return frMonth(text); // a lone month ("Jan" on a chart)
+  return text
+    .replace(new RegExp(`\\b${MONTH} (\\d{1,2}),? (\\d{4})(?: at (\\d{1,2}:\\d{2}))?`, "g"),
+      (_m, mo, d, y, time) => `${d} ${frMonth(mo)} ${y}${time ? ` à ${time}` : ""}`)
+    .replace(new RegExp(`\\b${MONTH} (\\d{1,2}),? (\\d{1,2}:\\d{2})`, "g"), (_m, mo, d, time) => `${d} ${frMonth(mo)}, ${time}`)
+    .replace(new RegExp(`\\b${MONTH} (\\d{1,2})\\b(?![,:\\d])`, "g"), (_m, mo, d) => `${d} ${frMonth(mo)}`)
+    .replace(new RegExp(`\\b${MONTH} '?(\\d{2}|\\d{4})\\b`, "g"), (_m, mo, y) => `${frMonth(mo)} ${y}`);
+}
+
 /** French for one piece of English text, keeping its surrounding spaces; null if unknown. */
 export function translate(text: string): string | null {
   const key = norm(text);
@@ -73,12 +94,32 @@ export function translate(text: string): string | null {
     }
   }
   if (fr === undefined) {
+    const dated = frenchDates(key);
+    if (dated !== key) fr = dated;
+  }
+  if (fr === undefined) {
     misses.add(key);
     return null;
   }
   const lead = text.match(/^\s*/)?.[0] ?? "";
   const trail = text.match(/\s*$/)?.[0] ?? "";
   return lead + fr + trail;
+}
+
+/**
+ * A value the server sends in English and a French sentence takes in (a notification's
+ * "{kind}", "{role}", "{what}"): its French while French is on, otherwise the value as is.
+ * A lower-case word is looked up capitalised too ("developer" → "promoteur").
+ */
+export function translateValue(value: string): string {
+  if (!enabled || !value) return value;
+  const fr = translate(value);
+  if (fr !== null) return fr;
+  if (/^[a-z][a-z ]*$/.test(value)) {
+    const cap = translate(value[0].toUpperCase() + value.slice(1));
+    if (cap !== null) return cap.toLowerCase();
+  }
+  return value;
 }
 
 function skipped(el: Element | null): boolean {
@@ -129,6 +170,7 @@ function walk(root: Node) {
 export function enableFrench(dict: Record<string, string>) {
   build(dict);
   misses.clear();
+  enabled = true;
   walk(document.body);
   if (document.title) {
     const t = translate(document.title);

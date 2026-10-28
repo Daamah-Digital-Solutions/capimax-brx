@@ -50,7 +50,7 @@ export default function Cards() {
         <div className="container py-8 space-y-8">
           {/* Sample card showcase */}
           <Card className="overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/20">
-            <CardContent className="p-6 md:p-8 grid md:grid-cols-2 gap-6 items-center">
+            <CardContent className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
               <div className="space-y-4">
                 <Badge variant="outline" className="gap-1">
                   <Sparkles className="w-3 h-3" />
@@ -105,7 +105,7 @@ export default function Cards() {
                 )}
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid md:grid-cols-3 gap-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
                 { step: 1, en: "Create a virtual card instantly or order a physical one (5-7 days).",
                   ar: "أنشئ بطاقة افتراضية فورًا أو اطلب فعلية (5-7 أيام)." },

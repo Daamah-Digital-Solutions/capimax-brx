@@ -701,7 +701,7 @@ export default function Checkout() {
         </div>
 
         <div className="container py-8">
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Investment Summary - Left/Top */}
             <div className="lg:col-span-1 order-2 lg:order-1 space-y-6">
               {/* Units Adjustment */}

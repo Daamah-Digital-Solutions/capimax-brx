@@ -207,7 +207,7 @@ export default function BrokerReports() {
 
           <Tabs defaultValue="commissions" className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <TabsList className="bg-muted/50">
+              <TabsList className="bg-muted/50 max-w-full overflow-x-auto justify-start">
                 <TabsTrigger value="commissions">{isAr ? "العمولات" : "Commissions"}</TabsTrigger>
                 <TabsTrigger value="properties">{isAr ? "حسب العقار" : "By Property"}</TabsTrigger>
                 <TabsTrigger value="monthly">{isAr ? "شهرياً" : "Monthly"}</TabsTrigger>

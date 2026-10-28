@@ -138,7 +138,7 @@ export function ExitOptionsCard({
 
       {positionNote && <div className="mb-4">{positionNote}</div>}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {exitOptions.map((option) => (
           <div
             key={option.id}

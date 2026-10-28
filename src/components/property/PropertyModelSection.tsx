@@ -403,7 +403,7 @@ export function PropertyModelSection({ property }: PropertyModelSectionProps) {
             {isAr ? "كيف يعمل هذا النموذج" : "How this model works"}
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {sections.map((s, i) => {
             const Icon = s.icon;
             return (

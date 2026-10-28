@@ -91,7 +91,7 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Button
               variant="outline"
               className="h-auto py-4 flex-col gap-2"

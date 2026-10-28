@@ -26,7 +26,7 @@ export function OwnerDeveloperSection() {
   return (
     <section className="py-20 bg-background">
       <div className="container">
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* For Property Owners */}
           <div className="relative min-w-0 overflow-hidden p-5 sm:p-8 rounded-3xl bg-gradient-to-br from-card to-card/50 border border-border hover:border-primary/30 transition-all duration-300 animate-fade-in">
             <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
@@ -41,7 +41,7 @@ export function OwnerDeveloperSection() {
             </p>
 
             {/* Benefits */}
-            <div className="grid sm:grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
               {ownerBenefits.map((item, index) => (
                 <div key={index} className="flex items-center gap-3 text-sm text-foreground">
                   <item.icon className="w-5 h-5 text-primary shrink-0" />
@@ -70,7 +70,7 @@ export function OwnerDeveloperSection() {
             </p>
 
             {/* Benefits */}
-            <div className="grid sm:grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
               {developerBenefits.map((item, index) => (
                 <div key={index} className="flex items-center gap-3 text-sm text-foreground">
                   <item.icon className="w-5 h-5 text-primary shrink-0" />

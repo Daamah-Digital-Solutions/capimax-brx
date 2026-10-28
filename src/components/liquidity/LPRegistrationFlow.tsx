@@ -261,7 +261,7 @@ export function LPRegistrationFlow({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="company_name">
                   <Building2 className="w-4 h-4 inline mr-2" />
@@ -289,7 +289,7 @@ export function LPRegistrationFlow({
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">
                   <Mail className="w-4 h-4 inline mr-2" />
@@ -319,7 +319,7 @@ export function LPRegistrationFlow({
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="country">
                   <MapPin className="w-4 h-4 inline mr-2" />
@@ -381,7 +381,7 @@ export function LPRegistrationFlow({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="business_type">
                   {isRTL ? "نوع العمل *" : "Business Type *"}
@@ -416,7 +416,7 @@ export function LPRegistrationFlow({
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="tax_id">
                   {isRTL ? "الرقم الضريبي" : "Tax ID"}
@@ -609,7 +609,7 @@ export function LPRegistrationFlow({
                 <User className="w-4 h-4" />
                 {isRTL ? "معلومات التسجيل" : "Registration Information"}
               </h4>
-              <div className="grid sm:grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg text-sm">
                 <div>
                   <span className="text-muted-foreground">{isRTL ? "الشركة:" : "Company:"}</span>
                   <span className="font-medium ml-2">{registrationData.company_name || "-"}</span>
@@ -635,7 +635,7 @@ export function LPRegistrationFlow({
                 <Building2 className="w-4 h-4" />
                 {isRTL ? "معلومات الأعمال" : "Business Information"}
               </h4>
-              <div className="grid sm:grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg text-sm">
                 <div>
                   <span className="text-muted-foreground">{isRTL ? "نوع العمل:" : "Business Type:"}</span>
                   <span className="font-medium ml-2">{kybData.business_type}</span>

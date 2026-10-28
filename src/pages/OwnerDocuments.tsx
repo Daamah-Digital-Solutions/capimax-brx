@@ -231,7 +231,7 @@ export default function OwnerDocuments() {
           </div>
 
           {/* Categories & Documents */}
-          <div className="grid lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Categories Sidebar */}
             <Card className="lg:col-span-1 bg-card/50 backdrop-blur border-border/50 h-fit">
               <CardHeader className="pb-3">

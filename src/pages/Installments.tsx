@@ -357,7 +357,7 @@ export default function Installments() {
                           {plan.position && <PositionSaleCard plan={plan} onChanged={refresh} />}
 
                           {/* Payment Progress */}
-                          <div className="grid sm:grid-cols-4 gap-4 mb-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
                             <div className="p-3 bg-muted rounded-xl">
                               <div className="text-xs text-muted-foreground mb-1">{t("installments.totalAmount")}</div>
                               <div className="font-bold text-foreground">${plan.totalAmount.toLocaleString()}</div>

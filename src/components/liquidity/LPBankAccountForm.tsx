@@ -73,7 +73,7 @@ export function LPBankAccountForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {field("bank_account_holder", isAr ? "اسم صاحب الحساب" : "Account holder name", {
           required: true, hint: isAr ? "كما هو مسجّل في البنك" : "Exactly as registered at the bank",
         })}

@@ -225,7 +225,7 @@ export function PropertyCard({ property, viewMode, index }: PropertyCardProps) {
         )}
         
         {/* Asset Type & Risk */}
-        <div className="absolute bottom-4 start-4 end-4 flex items-center justify-between">
+        <div className="absolute bottom-4 start-4 end-4 flex flex-wrap items-center justify-between gap-1">
           <div className="flex items-center gap-2 text-sm text-foreground bg-background/50 backdrop-blur-sm rounded-full px-3 py-1">
             <AssetIcon className="w-4 h-4" />
             <span>{assetTypeConfig[property.assetType].label}</span>
@@ -289,7 +289,7 @@ export function PropertyCard({ property, viewMode, index }: PropertyCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-4 border-t border-border">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border">
           <div>
             <div className="text-xs text-muted-foreground">{t("property.minInvestment")}</div>
             <div className="text-lg font-bold text-foreground">

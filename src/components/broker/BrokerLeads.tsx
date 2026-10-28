@@ -272,7 +272,7 @@ export function BrokerLeads({ clientOpen, setClientOpen, propertyOpen, setProper
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5 sm:col-span-2"><Label>{isAr ? "اسم العقار أو المشروع" : "Property or project name"} *</Label><Input {...p("title")} /></div>
               <div className="space-y-1.5"><Label>{isAr ? "الموقع (المدينة / المنطقة)" : "Location (city / area)"} *</Label><Input {...p("location")} /></div>
               <div className="space-y-1.5"><Label>{isAr ? "الدولة" : "Country"}</Label>
@@ -294,7 +294,7 @@ export function BrokerLeads({ clientOpen, setClientOpen, propertyOpen, setProper
                   </Button>
                 ))}
               </div>
-              <div className="grid sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5"><Label>{isDev ? (isAr ? "اسم المطوّر" : "Developer name") : (isAr ? "اسم المالك" : "Owner name")} *</Label><Input {...p("owner_name")} /></div>
                 <div className="space-y-1.5"><Label>{isAr ? "البريد الإلكتروني" : "Email"}</Label><Input type="email" dir="ltr" {...p("owner_email")} /></div>
                 <div className="space-y-1.5"><Label>{isAr ? "الهاتف" : "Phone"}</Label><Input type="tel" dir="ltr" {...p("owner_phone")} /></div>
@@ -309,7 +309,7 @@ export function BrokerLeads({ clientOpen, setClientOpen, propertyOpen, setProper
 
             <div className="space-y-1.5"><Label>{isAr ? "ملاحظات لفريقنا" : "Notes for our team"}</Label><Textarea rows={2} {...p("notes")} /></div>
 
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{isAr ? "مستندات العقار (حتى 8)" : "Property documents (up to 8)"}</Label>
                 <Input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"

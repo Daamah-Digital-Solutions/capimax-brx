@@ -504,7 +504,7 @@ export default function Portfolio() {
 
             {/* Distributions Tab */}
             <TabsContent value="distributions">
-              <div className="grid lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-card rounded-2xl border border-border p-8 text-center">
                   <DollarSign className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-foreground mb-2">{t("portfolio.distributions")}</h3>

@@ -208,7 +208,7 @@ export default function StrategicPartners() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-muted/50 p-1">
+          <TabsList className="bg-muted/50 p-1 max-w-full overflow-x-auto justify-start">
             <TabsTrigger value="assets" className="flex items-center gap-2">
               <Building2 className="w-4 h-4" />
               {t("partners.tabAssets")}

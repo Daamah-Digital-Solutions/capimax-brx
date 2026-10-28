@@ -343,7 +343,7 @@ export default function PublicAnalytics() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project) => (
                 <Card 
                   key={project.id} 
@@ -482,7 +482,7 @@ export default function PublicAnalytics() {
             </div>
 
             {/* KPI Summary Cards */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <Card>
                 <CardContent className="py-4">
                   <div className={`flex items-center justify-between mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
@@ -580,7 +580,7 @@ export default function PublicAnalytics() {
 
               {/* Financial Performance */}
               <TabsContent value="financial" className="space-y-6">
-                <div className="grid lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <Card className="lg:col-span-2">
                     <CardHeader>
                       <CardTitle className={`flex items-center justify-between ${isRTL ? "flex-row-reverse" : ""}`}>

@@ -104,7 +104,7 @@ export function KycStatusCard({ className, hideWhenVerified = false }: { classNa
             value={(doneCount / steps.length) * 100}
             className={cn("h-2", approved ? "[&>div]:bg-emerald-500" : "[&>div]:bg-destructive")}
           />
-          <div className="grid sm:grid-cols-3 gap-2 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
             {steps.map((s) => (
               <div key={s.en} className="flex items-center gap-2 text-xs">
                 {s.done ? (

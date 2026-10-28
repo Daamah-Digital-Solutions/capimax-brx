@@ -128,7 +128,7 @@ export function LPDocuments({ documents, onUpload, onDownload, onDelete, isRTL }
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpload} className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{isRTL ? "اسم المستند" : "Document Name"}</Label>
                   <Input
@@ -214,7 +214,7 @@ export function LPDocuments({ documents, onUpload, onDownload, onDelete, isRTL }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {templateDocuments.map((doc) => {
                 const FileIcon = getFileIcon(doc.document_name);
                 return (

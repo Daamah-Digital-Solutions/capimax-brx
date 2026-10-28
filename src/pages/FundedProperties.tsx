@@ -210,7 +210,7 @@ export default function FundedProperties() {
           ) : (
             <div className={cn(
               viewMode === "grid"
-                ? "grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                 : "space-y-4"
             )}>
               {filteredProperties.map((property, index) => {
@@ -439,7 +439,7 @@ export default function FundedProperties() {
                 }
               </p>
               <Link to="/marketplace">
-                <Button variant="hero" size="lg">
+                <Button variant="hero" size="lg" className="h-auto min-h-11 max-w-full whitespace-normal">
                   {isRTL ? "استعرض الفرص المتاحة" : "Browse Available Opportunities"}
                 </Button>
               </Link>

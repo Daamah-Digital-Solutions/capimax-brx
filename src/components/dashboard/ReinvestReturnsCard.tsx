@@ -53,7 +53,7 @@ export function ReinvestReturnsCard({
 
       {/* Available Returns — REAL internal balance */}
       <div className="p-4 bg-card/80 backdrop-blur-sm rounded-xl border border-border mb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="text-sm text-muted-foreground">
             {isAr ? "العوائد المتاحة للاستثمار" : "Available Returns"}
           </span>
@@ -64,7 +64,7 @@ export function ReinvestReturnsCard({
       </div>
 
       {/* Bonus rewards — deferred product, shown honestly (no fake figures) */}
-      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg border border-border mb-6">
         <span className="text-sm text-muted-foreground">
           {isAr ? "مكافآت إعادة الاستثمار" : "Reinvestment bonus rewards"}
         </span>
@@ -73,7 +73,7 @@ export function ReinvestReturnsCard({
 
       {/* CTA */}
       <Link to="/reinvestment">
-        <Button variant="hero" className="w-full gap-2" disabled={availableReturns <= 0}>
+        <Button variant="hero" className="w-full gap-2 h-auto min-h-10 py-2 whitespace-normal" disabled={availableReturns <= 0}>
           <TrendingUp className="w-4 h-4" />
           {isAr ? "إعادة استثمار العوائد الآن" : "Reinvest Returns Now"}
           <ArrowRight className={cn("w-4 h-4", isRTL && "rotate-180")} />

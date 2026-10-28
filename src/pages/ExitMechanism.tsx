@@ -122,7 +122,7 @@ export default function ExitMechanism() {
             </p>
 
             {/* Advantages Grid */}
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {lpAdvantages.map((advantage, index) => (
                 <div
                   key={index}
@@ -204,7 +204,7 @@ export default function ExitMechanism() {
             </p>
 
             {/* Advantages Grid */}
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {secondaryAdvantages.map((advantage, index) => (
                 <div
                   key={index}

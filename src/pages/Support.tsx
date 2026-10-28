@@ -172,7 +172,7 @@ export default function Support() {
         </div>
 
         {/* The three ways to get help */}
-        <div className="grid lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-6 space-y-3">
               <div className="flex items-center gap-3">
@@ -293,7 +293,7 @@ export default function Support() {
               </CardContent>
             </Card>
 
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex flex-wrap gap-2">
                   {[{ id: "all", titleAr: "كل الأسئلة", titleEn: "All questions", count: faqSections.reduce((n, s) => n + s.items.length, 0) },

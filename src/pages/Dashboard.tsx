@@ -165,7 +165,7 @@ export default function Dashboard() {
 
           {/* Every service first, with the exit options beside it (client review: the
               shortcuts lead the dashboard; reinvesting is one of them, not a banner). */}
-          <div className="grid lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <QuickActions className="lg:col-span-2 min-w-0 animate-fade-in" />
             <ExitOptionsCard
               compact
@@ -224,7 +224,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-8 min-w-0">
               {/* Holdings */}

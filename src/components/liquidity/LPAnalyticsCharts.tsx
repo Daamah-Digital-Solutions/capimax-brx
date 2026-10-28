@@ -181,7 +181,7 @@ export function LPAnalyticsCharts({ lpProfile, transactions, isRTL }: LPAnalytic
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Distribution Pie Chart */}
         <Card>
           <CardHeader>

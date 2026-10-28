@@ -237,7 +237,7 @@ export default function Listings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-muted/50 p-1">
+          <TabsList className="bg-muted/50 p-1 max-w-full overflow-x-auto justify-start">
             <TabsTrigger value="all">
               {isAr ? "الكل" : "All"}
               <Badge variant="outline" className="ml-2">{properties.length}</Badge>

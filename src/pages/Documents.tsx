@@ -258,7 +258,7 @@ export default function Documents() {
           ))}
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <Card className="lg:col-span-1 min-w-0 bg-card/50 backdrop-blur border-border/50 h-fit">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{isAr ? "التصنيفات" : "Categories"}</CardTitle>

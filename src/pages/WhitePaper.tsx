@@ -119,7 +119,7 @@ export default function WhitePaper() {
                     : 'Capimax BRX is a pioneering technology platform that enables investors to own shares in high-quality real estate through digital tokenization. We provide an innovative solution that combines transparency, security, and accessibility for real estate investment.'}
                 </p>
                 
-                <div className="grid md:grid-cols-3 gap-4 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                   <div className="p-4 rounded-lg bg-muted/50 text-center">
                     <div className="text-3xl font-bold text-primary mb-2">$100</div>
                     <div className="text-sm text-muted-foreground">
@@ -186,7 +186,7 @@ export default function WhitePaper() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <h4 className="font-semibold">{language === 'ar' ? 'المستثمرون الأفراد' : 'Individual Investors'}</h4>
                     <ul className="space-y-2 text-muted-foreground">
@@ -242,7 +242,7 @@ export default function WhitePaper() {
                     : 'Capimax BRX is an integrated technology platform that acts as an intermediary between investors and real estate investment opportunities. The platform does not operate as a financial broker or investment advisor, but provides the necessary technical infrastructure.'}
                 </p>
                 
-                <div className="grid md:grid-cols-2 gap-4 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                   <div className="p-4 rounded-lg border space-y-2">
                     <Globe className="h-8 w-8 text-primary" />
                     <h4 className="font-semibold">{language === 'ar' ? 'وصول عالمي' : 'Global Access'}</h4>
@@ -382,7 +382,7 @@ export default function WhitePaper() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <h4 className="font-semibold">{language === 'ar' ? 'مزايا البلوكتشين' : 'Blockchain Benefits'}</h4>
                     <ul className="space-y-2 text-muted-foreground">
@@ -503,7 +503,7 @@ export default function WhitePaper() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="p-4 rounded-lg border text-center">
                     <div className="text-2xl mb-2">💳</div>
                     <h4 className="font-semibold">{language === 'ar' ? 'بطاقات الائتمان' : 'Credit Cards'}</h4>
@@ -552,7 +552,7 @@ export default function WhitePaper() {
                     : 'Capimax BRX LLC is a company registered in the State of Wyoming, United States of America. It operates as a technology and infrastructure provider only.'}
                 </p>
                 
-                <div className="grid md:grid-cols-2 gap-6 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <div className="p-4 rounded-lg border">
                     <h4 className="font-semibold mb-3">{language === 'ar' ? 'هيكل SPV' : 'SPV Structure'}</h4>
                     <ul className="space-y-2 text-sm text-muted-foreground">
@@ -587,7 +587,7 @@ export default function WhitePaper() {
                     ? 'يحصل كل مستثمر على شهادة ملكية رقمية تتضمن:'
                     : 'Each investor receives a digital ownership certificate that includes:'}
                 </p>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
                     { en: 'SPV Company Name', ar: 'اسم شركة SPV' },
                     { en: 'Platform Company Name', ar: 'اسم شركة المنصة' },
@@ -618,7 +618,7 @@ export default function WhitePaper() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <h4 className="font-semibold">{language === 'ar' ? 'أمان المنصة' : 'Platform Security'}</h4>
                     <ul className="space-y-2 text-sm text-muted-foreground">

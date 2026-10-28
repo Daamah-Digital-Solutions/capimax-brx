@@ -328,7 +328,7 @@ export default function PublicReports() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project) => (
                 <Card 
                   key={project.id} 
@@ -476,7 +476,7 @@ export default function PublicReports() {
             </Card>
 
             {/* Report Categories */}
-            <div className="grid md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               {localizedReportCategories.map((category) => {
                 const Icon = category.icon;
                 return (

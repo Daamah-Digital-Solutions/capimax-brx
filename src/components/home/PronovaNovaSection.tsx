@@ -9,7 +9,7 @@ export function PronovaNovaSection() {
   return (
     <section className="py-16 bg-muted/30">
       <div className="container">
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Pronova Discount Card */}
           <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20 overflow-hidden relative">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-gold opacity-10 blur-3xl" />

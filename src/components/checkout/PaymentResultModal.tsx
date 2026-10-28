@@ -99,7 +99,7 @@ export function PaymentResultModal({
                     {isArabic ? "تم إصدار رموز الملكية!" : "Ownership tokens minted!"}
                   </span>
                   <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                    {investment.units} {isArabic ? "رمز" : "tokens"}
+                    {investment.units} {isArabic ? "رمز" : investment.units === 1 ? "token" : "tokens"}
                   </Badge>
                 </div>
               ) : (
@@ -145,7 +145,7 @@ export function PaymentResultModal({
                   {isArabic ? "الوحدات المُشتراة" : "Units Purchased"}
                 </span>
                 <span className="font-medium text-foreground text-right min-w-0 break-words">
-                  {investment.units} {isArabic ? "وحدات" : "units"}
+                  {investment.units} {isArabic ? "وحدات" : investment.units === 1 ? "unit" : "units"}
                 </span>
               </div>
             </div>

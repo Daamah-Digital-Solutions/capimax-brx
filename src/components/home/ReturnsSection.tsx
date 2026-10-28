@@ -47,7 +47,7 @@ export function ReturnsSection() {
   return (
     <section className="py-20 bg-card/50">
       <div className="container">
-        <div className="grid lg:grid-cols-2 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* How Returns Work */}
           <div className="animate-fade-in">
             <Badge variant="gold" className="mb-4">{t("returns.howReturnsBadge")}</Badge>

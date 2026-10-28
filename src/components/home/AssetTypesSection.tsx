@@ -89,7 +89,7 @@ export function AssetTypesSection() {
         </div>
 
         {/* Asset Types Grid */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {assetTypes.map((type, index) => (
             <div
               key={index}

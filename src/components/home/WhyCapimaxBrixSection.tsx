@@ -159,7 +159,7 @@ export function WhyCapimaxBrixSection() {
         </div>
 
         {/* Core benefits grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-16">
           {coreBenefits.map((b, i) => (
             <div
               key={i}
@@ -185,7 +185,7 @@ export function WhyCapimaxBrixSection() {
           </h3>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {firsts.map((f, i) => (
             <div
               key={i}

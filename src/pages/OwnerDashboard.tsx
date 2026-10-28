@@ -264,13 +264,13 @@ export default function OwnerDashboard() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-8">
               {/* Assets */}
               <Tabs defaultValue="all" className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <TabsList className="bg-muted/50">
+                  <TabsList className="bg-muted/50 max-w-full overflow-x-auto justify-start">
                     <TabsTrigger value="all">{isAr ? "الكل" : "All"}</TabsTrigger>
                     <TabsTrigger value="active">{isAr ? "نشط" : "Active"}</TabsTrigger>
                     <TabsTrigger value="construction">{isAr ? "تحت الإنشاء" : "Under Construction"}</TabsTrigger>

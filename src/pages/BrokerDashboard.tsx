@@ -215,7 +215,7 @@ export default function BrokerDashboard() {
           </div>
 
           <Tabs defaultValue="referrals" className="space-y-6">
-            <TabsList className="bg-muted/50">
+            <TabsList className="bg-muted/50 max-w-full overflow-x-auto justify-start">
               <TabsTrigger value="referrals">الإحالات</TabsTrigger>
               <TabsTrigger value="commissions">العمولات</TabsTrigger>
               <TabsTrigger value="listings">العقارات</TabsTrigger>
@@ -307,7 +307,7 @@ export default function BrokerDashboard() {
 
             {/* Commissions Tab */}
             <TabsContent value="commissions">
-              <div className="grid lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                   <div className="bg-card rounded-2xl border border-border overflow-hidden">
                     <div className="p-6 border-b border-border">
@@ -397,7 +397,7 @@ export default function BrokerDashboard() {
 
             {/* Listings Tab */}
             <TabsContent value="listings">
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {listings.map((listing, index) => (
                   <div 
                     key={listing.id}
@@ -459,7 +459,7 @@ export default function BrokerDashboard() {
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="p-4 bg-muted rounded-xl text-center">
                     <div className="text-2xl font-bold text-foreground">{brokerStats.conversionRate}%</div>
                     <div className="text-sm text-muted-foreground">معدل التحويل</div>

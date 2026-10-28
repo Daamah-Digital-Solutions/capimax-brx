@@ -558,7 +558,7 @@ const FamilyInvestment = () => {
         </div>
 
         {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           {features.map((feature, index) => {
             const IconComponent = feature.icon;
             return (
@@ -976,7 +976,7 @@ const FamilyInvestment = () => {
 
           {/* Transfers Tab */}
           <TabsContent value="transfers" className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1641,7 +1641,7 @@ const FamilyInvestment = () => {
               </p>
             </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="border-border/50">
               <CardContent className="p-5">
                 <Users className="w-6 h-6 text-primary mb-3" />
@@ -1687,7 +1687,7 @@ const FamilyInvestment = () => {
               </p>
             </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="border-blue-500/30 bg-blue-500/5">
               <CardContent className="p-5">
                 <ArrowRightLeft className="w-6 h-6 text-blue-600 mb-3" />
@@ -1753,7 +1753,7 @@ const FamilyInvestment = () => {
           </div>
           <Card className="border-pink-500/30 bg-gradient-to-br from-pink-500/5 to-rose-500/5">
             <CardContent className="p-6">
-              <div className="grid md:grid-cols-3 gap-4 mb-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-card border">
                   <Calendar className="w-5 h-5 text-pink-500" />
                   <div>
@@ -1808,7 +1808,7 @@ const FamilyInvestment = () => {
               </p>
             </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="border-amber-500/30 bg-amber-500/5">
               <CardContent className="p-5">
                 <Users className="w-6 h-6 text-amber-600 mb-3" />

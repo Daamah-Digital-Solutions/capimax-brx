@@ -122,7 +122,7 @@ export default function Fees() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {standardPlatformFees.map((fee, index) => (
                 <div
                   key={index}
@@ -158,7 +158,7 @@ export default function Fees() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {installmentFees.map((fee, index) => (
                 <div
                   key={index}
@@ -202,7 +202,7 @@ export default function Fees() {
                 ? "يتحمل المستثمر رسوم وسيلة الدفع المستخدمة، وفقًا للرسوم المطبقة على الطريقة التي يختارها عند الدفع."
                 : "The investor bears the fees of the payment method used, according to the fees that apply to the method chosen at checkout."}
             </p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {paymentMethods.map((method, index) => (
                 <div key={index} className="flex items-center p-4 rounded-lg bg-muted/30">
                   <h4 className="font-medium text-foreground">{method.name}</h4>
@@ -352,7 +352,7 @@ export default function Fees() {
           <h3 className="text-xl font-bold text-foreground mb-4">
             {isRTL ? "هل لديك أسئلة حول الرسوم؟" : "Have questions about fees?"}
           </h3>
-          <div className="flex justify-center gap-4">
+          <div className="flex flex-wrap justify-center gap-4">
             <Link to="/support">
               <Button variant="outline" size="lg">
                 <HelpCircle className="w-4 h-4 mr-2" />

@@ -92,7 +92,7 @@ export default function Messages() {
           )}
         </div>
 
-        <div className="grid lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <Card className={cn("lg:col-span-2 bg-card/50 backdrop-blur border-border/50", open && "hidden lg:block")}>
             <CardContent className="p-0 divide-y divide-border/50">
               {items === null ? (

@@ -321,7 +321,7 @@ export default function Reports() {
 
             {/* Analytics Tab */}
             <TabsContent value="analytics" className="space-y-6">
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Portfolio Value Chart — needs value-snapshot history (deferred) → honest empty. */}
                 <div className="bg-card rounded-2xl border border-border p-6">
                   <div className="flex items-center justify-between mb-6">
@@ -466,7 +466,7 @@ export default function Reports() {
 
             {/* Reports Tab — the downloadable documents, by category, for the selected period. */}
             <TabsContent value="reports">
-              <div className="grid lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-1 space-y-2">
                   {[{ id: "all", name: "كل المستندات", nameEn: "All documents", icon: FileText }, ...reportCategories].map((cat) => (
                     <button

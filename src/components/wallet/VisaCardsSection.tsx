@@ -147,7 +147,7 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
       <CardContent className="space-y-6">
         {/* Issue card buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2"
+          <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2 whitespace-normal"
             onClick={() => setCreateOpen(true)}>
             <div className="flex items-center gap-2 w-full">
               <UserIcon className="h-4 w-4" />
@@ -157,7 +157,7 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
               {t("Issue a card linked to your wallet.", "أصدر بطاقة مرتبطة بمحفظتك.")}
             </span>
           </Button>
-          <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2"
+          <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2 whitespace-normal"
             onClick={() => setCreateOpen(true)}>
             <div className="flex items-center gap-2 w-full">
               <Users className="h-4 w-4" />
@@ -167,7 +167,7 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
               {t("Linked to a family member's allocation.", "مرتبطة بحصة فرد من العائلة.")}
             </span>
           </Button>
-          <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2"
+          <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2 whitespace-normal"
             onClick={() => setCreateOpen(true)}>
             <div className="flex items-center gap-2 w-full">
               <Baby className="h-4 w-4" />

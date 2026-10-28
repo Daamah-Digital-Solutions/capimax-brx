@@ -192,7 +192,7 @@ export default function OwnerReports() {
 
           <Tabs defaultValue="performance" className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <TabsList className="bg-muted/50">
+              <TabsList className="bg-muted/50 max-w-full overflow-x-auto justify-start">
                 <TabsTrigger value="performance">
                   {language === "ar" ? "أداء الأصول" : "Asset Performance"}
                 </TabsTrigger>

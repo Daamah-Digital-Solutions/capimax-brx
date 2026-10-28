@@ -412,7 +412,7 @@ export default function Marketplace() {
                   </p>
                 </div>
               ) : (
-                <div className={viewMode === "grid" ? "grid md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
+                <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
                   {filtered.map((property, index) => (
                     <PropertyCard
                       key={property.id}

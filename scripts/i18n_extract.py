@@ -47,12 +47,17 @@ def template(s: str) -> str:
 
 CSSISH = re.compile(r"^[a-z0-9\-:/\[\]\.%#_ ()!,=>&]+$")
 CODEISH = re.compile(
-    r"[{}]|;\s*(?:const|let|var|return|if|\}|\)|$)|=>|===|!==|&&|\|\||\bconst\b|\buse[A-Z]\w*|\breturn\b|\(\)|\bnull\b"
+    # code words only in code shape, so "rate of return" / "null and void" stay text
+    r"[{}]|;\s*(?:const|let|var|return|if|\}|\)|$)|=>|===|!==|&&|\|\||\bconst\s+\w+\s*=|\buse[A-Z]\w*|\breturn\s*[(<;\[]"
+    r"|\(\)|[=(,:]\s*null\b|\bnull\s*[;),]|;\s*case\b|\bdefault:\s*return"
 )
 
 
-def is_ui_text(s: str) -> bool:
+def is_ui_text(s: str, paired: bool = False) -> bool:
+    """paired: the English side of an Arabic/English pair, so a lower-case word ("units") is text too."""
     s = norm(s)
+    if paired and re.fullmatch(r"[a-z][a-z'’]*[.!?:]?", s):
+        return s not in {"en", "ar", "ltr", "rtl", "r", "left", "right"}  # language / direction codes, css sides
     if not s or not re.search(r"[A-Za-z]", s):
         return False
     if re.match(r"^[MmLlCcHhVvZz]\s*-?[\d.]", s) or re.fullmatch(r"[dMyHhms ,:/.\-]+", s):
@@ -88,15 +93,16 @@ def keys_dictionary():
 
 def ui_strings():
     found = set()
+    paired = set()  # strings that are the English side of an Arabic/English pair
     ternary = re.compile(
-        r"(?:isAr|isRTL|\bar|language\s*===\s*[\"']ar[\"'])\s*\?\s*" + STR.replace("q>", "q1>").replace("s>", "a>").replace("(?P=q)", "(?P=q1)")
+        r"(?:isArabic|isAr|isRTL|\bar|language\s*===\s*[\"']ar[\"'])\s*\?\s*" + STR.replace("q>", "q1>").replace("s>", "a>").replace("(?P=q)", "(?P=q1)")
         + r"\s*:\s*" + STR, re.S)
     field = re.compile(r"\b(?:en|[a-z]+En)\s*:\s*((?:" + r'''(["'])(?:\\.|(?!\2).)*\2''' + r"\s*\+?\s*)+)", re.S)
     lcall = re.compile(r"\bL\(\s*" + STR + r"\s*,", re.S)
     jsx_text = re.compile(r">\s*([^<>{}]*[A-Za-z][^<>{}]*?)\s*<")
     # `isAr ? ["…", …] : ["…", …]` — every string of the English list
     arr_ternary = re.compile(
-        r"(?:isAr|isRTL|language\s*===\s*[\"']ar[\"'])\s*\?\s*\[[^\[\]]*\]\s*:\s*\[([^\[\]]*)\]", re.S)
+        r"(?:isArabic|isAr|isRTL|language\s*===\s*[\"']ar[\"'])\s*\?\s*\[[^\[\]]*\]\s*:\s*\[([^\[\]]*)\]", re.S)
     # any English sentence literal ("Something with spaces"): English-only text, toasts, labels
     sentence = re.compile(r"""(["'])([A-Z][^"'\n]*? [^"'\n]*?)\1""")
     quoted = re.compile(r"""(["'])((?:\\.|(?!\1).)*)\1""")
@@ -120,7 +126,9 @@ def ui_strings():
                 continue
             src = io.open(path, encoding="utf-8").read()
             for m in ternary.finditer(src):
-                found.add(template(unescape(m.group("s"))) if m.group("q") == "`" else unescape(m.group("s")))
+                s = template(unescape(m.group("s"))) if m.group("q") == "`" else unescape(m.group("s"))
+                found.add(s)
+                paired.add(s)
             for m in field.finditer(src):
                 if re.search(r"\bnameEn\s*:", m.group(0)):
                     continue  # names (properties, partners) stay as written
@@ -134,6 +142,7 @@ def ui_strings():
                 found.add(unescape(m.group("s")))
             for m in en_ar_call.finditer(src):
                 found.add(unescape(m.group("s")))
+                paired.add(unescape(m.group("s")))
             for m in arr_ternary.finditer(src):
                 for q in quoted.findall(m.group(1)):
                     found.add(unescape(q[1]))
@@ -148,7 +157,7 @@ def ui_strings():
                     found.add(html.unescape(m.group(1)))
                 for m in attr.finditer(src):
                     found.add(m.group(1))
-    out = {norm(s) for s in found if is_ui_text(s)}
+    out = {norm(s) for s in found if is_ui_text(s, s in paired)}
     return sorted(out)
 
 

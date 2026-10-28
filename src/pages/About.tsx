@@ -106,7 +106,7 @@ export default function About() {
         </div>
 
         {/* Mission & Vision */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-4">
@@ -146,7 +146,7 @@ export default function About() {
             <h2 className="text-2xl font-bold text-foreground mb-2">{t("about.ourValues")}</h2>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {values.map((value, index) => (
               <Card
                 key={index}
@@ -170,7 +170,7 @@ export default function About() {
             <h2 className="text-2xl font-bold text-foreground mb-2">{t("about.leadershipTeam")}</h2>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {team.map((member, index) => (
               <Card
                 key={index}
@@ -232,7 +232,7 @@ export default function About() {
                 <h2 className="text-2xl font-bold text-foreground mb-2">{t("about.contactUs")}</h2>
               </div>
 
-              <div className="grid sm:grid-cols-3 gap-6 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
                 <div className="flex flex-col items-center">
                   <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-3">
                     <MapPin className="w-6 h-6 text-primary" />
