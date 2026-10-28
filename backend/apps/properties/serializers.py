@@ -197,6 +197,8 @@ class ValuationReportSerializer(serializers.ModelSerializer):
 # --- detail / data-room extras (SPEC §3.1) -------------------------------- #
 class SPVSerializer(serializers.ModelSerializer):
     registrationNumber = serializers.CharField(source="registration_number")
+    digitalAssetId = serializers.CharField(source="digital_asset_id")
+    wyomingRegistered = serializers.BooleanField(source="is_wyoming")
     complianceAr = ArText("compliance_ar", "compliance")
     custodyAr = ArText("custody_ar", "custody")
 
@@ -205,6 +207,7 @@ class SPVSerializer(serializers.ModelSerializer):
         fields = (
             "name", "jurisdiction", "registrationNumber", "established",
             "compliance", "complianceAr", "custody", "custodyAr",
+            "digitalAssetId", "wyomingRegistered",
         )
 
 

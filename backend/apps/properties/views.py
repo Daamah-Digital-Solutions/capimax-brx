@@ -93,6 +93,32 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(pricing.price_summary(self.get_object()))
 
     @action(detail=False)
+    def registrations(self, request):
+        """
+        GET /api/properties/registrations/ — for the Verification Center: each published
+        property's Wyoming registrations a visitor can check on the state's own registry —
+        its SPV (name + filing ID, Wyoming SPVs only) and its digital asset ID (when registered).
+        """
+        from .models import SPVRecord
+
+        rows = []
+        for spv in SPVRecord.objects.filter(property__is_published=True).select_related("property"):
+            prop = spv.property
+            wyoming = spv.is_wyoming()
+            if not wyoming and not spv.digital_asset_id:
+                continue
+            rows.append({
+                "id": prop.slug,
+                "name": prop.name,
+                "nameAr": prop.name_ar or prop.name,
+                "spvName": spv.name if wyoming else "",
+                "filingId": spv.registration_number if wyoming else "",
+                "digitalAssetId": spv.digital_asset_id,
+            })
+        rows.sort(key=lambda r: r["name"])
+        return Response(rows)
+
+    @action(detail=False)
     def funded(self, request):
         """Closed deals for FundedProperties.tsx (it computes its own aggregate stats)."""
         qs = Property.objects.filter(is_published=True, funded_date__isnull=False).order_by(

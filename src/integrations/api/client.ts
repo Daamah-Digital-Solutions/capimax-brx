@@ -346,6 +346,11 @@ export const propertiesApi = {
   featured: () => publicGet("/properties/featured/") as Promise<any[]>,
   /** Closed deals for FundedProperties. */
   funded: () => publicGet("/properties/funded/") as Promise<any[]>,
+  /** Each property's Wyoming registrations (SPV filing, digital asset ID) for the Verification Center. */
+  registrations: () =>
+    publicGet("/properties/registrations/") as Promise<{
+      id: string; name: string; nameAr: string; spvName: string; filingId: string; digitalAssetId: string;
+    }[]>,
   /** Off-plan unit price: launch, current, % change since launch, phase name and every
    *  recorded change (oldest first; the first point is the launch price). */
   prices: (idOrSlug: string) =>

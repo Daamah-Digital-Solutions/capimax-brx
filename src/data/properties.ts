@@ -173,6 +173,10 @@ export interface Property {
   spv?: {
     name: string; jurisdiction: string; registrationNumber: string; established?: string;
     compliance?: string; complianceAr?: string; custody?: string; custodyAr?: string;
+    /** Wyoming Digital Asset Registry ID (empty → not registered there). */
+    digitalAssetId?: string;
+    /** The SPV is registered in Wyoming (verifiable on the state's business search). */
+    wyomingRegistered?: boolean;
   };
   tokenMetadata?: {
     contractAddress?: string; network?: string; standard?: string;

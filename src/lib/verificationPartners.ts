@@ -1,13 +1,24 @@
 /**
- * The Capimax ecosystem's designated verification partners (client's "Verify Your Documents"
- * text), shown on the Verification Center page — the same five, in the same order, as on
- * Capimax PropShare, with an Arabic version of every line. BRX verifies nothing itself: each
- * kind of record is checked on its partner's own site.
+ * The Verification Center's "Verify Your Documents" list (client's BRX text, 2026-10-28), with an
+ * Arabic version of every line:
+ *  1. BRX's own ownership certificates — verified by the QR code printed on each certificate,
+ *     which opens its verification page on BRX (client: not through CIM Global Financial).
+ *  2-5. The designated partners, as on Capimax PropShare.
+ *  6-7. The Wyoming Secretary of State's registries: the property-holding SPV and the digital
+ *     asset. Their links are the state's search pages; the IDs to search with are per property
+ *     (GET /api/properties/registrations/).
+ * Links are the client's, as given (tracking parameters removed).
  */
 import type { Bilingual } from "@/lib/partners";
 
 export interface VerificationPartner {
   key: string;
+  /** "certificate": verified on BRX itself by QR / code; "external": on the provider's site. */
+  kind?: "certificate" | "external";
+  /** Which per-property registration IDs to list under the card. */
+  registry?: "spv" | "digital_asset";
+  /** Extra notes shown after the how-to (the client's caveats). */
+  notes?: Bilingual[];
   title: Bilingual;
   /** The provider line exactly as the client wrote it ("Powered by …" for the first). */
   providerLine: Bilingual;
@@ -47,24 +58,30 @@ export const INDEPENDENT_VERIFICATION = {
 
 export const VERIFICATION_PARTNERS: VerificationPartner[] = [
   {
-    key: "capimax_documents",
-    title: { en: "Capimax Documents & Investment Certificates", ar: "مستندات Capimax وشهادات الاستثمار" },
-    providerLine: { en: "Powered by CIM Global Financial", ar: "بتشغيل CIM Global Financial" },
+    key: "certificates",
+    kind: "certificate",
+    title: { en: "Capimax BRX Ownership Certificates", ar: "شهادات الملكية الصادرة من Capimax BRX" },
+    providerLine: { en: "Verified on Capimax BRX by QR code", ar: "يتم التحقق منها على Capimax BRX عبر رمز QR" },
     description: {
-      en: "Verify Capimax-issued documents, investment certificates, official records and other ecosystem documents.",
-      ar: "تحقق من المستندات الصادرة عن Capimax وشهادات الاستثمار والسجلات الرسمية وسائر مستندات المنظومة.",
+      en:
+        "Every ownership certificate issued on Capimax BRX carries its own QR code. Scanning it " +
+        "opens the certificate's verification page here on the platform, showing whether it is " +
+        "authentic and its current status.",
+      ar:
+        "تحمل كل شهادة ملكية تصدر من Capimax BRX رمز QR خاصًا بها. مسح الرمز يفتح صفحة التحقق " +
+        "الخاصة بالشهادة هنا على المنصة، ويوضح صحتها وحالتها الحالية.",
     },
     howTo: {
       en:
-        "Enter the Verification Number, Record Number, Certificate Number, or scan the QR Code to " +
-        "confirm authenticity and current verification status.",
+        "Scan the QR code printed on the certificate with your phone's camera. Can't scan it? Enter " +
+        "the verification code shown beside the QR code below.",
       ar:
-        "أدخل رقم التحقق أو رقم السجل أو رقم الشهادة، أو امسح رمز QR، لتأكيد صحة المستند وحالة " +
-        "التحقق الحالية.",
+        "امسح رمز QR المطبوع على الشهادة بكاميرا هاتفك. إن تعذّر المسح، أدخل رمز التحقق المدوّن " +
+        "بجوار رمز QR في الخانة أدناه.",
     },
-    action: { en: "Verify Document / Certificate", ar: "تحقق من المستند / الشهادة" },
-    linkLabel: { en: "Open Capimax Verify — CIM Global Financial", ar: "افتح Capimax Verify — CIM Global Financial" },
-    url: "https://www.cimglobalfinancial.com/capimax-verify",
+    action: { en: "Verify Certificate", ar: "تحقق من الشهادة" },
+    linkLabel: { en: "Verification code", ar: "رمز التحقق" },
+    url: "/verify",
   },
   {
     key: "valuation_financial",
@@ -164,5 +181,99 @@ export const VERIFICATION_PARTNERS: VerificationPartner[] = [
     action: { en: "Verify Blockchain Record", ar: "تحقق من سجل البلوكتشين" },
     linkLabel: { en: "Verify with Proof Anchor", ar: "تحقق عبر Proof Anchor" },
     url: "https://www.proofanchor.io/verify",
+  },
+  {
+    key: "spv",
+    registry: "spv",
+    title: {
+      en: "Property-Holding SPV & Corporate Registration Verification",
+      ar: "التحقق من الشركة ذات الغرض الخاص (SPV) المالكة للعقار وتسجيلها التجاري",
+    },
+    providerLine: {
+      en: "Wyoming Secretary of State — Business Entity Search",
+      ar: "وزير خارجية ولاية Wyoming — البحث عن الكيانات التجارية",
+    },
+    description: {
+      en:
+        "Verify the corporate registration of the Wyoming-incorporated Special Purpose Vehicle " +
+        "(SPV) identified in the property's legal documents as the property-holding entity.",
+      ar:
+        "تحقق من التسجيل التجاري للشركة ذات الغرض الخاص (SPV) المؤسسة في ولاية Wyoming، والمحددة " +
+        "في المستندات القانونية للعقار بوصفها الكيان المالك له.",
+    },
+    howTo: {
+      en:
+        "Search using the SPV's Legal Company Name or Wyoming Filing ID to view its registration " +
+        "details, current entity status, and available corporate filings.",
+      ar:
+        "ابحث باسم الشركة القانوني أو رقم الإيداع في Wyoming (Filing ID) للاطلاع على بيانات " +
+        "تسجيلها وحالة الكيان الحالية والمستندات التجارية المتاحة.",
+    },
+    notes: [
+      {
+        en:
+          "Corporate registration verification confirms the entity's recorded existence and status. " +
+          "Property ownership should be verified separately through the applicable land registry " +
+          "and supporting title documents.",
+        ar:
+          "التحقق من التسجيل التجاري يؤكد وجود الكيان المسجّل وحالته. أما ملكية العقار فيُتحقق منها " +
+          "بشكل منفصل من خلال سجل الأراضي المختص ومستندات الملكية الداعمة.",
+      },
+    ],
+    action: { en: "Verify Property-Holding SPV", ar: "تحقق من الشركة المالكة للعقار" },
+    linkLabel: { en: "Verify with the Wyoming Secretary of State", ar: "تحقق عبر وزير خارجية ولاية Wyoming" },
+    url: "https://wyobiz.wyo.gov/Business/FilingSearch.aspx",
+  },
+  {
+    key: "digital_asset",
+    registry: "digital_asset",
+    title: {
+      en: "Wyoming Digital Asset Registration Verification",
+      ar: "التحقق من تسجيل الأصل الرقمي في ولاية Wyoming",
+    },
+    providerLine: {
+      en: "Wyoming Secretary of State — Digital Asset Search",
+      ar: "وزير خارجية ولاية Wyoming — البحث عن الأصول الرقمية",
+    },
+    description: {
+      en:
+        "Verify the Wyoming registration record for the digital asset associated with the relevant " +
+        "BRX property offering, where registered.",
+      ar:
+        "تحقق من سجل تسجيل الأصل الرقمي المرتبط بطرح عقار BRX المعني في ولاية Wyoming، حيثما كان مسجّلًا.",
+    },
+    howTo: {
+      en:
+        "Search using the Wyoming Digital Asset ID, as stated in the asset's registration certificate " +
+        "or offering documents, to retrieve the corresponding Registration Certificate PDF. The " +
+        "official search page provides the example format DA-000123456.",
+      ar:
+        "ابحث بمعرّف الأصل الرقمي في Wyoming (Digital Asset ID) المذكور في شهادة تسجيل الأصل أو " +
+        "مستندات الطرح، لتحصل على شهادة التسجيل بصيغة PDF. وتعرض صفحة البحث الرسمية مثالًا للصيغة: " +
+        "DA-000123456.",
+    },
+    notes: [
+      {
+        en:
+          "Open the downloaded certificate in a compatible PDF viewer to inspect its cryptographic " +
+          "signature. The registry also provides access to a list of current Wyoming Registered " +
+          "Digital Assets and applicant information.",
+        ar:
+          "افتح الشهادة بعد تنزيلها في برنامج PDF متوافق لفحص توقيعها المشفّر. ويتيح السجل أيضًا " +
+          "قائمة بالأصول الرقمية المسجّلة حاليًا في Wyoming وبيانات مقدّمي الطلبات.",
+      },
+      {
+        en:
+          "Digital asset registration is separate from property title verification, smart contract " +
+          "auditing, and approval of an investment offering. It does not guarantee investment " +
+          "returns or liquidity.",
+        ar:
+          "تسجيل الأصل الرقمي منفصل عن التحقق من ملكية العقار وتدقيق العقود الذكية واعتماد الطرح " +
+          "الاستثماري، ولا يضمن عوائد الاستثمار أو السيولة.",
+      },
+    ],
+    action: { en: "Verify Digital Asset Registration", ar: "تحقق من تسجيل الأصل الرقمي" },
+    linkLabel: { en: "Verify with the Wyoming Digital Asset Registry", ar: "تحقق عبر سجل الأصول الرقمية في Wyoming" },
+    url: "https://wyobiz.wyo.gov/Business/DigitalAssets/DigitalAssetSearch.aspx",
   },
 ];

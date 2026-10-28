@@ -468,6 +468,14 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
             <KV label="SPV Name" labelAr="اسم الشركة" value={spv?.name ?? "—"} isAr={isAr} />
             <KV label="Jurisdiction" labelAr="الولاية القضائية" value={spv?.jurisdiction ?? "—"} isAr={isAr} />
             <KV label="Reg. Number" labelAr="رقم التسجيل" value={spv?.registrationNumber ?? "—"} isAr={isAr} />
+            {spv?.digitalAssetId && (
+              <KV
+                label="Digital Asset ID"
+                labelAr="معرّف الأصل الرقمي"
+                value={<span className="font-mono text-xs" dir="ltr">{spv.digitalAssetId}</span>}
+                isAr={isAr}
+              />
+            )}
             <KV label="Established" labelAr="تأسست" value={spv?.established ?? "—"} isAr={isAr} />
             <KV
               label="Compliance"
@@ -484,6 +492,35 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
               }
               isAr={isAr}
             />
+            {/* Wyoming registries (Verification Center sections 6-7) — search with the IDs above. */}
+            {(spv?.wyomingRegistered || spv?.digitalAssetId) && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                {spv?.wyomingRegistered && (
+                  <a
+                    href="https://wyobiz.wyo.gov/Business/FilingSearch.aspx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1.5"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    {isAr ? "تحقق من تسجيل الشركة في Wyoming" : "Verify the SPV's Wyoming registration"}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                {spv?.digitalAssetId && (
+                  <a
+                    href="https://wyobiz.wyo.gov/Business/DigitalAssets/DigitalAssetSearch.aspx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1.5"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    {isAr ? "تحقق من تسجيل الأصل الرقمي في Wyoming" : "Verify the digital asset registration (Wyoming)"}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

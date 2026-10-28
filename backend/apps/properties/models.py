@@ -713,10 +713,22 @@ class SPVRecord(models.Model):
     property = models.OneToOneField(
         Property, on_delete=models.CASCADE, related_name="spv"
     )
-    name = models.CharField(max_length=200)
-    jurisdiction = models.CharField(max_length=120)
-    registration_number = models.CharField(max_length=120)
+    name = models.CharField(
+        max_length=200, help_text="The SPV's legal company name, as registered.",
+    )
+    jurisdiction = models.CharField(
+        max_length=120, help_text='Where it is registered, e.g. "Wyoming, USA".',
+    )
+    registration_number = models.CharField(
+        max_length=120, help_text="Its registration / filing number (Wyoming Filing ID for a Wyoming SPV).",
+    )
     established = models.DateField(null=True, blank=True)
+    # Wyoming Digital Asset Registry ID of this property's digital asset (Verification Center
+    # "Wyoming Digital Asset Registration Verification"); empty → not registered there.
+    digital_asset_id = models.CharField(
+        max_length=40, blank=True, verbose_name="Wyoming digital asset ID",
+        help_text="As stated on the asset's registration certificate, e.g. DA-000123456. Empty if not registered.",
+    )
     # Structure tab (empty → the page keeps its default wording).
     compliance = models.CharField(max_length=120, blank=True, help_text='e.g. "Reg D 506(c) / Reg S"')
     compliance_ar = models.CharField(max_length=120, blank=True)
@@ -725,6 +737,12 @@ class SPVRecord(models.Model):
 
     def __str__(self):
         return self.name
+
+    def is_wyoming(self) -> bool:  # a method: this model has a `property` field
+        """Registered in Wyoming — the Secretary of State's business search can verify it."""
+        import re
+
+        return bool(re.search(r"wyoming|\bwy\b", self.jurisdiction or "", re.I))
 
 
 class TokenMetadata(models.Model):

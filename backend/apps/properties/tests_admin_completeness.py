@@ -44,6 +44,23 @@ class PropertyAdminCompletenessTests(TestCase):
         DeveloperInfo.objects.create(property=self.prop, name="Dev Co", website="https://dev.example.com")
         self.assertEqual(self._detail()["developer"]["website"], "https://dev.example.com")
 
+    def test_wyoming_registrations_for_the_verification_center(self):
+        from .models import SPVRecord
+
+        SPVRecord.objects.create(property=self.prop, name="Admin Made SPV LLC", jurisdiction="WY - USA",
+                                 registration_number="109512", digital_asset_id="DA-000123456")
+        spv = self._detail()["spv"]
+        self.assertTrue(spv["wyomingRegistered"])
+        self.assertEqual(spv["digitalAssetId"], "DA-000123456")
+        rows = self.client.get("/api/properties/registrations/").json()
+        self.assertEqual(rows, [{
+            "id": "admin-made", "name": self.prop.name, "nameAr": self.prop.name_ar or self.prop.name,
+            "spvName": "Admin Made SPV LLC", "filingId": "109512", "digitalAssetId": "DA-000123456",
+        }])
+        # A non-Wyoming SPV without a digital asset ID is not listed.
+        SPVRecord.objects.filter(property=self.prop).update(jurisdiction="London, United Kingdom", digital_asset_id="")
+        self.assertEqual(self.client.get("/api/properties/registrations/").json(), [])
+
     def test_amenities_follow_the_admin_order(self):
         Amenity.objects.create(property=self.prop, name_en="Pool", order=2)
         Amenity.objects.create(property=self.prop, name_en="Gym", order=1)
