@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-type Language = "ar" | "en" | "fr" | "es" | "zh" | "de" | "pt" | "ru";
+/** The platform's languages: Arabic, English and French (client, 2026-10-28). */
+export type Language = "ar" | "en" | "fr";
+const SUPPORTED: Language[] = ["en", "ar", "fr"];
 
 interface LanguageContextType {
   language: Language;
@@ -9,7 +11,9 @@ interface LanguageContextType {
   isRTL: boolean;
 }
 
-const translations: Record<Language, Record<string, string>> = {
+// French is loaded only when chosen: its t() keys (src/lib/i18n/fr-keys.json) here, and the rest
+// of the interface through the French layer (src/lib/i18n/frenchLayer.ts + fr-ui.json).
+const translations: Record<"ar" | "en", Record<string, string>> = {
   ar: {
     // Navigation
     "nav.home": "الرئيسية",
@@ -3042,79 +3046,26 @@ const translations: Record<Language, Record<string, string>> = {
     "notif.certificate_final.title": "Ownership Certificate Final",
     "notif.certificate_final.body": "Your purchase of {tokens} unit(s) of {property} is fully settled — certificate {certificate_id} is now final. Download it from your portfolio.",
   },
-  fr: {
-    // French translations - fallback to English with French labels
-    "nav.home": "Accueil",
-    "nav.dashboard": "Tableau de bord",
-    "nav.marketplace": "Marché",
-    "nav.portfolio": "Portefeuille",
-    "auth.login": "Connexion",
-    "auth.logout": "Déconnexion",
-    "nav.settings": "Paramètres",
-  },
-  es: {
-    // Spanish translations - fallback to English with Spanish labels
-    "nav.home": "Inicio",
-    "nav.dashboard": "Panel de control",
-    "nav.marketplace": "Mercado",
-    "nav.portfolio": "Portafolio",
-    "auth.login": "Iniciar sesión",
-    "auth.logout": "Cerrar sesión",
-    "nav.settings": "Configuración",
-  },
-  zh: {
-    // Chinese translations - fallback to English with Chinese labels
-    "nav.home": "首页",
-    "nav.dashboard": "仪表板",
-    "nav.marketplace": "市场",
-    "nav.portfolio": "投资组合",
-    "auth.login": "登录",
-    "auth.logout": "退出登录",
-    "nav.settings": "设置",
-  },
-  de: {
-    // German translations - fallback to English with German labels
-    "nav.home": "Startseite",
-    "nav.dashboard": "Dashboard",
-    "nav.marketplace": "Marktplatz",
-    "nav.portfolio": "Portfolio",
-    "auth.login": "Anmelden",
-    "auth.logout": "Abmelden",
-    "nav.settings": "Einstellungen",
-  },
-  pt: {
-    // Portuguese translations - fallback to English with Portuguese labels
-    "nav.home": "Início",
-    "nav.dashboard": "Painel",
-    "nav.marketplace": "Mercado",
-    "nav.portfolio": "Portfólio",
-    "auth.login": "Entrar",
-    "auth.logout": "Sair",
-    "nav.settings": "Configurações",
-  },
-  ru: {
-    // Russian translations - fallback to English with Russian labels
-    "nav.home": "Главная",
-    "nav.dashboard": "Панель управления",
-    "nav.marketplace": "Рынок",
-    "nav.portfolio": "Портфель",
-    "auth.login": "Войти",
-    "auth.logout": "Выйти",
-    "nav.settings": "Настройки",
-  },
 };
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem("language");
-    return (saved as Language) || "en";
+    const saved = localStorage.getItem("language") as Language | null;
+    return saved && SUPPORTED.includes(saved) ? saved : "en";
   });
+  const [frKeys, setFrKeys] = useState<Record<string, string> | null>(null);
 
   const setLanguage = (lang: Language) => {
+    const leavingFrench = language === "fr" && lang !== "fr";
     setLanguageState(lang);
     localStorage.setItem("language", lang);
+    if (leavingFrench) {
+      // The French layer rewrote text in place — a fresh page is the clean way back.
+      window.location.reload();
+      return;
+    }
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     document.documentElement.lang = lang;
   };
@@ -3124,8 +3075,31 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
   }, [language]);
 
+  // French: load its dictionaries on demand and switch the interface over.
+  useEffect(() => {
+    if (language !== "fr") return;
+    let active = true;
+    Promise.all([
+      import("@/lib/i18n/fr-keys.json"),
+      import("@/lib/i18n/fr-ui.json"),
+      import("@/lib/i18n/fr-extra.json"),
+      import("@/lib/i18n/frenchLayer"),
+    ])
+      .then(([keys, ui, server, layer]) => {
+        if (!active) return;
+        setFrKeys(keys.default as Record<string, string>);
+        // fr-extra.json: hand-kept lines the extractor cannot see (server messages, split sentences).
+        layer.enableFrench({ ...(ui.default as Record<string, string>), ...(server.default as Record<string, string>) });
+      })
+      .catch(() => undefined); // stays in English if the files cannot load
+    return () => {
+      active = false;
+    };
+  }, [language]);
+
   const t = (key: string): string => {
-    return translations[language][key] || translations["en"][key] || key;
+    if (language === "fr") return frKeys?.[key] || translations.en[key] || key;
+    return translations[language][key] || translations.en[key] || key;
   };
 
   return (

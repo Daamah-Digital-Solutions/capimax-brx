@@ -403,10 +403,11 @@ export default function Settings() {
                   <select 
                     className="w-full h-10 rounded-md border border-input bg-background px-3"
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value as "ar" | "en")}
+                    onChange={(e) => setLanguage(e.target.value as "ar" | "en" | "fr")}
                   >
                     <option value="ar">العربية</option>
                     <option value="en">English</option>
+                    <option value="fr">Français</option>
                   </select>
                 </div>
 

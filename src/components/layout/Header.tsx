@@ -123,36 +123,6 @@ export function Header({ onMenuToggle }: HeaderProps) {
               >
                 🇫🇷 Français
               </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setLanguage("es")}
-                className={language === "es" ? "bg-accent" : ""}
-              >
-                🇪🇸 Español
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setLanguage("zh")}
-                className={language === "zh" ? "bg-accent" : ""}
-              >
-                🇨🇳 中文
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setLanguage("de")}
-                className={language === "de" ? "bg-accent" : ""}
-              >
-                🇩🇪 Deutsch
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setLanguage("pt")}
-                className={language === "pt" ? "bg-accent" : ""}
-              >
-                🇧🇷 Português
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setLanguage("ru")}
-                className={language === "ru" ? "bg-accent" : ""}
-              >
-                🇷🇺 Русский
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

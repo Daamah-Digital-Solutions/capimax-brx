@@ -16,7 +16,7 @@ export interface CountryOption {
 
 /** All countries, sorted by name in the given language. */
 export function countryOptions(language: string): CountryOption[] {
-  const lang = language === "ar" ? "ar" : "en";
+  const lang = language === "ar" || language === "fr" ? language : "en";
   let names: Intl.DisplayNames | null = null;
   try {
     names = new Intl.DisplayNames([lang], { type: "region" });
