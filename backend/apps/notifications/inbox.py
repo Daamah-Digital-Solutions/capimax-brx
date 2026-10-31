@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
@@ -35,6 +36,16 @@ def recipients_for(b: MessageBroadcast):
         return [b.user] if b.user and b.user.is_active else []
     if b.audience == MessageBroadcast.Audience.EVERYONE:
         return list(User.objects.filter(is_active=True))
+    if b.audience == MessageBroadcast.Audience.INVESTORS:
+        # Registered as an investor, or holding a paid purchase whatever their role.
+        from apps.core.models import Profile
+        from apps.investments.models import PaymentStatus
+
+        return list(User.objects.filter(
+            Q(profile__role=Profile.Role.INVESTOR)
+            | Q(investments__payment_status=PaymentStatus.COMPLETED),
+            is_active=True,
+        ).distinct())
     from apps.roles.services import _record_model
 
     model = _record_model(_ROLE_MODEL[b.audience])

@@ -66,9 +66,12 @@ export function GiftDialog({
   const [occasion, setOccasion] = useState(isTransfer ? NO_OCCASION : "birthday");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  // Transfers review what they send on a confirmation step; gifts (Family page) send directly.
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setConfirming(false);
     transfersApi
       .giftable()
       .then((g) => {
@@ -121,18 +124,44 @@ export function GiftDialog({
     }
   };
 
+  const later = date > today();
+  const occasionRow = OCCASIONS.find((o) => o.id === occasion && o.id !== NO_OCCASION);
+  const reviewRows: { label: string; value: string; ltr?: boolean }[] = [
+    asset === "units"
+      ? {
+          label: isRTL ? "ما سيتم تحويله" : "What you send",
+          value: `${n} ${isRTL ? "وحدة" : n === 1 ? "unit" : "units"} — ${(isRTL && pos?.property_name_ar) || pos?.property_name || ""}`,
+        }
+      : { label: isRTL ? "المبلغ" : "Amount", value: `$${amt.toFixed(2)}`, ltr: true },
+    ...(fee > 0 ? [{ label: isRTL ? "رسوم التحويل" : "Transfer fee", value: `$${fee.toFixed(2)}`, ltr: true }] : []),
+    ...(asset === "cash"
+      ? [{ label: isRTL ? "يُخصم من رصيدك" : "Taken from your balance", value: `$${(amt + fee).toFixed(2)}`, ltr: true }]
+      : []),
+    { label: isRTL ? "بريد المستلم" : "Recipient email", value: email.trim(), ltr: true },
+    ...(name.trim() ? [{ label: isRTL ? "اسم المستلم" : "Recipient name", value: name.trim() }] : []),
+    { label: isRTL ? "تاريخ التسليم" : "Delivery date", value: later ? date : isRTL ? "فوراً" : "Right away" },
+    ...(occasionRow ? [{ label: isRTL ? "المناسبة" : "Occasion", value: isRTL ? occasionRow.ar : occasionRow.en }] : []),
+    ...(message.trim() ? [{ label: isRTL ? "الرسالة" : "Message", value: message.trim() }] : []),
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent dir={isRTL ? "rtl" : "ltr"} className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isTransfer ? <ArrowLeftRight className="w-5 h-5 text-primary" /> : <Gift className="w-5 h-5 text-pink-500" />}
-            {isTransfer
-              ? isRTL ? "تحويل" : "Transfer"
-              : isRTL ? "هدية عقارية" : "Property gift"}
+            {confirming
+              ? isRTL ? "تأكيد التحويل" : "Confirm transfer"
+              : isTransfer
+                ? isRTL ? "تحويل" : "Transfer"
+                : isRTL ? "هدية عقارية" : "Property gift"}
           </DialogTitle>
           <DialogDescription>
-            {isTransfer
+            {confirming
+              ? isRTL
+                ? "راجع البيانات قبل التأكيد. إن كان بريد المستلم مؤكدًا وهويته موثّقة والتسليم فوري، يصله التحويل مباشرة ولا يمكن إلغاؤه بعد ذلك."
+                : "Check the details before confirming. If the recipient's email is confirmed, their identity verified and delivery is right away, the transfer reaches them at once and can't be cancelled after that."
+              : isTransfer
               ? isRTL
                 ? `يُحجز ما تحوّله فوراً، ويصل للمستلم مباشرة إن كان بريده مؤكدًا وهويته موثّقة، وإلا يصله بريد دعوة ويصله التحويل فور توثيقه. إن لم يستلمه خلال ${info?.claim_days ?? 30} يوماً يعود إليك، ويمكنك إلغاؤه قبل ذلك من صفحة التحويلات.`
                 : `What you send is held at once and reaches the recipient right away if their email is confirmed and their identity verified; otherwise they get an invitation and receive it as soon as they verify. If not received within ${info?.claim_days ?? 30} days it returns to you — you can cancel it before then on the Transfers page.`
@@ -142,6 +171,16 @@ export function GiftDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {confirming ? (
+          <dl className="rounded-lg border border-border divide-y divide-border text-sm">
+            {reviewRows.map((r) => (
+              <div key={r.label} className="flex items-start justify-between gap-4 p-3">
+                <dt className="text-muted-foreground shrink-0">{r.label}</dt>
+                <dd className="font-medium text-end break-words min-w-0" dir={r.ltr ? "ltr" : undefined}>{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             {(["units", "cash"] as const).map((a) => (
@@ -237,17 +276,33 @@ export function GiftDialog({
             <Textarea rows={2} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
           </div>
         </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            {isRTL ? "إلغاء" : "Cancel"}
-          </Button>
-          <Button onClick={submit} disabled={busy || !valid} className="gap-2">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : isTransfer ? <ArrowLeftRight className="w-4 h-4" /> : <Gift className="w-4 h-4" />}
-            {date > today()
-              ? isRTL ? `جدولة ${word.ar}` : `Schedule ${word.enLower}`
-              : isRTL ? `إرسال ${word.ar}` : `Send ${word.enLower}`}
-          </Button>
+          {confirming ? (
+            <Button variant="outline" onClick={() => setConfirming(false)} disabled={busy}>
+              {isRTL ? "رجوع" : "Back"}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+              {isRTL ? "إلغاء" : "Cancel"}
+            </Button>
+          )}
+          {isTransfer && !confirming ? (
+            <Button onClick={() => setConfirming(true)} disabled={!valid} className="gap-2">
+              <ArrowLeftRight className="w-4 h-4" />
+              {isRTL ? "مراجعة التحويل" : "Review transfer"}
+            </Button>
+          ) : (
+            <Button onClick={submit} disabled={busy || !valid} className="gap-2">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : isTransfer ? <ArrowLeftRight className="w-4 h-4" /> : <Gift className="w-4 h-4" />}
+              {confirming
+                ? isRTL ? "تأكيد التحويل" : "Confirm transfer"
+                : later
+                  ? isRTL ? `جدولة ${word.ar}` : `Schedule ${word.enLower}`
+                  : isRTL ? `إرسال ${word.ar}` : `Send ${word.enLower}`}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

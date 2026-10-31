@@ -201,6 +201,7 @@ class MessageBroadcast(models.Model):
 
     class Audience(models.TextChoices):
         USER = "user", _("One user")
+        INVESTORS = "investors", _("All investors")
         OWNERS = "owners", _("All property owners")
         DEVELOPERS = "developers", _("All developers")
         BROKERS = "brokers", _("All brokers")
