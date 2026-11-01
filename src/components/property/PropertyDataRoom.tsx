@@ -467,7 +467,7 @@ function TokenizationSection({ p, isAr }: { p: Property; isAr: boolean }) {
               {isAr ? "هيكل SPV" : "SPV Structure"}
             </h4>
             <KV label="SPV Name" labelAr="اسم الشركة" value={spv?.name ?? "—"} isAr={isAr} />
-            <KV label="Jurisdiction" labelAr="الولاية القضائية" value={spv?.jurisdiction ?? "—"} isAr={isAr} />
+            <KV label="Jurisdiction" labelAr="الولاية القضائية" value={(isAr ? spv?.jurisdictionAr || spv?.jurisdiction : spv?.jurisdiction) ?? "—"} isAr={isAr} />
             <KV label="Reg. Number" labelAr="رقم التسجيل" value={spv?.registrationNumber ?? "—"} isAr={isAr} />
             {spv?.digitalAssetId && (
               <KV

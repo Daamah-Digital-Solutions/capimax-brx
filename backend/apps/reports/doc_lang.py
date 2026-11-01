@@ -61,20 +61,20 @@ def doc_language(code: str | None):
         _NAMES.reset(names_token)
 
 
-def _arabic_names() -> dict:
-    """Property name / location → the Arabic the admin entered (only for Arabic documents)."""
+def _property_names(lang: str) -> dict:
+    """Property name / location → the version the admin entered in the document's language."""
     names = _NAMES.get()
     if names is None:
         from apps.properties.models import Property
 
         names = {}
-        for name, name_ar, location, location_ar in Property.objects.values_list(
-            "name", "name_ar", "location", "location_ar"
+        for name, translated, location, location_translated in Property.objects.values_list(
+            "name", f"name_{lang}", "location", f"location_{lang}"
         ):
-            if name and name_ar:
-                names[name] = name_ar
-            if location and location_ar:
-                names[location] = location_ar
+            if name and translated:
+                names[name] = translated
+            if location and location_translated:
+                names[location] = location_translated
         _NAMES.set(names)
     return names
 
@@ -84,10 +84,9 @@ def _lookup(text: str, lang: str) -> str | None:
     found = _EXACT[lang].get(key)
     if found is not None:
         return found
-    if lang == "ar":
-        found = _arabic_names().get(key)
-        if found:
-            return found
+    found = _property_names(lang).get(key)
+    if found:
+        return found
     for pattern, pair in _TEMPLATES:
         m = pattern.fullmatch(key)
         if m:

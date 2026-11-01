@@ -3058,11 +3058,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [frKeys, setFrKeys] = useState<Record<string, string> | null>(null);
 
   const setLanguage = (lang: Language) => {
-    const leavingFrench = language === "fr" && lang !== "fr";
+    const frenchChanges = (language === "fr") !== (lang === "fr");
     setLanguageState(lang);
     localStorage.setItem("language", lang);
-    if (leavingFrench) {
-      // The French layer rewrote text in place — a fresh page is the clean way back.
+    if (frenchChanges) {
+      // Leaving: the French layer rewrote text in place — a fresh page is the clean way back.
+      // Entering: property text comes from the server in French, so it is fetched again.
       window.location.reload();
       return;
     }

@@ -198,9 +198,11 @@ class Property(models.Model):
 
     # identity (bilingual — Arabic is optional; the API falls back to the English text)
     name = models.CharField(max_length=200)
-    name_ar = models.CharField(max_length=200, blank=True, default="")
+    name_ar = models.CharField(max_length=200, blank=True, default="", verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="name (French)")
     location = models.CharField(max_length=200, blank=True, default="")
-    location_ar = models.CharField(max_length=200, blank=True, default="")
+    location_ar = models.CharField(max_length=200, blank=True, default="", verbose_name="location (Arabic)")
+    location_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="location (French)")
     country = models.CharField(max_length=16, choices=COUNTRY_CHOICES, blank=True, default="")
     city = models.CharField(max_length=80, blank=True, default="")
     # Hero image: an uploaded file wins; otherwise the URL / site path. One of the two is
@@ -257,14 +259,16 @@ class Property(models.Model):
     investors = models.PositiveIntegerField(default=0)
     min_investment = models.DecimalField(max_digits=12, decimal_places=2, default=100)
     duration = models.CharField(max_length=40, blank=True, default="")
-    duration_ar = models.CharField(max_length=40, blank=True, default="")
+    duration_ar = models.CharField(max_length=40, blank=True, default="", verbose_name="duration (Arabic)")
+    duration_fr = models.CharField(max_length=40, blank=True, default="", verbose_name="duration (French)")
     # Expected completion / handover, as shown on the page (e.g. "Q4 2027", "June 2028").
     expected_completion = models.CharField(
         max_length=40, blank=True, default="",
         help_text='Shown as the handover / expected completion date, e.g. "Q4 2027". '
                   "Empty → the installment activation date, then the duration.",
     )
-    expected_completion_ar = models.CharField(max_length=40, blank=True, default="")
+    expected_completion_ar = models.CharField(max_length=40, blank=True, default="", verbose_name="expected completion (Arabic)")
+    expected_completion_fr = models.CharField(max_length=40, blank=True, default="", verbose_name="expected completion (French)")
 
     # Off-plan purchase mode (ignored for ready properties, which are always paid in full).
     offplan_payment = models.CharField(
@@ -281,7 +285,8 @@ class Property(models.Model):
 
     # narrative
     description = models.TextField(blank=True, default="")
-    description_ar = models.TextField(blank=True, default="")
+    description_ar = models.TextField(blank=True, default="", verbose_name="description (Arabic)")
+    description_fr = models.TextField(blank=True, default="", verbose_name="description (French)")
 
     # construction (any under-construction model)
     construction_progress = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -602,7 +607,8 @@ class OptionContract(models.Model):
     validity_months = models.PositiveIntegerField()
     estimated_future_value = models.DecimalField(max_digits=12, decimal_places=2)
     exercise_conditions = models.TextField()
-    exercise_conditions_ar = models.TextField(blank=True, default="")
+    exercise_conditions_ar = models.TextField(blank=True, default="", verbose_name="exercise conditions (Arabic)")
+    exercise_conditions_fr = models.TextField(blank=True, default="", verbose_name="exercise conditions (French)")
 
     def __str__(self):
         return f"Option · {self.property.slug}"
@@ -622,7 +628,8 @@ class SharedOwnership(models.Model):
         max_length=16, choices=RevenueDistribution.choices
     )
     transfer_process = models.TextField()
-    transfer_process_ar = models.TextField(blank=True, default="")
+    transfer_process_ar = models.TextField(blank=True, default="", verbose_name="transfer process (Arabic)")
+    transfer_process_fr = models.TextField(blank=True, default="", verbose_name="transfer process (French)")
 
     def __str__(self):
         return f"Shared · {self.property.slug}"
@@ -636,7 +643,8 @@ class PropertyPhase(models.Model):
     )
     number = models.PositiveIntegerField()
     name = models.CharField(max_length=120)
-    name_ar = models.CharField(max_length=120, blank=True, default="")
+    name_ar = models.CharField(max_length=120, blank=True, default="", verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=120, blank=True, default="", verbose_name="name (French)")
     token_price = models.DecimalField(max_digits=12, decimal_places=2)
     start_date = models.DateField()
     end_date = models.DateField()
@@ -658,7 +666,8 @@ class PortfolioAsset(models.Model):
     )
     asset_slug = models.CharField(max_length=64)  # frontend id e.g. "p1-a"
     name = models.CharField(max_length=120)
-    name_ar = models.CharField(max_length=120, blank=True, default="")
+    name_ar = models.CharField(max_length=120, blank=True, default="", verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=120, blank=True, default="", verbose_name="name (French)")
     city = models.CharField(max_length=80)
     weight = models.DecimalField(max_digits=5, decimal_places=2)  # % of portfolio
     asset_type = models.CharField(max_length=16, choices=AssetType.choices)
@@ -678,7 +687,8 @@ class DeveloperReport(models.Model):
     )
     date = models.DateField()
     title = models.CharField(max_length=200)
-    title_ar = models.CharField(max_length=200, blank=True, default="")
+    title_ar = models.CharField(max_length=200, blank=True, default="", verbose_name="title (Arabic)")
+    title_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="title (French)")
     progress = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -721,6 +731,8 @@ class SPVRecord(models.Model):
     jurisdiction = models.CharField(
         max_length=120, help_text='Where it is registered, e.g. "Wyoming, USA".',
     )
+    jurisdiction_ar = models.CharField(max_length=120, blank=True, default="", verbose_name="jurisdiction (Arabic)")
+    jurisdiction_fr = models.CharField(max_length=120, blank=True, default="", verbose_name="jurisdiction (French)")
     registration_number = models.CharField(
         max_length=120, help_text="Its registration / filing number (Wyoming Filing ID for a Wyoming SPV).",
     )
@@ -733,9 +745,11 @@ class SPVRecord(models.Model):
     )
     # Structure tab (empty → the page keeps its default wording).
     compliance = models.CharField(max_length=120, blank=True, help_text='e.g. "Reg D 506(c) / Reg S"')
-    compliance_ar = models.CharField(max_length=120, blank=True)
+    compliance_ar = models.CharField(max_length=120, blank=True, verbose_name="compliance (Arabic)")
+    compliance_fr = models.CharField(max_length=120, blank=True, default="", verbose_name="compliance (French)")
     custody = models.CharField(max_length=120, blank=True, help_text='e.g. "Licensed Custodian"')
-    custody_ar = models.CharField(max_length=120, blank=True)
+    custody_ar = models.CharField(max_length=120, blank=True, verbose_name="custody (Arabic)")
+    custody_fr = models.CharField(max_length=120, blank=True, default="", verbose_name="custody (French)")
 
     def __str__(self):
         return self.name
@@ -868,6 +882,7 @@ class PropertyDocument(models.Model):
         max_length=200, blank=True, default="", verbose_name="name (Arabic)"
     )
     name_en = models.CharField(max_length=200, verbose_name="name")
+    name_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="name (French)")
     date = models.DateField(default=datetime.date.today)
     doc_type = models.CharField(max_length=16, choices=DocType.choices, verbose_name="document type")
     # Downloadable file. A real, resolvable URL (backend media on the API host, or an
@@ -906,7 +921,11 @@ class PropertyPrice(models.Model):
     previous_price = models.DecimalField(max_digits=12, decimal_places=2)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     label = models.CharField(max_length=80, blank=True, help_text="Phase name, e.g. Phase 2")
+    label_ar = models.CharField(max_length=80, blank=True, default="", verbose_name="phase name (Arabic)")
+    label_fr = models.CharField(max_length=80, blank=True, default="", verbose_name="phase name (French)")
     note = models.CharField(max_length=280, blank=True, help_text="One-line note to investors")
+    note_ar = models.CharField(max_length=280, blank=True, default="", verbose_name="note (Arabic)")
+    note_fr = models.CharField(max_length=280, blank=True, default="", verbose_name="note (French)")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="+",
@@ -1011,21 +1030,24 @@ class DeveloperInfo(models.Model):
         Property, on_delete=models.CASCADE, related_name="developer_info"
     )
     name = models.CharField(max_length=200)
-    name_ar = models.CharField(max_length=200, blank=True)
+    name_ar = models.CharField(max_length=200, blank=True, verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="name (French)")
     overview = models.TextField(blank=True)
-    overview_ar = models.TextField(blank=True)
+    overview_ar = models.TextField(blank=True, verbose_name="overview (Arabic)")
+    overview_fr = models.TextField(blank=True, default="", verbose_name="overview (French)")
     years_experience = models.PositiveIntegerField(default=0)
     completed_projects = models.PositiveIntegerField(default=0)
     ongoing_projects = models.PositiveIntegerField(default=0)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)  # 0..5
     location = models.CharField(max_length=200, blank=True)
-    location_ar = models.CharField(max_length=200, blank=True)
+    location_ar = models.CharField(max_length=200, blank=True, verbose_name="location (Arabic)")
+    location_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="location (French)")
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=40, blank=True)
     website = models.URLField(max_length=300, blank=True, help_text="The developer's website, e.g. https://example.com")
     related_projects = models.JSONField(
         default=list, blank=True,
-        help_text='List of projects, e.g. [{"en": "Marina Heights", "ar": "مارينا هايتس"}]',
+        help_text='List of projects, e.g. [{"en": "Marina Heights", "ar": "مارينا هايتس", "fr": "Marina Heights"}]',
     )  # [{"en":.., "ar":..}]
 
     def clean(self):
@@ -1034,7 +1056,7 @@ class DeveloperInfo(models.Model):
         if v not in (None, "") and (not isinstance(v, list) or not all(isinstance(x, dict) and x.get("en") for x in v)):
             from django.core.exceptions import ValidationError
 
-            raise ValidationError({"related_projects": 'Use a list like [{"en": "Name", "ar": "الاسم"}].'})
+            raise ValidationError({"related_projects": 'Use a list like [{"en": "Name", "ar": "الاسم", "fr": "Nom"}].'})
 
     def __str__(self):
         return f"Developer · {self.property.slug}"
@@ -1099,7 +1121,8 @@ class Amenity(models.Model):
         Property, on_delete=models.CASCADE, related_name="amenities"
     )
     name_en = models.CharField(max_length=120)
-    name_ar = models.CharField(max_length=120, blank=True)
+    name_ar = models.CharField(max_length=120, blank=True, verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=120, blank=True, default="", verbose_name="name (French)")
     order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
@@ -1116,7 +1139,8 @@ class Landmark(models.Model):
         Property, on_delete=models.CASCADE, related_name="landmarks"
     )
     name_en = models.CharField(max_length=160)
-    name_ar = models.CharField(max_length=160, blank=True)
+    name_ar = models.CharField(max_length=160, blank=True, verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=160, blank=True, default="", verbose_name="name (French)")
     order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
@@ -1133,7 +1157,8 @@ class RiskFactor(models.Model):
         Property, on_delete=models.CASCADE, related_name="risk_factors"
     )
     text_en = models.CharField(max_length=300)
-    text_ar = models.CharField(max_length=300, blank=True)
+    text_ar = models.CharField(max_length=300, blank=True, verbose_name="text (Arabic)")
+    text_fr = models.CharField(max_length=300, blank=True, default="", verbose_name="text (French)")
     order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:
@@ -1183,7 +1208,8 @@ class ConstructionMilestone(models.Model):
         Property, on_delete=models.CASCADE, related_name="construction_milestones"
     )
     name_en = models.CharField(max_length=80)
-    name_ar = models.CharField(max_length=80, blank=True)
+    name_ar = models.CharField(max_length=80, blank=True, verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=80, blank=True, default="", verbose_name="name (French)")
     threshold = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Construction progress % at which this milestone shows as done.",
@@ -1204,7 +1230,8 @@ class PostHandoverBenefit(models.Model):
         Property, on_delete=models.CASCADE, related_name="post_handover_benefits"
     )
     text_en = models.CharField(max_length=160)
-    text_ar = models.CharField(max_length=160, blank=True)
+    text_ar = models.CharField(max_length=160, blank=True, verbose_name="text (Arabic)")
+    text_fr = models.CharField(max_length=160, blank=True, default="", verbose_name="text (French)")
     order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -1221,9 +1248,11 @@ class PropertyFAQ(models.Model):
         Property, on_delete=models.CASCADE, related_name="faqs"
     )
     question_en = models.CharField(max_length=300)
-    question_ar = models.CharField(max_length=300, blank=True)
+    question_ar = models.CharField(max_length=300, blank=True, verbose_name="question (Arabic)")
+    question_fr = models.CharField(max_length=300, blank=True, default="", verbose_name="question (French)")
     answer_en = models.TextField()
-    answer_ar = models.TextField(blank=True)
+    answer_ar = models.TextField(blank=True, verbose_name="answer (Arabic)")
+    answer_fr = models.TextField(blank=True, default="", verbose_name="answer (French)")
     order = models.PositiveSmallIntegerField(default=0, help_text="Lower shows first.")
 
     class Meta:

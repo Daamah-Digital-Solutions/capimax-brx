@@ -157,8 +157,8 @@ class PropertyDocumentInline(admin.TabularInline):
     def get_fields(self, request, obj=None):
         # Upload only; the old link column shows just for properties that already use links.
         if obj is not None and obj.documents.exclude(url="").exists():
-            return ("name_en", "name", "doc_type", "date", "file", "url")
-        return ("name_en", "name", "doc_type", "date", "file")
+            return ("name_en", "name", "name_fr", "doc_type", "date", "file", "url")
+        return ("name_en", "name", "name_fr", "doc_type", "date", "file")
 
 
 def _thumb(url, height=70):
@@ -257,7 +257,7 @@ class ConstructionMilestoneInline(admin.TabularInline):
 
     model = ConstructionMilestone
     extra = 0
-    fields = ("name_en", "name_ar", "threshold", "order")
+    fields = ("name_en", "name_ar", "name_fr", "threshold", "order")
 
 
 class PostHandoverBenefitInline(admin.TabularInline):
@@ -265,7 +265,7 @@ class PostHandoverBenefitInline(admin.TabularInline):
 
     model = PostHandoverBenefit
     extra = 0
-    fields = ("text_en", "text_ar", "order")
+    fields = ("text_en", "text_ar", "text_fr", "order")
 
 
 class PublicationFilter(admin.SimpleListFilter):
@@ -322,7 +322,7 @@ class PropertyAdmin(admin.ModelAdmin):
         "risk_level",
         "is_featured",
     )
-    search_fields = ("name", "name_ar", "location", "location_ar", "city", "slug")
+    search_fields = ("name", "name_ar", "name_fr", "location", "location_ar", "location_fr", "city", "slug")
     list_editable = ("is_featured",)
     ordering = ("display_order", "name")
     actions = ["publish_selected", "unpublish_selected", "deploy_token_contract"]
@@ -620,7 +620,7 @@ class PropertyAdmin(admin.ModelAdmin):
     ]
     def get_fieldsets(self, request, obj=None):
         """
-        Essentials first (only they are needed to publish), Arabic optional and collapsed,
+        Essentials first (only they are needed to publish), Arabic and French optional,
         everything else optional with defaults (client review §3, §10). The older link
         fields appear only on properties that already use them.
         """
@@ -661,13 +661,20 @@ class PropertyAdmin(admin.ModelAdmin):
                 },
             ),
             (
-                "Arabic (optional)",
+                "Arabic and French versions",
                 {
-                    "classes": ("collapse",),
-                    "description": "Leave empty to show the English text on the Arabic site.",
+                    "description": (
+                        "What visitors read when the site is in Arabic or French. The site's own "
+                        "labels translate by themselves; this text doesn't. Leave a box empty to "
+                        "show the English instead. The sections below (developer, FAQ, risks, "
+                        "amenities…) have their own Arabic and French boxes."
+                    ),
                     "fields": (
-                        "name_ar", "location_ar", "description_ar", "duration_ar",
-                        "expected_completion_ar",
+                        ("name_ar", "name_fr"),
+                        ("location_ar", "location_fr"),
+                        ("description_ar", "description_fr"),
+                        ("duration_ar", "duration_fr"),
+                        ("expected_completion_ar", "expected_completion_fr"),
                     ),
                 },
             ),
@@ -768,7 +775,7 @@ class PriceHistoryInline(admin.TabularInline):
     model = PropertyPrice
     extra = 0
     can_delete = False
-    fields = ("created_at", "previous_price", "price", "label", "note", "created_by")
+    fields = ("created_at", "previous_price", "price", "label", "label_ar", "label_fr", "note", "note_ar", "note_fr", "created_by")
     readonly_fields = fields
     ordering = ("-created_at", "-id")
     verbose_name = "Price change"
@@ -793,9 +800,13 @@ class UnitPriceForm(forms.ModelForm):
         max_length=80, required=False, label="Phase name (optional)",
         help_text="e.g. Phase 2 — shown to investors with the new price.",
     )
+    phase_label_ar = forms.CharField(max_length=80, required=False, label="Phase name (Arabic)")
+    phase_label_fr = forms.CharField(max_length=80, required=False, label="Phase name (French)")
     investor_note = forms.CharField(
         max_length=280, required=False, label="Note to investors (optional)",
     )
+    investor_note_ar = forms.CharField(max_length=280, required=False, label="Note to investors (Arabic)")
+    investor_note_fr = forms.CharField(max_length=280, required=False, label="Note to investors (French)")
     confirm_large_change = forms.BooleanField(
         required=False, label="I confirm a change of more than 25%",
     )
@@ -862,7 +873,12 @@ class UnitPriceAdmin(admin.ModelAdmin):
                     "Holders, installment payers and listing sellers are notified (in-app + email). "
                     "A mistake is fixed by recording the right price."
                 ),
-                "fields": ("new_price", "phase_label", "investor_note", "confirm_large_change"),
+                "fields": (
+                    "new_price",
+                    ("phase_label", "phase_label_ar", "phase_label_fr"),
+                    ("investor_note", "investor_note_ar", "investor_note_fr"),
+                    "confirm_large_change",
+                ),
             },
         ),
     )
@@ -906,6 +922,12 @@ class UnitPriceAdmin(admin.ModelAdmin):
                 obj, new, by=request.user,
                 label=form.cleaned_data.get("phase_label", ""),
                 note=form.cleaned_data.get("investor_note", ""),
+                translations={
+                    "label_ar": form.cleaned_data.get("phase_label_ar", ""),
+                    "label_fr": form.cleaned_data.get("phase_label_fr", ""),
+                    "note_ar": form.cleaned_data.get("investor_note_ar", ""),
+                    "note_fr": form.cleaned_data.get("investor_note_fr", ""),
+                },
                 confirm_large=bool(form.cleaned_data.get("confirm_large_change")),
             )
         except pricing.PriceError as exc:  # raced with another change after validation

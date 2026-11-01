@@ -76,6 +76,7 @@ def record_price(
     by,
     label: str = "",
     note: str = "",
+    translations: dict | None = None,
     confirm_large: bool = False,
 ) -> PropertyPrice:
     """Record a new unit price for a published property. See the module docstring."""
@@ -116,6 +117,7 @@ def record_price(
             price=new,
             label=(label or "").strip()[:80],
             note=(note or "").strip()[:280],
+            **{k: (v or "").strip() for k, v in (translations or {}).items()},
             created_by=by,
         )
         p.token_price = new
@@ -234,25 +236,32 @@ def is_price_due(prop: Property, now=None) -> bool:
     return (now or timezone.now()) - since > timedelta(days=PRICE_DUE_DAYS)
 
 
-def price_summary(prop: Property) -> dict:
+def price_summary(prop: Property, *, french: bool = False) -> dict:
     """Public price block: launch, current, % change, current phase name and every point."""
     history = list(prop.price_history.order_by("created_at", "id"))
     launch = prop.launch_price or prop.token_price
     latest = history[-1] if history else None
+    # The English keys carry the French on a French request, as in the property serializers.
+    label = lambda h: (french and h.label_fr) or h.label  # noqa: E731
+    note = lambda h: (french and h.note_fr) or h.note  # noqa: E731
     points = [
         {
             "date": prop.created_at.isoformat(),
             "price": str(launch),
             "label": "",
+            "labelAr": "",
             "note": "",
+            "noteAr": "",
         }
     ] + [
         {
             "date": h.created_at.isoformat(),
             "price": str(h.price),
             "previousPrice": str(h.previous_price),
-            "label": h.label,
-            "note": h.note,
+            "label": label(h),
+            "labelAr": h.label_ar or h.label,
+            "note": note(h),
+            "noteAr": h.note_ar or h.note,
         }
         for h in history
     ]
@@ -260,7 +269,8 @@ def price_summary(prop: Property) -> dict:
         "launchPrice": str(launch),
         "currentPrice": str(prop.token_price),
         "changePct": str(change_since_launch_pct(prop)),
-        "label": latest.label if latest else "",
+        "label": label(latest) if latest else "",
+        "labelAr": (latest.label_ar or latest.label) if latest else "",
         "updatedAt": latest.created_at.isoformat() if latest else None,
         "points": points,
     }

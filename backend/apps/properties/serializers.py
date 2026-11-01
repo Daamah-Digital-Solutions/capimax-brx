@@ -50,6 +50,30 @@ class ArText(serializers.Field):
         return getattr(obj, self.ar_attr, "") or getattr(obj, self.en_attr, "") or ""
 
 
+class FrenchText:
+    """
+    On a French request (?lang=fr) the English keys carry the French the admin entered, so every
+    page's "not Arabic" branch shows it without knowing French exists; what has no French stays
+    in English. `french` maps a response key to its model field.
+    """
+
+    french: dict[str, str] = {}
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        if wants_french(self.context):
+            for key, attr in self.french.items():
+                value = getattr(obj, attr, "")
+                if value:
+                    data[key] = value
+        return data
+
+
+def wants_french(context) -> bool:
+    request = (context or {}).get("request")
+    return bool(request and request.query_params.get("lang") == "fr")
+
+
 # --------------------------------------------------------------------------- #
 # Nested model blocks (camelCase to match properties.ts sub-interfaces)
 # --------------------------------------------------------------------------- #
@@ -77,7 +101,8 @@ class InstallmentScheduleSerializer(serializers.ModelSerializer):
         )
 
 
-class PhaseSerializer(serializers.ModelSerializer):
+class PhaseSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"name": "name_fr"}
     nameAr = ArText("name_ar", "name")
     tokenPrice = serializers.DecimalField(
         source="token_price", max_digits=12, decimal_places=2
@@ -116,7 +141,8 @@ class FutureContractSerializer(serializers.ModelSerializer):
         )
 
 
-class OptionContractSerializer(serializers.ModelSerializer):
+class OptionContractSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"exerciseConditions": "exercise_conditions_fr"}
     optionPremium = serializers.DecimalField(
         source="option_premium", max_digits=12, decimal_places=2
     )
@@ -144,7 +170,8 @@ class OptionContractSerializer(serializers.ModelSerializer):
         )
 
 
-class SharedOwnershipSerializer(serializers.ModelSerializer):
+class SharedOwnershipSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"transferProcess": "transfer_process_fr"}
     investorShare = serializers.DecimalField(
         source="investor_share", max_digits=5, decimal_places=2
     )
@@ -170,7 +197,8 @@ class SharedOwnershipSerializer(serializers.ModelSerializer):
         )
 
 
-class PortfolioAssetSerializer(serializers.ModelSerializer):
+class PortfolioAssetSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"name": "name_fr"}
     id = serializers.CharField(source="asset_slug")  # frontend id e.g. "p1-a"
     nameAr = ArText("name_ar", "name")
     assetType = serializers.CharField(source="asset_type")
@@ -180,7 +208,8 @@ class PortfolioAssetSerializer(serializers.ModelSerializer):
         fields = ("id", "name", "nameAr", "city", "weight", "assetType")
 
 
-class DeveloperReportSerializer(serializers.ModelSerializer):
+class DeveloperReportSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"title": "title_fr"}
     titleAr = ArText("title_ar", "title")
 
     class Meta:
@@ -195,7 +224,9 @@ class ValuationReportSerializer(serializers.ModelSerializer):
 
 
 # --- detail / data-room extras (SPEC §3.1) -------------------------------- #
-class SPVSerializer(serializers.ModelSerializer):
+class SPVSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"jurisdiction": "jurisdiction_fr", "compliance": "compliance_fr", "custody": "custody_fr"}
+    jurisdictionAr = ArText("jurisdiction_ar", "jurisdiction")
     registrationNumber = serializers.CharField(source="registration_number")
     digitalAssetId = serializers.CharField(source="digital_asset_id")
     wyomingRegistered = serializers.BooleanField(source="is_wyoming")
@@ -205,7 +236,7 @@ class SPVSerializer(serializers.ModelSerializer):
     class Meta:
         model = SPVRecord
         fields = (
-            "name", "jurisdiction", "registrationNumber", "established",
+            "name", "jurisdiction", "jurisdictionAr", "registrationNumber", "established",
             "compliance", "complianceAr", "custody", "custodyAr",
             "digitalAssetId", "wyomingRegistered",
         )
@@ -316,7 +347,8 @@ class FinancialsSerializer(serializers.ModelSerializer):
         )
 
 
-class PropertyDocumentSerializer(serializers.ModelSerializer):
+class PropertyDocumentSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"nameEn": "name_fr"}
     name = ArText("name", "name_en")  # Arabic name (optional)
     nameEn = serializers.CharField(source="name_en")
     type = serializers.CharField(source="doc_type")
@@ -332,7 +364,8 @@ class PropertyDocumentSerializer(serializers.ModelSerializer):
 
 
 # --- data-room section content (admin-managed) ---------------------------- #
-class DeveloperInfoSerializer(serializers.ModelSerializer):
+class DeveloperInfoSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"name": "name_fr", "overview": "overview_fr", "location": "location_fr"}
     nameAr = ArText("name_ar", "name")
     overviewAr = ArText("overview_ar", "overview")
     yearsExperience = serializers.IntegerField(source="years_experience")
@@ -348,6 +381,14 @@ class DeveloperInfoSerializer(serializers.ModelSerializer):
             "completedProjects", "ongoingProjects", "rating", "location",
             "locationAr", "email", "phone", "website", "relatedProjects",
         )
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        if wants_french(self.context):
+            data["relatedProjects"] = [
+                {**r, "en": r.get("fr") or r.get("en")} for r in data.get("relatedProjects") or []
+            ]
+        return data
 
 
 class InsuranceInfoSerializer(serializers.ModelSerializer):
@@ -382,7 +423,8 @@ class MarketDataSerializer(serializers.ModelSerializer):
         )
 
 
-class AmenitySerializer(serializers.ModelSerializer):
+class AmenitySerializer(FrenchText, serializers.ModelSerializer):
+    french = {"nameEn": "name_fr"}
     nameEn = serializers.CharField(source="name_en")
     nameAr = ArText("name_ar", "name_en")
 
@@ -391,7 +433,8 @@ class AmenitySerializer(serializers.ModelSerializer):
         fields = ("nameEn", "nameAr")
 
 
-class LandmarkSerializer(serializers.ModelSerializer):
+class LandmarkSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"nameEn": "name_fr"}
     nameEn = serializers.CharField(source="name_en")
     nameAr = ArText("name_ar", "name_en")
 
@@ -400,7 +443,8 @@ class LandmarkSerializer(serializers.ModelSerializer):
         fields = ("nameEn", "nameAr")
 
 
-class RiskFactorSerializer(serializers.ModelSerializer):
+class RiskFactorSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"textEn": "text_fr"}
     textEn = serializers.CharField(source="text_en")
     textAr = ArText("text_ar", "text_en")
 
@@ -409,7 +453,8 @@ class RiskFactorSerializer(serializers.ModelSerializer):
         fields = ("textEn", "textAr")
 
 
-class ConstructionMilestoneSerializer(serializers.ModelSerializer):
+class ConstructionMilestoneSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"nameEn": "name_fr"}
     nameEn = serializers.CharField(source="name_en")
     nameAr = ArText("name_ar", "name_en")
 
@@ -418,7 +463,8 @@ class ConstructionMilestoneSerializer(serializers.ModelSerializer):
         fields = ("nameEn", "nameAr", "threshold")
 
 
-class PostHandoverBenefitSerializer(serializers.ModelSerializer):
+class PostHandoverBenefitSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"textEn": "text_fr"}
     textEn = serializers.CharField(source="text_en")
     textAr = ArText("text_ar", "text_en")
 
@@ -427,7 +473,8 @@ class PostHandoverBenefitSerializer(serializers.ModelSerializer):
         fields = ("textEn", "textAr")
 
 
-class PropertyFAQSerializer(serializers.ModelSerializer):
+class PropertyFAQSerializer(FrenchText, serializers.ModelSerializer):
+    french = {"questionEn": "question_fr", "answerEn": "answer_fr"}
     questionEn = serializers.CharField(source="question_en")
     questionAr = ArText("question_ar", "question_en")
     answerEn = serializers.CharField(source="answer_en")
@@ -479,8 +526,11 @@ _COMMON_FIELDS = (
 )
 
 
-class _PropertyBaseSerializer(serializers.ModelSerializer):
+class _PropertyBaseSerializer(FrenchText, serializers.ModelSerializer):
     """Common camelCase mapping for both list and detail."""
+
+    french = {"name": "name_fr", "location": "location_fr", "duration": "duration_fr",
+              "description": "description_fr"}
 
     id = serializers.CharField(source="slug")  # UI uses string ids; resolve by slug
     nameAr = ArText("name_ar", "name")
@@ -671,6 +721,8 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         return [public_media_url(ph.image, request) for ph in obj.site_photos.all() if ph.image]
 
     def get_expectedCompletion(self, obj):
+        if wants_french(self.context) and obj.expected_completion_fr:
+            return obj.expected_completion_fr
         return obj.expected_completion or None  # None → the page's own fallback
 
     def get_expectedCompletionAr(self, obj):
@@ -687,13 +739,13 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         return FutureContractSerializer(obj.future).data if hasattr(obj, "future") else None
 
     def get_option(self, obj):
-        return OptionContractSerializer(obj.option).data if hasattr(obj, "option") else None
+        return OptionContractSerializer(obj.option, context=self.context).data if hasattr(obj, "option") else None
 
     def get_shared(self, obj):
-        return SharedOwnershipSerializer(obj.shared).data if hasattr(obj, "shared") else None
+        return SharedOwnershipSerializer(obj.shared, context=self.context).data if hasattr(obj, "shared") else None
 
     def get_spv(self, obj):
-        return SPVSerializer(obj.spv).data if hasattr(obj, "spv") else None
+        return SPVSerializer(obj.spv, context=self.context).data if hasattr(obj, "spv") else None
 
     def get_tokenMetadata(self, obj):
         return (
@@ -728,7 +780,7 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
 
     def get_developer(self, obj):
         return (
-            DeveloperInfoSerializer(obj.developer_info).data
+            DeveloperInfoSerializer(obj.developer_info, context=self.context).data
             if hasattr(obj, "developer_info") else None
         )
 
@@ -745,8 +797,10 @@ class PropertyDetailSerializer(_PropertyBaseSerializer):
         )
 
 
-class FundedPropertySerializer(serializers.ModelSerializer):
+class FundedPropertySerializer(FrenchText, serializers.ModelSerializer):
     """Exact shape FundedProperties.tsx renders (its inline `fundedProperties` item)."""
+
+    french = {"name": "name_fr", "location": "location_fr", "duration": "duration_fr"}
 
     id = serializers.CharField(source="slug")
     nameAr = ArText("name_ar", "name")

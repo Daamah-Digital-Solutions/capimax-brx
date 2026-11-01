@@ -58,7 +58,7 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = "slug"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = PropertyFilter
-    search_fields = ["name", "name_ar", "location", "location_ar"]
+    search_fields = ["name", "name_ar", "name_fr", "location", "location_ar", "location_fr"]
     ordering_fields = [
         "expected_yield",
         "expected_growth",
@@ -90,7 +90,7 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
         GET /api/properties/{slug}/prices/ — off-plan unit price: launch, current, % change
         since launch, current phase name, and every recorded point (public).
         """
-        return Response(pricing.price_summary(self.get_object()))
+        return Response(pricing.price_summary(self.get_object(), french=request.query_params.get("lang") == "fr"))
 
     @action(detail=False)
     def registrations(self, request):
@@ -109,7 +109,7 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
                 continue
             rows.append({
                 "id": prop.slug,
-                "name": prop.name,
+                "name": (request.query_params.get("lang") == "fr" and prop.name_fr) or prop.name,
                 "nameAr": prop.name_ar or prop.name,
                 "spvName": spv.name if wyoming else "",
                 "filingId": spv.registration_number if wyoming else "",
@@ -124,7 +124,7 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
         qs = Property.objects.filter(is_published=True, funded_date__isnull=False).order_by(
             "-funded_date"
         )
-        return Response(FundedPropertySerializer(qs, many=True).data)
+        return Response(FundedPropertySerializer(qs, many=True, context=self.get_serializer_context()).data)
 
     @action(detail=False)
     def stats(self, request):

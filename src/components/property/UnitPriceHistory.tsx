@@ -109,7 +109,7 @@ export function UnitPriceHistory({ slug, avgCost, compact, hideIfUnchanged, titl
         </div>
         <Stat
           label={data.label ? (isAr ? "المرحلة الحالية" : "Current phase") : isAr ? "آخر تحديث" : "Last update"}
-          value={phaseName(data.label, isAr) || (data.updatedAt ? fmtDate(data.updatedAt) : isAr ? "لم يتغيّر" : "Unchanged")}
+          value={phaseName(isAr ? data.labelAr || data.label : data.label, isAr) || (data.updatedAt ? fmtDate(data.updatedAt) : isAr ? "لم يتغيّر" : "Unchanged")}
         />
       </div>
 
@@ -192,7 +192,8 @@ export function UnitPriceHistory({ slug, avgCost, compact, hideIfUnchanged, titl
                     <span className="font-medium">{money(Number(p.price))}</span>
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    {[phaseName(p.label, isAr), p.note].filter(Boolean).join(" — ") || "—"}
+                    {[phaseName(isAr ? p.labelAr || p.label : p.label, isAr), isAr ? p.noteAr || p.note : p.note]
+                      .filter(Boolean).join(" — ") || "—"}
                   </td>
                 </tr>
               ))}

@@ -310,7 +310,9 @@ export const accountApi = {
 // Returns the exact `Property` shape the components already consume.
 // --------------------------------------------------------------------------- //
 async function publicGet(path: string): Promise<unknown> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  // Property text the admin wrote in French arrives under the usual English keys.
+  const french = path.startsWith("/properties/") && localStorage.getItem("language") === "fr";
+  const res = await fetch(`${API_BASE_URL}${path}${french ? "?lang=fr" : ""}`, {
     headers: { "Content-Type": "application/json" },
   });
   const data = await parse(res);
@@ -325,7 +327,9 @@ export interface UnitPricePoint {
   price: string;
   previousPrice?: string;
   label: string;
+  labelAr?: string;
   note: string;
+  noteAr?: string;
 }
 
 export interface UnitPriceSummary {
@@ -333,6 +337,7 @@ export interface UnitPriceSummary {
   currentPrice: string;
   changePct: string;
   label: string;           // current phase name ("" when none)
+  labelAr: string;
   updatedAt: string | null; // last recorded change (null = unchanged since launch)
   points: UnitPricePoint[];
 }

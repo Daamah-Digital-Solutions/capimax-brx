@@ -171,7 +171,7 @@ export interface Property {
 
   // data-room section content (from the API detail; admin-managed)
   spv?: {
-    name: string; jurisdiction: string; registrationNumber: string; established?: string;
+    name: string; jurisdiction: string; jurisdictionAr?: string; registrationNumber: string; established?: string;
     compliance?: string; complianceAr?: string; custody?: string; custodyAr?: string;
     /** Wyoming Digital Asset Registry ID (empty → not registered there). */
     digitalAssetId?: string;
