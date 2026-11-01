@@ -10,11 +10,12 @@ contract shows as pending until it is really deployed, never invented.
 from __future__ import annotations
 
 from apps.reports.brand import (
-    CONTENT_W, CX, GOLD, GREEN_D, INK, LEFT, MUTED, PANEL, RIGHT, Doc, divider, draw, fit_centred,
-    holder_for, money, qr_image, wrap,
+    CONTENT_W, CX, GOLD, GREEN_D, INK, LEFT, MUTED, PANEL, RIGHT, Doc, day, divider, draw, fit_centred,
+    holder_for, mbox, money, mx, qr_image, wrap,
 )
+from apps.reports.doc_lang import tr, tr_value
 
-_STATUS = {"final": ("FINAL", GREEN_D), "provisional": ("PROVISIONAL", GOLD), "revoked": ("REVOKED", INK)}
+_STATUS = {"final": ("Final", GREEN_D), "provisional": ("Provisional", GOLD), "revoked": ("Revoked", INK)}
 
 
 def _contract(cert) -> tuple[str, str, str]:
@@ -34,12 +35,12 @@ def _panel(d: Doc, x: float, top: float, w: float, title: str, rows: list[tuple[
     c.setFillColor(PANEL)
     c.setStrokeColor(GOLD)
     c.setLineWidth(0.7)
-    c.roundRect(x, top - h, w, h, 6, stroke=1, fill=1)
-    draw(c, x + 12, top - 15, title, "Helvetica-Bold", 8, GREEN_D)
+    c.roundRect(mbox(x, w), top - h, w, h, 6, stroke=1, fill=1)
+    draw(c, x + 12, top - 15, tr(title).upper(), "Helvetica-Bold", 8, GREEN_D)
     yy = top - 34
     for label, value in rows:
-        draw(c, x + 12, yy, label.upper(), "Helvetica", 6.4, MUTED)
-        lines = wrap(value, "Helvetica-Bold", 8.6, w - 24, max_lines=1)
+        draw(c, x + 12, yy, tr(label).upper(), "Helvetica", 6.4, MUTED)
+        lines = wrap(tr_value(value), "Helvetica-Bold", 8.6, w - 24, max_lines=1)
         draw(c, x + 12, yy - 10, lines[0], "Helvetica-Bold", 8.6, INK)
         yy -= 24
     return top - h
@@ -63,20 +64,21 @@ def render_certificate_pdf(cert) -> bytes:
 
     # --- holder statement --------------------------------------------------- #
     y = d.y - 4
-    draw(c, CX, y, "This certifies that", "Helvetica-Oblique", 10.5, MUTED, "center")
+    draw(c, CX, y, tr("This certifies that"), "Helvetica-Oblique", 10.5, MUTED, "center")
     fit_centred(c, CX, y - 28, name, "Helvetica-Bold", 22, CONTENT_W - 40, INK)
     divider(c, CX, y - 42, 120)
     units = f"{cert.units_purchased:,}"
-    line = (f"is the registered holder of {units} unit{'s' if cert.units_purchased != 1 else ''} "
-            f"of {cert.property_name or 'the property'}, representing "
-            f"{float(cert.ownership_percentage):.4f}% ownership.")
+    line = tr(f"is the registered holder of {units} unit{'s' if cert.units_purchased != 1 else ''} "
+              f"of {cert.property_name or 'the property'}, representing "
+              f"{float(cert.ownership_percentage):.4f}% ownership.")
     yy = y - 62
     for ln in wrap(line, "Helvetica", 10.5, CONTENT_W - 60):
         draw(c, CX, yy, ln, "Helvetica", 10.5, INK, "center")
         yy -= 15
 
     # status badge
-    label, color = _STATUS.get(status, (status.upper(), MUTED))
+    label, color = _STATUS.get(status, (status, MUTED))
+    label = tr_value(label).upper()
     bw = 92
     c.setFillColor(color)
     c.roundRect(CX - bw / 2, yy - 18, bw, 18, 9, stroke=0, fill=1)
@@ -87,24 +89,24 @@ def render_certificate_pdf(cert) -> bytes:
     gap = 12
     w = (CONTENT_W - gap) / 2
     standard, contract, network = _contract(cert)
-    left1 = _panel(d, LEFT, top, w, "HOLDER", [
+    left1 = _panel(d, LEFT, top, w, "Holder", [
         ("Name", name),
         ("Email", holder.email if holder and holder.email else "—"),
         ("Investor ID", cert.investor_id_masked or "—"),
     ])
-    right1 = _panel(d, LEFT + w + gap, top, w, "PROPERTY & SPV", [
+    right1 = _panel(d, LEFT + w + gap, top, w, "Property & SPV", [
         ("Property", cert.property_name or "—"),
         ("Location", cert.property_location or "—"),
         ("SPV", f"{cert.spv_name or '—'}" + (f"  ({cert.spv_registration_ref})" if cert.spv_registration_ref else "")),
     ])
     top2 = min(left1, right1) - gap
-    left2 = _panel(d, LEFT, top2, w, "INVESTMENT", [
+    left2 = _panel(d, LEFT, top2, w, "Investment", [
         ("Units / tokens", units),
         ("Unit price", f"{money(cert.unit_price)} USD"),
         ("Investment amount", f"{money(cert.investment_amount)} USD"),
         ("Ownership", f"{float(cert.ownership_percentage):.4f}%"),
     ])
-    right2 = _panel(d, LEFT + w + gap, top2, w, "ON-CHAIN RECORD", [
+    right2 = _panel(d, LEFT + w + gap, top2, w, "On-chain record", [
         ("Holder wallet", holder.wallet_address if holder and holder.wallet_address else "—"),
         ("Token contract", contract),
         ("Standard / network", f"{standard} · {network}"),
@@ -116,23 +118,23 @@ def render_certificate_pdf(cert) -> bytes:
     qr_size = 92
     url = cert.verification_url or ""
     if url:
-        c.drawImage(qr_image(url), RIGHT - qr_size, y - qr_size, width=qr_size, height=qr_size, mask="auto")
-        draw(c, RIGHT - qr_size / 2, y - qr_size - 10, "Scan to verify", "Helvetica", 6.8, MUTED, "center")
+        c.drawImage(qr_image(url), mbox(RIGHT - qr_size, qr_size), y - qr_size, width=qr_size, height=qr_size, mask="auto")
+        draw(c, RIGHT - qr_size / 2, y - qr_size - 10, tr("Scan to verify"), "Helvetica", 6.8, MUTED, "center")
     rows = [
-        ("Issue date", cert.issue_date.strftime("%d %b %Y") if cert.issue_date else "—"),
-        ("Subscription date", cert.subscription_date.strftime("%d %b %Y") if cert.subscription_date else "—"),
+        ("Issue date", day(cert.issue_date) if cert.issue_date else "—"),
+        ("Subscription date", day(cert.subscription_date) if cert.subscription_date else "—"),
         ("Verification code", cert.verification_code or "—"),
         ("Verify at", url or "—"),
     ]
     yy = y - 6
     for label_, value in rows:
-        draw(c, LEFT + 4, yy, label_, "Helvetica", 8, MUTED)
+        draw(c, LEFT + 4, yy, tr(label_), "Helvetica", 8, MUTED)
         for ln in wrap(value, "Helvetica-Bold", 8.4, CONTENT_W - qr_size - 150, max_lines=2):
             draw(c, LEFT + 120, yy, ln, "Helvetica-Bold", 8.4, INK)
             yy -= 12
         yy -= 3
     if cert.digital_signature_hash:
-        draw(c, LEFT + 4, yy, "Digital signature", "Helvetica", 8, MUTED)
+        draw(c, LEFT + 4, yy, tr("Digital signature"), "Helvetica", 8, MUTED)
         for ln in wrap(cert.digital_signature_hash, "Helvetica", 6.6, CONTENT_W - qr_size - 150, max_lines=2):
             draw(c, LEFT + 120, yy, ln, "Helvetica", 6.6, INK)
             yy -= 9
@@ -140,8 +142,8 @@ def render_certificate_pdf(cert) -> bytes:
     sig_y = 150
     c.setStrokeColor(INK)
     c.setLineWidth(0.6)
-    c.line(LEFT, sig_y, LEFT + 190, sig_y)
-    draw(c, LEFT, sig_y - 12, cert.authorized_signatory or "Authorized Signatory", "Helvetica-Bold", 8.6, INK)
-    draw(c, LEFT, sig_y - 23, "For and on behalf of Capimax BRX", "Helvetica", 7.4, MUTED)
+    c.line(mx(LEFT), sig_y, mx(LEFT + 190), sig_y)
+    draw(c, LEFT, sig_y - 12, tr(cert.authorized_signatory or "Authorized Signatory"), "Helvetica-Bold", 8.6, INK)
+    draw(c, LEFT, sig_y - 23, tr("For and on behalf of Capimax BRX"), "Helvetica", 7.4, MUTED)
     d.y = sig_y - 30
     return d.finish()

@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from .adapters import ADAPTERS, distributions_tax, installment_plan, resolve_range
 from .brand import holder_for
+from .doc_lang import doc_language, language_of
 from .export import to_csv
 from .pdf import render_payload
 
@@ -64,8 +65,9 @@ class ReportExportView(APIView):
         if fmt not in ("csv", "pdf"):
             fmt = "csv"
         q = request.query_params
-        rng = resolve_range(q.get("period", ""), q.get("year"), q.get("start"), q.get("end"))
-        return _build(adapter(request.user, rng=rng), fmt, context, request.user)
+        with doc_language(language_of(request)):
+            rng = resolve_range(q.get("period", ""), q.get("year"), q.get("start"), q.get("end"))
+            return _build(adapter(request.user, rng=rng), fmt, context, request.user)
 
 
 class DistributionsTaxView(APIView):
@@ -74,8 +76,9 @@ class DistributionsTaxView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        payload = distributions_tax(request.user, year=request.query_params.get("year"))
-        pdf = render_payload(payload, holder_for(request.user))
+        with doc_language(language_of(request)):
+            payload = distributions_tax(request.user, year=request.query_params.get("year"))
+            pdf = render_payload(payload, holder_for(request.user))
         return _stream(pdf, _filename("distributions-tax", "pdf"), "application/pdf")
 
 
@@ -85,8 +88,9 @@ class InstallmentPlanPdfView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, plan_id):
-        payload = installment_plan(request.user, plan_id)
-        pdf = render_payload(payload, holder_for(request.user))
+        with doc_language(language_of(request)):
+            payload = installment_plan(request.user, plan_id)
+            pdf = render_payload(payload, holder_for(request.user))
         return _stream(pdf, _filename("installment-schedule", "pdf"), "application/pdf")
 
 
@@ -116,5 +120,6 @@ class ReceiptPdfView(APIView):
         }.get(kind)
         if builder is None:
             raise Http404
-        filename, pdf = builder(request.user, obj_id)
+        with doc_language(language_of(request)):
+            filename, pdf = builder(request.user, obj_id)
         return _stream(pdf, filename, "application/pdf")

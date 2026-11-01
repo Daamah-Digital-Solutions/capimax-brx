@@ -106,9 +106,12 @@ class CertificatePdfView(APIView):
         try:
             import io
 
+            from apps.reports.doc_lang import doc_language, language_of
+
             from .pdf import render_certificate_pdf
 
-            body = io.BytesIO(render_certificate_pdf(cert))
+            with doc_language(language_of(request)):
+                body = io.BytesIO(render_certificate_pdf(cert))
         except Exception:  # noqa: BLE001
             log.exception("certificate PDF render failed (cert=%s)", cert.pk)
             body = cert.pdf_file.open("rb")

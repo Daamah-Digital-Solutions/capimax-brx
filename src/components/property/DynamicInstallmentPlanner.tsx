@@ -1,3 +1,4 @@
+import { translateValue } from "@/lib/i18n/frenchLayer";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -251,9 +252,9 @@ export function DynamicInstallmentPlanner({
       r.ownership.toFixed(2) + "%",
     ]);
     const csv =
-      meta.map((m) => m.join(",")).join("\n") +
+      meta.map((m) => m.map(translateValue).join(",")).join("\n") +
       "\n" +
-      header.join(",") +
+      header.map(translateValue).join(",") +
       "\n" +
       rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });

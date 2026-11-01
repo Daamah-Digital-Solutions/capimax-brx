@@ -628,11 +628,16 @@ class InstallmentPreviewPdfView(InstallmentPreviewView):
         resp = super().post(request)
         if resp.status_code != 200:
             return resp
+        from apps.reports.doc_lang import doc_language, language_of
+
+        with doc_language(language_of(request)):
+            return self._pdf(resp.data)
+
+    def _pdf(self, p):
         from django.http import HttpResponse
 
         from apps.reports.brand import Col, Doc, money
 
-        p = resp.data
         prop = Property.objects.filter(slug=p["property"]).first()
         name = prop.name if prop else p["property"]
         from django.utils import timezone
@@ -670,8 +675,8 @@ class InstallmentPreviewPdfView(InstallmentPreviewView):
         d.table(
             [
                 Col("sequence", "#", 0.4),
-                Col("label", "Payment", 1.4),
-                Col("due", "Due date", 1.0, fmt="date"),
+                Col("label", "Payment", 1.25),
+                Col("due", "Due date", 1.15, fmt="date"),
                 Col("amount", "Amount (USD)", 1.1, "right", fmt="money"),
                 Col("fee", "Fee (USD)", 0.9, "right", fmt="money"),
                 Col("charge", "To pay (USD)", 1.1, "right", fmt="money"),

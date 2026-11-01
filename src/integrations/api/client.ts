@@ -1075,7 +1075,7 @@ export const certificatesApi = {
     }) as Promise<{ success: boolean; certificate?: any; error?: string }>,
   /** Owner download of the PDF blob (authenticated). */
   async downloadPdf(certificateId: string): Promise<Blob> {
-    const res = await fetch(`${API_BASE_URL}/certificates/${certificateId}/pdf/`, {
+    const res = await fetch(`${API_BASE_URL}${withDocLang(`/certificates/${certificateId}/pdf/`)}`, {
       headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
     });
     if (!res.ok) {
@@ -1140,6 +1140,13 @@ export interface KybDocumentRow {
 
 /** Fetch a self-scoped KYB document blob (auth header) and trigger a browser save.
  *  Mirrors partnerApi.downloadDeliverableDocument. */
+/** Documents the platform issues come in the language the person has the site in. */
+function withDocLang(path: string): string {
+  const lang = localStorage.getItem("language");
+  if (lang !== "ar" && lang !== "fr") return path;
+  return `${path}${path.includes("?") ? "&" : "?"}lang=${lang}`;
+}
+
 async function downloadKybDocumentBlob(path: string, filename?: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
@@ -1754,7 +1761,7 @@ export const installmentsApi = {
     }) as Promise<InstallmentPreview>,
   /** The same preview as a branded PDF, saved to the device (PUBLIC, writes nothing). */
   async downloadPreviewPdf(params: InstallmentPreviewParams, filename: string): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/installments/preview/pdf/`, {
+    const res = await fetch(`${API_BASE_URL}${withDocLang("/installments/preview/pdf/")}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
@@ -2274,7 +2281,7 @@ export type ReportContext =
 
 export const reportsApi = {
   async download(path: string): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await fetch(`${API_BASE_URL}${withDocLang(path)}`, {
       headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : {},
     });
     if (!res.ok) {
@@ -2410,7 +2417,7 @@ export const transfersApi = {
       auth: true,
       body: { beneficiaries },
     }) as Promise<BeneficiariesPayload>,
-  certificatePdf: () => downloadKybDocumentBlob("/transfers/estate/certificate/pdf/", "beneficiary-certificate.pdf"),
+  certificatePdf: () => downloadKybDocumentBlob(withDocLang("/transfers/estate/certificate/pdf/"), "beneficiary-certificate.pdf"),
   submitClaim: (fields: { certificate_number: string; date_of_death?: string; notes?: string; file: File }) => {
     const form = new FormData();
     form.append("certificate_number", fields.certificate_number);

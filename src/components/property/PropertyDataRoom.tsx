@@ -1,3 +1,4 @@
+import { translateValue } from "@/lib/i18n/frenchLayer";
 import { useState } from "react";
 import { propertyLabel } from "@/lib/propertyLabels";
 import {
@@ -1182,11 +1183,11 @@ function InstallmentScheduleSection({
       };
 
   const handleDownload = (format: "csv" | "print") => {
-    const headers = isAr
+    const headers = (isAr
       ? ["#", "تاريخ الاستحقاق", "الحالة", "المبلغ (USD)", "الملكية %", "المتبقي (USD)"]
-      : ["#", "Due Date", "Status", "Amount (USD)", "Ownership %", "Remaining (USD)"];
+      : ["#", "Due Date", "Status", "Amount (USD)", "Ownership %", "Remaining (USD)"]).map(translateValue);
     const dataRows = rows.map((r) => {
-      const statusStr = r.paid ? (isAr ? "مدفوع" : "Paid") : (isAr ? "قادم" : "Upcoming");
+      const statusStr = translateValue(r.paid ? (isAr ? "مدفوع" : "Paid") : (isAr ? "قادم" : "Upcoming"));
       return [r.num, r.date, statusStr, Math.round(r.amount), `${r.ownership}%`, Math.round(r.remaining)];
     });
 
@@ -1204,7 +1205,7 @@ function InstallmentScheduleSection({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } else {
-      const title = isAr ? `جدول الأقساط — ${p.nameAr}` : `Installment Schedule — ${p.name}`;
+      const title = translateValue(isAr ? `جدول الأقساط — ${p.nameAr}` : `Installment Schedule — ${p.name}`);
       const html = `<!doctype html><html dir="${isAr ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${title}</title>
         <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;color:#555;font-weight:400;margin:0 0 16px}
         table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:${isAr ? "right" : "left"}}th{background:#f3f4f6}
@@ -1212,10 +1213,10 @@ function InstallmentScheduleSection({
         .summary p{margin:0;font-size:11px;color:#666}.summary strong{font-size:14px}</style></head><body>
         <h1>${title}</h1><h2>${isAr ? p.locationAr : p.location}</h2>
         <div class="summary">
-          <div><p>${summary.freqLabel}</p><strong>$${money(summary.headlineAmount)}</strong></div>
-          <div><p>${isAr ? "مدفوعة" : "Paid"}</p><strong>${summary.paidInstallments}/${summary.totalInstallments}</strong></div>
-          <div><p>${isAr ? "الدفعة القادمة" : "Next Due"}</p><strong>${summary.nextPaymentDate}</strong></div>
-          <div><p>${isAr ? "تاريخ التفعيل" : "Activation"}</p><strong>${summary.activationDate}</strong></div>
+          <div><p>${translateValue(summary.freqLabel)}</p><strong>$${money(summary.headlineAmount)}</strong></div>
+          <div><p>${translateValue(isAr ? "مدفوعة" : "Paid")}</p><strong>${summary.paidInstallments}/${summary.totalInstallments}</strong></div>
+          <div><p>${translateValue(isAr ? "الدفعة القادمة" : "Next Due")}</p><strong>${summary.nextPaymentDate}</strong></div>
+          <div><p>${translateValue(isAr ? "تاريخ التفعيل" : "Activation")}</p><strong>${summary.activationDate}</strong></div>
         </div>
         <table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
         <tbody>${dataRows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>
@@ -1573,7 +1574,9 @@ function PostConstructionPaymentPlan({
       ...preview.rows.map((r) => [r.sequence, r.dueDate, r.amount, `${r.ownershipPercent}%`, r.balance]),
     ];
     const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-    const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    const csv = [headers.map(translateValue), ...rows.map((row) => row.map((c) => (typeof c === "string" ? translateValue(c) : c)))]
+      .map((row) => row.map(escape).join(","))
+      .join("\n");
     // BOM for Excel UTF-8 (Arabic)
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);

@@ -11,6 +11,10 @@ pages (the table header repeats). Every page ends with a short note and
 Arabic text (names, property names) is shaped and ordered right-to-left and drawn with the
 bundled DejaVu font; everything else uses Helvetica. Pure ReportLab — no system libraries.
 
+A document comes in the language set by doc_lang.doc_language: its blocks translate what they
+are given, and in Arabic `draw` mirrors the page right to left (`mx` for anything else drawn
+at a side). Left and right margins are equal, so x → W − x flips the whole layout.
+
 This module only lays out what the caller passes; it never computes figures.
 """
 from __future__ import annotations
@@ -27,6 +31,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
+
+from .doc_lang import is_rtl, month_name, tr, tr_value
 
 # --------------------------------------------------------------------------- #
 # Palette (the logo's dark teal + green, the site's gold) and page geometry
@@ -81,7 +87,9 @@ def _visual(text: str) -> str:
         import arabic_reshaper
         from bidi.algorithm import get_display
 
-        return get_display(arabic_reshaper.reshape(text))
+        shaped = arabic_reshaper.reshape(text)
+        # An Arabic document reads right to left even where a line starts with a Latin name.
+        return get_display(shaped, base_dir="R") if is_rtl() else get_display(shaped)
     except Exception:  # noqa: BLE001 — libraries missing: draw as-is
         return text
 
@@ -110,6 +118,13 @@ def clip(text, font: str, size: float, max_w: float) -> str:
     return s + "…"
 
 
+def fit_size(text, font: str, size: float, max_w: float, smallest: float) -> float:
+    """A smaller size before anything is cut off (translated text can run longer)."""
+    while size > smallest and width(text, font, size) > max_w:
+        size -= 0.2
+    return size
+
+
 def wrap(text, font: str, size: float, max_w: float, max_lines: int | None = None) -> list[str]:
     words = ("" if text is None else str(text)).split()
     lines, cur = [], ""
@@ -128,9 +143,22 @@ def wrap(text, font: str, size: float, max_w: float, max_lines: int | None = Non
     return lines or [""]
 
 
+def mx(x: float) -> float:
+    """An x position in the document's direction (mirrored in Arabic)."""
+    return W - x if is_rtl() else x
+
+
+def mbox(x: float, w: float) -> float:
+    """The left edge of a box at `x`, `w` wide, in the document's direction."""
+    return W - x - w if is_rtl() else x
+
+
 def draw(c, x: float, y: float, text, font: str = "Helvetica", size: float = 9,
          color=INK, align: str = "left"):
     s, f = prep(text, font)
+    if is_rtl():
+        x = W - x
+        align = {"left": "right", "right": "left"}.get(align, align)
     c.setFillColor(color)
     c.setFont(f, size)
     if align == "right":
@@ -144,6 +172,10 @@ def draw(c, x: float, y: float, text, font: str = "Helvetica", size: float = 9,
 def spaced(c, cx: float, y: float, text: str, font: str, size: float, spacing: float, color):
     """Centred, letter-spaced title (contained so the spacing never leaks to later text)."""
     s, f = prep(text, font)
+    if f != font:
+        spacing = 0  # spaced-out Arabic letters would no longer join
+    while size > 12 and stringWidth(s, f, size) + spacing * max(0, len(s) - 1) > CONTENT_W:
+        size -= 0.5
     w = stringWidth(s, f, size) + spacing * max(0, len(s) - 1)
     c.saveState()
     t = c.beginText(cx - w / 2, y)
@@ -376,7 +408,7 @@ def day(d) -> str:
             d = datetime.fromisoformat(d.replace("Z", "+00:00"))
         except ValueError:
             return d
-    return d.strftime("%d %b %Y")
+    return f"{d.day:02d} {month_name(d.month, d.strftime('%b'))} {d.year}"
 
 
 # --------------------------------------------------------------------------- #
@@ -410,14 +442,14 @@ class Doc:
     def __init__(self, *, title: str, ref: str, subtitle: str = "", note: str = "",
                  issued: datetime | None = None):
         _register_fonts()
-        self.title = title
+        self.title = tr(title)
         self.ref = ref
-        self.subtitle = subtitle
-        self.note = note
+        self.subtitle = tr(subtitle)
+        self.note = tr(note)
         self.issued = issued or timezone.now()
         self.buf = io.BytesIO()
         self.c = _NumberedCanvas(self.buf, pagesize=(W, H), footer=self._footer)
-        self.c.setTitle(f"{ISSUER} — {title}")
+        self.c.setTitle(f"{ISSUER} — {self.title}")
         self.c.setAuthor(ISSUER)
         self.c.setSubject(ref)
         self._table_header_again = None
@@ -438,8 +470,8 @@ class Doc:
 
     def _continued_header(self) -> float:
         c = self.c
-        logo(c, LEFT + 52, 800, 104)
-        draw(c, RIGHT, 782, f"{self.title} (continued)", "Helvetica-Bold", 10.5, INK, "right")
+        logo(c, mx(LEFT + 52), 800, 104)
+        draw(c, RIGHT, 782, tr(f"{self.title} (continued)"), "Helvetica-Bold", 10.5, INK, "right")
         c.setStrokeColor(GOLD)
         c.setLineWidth(0.8)
         c.line(LEFT, 764, RIGHT, 764)
@@ -455,7 +487,7 @@ class Doc:
         c.setLineWidth(0.6)
         c.line(LEFT, 66, RIGHT, 66)
         draw(c, LEFT, 54, self.ref, "Helvetica", 7.5, GOLD)
-        draw(c, CX, 54, f"Page {page} of {total}", "Helvetica", 7.5, GOLD, "center")
+        draw(c, CX, 54, tr(f"Page {page} of {total}"), "Helvetica", 7.5, GOLD, "center")
         draw(c, RIGHT, 54, SITE, "Helvetica", 7.5, GOLD, "right")
 
     def new_page(self):
@@ -470,15 +502,16 @@ class Doc:
             self.new_page()
 
     # --- blocks -------------------------------------------------------------- #
-    def holder(self, h: Holder, *, label: str = "ACCOUNT HOLDER"):
+    def holder(self, h: Holder, *, label: str = "Account holder"):
         """Name, email, wallet + document number / issue date in a framed panel."""
         c = self.c
-        rows_left = [(label, h.name, True), ("EMAIL", h.email or "—", False)]
+        rows_left = [(tr(label).upper(), h.name, True), (tr("Email").upper(), h.email or "—", False)]
         if h.wallet_address:
-            lab = f"WALLET ADDRESS — {h.network.upper()}" if h.network else "WALLET ADDRESS"
-            rows_left.append((lab, h.wallet_address, False))
-        rows_right = [("DOCUMENT NO.", self.ref), ("ISSUED", f"{day(self.issued)} {self.issued:%H:%M} UTC")]
-        rows_right += [(k.upper(), v) for k, v in h.extra]
+            lab = tr(f"Wallet address — {h.network}") if h.network else tr("Wallet address")
+            rows_left.append((lab.upper(), h.wallet_address, False))
+        rows_right = [(tr("Document no.").upper(), self.ref),
+                      (tr("Issued").upper(), f"{day(self.issued)} {self.issued:%H:%M} UTC")]
+        rows_right += [(tr(k).upper(), tr_value(v)) for k, v in h.extra]
         n = max(len(rows_left), len(rows_right))
         ph = 18 + n * 25
         self.ensure(ph + 8)
@@ -523,24 +556,26 @@ class Doc:
             col, row = i % cols, i // cols
             x = LEFT + 14 + col * cw
             yy = top - 18 - row * 34
-            draw(c, x, yy, str(label).upper(), "Helvetica", 6.6, MUTED)
-            draw(c, x, yy - 14, clip(value, "Helvetica-Bold", 10.5, cw - 22),
-                 "Helvetica-Bold", 10.5, GREEN_D if strong else INK)
+            draw(c, x, yy, str(tr(label)).upper(), "Helvetica", 6.6, MUTED)
+            text = tr_value(value)
+            size = fit_size(text, "Helvetica-Bold", 10.5, cw - 22, 8)
+            draw(c, x, yy - 14, clip(text, "Helvetica-Bold", size, cw - 22),
+                 "Helvetica-Bold", size, GREEN_D if strong else INK)
         self.y = top - ph - 18
 
     def section(self, title: str, hint: str = ""):
         # Room for the heading, a table header and a first row — never a stranded heading.
         self.ensure(90)
         c = self.c
-        draw(c, LEFT, self.y, title, "Helvetica-Bold", 11.5, INK)
+        draw(c, LEFT, self.y, tr(title), "Helvetica-Bold", 11.5, INK)
         if hint:
-            draw(c, RIGHT, self.y, hint, "Helvetica-Oblique", 8, MUTED, "right")
+            draw(c, RIGHT, self.y, tr(hint), "Helvetica-Oblique", 8, MUTED, "right")
         c.setStrokeColor(GOLD)
         c.setLineWidth(1.2)
-        c.line(LEFT, self.y - 6, LEFT + 44, self.y - 6)
+        c.line(mx(LEFT), self.y - 6, mx(LEFT + 44), self.y - 6)
         c.setStrokeColor(GOLD_L)
         c.setLineWidth(0.5)
-        c.line(LEFT + 44, self.y - 6, RIGHT, self.y - 6)
+        c.line(mx(LEFT + 44), self.y - 6, mx(RIGHT), self.y - 6)
         self.y -= 22
 
     def kv(self, rows: list, label_w: float = 150):
@@ -550,16 +585,16 @@ class Doc:
             label, value = r[0], r[1]
             strong = len(r) > 2 and r[2]
             font = "Helvetica-Bold" if strong else "Helvetica"
-            lines = wrap(value if value not in (None, "") else "—", font, 9.2, CONTENT_W - label_w - 8)
+            lines = wrap(tr_value(value) if value not in (None, "") else "—", font, 9.2, CONTENT_W - label_w - 8)
             self.ensure(14 * len(lines) + 4)
-            draw(c, LEFT + 4, self.y, label, "Helvetica", 8.4, MUTED)
+            draw(c, LEFT + 4, self.y, tr(label), "Helvetica", 8.4, MUTED)
             for ln in lines:
                 draw(c, LEFT + label_w, self.y, ln, font, 9.2, GREEN_D if strong else INK)
                 self.y -= 13.5
             self.y -= 3
 
     def paragraph(self, text: str, size: float = 8.8, color=MUTED, font: str = "Helvetica"):
-        for ln in wrap(text, font, size, CONTENT_W):
+        for ln in wrap(tr(text), font, size, CONTENT_W):
             self.ensure(size + 6)
             draw(self.c, LEFT, self.y, ln, font, size, color)
             self.y -= size + 4
@@ -582,34 +617,38 @@ class Doc:
             c.roundRect(LEFT, self.y - 6, CONTENT_W, 19, 3, stroke=0, fill=1)
             for col, (cx0, cw) in zip(cols, xs):
                 tx = cx0 + cw - pad if col.align == "right" else (cx0 + cw / 2 if col.align == "center" else cx0 + pad)
-                draw(c, tx, self.y, clip(col.header.upper(), "Helvetica-Bold", 6.8, cw - 2 * pad),
-                     "Helvetica-Bold", 6.8, WHITE, col.align)
+                head = tr(col.header).upper()
+                size = fit_size(head, "Helvetica-Bold", 6.8, cw - 2 * pad, 5.4)
+                draw(c, tx, self.y, clip(head, "Helvetica-Bold", size, cw - 2 * pad),
+                     "Helvetica-Bold", size, WHITE, col.align)
             self.y -= 21
 
         self.ensure(19 + 40)
         header()
         self._table_header_again = header
         if not rows:
-            draw(c, LEFT + pad, self.y, empty, "Helvetica-Oblique", 9, MUTED)
+            draw(c, LEFT + pad, self.y, tr(empty), "Helvetica-Oblique", 9, MUTED)
             self.y -= 18
         for i, row in enumerate(rows):
             cells = []
             n_lines = 1
             for col, (cx0, cw) in zip(cols, xs):
-                val = show(row.get(col.key, ""), col.fmt)
+                val = tr_value(show(row.get(col.key, ""), col.fmt))
+                size = 8.2
                 if col.wrap:
-                    lines = wrap(val, "Helvetica", 8.2, cw - 2 * pad, max_lines=2)
+                    lines = wrap(val, "Helvetica", size, cw - 2 * pad, max_lines=2)
                 else:
-                    lines = [clip(val, "Helvetica", 8.2, cw - 2 * pad)]
+                    size = fit_size(val, "Helvetica", size, cw - 2 * pad, 6.6)
+                    lines = [clip(val, "Helvetica", size, cw - 2 * pad)]
                 n_lines = max(n_lines, len(lines))
-                cells.append(lines)
+                cells.append((lines, size))
             rh = 8 + 10.5 * n_lines
             if self.y - rh < BOTTOM:
                 self.new_page()
             if i % 2:
                 c.setFillColor(PANEL)
                 c.rect(LEFT, self.y - rh + 9, CONTENT_W, rh, stroke=0, fill=1)
-            for col, (cx0, cw), lines in zip(cols, xs, cells):
+            for col, (cx0, cw), (lines, size) in zip(cols, xs, cells):
                 color = INK
                 font = "Helvetica"
                 raw = show(row.get(col.key, ""), col.fmt)
@@ -622,7 +661,7 @@ class Doc:
                 tx = cx0 + cw - pad if col.align == "right" else (cx0 + cw / 2 if col.align == "center" else cx0 + pad)
                 ly = self.y
                 for ln in lines:
-                    draw(c, tx, ly, ln, font, 8.2, color, col.align)
+                    draw(c, tx, ly, ln, font, size, color, col.align)
                     ly -= 10.5
             self.y -= rh
         self._table_header_again = None
@@ -635,9 +674,11 @@ class Doc:
                 val = totals.get(col.key)
                 if val in (None, ""):
                     continue
-                val = show(val, col.fmt) if col.fmt in ("money", "signed", "int") else str(val)
+                numeric = col.fmt in ("money", "signed", "int")
+                val = show(val, col.fmt) if numeric else str(tr_value(val))
                 tx = cx0 + cw - pad if col.align == "right" else cx0 + pad
-                draw(c, tx, self.y - 6, clip(val, "Helvetica-Bold", 8.6, cw - 2 * pad),
+                # A label ("Total") may run over its narrow column; the next ones are figures.
+                draw(c, tx, self.y - 6, clip(val, "Helvetica-Bold", 8.6, cw - 2 * pad) if numeric else val,
                      "Helvetica-Bold", 8.6, INK, col.align)
             self.y -= 24
         self.y -= 10

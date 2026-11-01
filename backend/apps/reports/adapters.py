@@ -22,6 +22,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.utils import timezone
 
 from .brand import Col, day, money
+from .doc_lang import month_name
 from .labels import source_label
 
 D0 = Decimal("0")
@@ -101,7 +102,7 @@ def resolve_range(period: str = "", year=None, start=None, end=None) -> Range:
         try:
             y = int(year)
             return Range(_aware(date(y, 1, 1)), _aware(date(y + 1, 1, 1)),
-                         f"01 Jan {y} – 31 Dec {y}", y)
+                         f"{day(date(y, 1, 1))} – {day(date(y, 12, 31))}", y)
         except (TypeError, ValueError):
             pass
     return Range(label=f"All time, to {day(today)}")
@@ -681,7 +682,7 @@ def analytics(user, *, rng: Range, **_):
     for p, d in payouts:
         k = d.pay_date.strftime("%Y-%m")
         months[k] = months.get(k, D0) + Decimal(str(p.share_amount_usd))
-    income = [{"month": f"{calendar.month_abbr[int(k[5:])]} {k[:4]}", "amount": v}
+    income = [{"month": f"{month_name(int(k[5:]), calendar.month_abbr[int(k[5:])])} {k[:4]}", "amount": v}
               for k, v in sorted(months.items())]
     income_total = sum(months.values(), D0)
 

@@ -1,3 +1,4 @@
+import { translateValue } from "@/lib/i18n/frenchLayer";
 import {
   Calendar,
   Clock,
@@ -69,15 +70,21 @@ export default function Installments() {
   // Download THIS plan's schedule (dates + amounts + status) as a CSV — no backend round-trip.
   // A UTF-8 BOM keeps Arabic property names intact when opened in Excel.
   const downloadSchedule = (plan: InstallmentPlanRow) => {
-    const head = ["#", "Type", "Date", "Amount (USD)", "Installment fee (USD)", "Total (USD)", "Status"];
+    const isAr = language === "ar";
+    const statusAr: Record<string, string> = { paid: "مدفوع", pending: "قيد الانتظار", missed: "فائت", cancelled: "ملغى" };
+    const head = isAr
+      ? ["#", "النوع", "التاريخ", "المبلغ (USD)", "رسوم القسط (USD)", "الإجمالي (USD)", "الحالة"]
+      : ["#", "Type", "Date", "Amount (USD)", "Installment fee (USD)", "Total (USD)", "Status"].map(translateValue);
     const rows = plan.payments.map((p) => [
       p.type === "down_payment" ? "" : String(p.sequence),
-      p.type === "down_payment" ? "Down payment" : `Installment ${p.sequence}`,
+      translateValue(p.type === "down_payment"
+        ? isAr ? "الدفعة المقدمة" : "Down payment"
+        : isAr ? `القسط ${p.sequence}` : `Installment ${p.sequence}`),
       p.date,
       String(p.amount),
       String(p.fee ?? 0),
       String(p.charge ?? p.amount),
-      p.status,
+      isAr ? statusAr[p.status] ?? p.status : translateValue(p.status),
     ]);
     const esc = (c: string) => `"${c.replace(/"/g, '""')}"`;
     const csv = [head, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");

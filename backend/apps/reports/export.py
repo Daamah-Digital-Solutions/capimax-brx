@@ -13,6 +13,8 @@ from __future__ import annotations
 import csv
 import io
 
+from .doc_lang import tr, tr_value
+
 # UTF-8 byte-order mark — makes Excel render Arabic + symbols correctly on open.
 _BOM = "﻿"
 
@@ -20,7 +22,7 @@ _BOM = "﻿"
 def _cell(value) -> str:
     if value is None:
         return ""
-    return str(value)
+    return str(tr_value(value))
 
 
 def to_csv(columns: list[tuple[str, str]], rows: list[dict]) -> bytes:
@@ -30,7 +32,7 @@ def to_csv(columns: list[tuple[str, str]], rows: list[dict]) -> bytes:
     """
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow([header for _key, header in columns])
+    writer.writerow([tr(header) for _key, header in columns])
     for row in rows:
         writer.writerow([_cell(row.get(key, "")) for key, _header in columns])
     return (_BOM + buf.getvalue()).encode("utf-8")

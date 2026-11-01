@@ -209,7 +209,10 @@ class CertificatePdfView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        number, pdf = services.certificate_pdf(request.user)
+        from apps.reports.doc_lang import doc_language, language_of
+
+        with doc_language(language_of(request)):
+            number, pdf = services.certificate_pdf(request.user)
         resp = HttpResponse(pdf, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{number}.pdf"'
         return resp
