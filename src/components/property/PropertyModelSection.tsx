@@ -1,4 +1,5 @@
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -50,7 +51,7 @@ const educationalCopy: Record<
     timeline: { icon: Clock, title: "Timeline", titleAr: "الجدول الزمني", body: "Income begins from the first distribution period after purchase. Hold horizon defined by the offering.", bodyAr: "يبدأ الدخل من أول فترة توزيع بعد الشراء. أفق الاحتفاظ محدد في العرض." },
     returns: { icon: LineChart, title: "Returns", titleAr: "العوائد", body: "Annualised rental yield distributed pro-rata to ownership.", bodyAr: "عائد إيجاري سنوي يوزَّع بالتناسب مع نسبة الملكية." },
     ownership: { icon: PieChart, title: "Ownership", titleAr: "الملكية", body: "Direct fractional ownership via SPV. Each token represents the same beneficial interest.", bodyAr: "ملكية جزئية مباشرة عبر شركة ذات غرض خاص. كل رمز يمثل نفس الحق الانتفاعي." },
-    exit: { icon: LogOut, title: "Exit", titleAr: "التخارج", body: "Available via Liquidity Provider (1% fee) or Secondary Market (0.5% fee).", bodyAr: "متاح عبر مزود السيولة (رسوم 1%) أو السوق الثانوي (رسوم 0.5%)." },
+    exit: { icon: LogOut, title: "Exit", titleAr: "التخارج", body: "Available via Liquidity Provider ({lp}) or Secondary Market ({sec}).", bodyAr: "متاح عبر مزود السيولة ({lp}) أو السوق الثانوي ({sec})." },
   },
   ready_portfolio: {
     education: { icon: GraduationCap, title: "About this model", titleAr: "عن هذا النموذج", body: "A diversified bundle of operational income-producing assets. Buy one token, gain exposure to many properties.", bodyAr: "حزمة متنوعة من الأصول التشغيلية المدرّة للدخل. اشترِ رمزاً واحداً واحصل على انكشاف لعدة عقارات." },
@@ -139,6 +140,20 @@ interface PropertyModelSectionProps {
 export function PropertyModelSection({ property }: PropertyModelSectionProps) {
   const { language, isRTL } = useLanguage();
   const isAr = language === "ar";
+  // The exit fees in the text are the ones the server charges.
+  const terms = useExitTerms();
+  const exitFees = (text: string) =>
+    text
+      .replace(
+        "{lp}",
+        isAr
+          ? `بسعر أقل من سعر الوحدة بـ ${pct(terms.discount_percent)} ثم رسوم ${pct(terms.fee_percent)}`
+          : `${pct(terms.discount_percent)} below the unit price, then a ${pct(terms.fee_percent)} fee`,
+      )
+      .replace(
+        "{sec}",
+        isAr ? `رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري` : `${pct(terms.secondary_fee_percent)} fee paid by the buyer`,
+      );
   const meta = propertyModelMeta[property.model];
   const copy = educationalCopy[property.model];
 
@@ -413,7 +428,7 @@ export function PropertyModelSection({ property }: PropertyModelSectionProps) {
                   <h4 className="font-semibold">{isAr ? s.titleAr : s.title}</h4>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  {isAr ? s.bodyAr : s.body}
+                  {exitFees(isAr ? s.bodyAr : s.body)}
                 </p>
               </div>
             );

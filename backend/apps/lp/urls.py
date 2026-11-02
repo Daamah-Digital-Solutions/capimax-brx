@@ -2,6 +2,7 @@
 from django.urls import path
 
 from .views import (
+    ExitTermsView,
     LPBankDetailsView,
     LPCryptoDetailsView,
     LPDocumentDetailView,
@@ -39,6 +40,7 @@ urlpatterns = [
     path("kyb/documents/", LPKYBDocumentsView.as_view(), name="lp-kyb-documents"),
     path("kyb/access-token/", LPKYBAccessTokenView.as_view(), name="lp-kyb-access-token"),
     # LP secondary market (Phase 6 Wave 2).
+    path("exit-terms/", ExitTermsView.as_view(), name="lp-exit-terms"),
     path("market/", LPMarketView.as_view(), name="lp-market"),
     path("market/<uuid:listing_id>/cancel/", LPMarketCancelView.as_view(), name="lp-market-cancel"),
     path("market/<uuid:listing_id>/purchase/", LPMarketPurchaseView.as_view(), name="lp-market-purchase"),

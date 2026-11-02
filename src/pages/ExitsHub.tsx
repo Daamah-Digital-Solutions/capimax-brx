@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRightLeft, Zap, Store, TrendingUp, XCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -18,6 +19,7 @@ type LPListing = {
   total_value: number;
   net_amount: number;
   platform_fee_amount: number;
+  platform_fee_percent: number;
   status: string;
   listed_at: string;
 };
@@ -28,12 +30,14 @@ type SecListing = {
   total_value: number;
   net_amount: number;
   platform_fee_amount: number;
+  platform_fee_percent: number;
   status: string;
   listed_at: string;
 };
 
 export default function ExitsHub() {
   const { language, isRTL } = useLanguage();
+  const terms = useExitTerms();
   const isAr = language === "ar";
   const [lp, setLp] = useState<LPListing[]>([]);
   const [sec, setSec] = useState<SecListing[]>([]);
@@ -138,7 +142,9 @@ export default function ExitsHub() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              {isAr ? "تنفيذ فوري · رسوم 1% · تحويل خلال دقائق" : "Instant fill · 1% fee · settlement in minutes"}
+              {isAr
+                ? `تنفيذ فوري · سعر الوحدة −${pct(terms.discount_percent)} · رسوم ${pct(terms.fee_percent)} · تحويل خلال دقائق`
+                : `Instant fill · unit price −${pct(terms.discount_percent)} · ${pct(terms.fee_percent)} fee · settlement in minutes`}
             </CardContent>
           </Card>
           <Card className="border-accent/20">
@@ -149,7 +155,9 @@ export default function ExitsHub() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              {isAr ? "أعلى عائد محتمل · رسوم 0.5% · بانتظار مشتري" : "Higher net proceeds · 0.5% fee · awaits a buyer"}
+              {isAr
+                ? `أعلى عائد محتمل · رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري · بانتظار مشتري`
+                : `Higher net proceeds · ${pct(terms.secondary_fee_percent)} fee paid by the buyer · awaits a buyer`}
             </CardContent>
           </Card>
         </div>
@@ -174,7 +182,7 @@ export default function ExitsHub() {
                 <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 {isAr ? "لا توجد عروض LP حالياً" : "No LP listings yet"}
               </CardContent></Card>
-            ) : lp.map(l => renderListing(l, "1%", () => cancelLP(l.id)))}
+            ) : lp.map(l => renderListing(l, pct(Number(l.platform_fee_percent)), () => cancelLP(l.id)))}
           </TabsContent>
 
           <TabsContent value="sec" className="space-y-3 mt-4">
@@ -185,7 +193,7 @@ export default function ExitsHub() {
                 <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 {isAr ? "لا توجد عروض ثانوية حالياً" : "No secondary listings yet"}
               </CardContent></Card>
-            ) : sec.map(l => renderListing(l, "0.5%", () => cancelSec(l.id)))}
+            ) : sec.map(l => renderListing(l, pct(Number(l.platform_fee_percent)), () => cancelSec(l.id)))}
           </TabsContent>
         </Tabs>
       </div>

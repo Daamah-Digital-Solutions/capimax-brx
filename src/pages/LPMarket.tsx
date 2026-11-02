@@ -93,7 +93,7 @@ export default function LPMarket() {
         unit_price: price / holding.token_amount,
       };
       // Both markets escrow-lock the LP's tokens server-side + compute the
-      // (backend-configurable) fee — LP market 1%, peer secondary 0.5%.
+      // (backend-configurable) fee — see the server's exit terms.
       if (target === "lp") {
         await lpApi.listAsset(payload);
       } else {

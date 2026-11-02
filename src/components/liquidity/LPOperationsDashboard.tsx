@@ -20,6 +20,9 @@ interface LPOperationsDashboardProps {
   showDetails?: boolean;
 }
 
+// Ledger entries that take money out of the LP balance (an LP-market purchase pays from it).
+const OUTGOING = ["withdrawal", "fee", "purchase"];
+
 export function LPOperationsDashboard({
   lpProfile,
   transactions,
@@ -204,12 +207,12 @@ export function LPOperationsDashboard({
                   <div className="text-right">
                     <p
                       className={`font-bold ${
-                        tx.tx_type === "withdrawal" || tx.tx_type === "fee"
+                        OUTGOING.includes(tx.tx_type)
                           ? "text-destructive"
                           : "text-emerald-500"
                       }`}
                     >
-                      {tx.tx_type === "withdrawal" || tx.tx_type === "fee" ? "-" : "+"}
+                      {OUTGOING.includes(tx.tx_type) ? "-" : "+"}
                       {formatCurrency(tx.amount)}
                     </p>
                     {getStatusBadge(tx.status)}

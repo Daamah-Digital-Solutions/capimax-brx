@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 
 interface ExitOptionsCardProps {
   assetId?: string;
@@ -24,6 +25,7 @@ export function ExitOptionsCard({
   planUnits = 0,
 }: ExitOptionsCardProps) {
   const { language } = useLanguage();
+  const terms = useExitTerms();
 
   // Off-plan §7: an installment plan's units can't be listed one by one — point the holder
   // to selling the whole position from the Installments page instead.
@@ -58,7 +60,7 @@ export function ExitOptionsCard({
       description: language === "ar" 
         ? "أدرج أصولك للبيع للمستثمرين الآخرين بالسعر الذي تحدده"
         : "List your assets for sale to other investors at your chosen price",
-      fee: "0.5%",
+      fee: pct(terms.secondary_fee_percent),
       feeLabel: language === "ar" ? "رسوم" : "Fee",
       icon: TrendingUp,
       href: assetId ? `/secondary-market?asset=${assetId}` : "/secondary-market",
@@ -75,9 +77,9 @@ export function ExitOptionsCard({
       id: "lp",
       title: language === "ar" ? "بيع فوري عبر مزود السيولة" : "Instant Sale via LP",
       description: language === "ar"
-        ? "بع أصولك فوراً بسعر محدد مسبقاً مع سيولة مضمونة"
-        : "Sell your assets instantly at a pre-determined price with guaranteed liquidity",
-      fee: "1%",
+        ? `بع أصولك فوراً بسعر المنصة (أقل من سعر الوحدة بـ ${pct(terms.discount_percent)}) مع سيولة مضمونة`
+        : `Sell your assets instantly at the platform price (${pct(terms.discount_percent)} below the unit price) with guaranteed liquidity`,
+      fee: pct(terms.fee_percent),
       feeLabel: language === "ar" ? "رسوم" : "Fee",
       icon: Coins,
       href: assetId ? `/lp-market?asset=${assetId}` : "/lp-market",

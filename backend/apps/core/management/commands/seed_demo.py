@@ -435,7 +435,7 @@ class Command(BaseCommand):
         if lp and not LPTransaction.objects.filter(lp=lp).exists():
             LPTransaction.objects.create(lp=lp, tx_type="deposit", amount=Decimal("150000"),
                                          status="completed", notes="Demo initial deposit")
-            LPTransaction.objects.create(lp=lp, tx_type="earnings", amount=Decimal("18500"),
+            LPTransaction.objects.create(lp=lp, tx_type="earning", amount=Decimal("18500"),
                                          status="completed", notes="Demo accrued earnings")
             LPTransaction.objects.create(lp=lp, tx_type="withdrawal", amount=Decimal("25000"),
                                          status="completed", withdrawal_method="bank",

@@ -435,15 +435,20 @@ def lp(user, *, rng: Range, **_):
     rows = [{
         "date": t.created_at.date().isoformat(), "type": t.tx_type, "status": t.status,
         "method": t.withdrawal_method or "", "reference": t.bank_reference or t.crypto_tx_hash or "",
-        "amount": (-Decimal(t.amount) if t.tx_type == "withdrawal" else Decimal(t.amount)),
+        # Money leaving the LP balance: withdrawals and LP-market purchases.
+        "amount": (-Decimal(t.amount) if t.tx_type in ("withdrawal", "purchase") else Decimal(t.amount)),
     } for t in txs]
     money_in = sum((r["amount"] for r in rows if r["amount"] > 0), D0)
     money_out = -sum((r["amount"] for r in rows if r["amount"] < 0), D0)
 
+    from apps.lp.accounting import unit_prices, value_now
+
+    held = list(LPHolding.objects.filter(lp__user=user).exclude(status=LPHolding.Status.SOLD).order_by("property_name"))
+    prices = unit_prices(h.property_id for h in held)
     holdings = [{
         "property": h.property_name, "symbol": h.token_symbol, "units": h.token_amount,
-        "cost": Decimal(h.purchase_price), "value": Decimal(h.current_value), "status": h.status,
-    } for h in LPHolding.objects.filter(lp__user=user).exclude(status=LPHolding.Status.SOLD).order_by("property_name")]
+        "cost": Decimal(h.purchase_price), "value": value_now(h, prices), "status": h.status,
+    } for h in held]
 
     summary = [("In this period", _usd(money_in)), ("Out this period", _usd(money_out)),
                ("Transactions", str(len(rows)))]

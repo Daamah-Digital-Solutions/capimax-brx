@@ -1170,6 +1170,13 @@ async function downloadKybDocumentBlob(path: string, filename?: string): Promise
   URL.revokeObjectURL(url);
 }
 
+export interface ExitTerms {
+  discount_percent: number;
+  fee_percent: number;
+  ttl_minutes: number;
+  secondary_fee_percent: number;
+}
+
 export const lpApi = {
   /** The caller's LP profile, or null when none exists yet (404). */
   profile: async (): Promise<any | null> => {
@@ -1238,6 +1245,8 @@ export const lpApi = {
     }
   },
 
+  /** Public: the exit fees the server charges (LP discount + fee, secondary resale fee). */
+  exitTerms: () => publicGet("/lp/exit-terms/") as Promise<ExitTerms>,
   // --- LP secondary market (Phase 6 Wave 2) — on-chain settlement server-side. --- //
   /** Both arrays the market hook needs: `my_listings` (always) + `listings` (approved LPs only). */
   market: () =>

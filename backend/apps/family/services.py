@@ -91,7 +91,7 @@ def log_transaction(
 # --------------------------------------------------------------------------- #
 # Wave B — the auto-allocation engine + internal accrual ledger.
 # --------------------------------------------------------------------------- #
-def carve_family_accruals(owner, distribution, payout) -> Decimal:
+def carve_family_accruals(owner, distribution, payout, amount=None) -> Decimal:
     """
     Carve each ACTIVE family member's allocated slice out of one distribution `payout`
     credited to `owner`, and record it as an internal accrual — debiting the owner by the
@@ -109,7 +109,9 @@ def carve_family_accruals(owner, distribution, payout) -> Decimal:
     remainder. Flooring each share to the cent leaves the owner as the residual claimant of
     any rounding crumbs, so the books are cent-exact with no remainder to redistribute.
     """
-    owner_share = Decimal(payout.share_amount_usd or 0).quantize(CENTS)
+    # `amount`: the part of the payout that reached the owner's wallet (a liquidity provider's
+    # LP units are paid to its LP balance and are not carved). Defaults to the whole payout.
+    owner_share = Decimal(payout.share_amount_usd if amount is None else amount or 0).quantize(CENTS)
     if owner_share <= 0:
         return Decimal("0")
 

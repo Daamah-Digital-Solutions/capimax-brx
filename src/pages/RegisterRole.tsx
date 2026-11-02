@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 
 type RoleId =
   | "investor"
@@ -143,12 +144,12 @@ const ROLES: RoleDef[] = [
     taglineEn: "Provide capital, earn from market flow",
     taglineAr: "وفّر رأس المال واكسب من حركة السوق",
     bulletsEn: [
-      "Buy from the LP Market (1% fee)",
+      "Buy from the LP Market at {lp} below the unit price",
       "Institutional onboarding (KYB)",
       "Bank, IBAN, or crypto settlement",
     ],
     bulletsAr: [
-      "الشراء من سوق LP (رسوم 1%)",
+      "الشراء من سوق LP بسعر أقل من سعر الوحدة بـ {lp}",
       "تأهيل مؤسسي (KYB)",
       "تسوية بنكية أو IBAN أو عملات رقمية",
     ],
@@ -186,6 +187,7 @@ const ROLES: RoleDef[] = [
 export default function RegisterRole() {
   const navigate = useNavigate();
   const { language, isRTL } = useLanguage();
+  const terms = useExitTerms();
   const [selected, setSelected] = useState<RoleId | null>(null);
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
 
@@ -354,7 +356,7 @@ export default function RegisterRole() {
 
                 {/* Bullets */}
                 <ul className="space-y-2 mb-5">
-                  {(language === "ar" ? role.bulletsAr : role.bulletsEn).map(
+                  {(language === "ar" ? role.bulletsAr : role.bulletsEn).map((b) => b.replace("{lp}", pct(terms.discount_percent))).map(
                     (b, i) => (
                       <li
                         key={i}

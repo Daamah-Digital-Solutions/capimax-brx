@@ -65,7 +65,8 @@ class PlatformPricedExitTests(APITestCase):
 
     def test_terms_are_published_with_the_market(self, m_transfer):
         terms = self.client.get("/api/lp/market/").data["exit_terms"]
-        self.assertEqual(terms, {"discount_percent": 3.0, "fee_percent": 2.0, "ttl_minutes": 1440})
+        self.assertEqual(terms, {"discount_percent": 3.0, "fee_percent": 2.0, "ttl_minutes": 1440,
+                                 "secondary_fee_percent": 1.0})
 
     def test_funded_at_the_quote(self, m_transfer):
         lid = self._request().data["id"]

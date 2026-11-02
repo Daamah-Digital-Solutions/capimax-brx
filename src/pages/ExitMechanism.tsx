@@ -17,9 +17,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 
 export default function ExitMechanism() {
   const { isRTL } = useLanguage();
+  const terms = useExitTerms();
 
   const lpAdvantages = [
     {
@@ -109,7 +111,7 @@ export default function ExitMechanism() {
                 </div>
               </div>
               <Badge variant="outline" className="text-lg font-bold px-4 py-2 border-primary/30">
-                1% {isRTL ? "رسوم" : "Fee"}
+                {pct(terms.fee_percent)} {isRTL ? "رسوم" : "Fee"}
               </Badge>
             </div>
           </CardHeader>
@@ -191,7 +193,7 @@ export default function ExitMechanism() {
                 </div>
               </div>
               <Badge variant="outline" className="text-lg font-bold px-4 py-2 border-emerald-500/30 text-emerald-600">
-                0.5% {isRTL ? "رسوم" : "Fee"}
+                {pct(terms.secondary_fee_percent)} {isRTL ? "رسوم" : "Fee"}
               </Badge>
             </div>
           </CardHeader>
@@ -280,8 +282,18 @@ export default function ExitMechanism() {
                     <td className="py-3 px-4 text-muted-foreground">
                       {isRTL ? "الرسوم" : "Fee"}
                     </td>
-                    <td className="py-3 px-4 text-center font-semibold text-foreground">1%</td>
-                    <td className="py-3 px-4 text-center font-semibold text-emerald-500">0.5%</td>
+                    <td className="py-3 px-4 text-center font-semibold text-foreground">
+                      {pct(terms.fee_percent)}
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {isRTL ? `بسعر أقل من سعر الوحدة بـ ${pct(terms.discount_percent)}` : `at ${pct(terms.discount_percent)} below the unit price`}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center font-semibold text-emerald-500">
+                      {pct(terms.secondary_fee_percent)}
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {isRTL ? "يدفعها المشتري" : "paid by the buyer"}
+                      </span>
+                    </td>
                   </tr>
                   <tr className="border-b border-border/30">
                     <td className="py-3 px-4 text-muted-foreground">

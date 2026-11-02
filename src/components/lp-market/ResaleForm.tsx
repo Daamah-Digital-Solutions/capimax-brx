@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { LPHolding } from "@/hooks/useLPHoldings";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useExitTerms } from "@/hooks/useExitTerms";
 import { 
   Repeat, 
   CheckCircle2, 
@@ -49,13 +50,14 @@ export function ResaleForm({
 
   const tokens = parseFloat(tokenAmount) || 0;
 
-  // Display only — the server computes the real figures (same defaults as the backend).
-  // LP market (decision 6): priced by the platform at today's unit price − 3%, then a 2%
-  // liquidity fee is deducted; the seller's own price doesn't apply.
-  // Secondary market (decision 5): the seller's price, received in full; the buyer pays 1% on top.
-  const lpDiscountPercent = 3;
-  const lpFeePercent = 2;
-  const secondaryFeePercent = 1;
+  // Display only — the server computes the real figures; the percentages are the server's.
+  // LP market (decision 6): priced by the platform at today's unit price − the discount, then
+  // the liquidity fee is deducted; the seller's own price doesn't apply.
+  // Secondary market (decision 5): the seller's price, received in full; the buyer pays the fee on top.
+  const terms = useExitTerms();
+  const lpDiscountPercent = terms.discount_percent;
+  const lpFeePercent = terms.fee_percent;
+  const secondaryFeePercent = terms.secondary_fee_percent;
   const unitNow = holding.token_amount > 0 ? holding.current_value / holding.token_amount : 0;
   const lpPrice = Math.round(unitNow * tokens * (100 - lpDiscountPercent)) / 100;
   const price = targetMarket === "lp" ? lpPrice : parseFloat(salePrice) || 0;

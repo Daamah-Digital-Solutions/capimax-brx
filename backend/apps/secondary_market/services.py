@@ -171,6 +171,9 @@ def cancel_listing(*, user, listing_id) -> SecondaryMarketListing:
         listing.status = SecondaryMarketListing.Status.CANCELLED
         listing.cancelled_at = timezone.now()
         listing.save(update_fields=["status", "cancelled_at", "updated_at"])
+        from apps.lp.accounting import sync_listed
+
+        sync_listed(user, listing.property_id)
     return listing
 
 
@@ -261,12 +264,21 @@ def purchase_listing(*, buyer_user, listing_id, expected_cash=None, expected_fee
             listing, seller_wallet, buyer_wallet, int(listing.token_amount)
         )
 
-        # Credit the seller's net proceeds.
-        credit_user_balance(
-            listing.seller, listing.net_amount, source="secondary_market_sale",
-            reference=str(listing.pk),
-            memo=f"Sale of {listing.token_amount} {listing.token_symbol}",
+        # Credit the seller's net proceeds (a reselling LP's LP units go back to its LP
+        # balance, apps/lp/accounting.py).
+        from apps.lp import accounting as lp_accounting
+
+        to_wallet = lp_accounting.book_sale(
+            seller=listing.seller, property_slug=listing.property_id,
+            units=listing.token_amount, proceeds=listing.net_amount, market="secondary",
+            reference=f"secondary listing {listing.pk}",
         )
+        if to_wallet > 0:
+            credit_user_balance(
+                listing.seller, to_wallet, source="secondary_market_sale",
+                reference=str(listing.pk),
+                memo=f"Sale of {listing.token_amount} {listing.token_symbol}",
+            )
 
         # Move OwnershipToken positions to match the chain.
         seller_pos.token_amount = int(seller_pos.token_amount) - int(listing.token_amount)
@@ -328,6 +340,7 @@ def purchase_listing(*, buyer_user, listing_id, expected_cash=None, expected_fee
             "status", "buyer", "buyer_type", "purchased_at", "completed_at",
             "settlement_tx_hash", "updated_at",
         ])
+        lp_accounting.sync_listed(listing.seller, listing.property_id)
 
         # Phase 10: notify BOTH parties (replay-safe — the completed-guard above returns
         # early on a re-run). Inside the atomic block so they commit with settlement.

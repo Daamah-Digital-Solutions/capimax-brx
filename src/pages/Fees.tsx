@@ -18,9 +18,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 
 export default function Fees() {
   const { t, isRTL } = useLanguage();
+  const terms = useExitTerms();
 
   const standardPlatformFees = [
     {
@@ -54,7 +56,8 @@ export default function Fees() {
     {
       name: t("fees.exitFee"),
       nameEn: "Exit Fee",
-      rate: "0.5%",
+      // Secondary market (paid by the buyer) – LP market (after its price discount).
+      rate: `${pct(terms.secondary_fee_percent)} – ${pct(terms.fee_percent)}`,
       description: t("fees.exitFeeDesc"),
       category: "investor",
     },

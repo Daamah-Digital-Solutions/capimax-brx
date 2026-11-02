@@ -3,18 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Code2, Webhook, Shield, Zap, Database, BookOpen } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 
 export default function DeveloperHub() {
   const { isRTL } = useLanguage();
   const isAr = isRTL;
+  const terms = useExitTerms();
 
   const endpoints = [
     { method: "GET", path: "/v1/properties", desc: isAr ? "قائمة الأصول العقارية المتاحة" : "List available real estate assets" },
     { method: "GET", path: "/v1/properties/:id", desc: isAr ? "تفاصيل أصل واحد بما في ذلك العائد والحالة" : "Single asset detail incl. yield and status" },
     { method: "POST", path: "/v1/orders", desc: isAr ? "إنشاء طلب شراء وحدات" : "Create a unit purchase order" },
     { method: "GET", path: "/v1/portfolio", desc: isAr ? "مراكز المستثمر الحالية والتوزيعات" : "Investor positions and distributions" },
-    { method: "POST", path: "/v1/exits/lp", desc: isAr ? "خروج فوري عبر LP (رسوم 1%)" : "Instant LP exit (1% fee)" },
-    { method: "POST", path: "/v1/exits/secondary", desc: isAr ? "إدراج في السوق الثانوي (رسوم 0.5%)" : "List on secondary market (0.5% fee)" },
+    { method: "POST", path: "/v1/exits/lp", desc: isAr ? `خروج فوري عبر LP (سعر الوحدة −${pct(terms.discount_percent)} ثم رسوم ${pct(terms.fee_percent)})` : `Instant LP exit (unit price −${pct(terms.discount_percent)}, then a ${pct(terms.fee_percent)} fee)` },
+    { method: "POST", path: "/v1/exits/secondary", desc: isAr ? `إدراج في السوق الثانوي (رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري)` : `List on secondary market (${pct(terms.secondary_fee_percent)} fee paid by the buyer)` },
     { method: "GET", path: "/v1/audit-log", desc: isAr ? "سجل التدقيق غير القابل للتعديل" : "Immutable audit log" },
     { method: "POST", path: "/v1/webhooks", desc: isAr ? "اشترك في الأحداث (الاكتتاب، التوزيع، الخروج)" : "Subscribe to events (subscription, distribution, exit)" },
   ];

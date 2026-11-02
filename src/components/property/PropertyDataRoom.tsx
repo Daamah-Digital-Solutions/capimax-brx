@@ -68,6 +68,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { pct, useExitTerms } from "@/hooks/useExitTerms";
 import type { Property } from "@/data/properties";
 import { DynamicInstallmentPlanner } from "@/components/property/DynamicInstallmentPlanner";
 import type { InstallmentPreview } from "@/integrations/api/client";
@@ -1429,6 +1430,7 @@ function InsuranceRiskSection({ p, isAr }: { p: Property; isAr: boolean }) {
 // 10. FAQ
 // ─────────────────────────────────────────────────────────────
 function FaqSection({ p, isAr }: { p: Property; isAr: boolean }) {
+  const terms = useExitTerms();
   const faqs = (p.faqs && p.faqs.length)
     ? p.faqs.map((f) => ({ q: f.questionEn, qAr: f.questionAr || f.questionEn, a: f.answerEn, aAr: f.answerAr || f.answerEn }))
     : [
@@ -1447,8 +1449,8 @@ function FaqSection({ p, isAr }: { p: Property; isAr: boolean }) {
     {
       q: "Can I sell before maturity?",
       qAr: "هل يمكنني البيع قبل الاستحقاق؟",
-      a: "Depending on availability, you may sell via the LP Market (1% fee) or the Secondary Market (0.5% fee).",
-      aAr: "حسب التوفر، يمكنك البيع عبر سوق LP (رسوم 1%) أو السوق الثانوي (رسوم 0.5%).",
+      a: `Depending on availability, you may sell via the LP Market (${pct(terms.discount_percent)} below the unit price, then a ${pct(terms.fee_percent)} fee) or the Secondary Market (${pct(terms.secondary_fee_percent)} fee paid by the buyer).`,
+      aAr: `حسب التوفر، يمكنك البيع عبر سوق LP (بسعر أقل من سعر الوحدة بـ ${pct(terms.discount_percent)} ثم رسوم ${pct(terms.fee_percent)}) أو السوق الثانوي (رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري).`,
     },
     {
       q: "What protects investors legally?",

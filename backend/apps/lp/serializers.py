@@ -249,9 +249,18 @@ class LPHoldingSerializer(serializers.ModelSerializer):
     lp_id = serializers.UUIDField(read_only=True)
     listing_id = serializers.UUIDField(read_only=True, allow_null=True)
     purchase_price = _Money(read_only=True)
-    current_value = _Money(read_only=True)
+    current_value = serializers.SerializerMethodField()
 
     property_name_ar = serializers.SerializerMethodField()
+
+    def get_current_value(self, obj) -> float:
+        """Today's value: the units at the current unit price (what it sold for once sold)."""
+        from .accounting import unit_prices, value_now
+
+        prices = self.context.setdefault("_unit_prices", {})
+        if obj.property_id not in prices:
+            prices.update(unit_prices([obj.property_id]))
+        return float(value_now(obj, prices))
 
     def get_property_name_ar(self, obj):
         from apps.wallets.serializers import arabic_property_name
@@ -272,7 +281,6 @@ class LPHoldingSerializer(serializers.ModelSerializer):
 class LPHoldingStatusSerializer(serializers.Serializer):
     """PATCH a holding's status (frontend updateHoldingStatus)."""
 
-    status = serializers.ChoiceField(
-        choices=["held", "listed_lp", "listed_secondary", "sold"]
-    )
+    # "sold" is set only by a real sale (apps/lp/accounting.py), never by hand.
+    status = serializers.ChoiceField(choices=["held", "listed_lp", "listed_secondary"])
     listed_at = serializers.DateTimeField(required=False, allow_null=True)

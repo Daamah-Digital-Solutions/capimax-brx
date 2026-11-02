@@ -24,9 +24,10 @@ import logging
 from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -353,6 +354,16 @@ def _is_approved_lp(user) -> bool:
     return bool(lp and lp.status == LPStatus.APPROVED)
 
 
+class ExitTermsView(APIView):
+    """Public: the exit fees the pages quote (LP discount + fee, secondary resale fee)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response(market_services.exit_terms())
+
+
 class LPMarketView(APIView):
     """GET both arrays the hook needs; POST to list (escrow-locks) your tokens."""
 
@@ -428,13 +439,12 @@ class LPHoldingDetailView(APIView):
         holding = get_object_or_404(LPHolding, pk=holding_id, lp=lp) if lp else None
         if holding is None:
             return Response({"detail": "Holding not found."}, status=status.HTTP_404_NOT_FOUND)
+        if holding.status == LPHolding.Status.SOLD:
+            return Response({"detail": "This holding is sold."}, status=status.HTTP_409_CONFLICT)
         serializer = LPHoldingStatusSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         holding.status = serializer.validated_data["status"]
         listed_at = serializer.validated_data.get("listed_at")
-        if listed_at:
-            holding.listed_at = listed_at
-        if holding.status == LPHolding.Status.SOLD:
-            holding.sold_at = timezone.now()
-        holding.save(update_fields=["status", "listed_at", "sold_at", "updated_at"])
+        holding.listed_at = (listed_at or timezone.now()) if holding.status != LPHolding.Status.HELD else None
+        holding.save(update_fields=["status", "listed_at", "updated_at"])
         return Response(LPHoldingSerializer(holding).data)

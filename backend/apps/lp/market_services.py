@@ -4,7 +4,8 @@ LP secondary-market settlement — Phase 6 Wave 2 (SPEC §3.8; SECONDARY_MARKET_
 The real, on-chain LP market: investors list ownership tokens (escrow-locked), approved
 LPs buy them, and a purchase ATOMICALLY:
   * checks + debits the buyer LP's internal balance,
-  * credits the seller's internal balance with the net proceeds,
+  * credits the seller's internal balance with the net proceeds (a reselling LP's LP units
+    are paid back to its LP balance instead, apps/lp/accounting.py),
   * TRANSFERS the tokens on-chain seller→buyer (signed with the SELLER's custodial key),
   * consumes the escrow lock + moves the OwnershipToken positions to match the chain,
   * writes WalletTransaction "transfer" rows with the REAL tx hash, and
@@ -46,6 +47,7 @@ from apps.wallets.services import (
     load_custodial_signer,
 )
 
+from . import accounting as lp_accounting
 from .models import LiquidityProvider, LPHolding, LPMarketListing, LPStatus, LPTransaction
 
 log = logging.getLogger(__name__)
@@ -92,6 +94,8 @@ def exit_terms() -> dict:
         "discount_percent": float(settings.LP_EXIT_DISCOUNT_PERCENT),
         "fee_percent": float(settings.LP_MARKET_FEE_PERCENT),
         "ttl_minutes": int(settings.LP_EXIT_TTL_MINUTES),
+        # The peer secondary market's resale fee, paid by the buyer on top of the price.
+        "secondary_fee_percent": float(settings.SECONDARY_MARKET_FEE_PERCENT),
     }
 
 
@@ -142,6 +146,7 @@ def close_request(listing: LPMarketListing, reason: str) -> None:
         else "Expired: the quote lapsed."
     )
     listing.save(update_fields=["status", "cancelled_at", "notes", "updated_at"])
+    lp_accounting.sync_listed(listing.seller, listing.property_id)
     if reason == "price_changed":
         notify(
             listing.seller, NotificationType.LP_EXIT_CLOSED,
@@ -324,6 +329,7 @@ def cancel_listing(*, user, listing_id) -> LPMarketListing:
         listing.status = LPMarketListing.Status.CANCELLED
         listing.cancelled_at = timezone.now()
         listing.save(update_fields=["status", "cancelled_at", "updated_at"])
+        lp_accounting.sync_listed(user, listing.property_id)
     return listing
 
 
@@ -435,11 +441,18 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
             notes=f"LP-market purchase of listing {listing.pk}",
             processed_at=timezone.now(),
         )
-        credit_user_balance(
-            listing.seller, listing.net_amount, source="lp_market_sale",
-            reference=str(listing.pk),
-            memo=f"Sale of {listing.token_amount} {listing.token_symbol}",
+        # A reselling LP's LP units are paid back to its LP balance; the rest to the wallet.
+        to_wallet = lp_accounting.book_sale(
+            seller=listing.seller, property_slug=listing.property_id,
+            units=listing.token_amount, proceeds=listing.net_amount, market="lp",
+            reference=f"LP market listing {listing.pk}",
         )
+        if to_wallet > 0:
+            credit_user_balance(
+                listing.seller, to_wallet, source="lp_market_sale",
+                reference=str(listing.pk),
+                memo=f"Sale of {listing.token_amount} {listing.token_symbol}",
+            )
 
         # ---- Move OwnershipToken positions to match the chain ---- #
         seller_pos.token_amount = int(seller_pos.token_amount) - int(listing.token_amount)
@@ -509,6 +522,7 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
             "status", "lp", "purchased_at", "completed_at", "settlement_tx_hash",
             "updated_at",
         ])
+        lp_accounting.sync_listed(listing.seller, listing.property_id)
 
         # Phase 10: notify BOTH parties (replay-safe — completed-guard returns early on
         # a re-run). The buyer is the LP user.

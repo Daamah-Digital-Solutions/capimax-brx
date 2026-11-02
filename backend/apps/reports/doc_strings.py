@@ -365,6 +365,8 @@ TEXT: dict[str, tuple[str, str]] = {
     "Withdrawal": ("سحب", "Retrait"),
     "Earnings": ("أرباح", "Gains"),
     "Earning": ("أرباح", "Gains"),
+    "Purchase": ("شراء", "Achat"),
+    "Sale": ("بيع", "Vente"),
     "Bank": ("بنك", "Banque"),
     "Crypto": ("كريبتو", "Crypto"),
     "Monthly": ("شهري", "Mensuel"),

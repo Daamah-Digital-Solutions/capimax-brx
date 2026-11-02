@@ -173,16 +173,23 @@ def _build_and_credit_payouts(dist: Distribution):
             continue
 
         if payout.share_amount_usd > 0:
-            credit_user_balance(
-                user,
-                payout.share_amount_usd,
-                source=DISTRIBUTION_SOURCE,
-                reference=str(payout.pk),
-                memo=(
-                    f"Distribution {dist.period_label or dist.pay_date}: "
-                    f"{dist.property_name or dist.property_id}"
-                ),
+            label = (
+                f"Distribution {dist.period_label or dist.pay_date}: "
+                f"{dist.property_name or dist.property_id}"
             )
+            # The share earned by units a liquidity provider bought on the LP market is paid
+            # to its LP balance (apps/lp/accounting.py); the rest to the wallet as before.
+            from apps.lp.accounting import book_distribution
+
+            to_wallet = book_distribution(
+                user=user, property_slug=dist.property_id, earning_units=earning[h.id],
+                amount=payout.share_amount_usd, label=label,
+            )
+            if to_wallet > 0:
+                credit_user_balance(
+                    user, to_wallet, source=DISTRIBUTION_SOURCE,
+                    reference=str(payout.pk), memo=label,
+                )
             # Bump the holding's distribution accounting (the pre-built seams).
             h.total_distributions = (h.total_distributions or Decimal("0")) + payout.share_amount_usd
             h.last_distribution_date = now
@@ -207,7 +214,7 @@ def _build_and_credit_payouts(dist: Distribution):
             # cheap no-op, so the existing non-family distribution behaviour is unchanged.
             from apps.family.services import carve_family_accruals
 
-            carve_family_accruals(user, dist, payout)
+            carve_family_accruals(user, dist, payout, amount=to_wallet)
 
         payout.credited = True
         payout.save(update_fields=["credited"])
