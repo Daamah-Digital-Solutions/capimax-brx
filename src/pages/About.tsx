@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Building2,
   Globe,
-  Users,
   Shield,
   Award,
   Target,
@@ -14,8 +13,6 @@ import {
   MapPin,
   Mail,
   Phone,
-  Linkedin,
-  Twitter,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -49,29 +46,6 @@ export default function About() {
       icon: Heart,
       titleKey: "about.customerService",
       descriptionKey: "about.customerServiceDesc",
-    },
-  ];
-
-  const team = [
-    {
-      nameAr: "إبراهيم جاد",
-      nameEn: "Ibrahim Gad",
-      roleKey: "about.ceo",
-    },
-    {
-      nameAr: "ويليام كيدج",
-      nameEn: "William Kidge",
-      roleKey: "about.cfo",
-    },
-    {
-      nameAr: "سميث رونالدو",
-      nameEn: "Smith Ronaldo",
-      roleKey: "about.cto",
-    },
-    {
-      nameAr: "فاطمة الحسن",
-      nameEn: "Fatima Al-Hassan",
-      roleKey: "about.complianceDirector",
     },
   ];
 
@@ -158,44 +132,6 @@ export default function About() {
                   </div>
                   <h3 className="font-bold text-foreground mb-2">{t(value.titleKey)}</h3>
                   <p className="text-sm text-muted-foreground">{t(value.descriptionKey)}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        {/* Team */}
-        <section>
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-foreground mb-2">{t("about.leadershipTeam")}</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {team.map((member, index) => (
-              <Card
-                key={index}
-                className="bg-card/50 backdrop-blur border-border/50 text-center hover:shadow-lg transition-shadow"
-              >
-                <CardContent className="p-6">
-                  <div className="w-20 h-20 rounded-full bg-gradient-gold flex items-center justify-center mx-auto mb-4 shadow-gold">
-                    <span className="text-2xl font-bold text-primary-foreground">
-                      {(language === "ar" ? member.nameAr : member.nameEn).charAt(0)}
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-foreground">
-                    {language === "ar" ? member.nameAr : member.nameEn}
-                  </h3>
-                  <Badge variant="outline" className="mt-2">
-                    {t(member.roleKey)}
-                  </Badge>
-                  <div className="flex justify-center gap-2 mt-4">
-                    <button className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center hover:bg-muted transition-colors">
-                      <Linkedin className="w-4 h-4" />
-                    </button>
-                    <button className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center hover:bg-muted transition-colors">
-                      <Twitter className="w-4 h-4" />
-                    </button>
-                  </div>
                 </CardContent>
               </Card>
             ))}
