@@ -28,6 +28,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
+import time
 
 from django.conf import settings
 from django.db import connection, transaction
@@ -217,6 +218,10 @@ def token_symbol_for_slug(slug: str) -> str:
     return _token_symbol(slug)
 
 
+_REGISTRY_READ_ATTEMPTS = 6
+_REGISTRY_READ_DELAY_S = 2
+
+
 def deploy_property_token(property_obj) -> dict:
     """
     Deploy ONE PropertyToken for `property_obj` via the factory, then record the
@@ -261,8 +266,15 @@ def deploy_property_token(property_obj) -> dict:
     receipt = _transact(w3, account, lambda p: _build(w3, account, fn, p))
     tx_hash = _hexstr(receipt["transactionHash"])
 
-    # Resolve the freshly deployed address from the factory registry.
-    token_address = factory.functions.tokenForSlug(slug).call()
+    # Resolve the freshly deployed address from the factory registry. The RPC node that
+    # answers the read can be a block or two behind the one that confirmed the tx, so a
+    # zero answer is retried briefly before it counts as a failure.
+    token_address = None
+    for attempt in range(_REGISTRY_READ_ATTEMPTS):
+        token_address = factory.functions.tokenForSlug(slug).call()
+        if token_address and token_address != ZERO_ADDRESS:
+            break
+        time.sleep(_REGISTRY_READ_DELAY_S * (attempt + 1))
     if not token_address or token_address == ZERO_ADDRESS:
         raise TransactionError(
             f"Deployment tx {tx_hash} confirmed but factory has no token for '{slug}'."
