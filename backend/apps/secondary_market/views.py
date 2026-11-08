@@ -8,7 +8,10 @@ Peer secondary-market API — Phase 6 Wave 3 (SPEC §2.8 / §3.9).
                                           on-chain transfer + UserBalance settlement.
   GET  /api/secondary-market/trades/      Completed trades involving the caller.
   POST /api/secondary-market/positions/   List a whole installment plan as one position
-                                          { plan_id, price_per_unit? } (off-plan §6).
+                                          { plan_id, price_per_unit? } (off-plan §6), or part
+                                          of it { plan_id, units, price_per_unit? }.
+  GET  /api/secondary-market/{id}/plan-part/?units=N  What buying N units of a part listing
+                                          costs now and the installments that come with them.
 
 List + buy require an approved KYC (consistent with invest-requires-KYC). Settlement
 is atomic + idempotent + on-chain (apps/secondary_market/services.py).
@@ -76,8 +79,21 @@ class SecondaryMarketPurchaseView(APIView):
             buyer_user=request.user, listing_id=listing_id,
             expected_cash=serializer.validated_data.get("expected_cash"),
             expected_fee=serializer.validated_data.get("expected_fee"),
+            units=serializer.validated_data.get("units"),
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class SecondaryMarketPlanPartQuoteView(APIView):
+    """The buyer's figures for N units of a part listing (read only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, listing_id):
+        quote = services.quote_plan_part(listing_id=listing_id, units=request.query_params.get("units"))
+        return Response({
+            k: (float(v) if hasattr(v, "quantize") else v) for k, v in quote.items()
+        })
 
 
 class SecondaryMarketPositionView(APIView):
@@ -88,11 +104,18 @@ class SecondaryMarketPositionView(APIView):
     def post(self, request):
         serializer = PositionListSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        listing = services.create_position_listing(
-            user=request.user,
-            plan_id=serializer.validated_data["plan_id"],
-            price_per_unit=serializer.validated_data.get("price_per_unit"),
-        )
+        data = serializer.validated_data
+        if data.get("units"):
+            listing = services.create_part_listing(
+                user=request.user, plan_id=data["plan_id"], units=data["units"],
+                price_per_unit=data.get("price_per_unit"),
+            )
+        else:
+            listing = services.create_position_listing(
+                user=request.user,
+                plan_id=data["plan_id"],
+                price_per_unit=data.get("price_per_unit"),
+            )
         return Response(
             SecondaryMarketListingSerializer(listing).data, status=status.HTTP_201_CREATED
         )

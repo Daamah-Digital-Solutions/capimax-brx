@@ -30,6 +30,9 @@ export interface SecondaryListing {
   // Off-plan §6: a whole installment plan sold as one position.
   plan_id: string | null;
   is_position: boolean;
+  // Part of a plan (buyer takes any number of the units offered; the rest stay listed).
+  // For a buy, the dialog passes the listing re-shaped to the chosen units and their quote.
+  plan_part?: boolean;
   position_value: number | null;
   paid_principal: number | null;
   assumed_principal: number | null;
@@ -136,15 +139,23 @@ export function useSecondaryMarket() {
   async function buyListing(listing: SecondaryListing) {
     // A position is bought at the exact cash + fee the buyer was shown.
     const expected = listing.is_position
-      ? { expected_cash: listing.total_value, expected_fee: listing.platform_fee_amount }
+      ? {
+          expected_cash: listing.total_value,
+          expected_fee: listing.platform_fee_amount,
+          ...(listing.plan_part ? { units: listing.token_amount } : {}),
+        }
       : undefined;
     try {
       await secondaryMarketApi.purchaseListing(listing.id, expected);
-      setListings((prev) => prev.filter((l) => l.id !== listing.id));
+      if (!listing.plan_part) setListings((prev) => prev.filter((l) => l.id !== listing.id));
       toast.success(
-        listing.is_position
-          ? isAr ? "تم شراء المركز وانتقلت إليك خطة الأقساط" : "Position bought — the installment plan is now yours"
-          : isAr ? "تم الشراء بنجاح" : "Purchased successfully",
+        listing.plan_part
+          ? isAr
+            ? `تم الشراء — خطة أقساط بـ ${listing.token_amount} وحدة أصبحت باسمك`
+            : `Bought — an installment plan for ${listing.token_amount} unit(s) is now in your name`
+          : listing.is_position
+            ? isAr ? "تم شراء المركز وانتقلت إليك خطة الأقساط" : "Position bought — the installment plan is now yours"
+            : isAr ? "تم الشراء بنجاح" : "Purchased successfully",
       );
       await fetchAll();
       return { success: true };

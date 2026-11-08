@@ -185,6 +185,8 @@ def _escrow_amount(listing: SecondaryMarketListing) -> int:
     """
     if listing.plan_id is None:
         return int(listing.token_amount)
+    if listing.plan_part:
+        return 0  # a part listing holds no escrow (apps/installments/split.py)
     from apps.installments.services import _down_paid, _released_for
 
     plan = listing.plan
@@ -213,8 +215,14 @@ def _release_escrow(listing: SecondaryMarketListing) -> None:
 # --------------------------------------------------------------------------- #
 # Purchase (atomic on-chain settlement; buyer pays from UserBalance)
 # --------------------------------------------------------------------------- #
-def purchase_listing(*, buyer_user, listing_id, expected_cash=None, expected_fee=None) -> dict:
-    head = SecondaryMarketListing.objects.filter(pk=listing_id).only("plan_id").first()
+def purchase_listing(*, buyer_user, listing_id, expected_cash=None, expected_fee=None,
+                     units=None) -> dict:
+    head = SecondaryMarketListing.objects.filter(pk=listing_id).only("plan_id", "plan_part").first()
+    if head is not None and head.plan_id is not None and head.plan_part:
+        return buy_plan_part(
+            buyer_user=buyer_user, listing_id=listing_id, units=units,
+            expected_cash=expected_cash, expected_fee=expected_fee,
+        )
     if head is not None and head.plan_id is not None:
         return buy_position(
             buyer_user=buyer_user, listing_id=listing_id,
@@ -512,8 +520,12 @@ def _plan_locked_units(plan, units: int) -> int:
 def refresh_position_listing(listing: SecondaryMarketListing) -> None:
     """Re-derive an open position listing's figures (after an installment was paid)."""
     from apps.installments.position import position_figures
+    from apps.installments.split import part_figures
 
-    figures = position_figures(listing.plan, listing.unit_price)
+    if listing.plan_part:
+        figures = part_figures(listing.plan, int(listing.token_amount), listing.unit_price)
+    else:
+        figures = position_figures(listing.plan, listing.unit_price)
     listing.total_value = figures["cash"]
     listing.net_amount = figures["cash"]
     listing.platform_fee_percent = figures["fee_percent"]
@@ -701,6 +713,270 @@ def buy_position(*, buyer_user, listing_id, expected_cash=None, expected_fee=Non
         "explorer_tx": explorer_tx,
         "on_chain": on_chain,
         "plan_id": str(plan.pk),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Part of an installment plan (apps/installments/split.py): the seller offers some of the
+# plan's units, a buyer takes any number of them and gets a plan of their own for those units;
+# what is not bought stays listed. Same lock order as the whole position.
+# --------------------------------------------------------------------------- #
+def create_part_listing(*, user, plan_id, units, price_per_unit=None) -> SecondaryMarketListing:
+    """Offer `units` of the caller's ACTIVE plan at `price_per_unit` (default: today's price)."""
+    from apps.installments.models import InstallmentPayment, InstallmentPlan
+    from apps.installments.position import plan_investment
+    from apps.installments.split import check_part, part_figures
+
+    with transaction.atomic():
+        list(InstallmentPayment.objects.select_for_update().filter(plan_id=plan_id).order_by("sequence"))
+        plan = InstallmentPlan.objects.select_for_update().filter(pk=plan_id, investor=user).first()
+        if plan is None:
+            raise ValidationError({"plan_id": "Installment plan not found."})
+        if SecondaryMarketListing.objects.filter(
+            plan=plan, status=SecondaryMarketListing.Status.LISTED
+        ).exists():
+            raise ValidationError({
+                "code": "already_listed",
+                "detail": "This plan already has an open listing. Cancel it to list again.",
+            })
+        inv = plan_investment(plan)
+        check_part(plan, units, inv=inv)
+        units = int(units)
+        slug = plan.property.slug
+        price = Decimal(str(price_per_unit)) if price_per_unit else _current_price(slug)
+        if price <= 0:
+            raise ValidationError({"price_per_unit": "Enter a price above 0."})
+        figures = part_figures(plan, units, price, inv=inv)
+        if figures["cash"] <= 0:
+            floor = (figures["remaining_principal"] / units).quantize(Decimal("0.01"))
+            raise ValidationError({
+                "code": "below_remaining",
+                "price_per_unit": (
+                    f"The price must cover the remaining installments: above ${floor} per unit."
+                ),
+            })
+        symbol = (
+            OwnershipToken.objects.filter(wallet__user=user, property_id=slug)
+            .values_list("token_symbol", flat=True).first()
+        ) or inv.token_symbol
+        return SecondaryMarketListing.objects.create(
+            seller=user,
+            seller_type=_party_type(user),
+            property_id=slug,
+            property_name=plan.property.name,
+            token_symbol=symbol,
+            token_amount=units,
+            unit_price=figures["price_per_unit"],
+            total_value=figures["cash"],
+            platform_fee_percent=figures["fee_percent"],
+            platform_fee_amount=figures["fee"],
+            net_amount=figures["cash"],
+            fee_payer=SecondaryMarketListing.FeePayer.BUYER,
+            plan=plan,
+            plan_part=True,
+            position_value=figures["position_value"],
+            paid_principal=figures["paid_principal"],
+            assumed_principal=figures["remaining_principal"],
+            status=SecondaryMarketListing.Status.LISTED,
+        )
+
+
+def _part_units(listing, units) -> int:
+    try:
+        units = int(units)
+    except (TypeError, ValueError):
+        units = 0
+    if units < 1:
+        raise ValidationError({"code": "min_one_unit", "detail": "Choose at least 1 unit."})
+    if units > int(listing.token_amount):
+        raise ValidationError({
+            "code": "exceeds_listed",
+            "detail": f"Only {listing.token_amount} unit(s) are offered.",
+        })
+    return units
+
+
+def quote_plan_part(*, listing_id, units) -> dict:
+    """What a buyer of `units` of an open part listing pays now and continues to pay."""
+    from apps.installments.split import part_figures
+
+    listing = (
+        SecondaryMarketListing.objects.select_related("plan")
+        .filter(pk=listing_id, plan_part=True, status=SecondaryMarketListing.Status.LISTED)
+        .first()
+    )
+    if listing is None:
+        raise ListingUnavailableError()
+    units = _part_units(listing, units)
+    f = part_figures(listing.plan, units, listing.unit_price)
+    return {
+        "listing_id": str(listing.pk),
+        "units": units,
+        "units_offered": int(listing.token_amount),
+        "price_per_unit": f["price_per_unit"],
+        "position_value": f["position_value"],
+        "paid_principal": f["paid_principal"],
+        "assumed_principal": f["remaining_principal"],
+        "cash": f["cash"],
+        "fee_percent": f["fee_percent"],
+        "fee": f["fee"],
+        "buyer_total": f["buyer_total"],
+        "remaining_charge": f["remaining_charge"],
+        "frequency": listing.plan.frequency,
+        "schedule": f["schedule"],
+    }
+
+
+def buy_plan_part(*, buyer_user, listing_id, units, expected_cash=None, expected_fee=None) -> dict:
+    """
+    Buy `units` of an open part listing, atomically: the buyer pays the cash for those units'
+    paid share + the resale fee, the units move to the buyer, and the plan is split — the buyer
+    continues their share of every remaining installment on its own plan. The buyer confirms
+    the cash and fee they saw (POSITION_CHANGED if they moved). The rest stays listed.
+    """
+    import uuid
+    from types import SimpleNamespace
+
+    from apps.installments.position import plan_investment
+    from apps.installments.split import check_part, part_figures, split_plan
+    from apps.lp import accounting as lp_accounting
+
+    with transaction.atomic():
+        plan = _lock_plan_of(listing_id)
+        listing = SecondaryMarketListing.objects.select_for_update().filter(pk=listing_id).first()
+        if listing is None or plan is None or not listing.plan_part:
+            raise ListingUnavailableError(detail="Listing not found.")
+        if listing.status != SecondaryMarketListing.Status.LISTED:
+            raise ListingUnavailableError()
+        if buyer_user == listing.seller:
+            raise ValidationError({"listing": "You cannot buy your own listing."})
+        if plan.investor_id != listing.seller_id:
+            raise ListingUnavailableError(detail="This plan is no longer available.")
+        units = _part_units(listing, units)
+        inv = plan_investment(plan)
+        try:
+            check_part(plan, units, inv=inv, exclude_secondary=listing.pk)
+        except ValidationError as exc:
+            code = (exc.detail or {}).get("code") if isinstance(exc.detail, dict) else None
+            if code == "overdue_installments":
+                raise ListingUnavailableError(
+                    detail="This plan has an overdue installment; it can be bought once the seller pays it."
+                )
+            raise ListingUnavailableError(detail="This plan is no longer available.")
+
+        figures = part_figures(plan, units, listing.unit_price, inv=inv)
+        if expected_cash is None or expected_fee is None:
+            raise ValidationError({
+                "expected_cash": "Confirm the amount shown (expected_cash and expected_fee).",
+            })
+        if (
+            Decimal(str(expected_cash)).quantize(Decimal("0.01")) != figures["cash"]
+            or Decimal(str(expected_fee)).quantize(Decimal("0.01")) != figures["fee"]
+        ):
+            raise PositionChangedError(figures)
+        if figures["cash"] <= 0:
+            raise ListingUnavailableError(detail="This plan is no longer available.")
+
+        seller_wallet = UserWallet.objects.filter(user=listing.seller).first()
+        buyer_wallet, _created = get_or_create_custodial_wallet(buyer_user)
+        if seller_wallet is None:
+            raise ListingUnavailableError(detail="Seller wallet missing.")
+
+        # Money, balances locked in user-id order: the buyer pays cash + fee; the seller gets the
+        # cash (to the LP balance for LP units, apps/lp/accounting.py, the rest to the wallet).
+        def _debit():
+            try:
+                debit_user_balance(
+                    buyer_user, figures["buyer_total"], source="secondary_market_purchase",
+                    reference=str(listing.pk),
+                    memo=f"Buy {units} {listing.token_symbol} of an installment plan",
+                )
+            except InsufficientBalance:
+                raise InsufficientBalanceError()
+
+        def _credit():
+            to_wallet = lp_accounting.book_sale(
+                seller=listing.seller, property_slug=listing.property_id, units=units,
+                proceeds=figures["cash"], market="secondary",
+                reference=f"secondary listing {listing.pk}",
+            )
+            if to_wallet > 0:
+                credit_user_balance(
+                    listing.seller, to_wallet, source="secondary_market_sale",
+                    reference=str(listing.pk),
+                    memo=f"Sale of {units} {listing.token_symbol} of an installment plan",
+                )
+
+        for step in sorted([(str(buyer_user.pk), _debit), (str(listing.seller_id), _credit)]):
+            step[1]()
+
+        fill_id = uuid.uuid4()
+        tx_hash, block, chain_id, explorer_tx, on_chain = _transfer(
+            SimpleNamespace(pk=fill_id, property_id=listing.property_id),
+            seller_wallet, buyer_wallet, units,
+        )
+        new_plan = split_plan(
+            plan, units, buyer_user, inv=inv, acquired_price=listing.unit_price,
+            cost_source="secondary_market",
+        )
+
+        for w in (seller_wallet, buyer_wallet):
+            WalletTransaction.objects.create(
+                wallet=w, tx_hash=tx_hash, tx_type="transfer",
+                amount=figures["cash"], token_symbol=listing.token_symbol,
+                status="confirmed", block_number=block, chain_id=chain_id,
+            )
+
+        now = timezone.now()
+        sale = dict(
+            buyer=buyer_user, buyer_type=_party_type(buyer_user), purchased_at=now,
+            completed_at=now, settlement_tx_hash=tx_hash, total_value=figures["cash"],
+            net_amount=figures["cash"], platform_fee_percent=figures["fee_percent"],
+            platform_fee_amount=figures["fee"], position_value=figures["position_value"],
+            paid_principal=figures["paid_principal"],
+            assumed_principal=figures["remaining_principal"],
+        )
+        if units == int(listing.token_amount):
+            for k, v in sale.items():
+                setattr(listing, k, v)
+            listing.status = SecondaryMarketListing.Status.COMPLETED
+            listing.save()
+        else:
+            # The sale is its own completed record; the listing keeps offering the rest.
+            SecondaryMarketListing.objects.create(
+                id=fill_id, seller=listing.seller, seller_type=listing.seller_type,
+                property_id=listing.property_id, property_name=listing.property_name,
+                token_symbol=listing.token_symbol, token_amount=units,
+                unit_price=listing.unit_price, fee_payer=listing.fee_payer, plan=plan,
+                plan_part=True, status=SecondaryMarketListing.Status.COMPLETED,
+                listed_at=listing.listed_at, notes=f"Part of listing {listing.pk}", **sale,
+            )
+            listing.token_amount = int(listing.token_amount) - units
+            listing.save(update_fields=["token_amount", "updated_at"])
+            listing.plan = plan
+            refresh_position_listing(listing)
+        lp_accounting.sync_listed(listing.seller, listing.property_id)
+
+        notify(
+            listing.seller, NotificationType.SECONDARY_SALE_SELLER,
+            params={"property": listing.property_name, "tokens": units,
+                    "amount": str(figures["cash"])},
+            action_url="/installments",
+        )
+        notify(
+            buyer_user, NotificationType.SECONDARY_SALE_BUYER,
+            params={"property": listing.property_name, "tokens": units},
+            action_url="/installments",
+        )
+
+    return {
+        "completed": True,
+        "tx_hash": tx_hash,
+        "block_number": block,
+        "explorer_tx": explorer_tx,
+        "on_chain": on_chain,
+        "plan_id": str(new_plan.pk),
+        "units": units,
     }
 
 

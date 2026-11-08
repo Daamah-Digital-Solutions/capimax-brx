@@ -82,6 +82,12 @@ class SecondaryMarketListing(models.Model):
     assumed_principal = models.DecimalField(
         max_digits=18, decimal_places=2, null=True, blank=True
     )
+    # Partial plan listing (apps/installments/split.py): token_amount units of the plan are
+    # offered, a buyer takes any number of them (≥ 1) and gets their share of the plan; what is
+    # left stays listed. Holds no escrow (the plan's units can't be sold one by one anyway); the
+    # figures above are for all the units still offered. A completed partial sale is recorded
+    # as its own completed row (plan_part=True, token_amount = the units bought).
+    plan_part = models.BooleanField(default=False)
 
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.LISTED, db_index=True

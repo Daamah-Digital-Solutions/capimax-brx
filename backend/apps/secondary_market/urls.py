@@ -3,6 +3,7 @@ from django.urls import path
 
 from .views import (
     SecondaryMarketCancelView,
+    SecondaryMarketPlanPartQuoteView,
     SecondaryMarketPositionView,
     SecondaryMarketPurchaseView,
     SecondaryMarketTradesView,
@@ -16,5 +17,6 @@ urlpatterns = [
     path("positions/", SecondaryMarketPositionView.as_view(), name="secondary-market-positions"),
     path("trades/", SecondaryMarketTradesView.as_view(), name="secondary-market-trades"),
     path("<uuid:listing_id>/cancel/", SecondaryMarketCancelView.as_view(), name="secondary-market-cancel"),
+    path("<uuid:listing_id>/plan-part/", SecondaryMarketPlanPartQuoteView.as_view(), name="secondary-market-plan-part"),
     path("<uuid:listing_id>/purchase/", SecondaryMarketPurchaseView.as_view(), name="secondary-market-purchase"),
 ]

@@ -694,3 +694,99 @@ class InstallmentPreviewPdfView(InstallmentPreviewView):
         out = HttpResponse(d.finish(), content_type="application/pdf")
         out["Content-Disposition"] = f'attachment; filename="{p["property"]}-installment-plan.pdf"'
         return out
+
+
+class PlanPartPreviewView(APIView):
+    """
+    GET /api/installments/plans/<id>/part/?units=N[&price=P]
+
+    What selling or transferring N units of the caller's plan means, before they do it
+    (apps/installments/split.py): the plan the other party gets (its paid share, what they
+    continue to pay, their schedule), the plan the caller keeps (its schedule), and the money —
+    on the peer market at price P (default today's price; the buyer pays the fee on top) and to
+    a liquidity provider (platform price, the fee off the seller's cash). Nothing is written;
+    a part that can't be sold or transferred answers 400 with its `code`.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, plan_id):
+        from apps.lp.market_services import _plan_quote
+
+        from .position import plan_investment
+        from .split import check_part, free_units, part_figures, schedule, split_terms
+
+        plan = (
+            InstallmentPlan.objects.select_related("property")
+            .filter(pk=plan_id, investor=request.user).first()
+        )
+        if plan is None:
+            return Response({"detail": "Installment plan not found."}, status=status.HTTP_404_NOT_FOUND)
+        inv = plan_investment(plan)
+        units = request.query_params.get("units")
+        check_part(plan, units, inv=inv)
+        units = int(units)
+        prop = plan.property
+        try:
+            price = Decimal(request.query_params.get("price") or prop.token_price)
+        except Exception:  # noqa: BLE001 — a malformed price is the caller's error
+            return Response({"price": "Enter a valid price."}, status=status.HTTP_400_BAD_REQUEST)
+
+        total_units = int(inv.token_amount)
+        taker = split_terms(plan, units, inv=inv)
+        # The plan the caller keeps: the original minus the taker's share, row by row.
+        keeper_rows = [
+            {**r, "amount": Decimal(r["payment"].amount) - r["amount"],
+             "fee": Decimal(r["payment"].fee_amount) - r["fee"]}
+            for r in taker["rows"]
+        ]
+        keeper = {"rows": keeper_rows}
+        market = part_figures(plan, units, price, inv=inv)
+        lp = _plan_quote(plan, units, prop, inv=inv)
+
+        def money(v):
+            return float(v)
+
+        return Response({
+            "units": units,
+            "planUnits": total_units,
+            "freeUnits": free_units(plan, inv),
+            "keptUnits": total_units - units,
+            "taker": {
+                "total": money(taker["total"]),
+                "paid": money(taker["paid"]),
+                "remaining": money(taker["remaining"]),
+                "schedule": schedule(taker),
+            },
+            "keeper": {
+                "total": money(Decimal(plan.total_amount) - taker["total"]),
+                "remaining": money(
+                    sum((r["amount"] for r in keeper_rows if r["status"] in ("pending", "missed")),
+                        Decimal("0"))
+                ),
+                "schedule": schedule(keeper),
+            },
+            "market": {
+                "pricePerUnit": money(market["price_per_unit"]),
+                "value": money(market["position_value"]),
+                "cash": money(market["cash"]),
+                "feePercent": money(market["fee_percent"]),
+                "buyerFee": money(market["fee"]),
+                "buyerTotal": money(market["buyer_total"]),
+            },
+            "lp": {
+                "pricePerUnit": money(lp["unit_price"]),
+                "discountPercent": money(lp["discount_percent"]),
+                "cash": money(lp["cash"]),
+                "feePercent": money(lp["fee_percent"]),
+                "fee": money(lp["fee"]),
+                "net": money(lp["net"]),
+            },
+            "transfer": {"valuePerUnit": money(holder_entry_price(plan, inv))},
+        })
+
+
+def holder_entry_price(plan, inv) -> Decimal:
+    from .position import holder_entry
+
+    return holder_entry(plan, inv)[0]

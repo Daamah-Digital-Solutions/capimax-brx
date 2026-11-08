@@ -255,6 +255,11 @@ export function LPMarketplaceView({
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-muted-foreground" />
                             {localName(listing, language)}
+                            {listing.plan_id && (
+                              <Badge variant="gold" className="text-[10px]">
+                                {language === "ar" ? "خطة تقسيط" : "Installment plan"}
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -297,6 +302,11 @@ export function LPMarketplaceView({
                             <div>
                               <h4 className="font-medium">{localName(listing, language)}</h4>
                               <Badge variant="outline" className="mt-1">{listing.token_symbol}</Badge>
+                              {listing.plan_id && (
+                                <Badge variant="gold" className="mt-1 ms-1 text-[10px]">
+                                  {language === "ar" ? "خطة تقسيط" : "Installment plan"}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </div>

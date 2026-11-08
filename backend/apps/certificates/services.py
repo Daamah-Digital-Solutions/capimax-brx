@@ -52,13 +52,13 @@ def create_provisional_certificate(investment) -> Certificate:
 
     # Real platform fee amount from the property's configured rate. Units received by a
     # market purchase, transfer or gift carry no platform purchase fee.
-    from apps.investments.models import RESALE_PAYMENT_METHODS
+    from apps.investments.models import PLAN_SPLIT_METHOD, RESALE_PAYMENT_METHODS
 
     fee_rate = Decimal(str(getattr(prop, "fee_platform", 0) or 0))
     platform_fee = (investment.amount_invested * fee_rate / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
-    if investment.payment_method in RESALE_PAYMENT_METHODS:
+    if investment.payment_method in RESALE_PAYMENT_METHODS or investment.payment_method == PLAN_SPLIT_METHOD:
         platform_fee = Decimal("0.00")
     # Ownership share of these units (records of received units don't store one).
     ownership = investment.ownership_percentage

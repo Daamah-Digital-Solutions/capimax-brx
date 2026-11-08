@@ -105,6 +105,15 @@ class InstallmentPlan(models.Model):
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     units_total = models.PositiveIntegerField(null=True, blank=True)
     fee_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Partial sale / transfer (apps/installments/split.py): a plan carved out of another one
+    # for some of its units. `split_from` is the plan it came from; `acquired_price` is the price
+    # per unit its holder took it at (the sale price, the LP price, or the giver's own entry
+    # price), which is their entry price for the gain shown on the plan.
+    split_from = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="splits"
+    )
+    acquired_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    acquired_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { transfersApi, type Giftable } from "@/integrations/api/client";
+import { installmentsApi, transfersApi, type Giftable, type PlanPartPreview } from "@/integrations/api/client";
 import { cn } from "@/lib/utils";
 
 const NO_OCCASION = "none";
@@ -38,17 +38,25 @@ const today = () => new Date().toISOString().slice(0, 10);
  *
  * `mode="transfer"` is the Transfers page wording (a plain transfer, occasion optional);
  * the default "gift" wording is the Family Investment page's.
+ *
+ * Units of a running installment plan can be sent too (any number, at least one): the
+ * recipient gets a plan of their own for them and continues their share of the installments.
+ * `initialPlanId` / `initialUnits` open the dialog on such a plan (from the Installments page).
  */
 export function GiftDialog({
   open,
   onOpenChange,
   onDone,
   mode = "gift",
+  initialPlanId,
+  initialUnits,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone?: () => void;
   mode?: "gift" | "transfer";
+  initialPlanId?: string;
+  initialUnits?: number;
 }) {
   const { isRTL } = useLanguage();
   const isTransfer = mode === "transfer";
@@ -69,6 +77,8 @@ export function GiftDialog({
   // Transfers review what they send on a confirmation step; gifts (Family page) send directly.
   const [confirming, setConfirming] = useState(false);
 
+  const [planPreview, setPlanPreview] = useState<PlanPartPreview | null>(null);
+
   useEffect(() => {
     if (!open) return;
     setConfirming(false);
@@ -76,20 +86,48 @@ export function GiftDialog({
       .giftable()
       .then((g) => {
         setInfo(g);
-        if (g.positions.length) setSlug((s) => s || g.positions[0].property_slug);
+        if (initialPlanId && g.plans?.some((p) => p.plan_id === initialPlanId)) {
+          setAsset("units");
+          setSlug(`plan:${initialPlanId}`);
+          setUnits(String(initialUnits ?? 1));
+        } else if (g.positions.length) setSlug((s) => s || g.positions[0].property_slug);
+        else if (g.plans?.length) setSlug((s) => s || `plan:${g.plans![0].plan_id}`);
         else setAsset("cash");
       })
       .catch(() => setInfo(null));
-  }, [open]);
+  }, [open, initialPlanId, initialUnits]);
 
-  const pos = info?.positions.find((p) => p.property_slug === slug);
+  // Units of an installment plan go with the recipient's share of the plan.
+  const planSel = slug.startsWith("plan:") ? info?.plans?.find((p) => `plan:${p.plan_id}` === slug) : undefined;
+  const pos = planSel ?? info?.positions.find((p) => p.property_slug === slug);
   const n = Number(units) || 0;
+  const planOverdue = (planSel?.overdue_installments ?? 0) > 0;
+
+  useEffect(() => {
+    if (!open || !planSel || n < 1 || n > planSel.free_units) {
+      setPlanPreview(null);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(() => {
+      installmentsApi
+        .partPreview(planSel.plan_id, n)
+        .then((p) => live && setPlanPreview(p))
+        .catch(() => live && setPlanPreview(null));
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [open, planSel?.plan_id, planSel?.free_units, n]);
   const amt = Number(amount) || 0;
   const value = asset === "units" ? n * (pos?.unit_value ?? 0) : amt;
   const fee = Math.round(value * (info?.gift_fee_percent ?? 0)) / 100;
   const valid =
     /\S+@\S+\.\S+/.test(email) &&
-    (asset === "units" ? !!pos && n >= 1 && n <= pos.free_units : amt > 0 && amt + fee <= (info?.balance ?? 0));
+    (asset === "units"
+      ? !!pos && n >= 1 && n <= pos.free_units && !planOverdue
+      : amt > 0 && amt + fee <= (info?.balance ?? 0));
 
   const submit = async () => {
     setBusy(true);
@@ -98,7 +136,11 @@ export function GiftDialog({
         recipient_email: email.trim(),
         recipient_name: name.trim(),
         asset,
-        ...(asset === "units" ? { property_slug: slug, units: n } : { amount: amt }),
+        ...(asset === "units"
+          ? planSel
+            ? { property_slug: planSel.property_slug, units: n, plan_id: planSel.plan_id }
+            : { property_slug: slug, units: n }
+          : { amount: amt }),
         deliver_on: date,
         occasion: occasion === NO_OCCASION ? "" : occasion,
         message: message.trim(),
@@ -130,9 +172,19 @@ export function GiftDialog({
     asset === "units"
       ? {
           label: isRTL ? "ما سيتم تحويله" : "What you send",
-          value: `${n} ${isRTL ? "وحدة" : n === 1 ? "unit" : "units"} — ${(isRTL && pos?.property_name_ar) || pos?.property_name || ""}`,
+          value: `${n} ${isRTL ? "وحدة" : n === 1 ? "unit" : "units"} — ${(isRTL && pos?.property_name_ar) || pos?.property_name || ""}${
+            planSel ? (isRTL ? " (خطة تقسيط)" : " (installment plan)") : ""
+          }`,
         }
       : { label: isRTL ? "المبلغ" : "Amount", value: `$${amt.toFixed(2)}`, ltr: true },
+    ...(asset === "units" && planSel && planPreview
+      ? [{
+          label: isRTL ? "يكمّلها المستلم" : "The recipient continues",
+          value: isRTL
+            ? `${planPreview.taker.schedule.length} قسط — $${planPreview.taker.remaining.toFixed(2)} أصل`
+            : `${planPreview.taker.schedule.length} installments — $${planPreview.taker.remaining.toFixed(2)} principal`,
+        }]
+      : []),
     ...(fee > 0 ? [{ label: isRTL ? "رسوم التحويل" : "Transfer fee", value: `$${fee.toFixed(2)}`, ltr: true }] : []),
     ...(asset === "cash"
       ? [{ label: isRTL ? "يُخصم من رصيدك" : "Taken from your balance", value: `$${(amt + fee).toFixed(2)}`, ltr: true }]
@@ -187,7 +239,7 @@ export function GiftDialog({
               <button
                 key={a}
                 type="button"
-                disabled={a === "units" && !info?.positions.length}
+                disabled={a === "units" && !info?.positions.length && !info?.plans?.length}
                 onClick={() => setAsset(a)}
                 className={cn(
                   "p-2.5 rounded-lg border text-sm transition-colors disabled:opacity-50",
@@ -213,6 +265,11 @@ export function GiftDialog({
                         {(isRTL && p.property_name_ar) || p.property_name} ({p.free_units})
                       </SelectItem>
                     ))}
+                    {info?.plans?.map((p) => (
+                      <SelectItem key={p.plan_id} value={`plan:${p.plan_id}`}>
+                        {(isRTL && p.property_name_ar) || p.property_name} — {isRTL ? "خطة تقسيط" : "installment plan"} ({p.free_units})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -231,6 +288,21 @@ export function GiftDialog({
               </Label>
               <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
+          )}
+          {asset === "units" && planSel && (
+            <p className={cn("text-xs", planOverdue ? "text-destructive" : "text-muted-foreground")}>
+              {planOverdue
+                ? isRTL
+                  ? "على هذه الخطة قسط متأخر. سدّده أولًا، وبعدها يمكنك تحويل جزء منها."
+                  : "This plan has an overdue installment. Pay it first — then you can transfer part of it."
+                : planPreview
+                  ? isRTL
+                    ? `يحصل المستلم على خطة باسمه بـ ${n} وحدة ويكمّل نصيبها من الأقساط: ${planPreview.taker.schedule.length} قسط، $${planPreview.taker.remaining.toFixed(2)} أصل، بنفس المواعيد. ويبقى لك ${planPreview.keptUnits} وحدة.`
+                    : `The recipient gets a plan in their name for ${n} unit(s) and continues their share of the installments: ${planPreview.taker.schedule.length} installments, $${planPreview.taker.remaining.toFixed(2)} principal, on the same dates. You keep ${planPreview.keptUnits} unit(s).`
+                  : isRTL
+                    ? "المستلم يكمّل نصيب هذه الوحدات من أقساط الخطة."
+                    : "The recipient continues these units' share of the plan's installments."}
+            </p>
           )}
           {fee > 0 && (
             <p className="text-xs text-muted-foreground">

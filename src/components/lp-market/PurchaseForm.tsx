@@ -1,3 +1,4 @@
+import { ScheduleBox } from "@/components/installments/PlanPartDialog";
 import { useState } from "react";
 import { localName } from "@/lib/propertyLabels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -168,6 +169,22 @@ export function PurchaseForm({
                 </div>
               </CardContent>
             </Card>
+
+            {listing.plan_id && listing.plan_schedule && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {language === "ar"
+                    ? `هذه الوحدات من خطة تقسيط: تدفع المبلغ أعلاه الآن، وتصبح باسمك خطة بها تكمّل نصيبها من الأقساط ($${(listing.assumed_principal ?? 0).toLocaleString()} أصل) في مواعيدها، وتُخصم من محفظتك.`
+                    : `These units are part of an installment plan: you pay the amount above now and get a plan in your name for them, continuing their share of the installments ($${(listing.assumed_principal ?? 0).toLocaleString()} principal) on their dates, debited from your wallet.`}
+                </p>
+                <ScheduleBox
+                  title={language === "ar" ? "الأقساط التي تكمّلها" : "Installments you continue"}
+                  units={listing.token_amount}
+                  rows={listing.plan_schedule}
+                  isAr={language === "ar"}
+                />
+              </div>
+            )}
           </div>
         )}
 

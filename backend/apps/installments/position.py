@@ -87,10 +87,18 @@ def holder_entry(plan, inv=None):
     position when it was bought on the market, else the plan's own price.
     """
     bought = (
-        plan.position_listings.filter(status="completed", buyer_id=plan.investor_id)
+        plan.position_listings.filter(
+            status="completed", buyer_id=plan.investor_id, plan_part=False,
+        )
         .order_by("-completed_at")
         .first()
     )
+    # A plan taken over as a part (or wholly, by a part sale / transfer) carries the price it
+    # was taken at; the most recent of the two takeovers counts.
+    if plan.acquired_price is not None and (
+        bought is None or (plan.acquired_at and plan.acquired_at > bought.completed_at)
+    ):
+        return Decimal(plan.acquired_price), plan.acquired_at
     if bought is not None:
         return Decimal(bought.unit_price), bought.completed_at
     units = plan_units(plan, inv)
@@ -117,6 +125,10 @@ def block_reason(plan, inv, figures) -> str | None:
         return "fully_paid"  # plain units now: sold like any other units
     if figures["cash"] <= 0:
         return "below_remaining"
+    from .split import offered_units
+
+    if offered_units(plan):
+        return "units_offered"  # part of it is on a market or in a pending transfer
     return None
 
 
@@ -129,6 +141,9 @@ def holder_view(plan, current_price, inv=None) -> dict:
     cost = max(Decimal("0"), _q(Decimal(units) * entry - figures["remaining_principal"]))
     gain = _q(Decimal(units) * (Decimal(current_price) - entry))
     listing = plan.position_listings.filter(status="listed").first()
+    from .split import free_units, overdue_rows
+
+    whole = listing is not None and not listing.plan_part
     return {
         "currentPrice": float(figures["price_per_unit"]),
         "units": units,
@@ -141,10 +156,16 @@ def holder_view(plan, current_price, inv=None) -> dict:
         "gain": float(gain),
         "acquiredAt": acquired_at.isoformat() if acquired_at else None,
         "feePercent": float(figures["fee_percent"]),
-        "blocked": None if listing else block_reason(plan, inv, figures),
+        "blocked": None if whole else block_reason(plan, inv, figures),
         "listingId": str(listing.pk) if listing else None,
         "listingPrice": float(listing.unit_price) if listing else None,
         "listingCash": float(listing.total_value) if listing else None,
+        # Part sales / transfers (apps/installments/split.py): the units not already offered,
+        # the installments past due (a part sale waits for them), and the open part listing.
+        "freeUnits": 0 if whole else free_units(plan, inv),
+        "overdueInstallments": len(overdue_rows(plan)),
+        "listingIsPart": bool(listing and listing.plan_part),
+        "listingUnits": int(listing.token_amount) if listing else None,
     }
 
 
@@ -158,13 +179,22 @@ def plan_bound_released(user_id, property_slug) -> int:
     from .models import InstallmentPlan
     from .services import _down_paid, _released_for
 
+    from django.db.models import Exists, OuterRef
+
+    from apps.secondary_market.models import SecondaryMarketListing
+
     held = 0
+    # A whole-position listing holds the plan's paid units in escrow already; a part listing
+    # holds none (apps/installments/split.py), so its plan's paid units are counted here.
+    whole_listed = SecondaryMarketListing.objects.filter(
+        plan=OuterRef("pk"), status="listed", plan_part=False,
+    )
     plans = (
         InstallmentPlan.objects.filter(
             investor_id=user_id, property__slug=property_slug,
             status=InstallmentPlanStatus.ACTIVE,
         )
-        .exclude(position_listings__status="listed")
+        .exclude(Exists(whole_listed))
         .prefetch_related("payments", "investments")
     )
     for plan in plans:

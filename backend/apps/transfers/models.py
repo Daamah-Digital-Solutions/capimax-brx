@@ -83,6 +83,12 @@ class UnitTransfer(models.Model):
         "transfers.EstateClaim", on_delete=models.PROTECT, null=True, blank=True,
         related_name="transfers",
     )
+    # Units of a running installment plan: the recipient gets them with their share of the plan
+    # and continues its installments (apps/installments/split.py).
+    plan = models.ForeignKey(
+        "installments.InstallmentPlan", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="unit_transfers",
+    )
     reference = models.CharField(max_length=20, unique=True)
     tx_hash = models.CharField(max_length=120, blank=True, default="")
     reminder_sent_at = models.DateTimeField(null=True, blank=True)

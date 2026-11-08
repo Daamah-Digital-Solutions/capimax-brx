@@ -211,6 +211,10 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
     # discount applied, and when it lapses ("seller" = a listing from before the rule).
     reference_price = _Money(read_only=True, allow_null=True)
     discount_percent = serializers.FloatField(read_only=True)
+    # Part of an installment plan: the LP continues the assumed installments (schedule).
+    plan_id = serializers.UUIDField(read_only=True, allow_null=True)
+    assumed_principal = _Money(read_only=True, allow_null=True)
+    plan_schedule = serializers.SerializerMethodField()
 
     property_name_ar = serializers.SerializerMethodField()
 
@@ -219,6 +223,13 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
 
         return arabic_property_name(self, obj.property_id)
 
+    def get_plan_schedule(self, obj):
+        if obj.plan_id is None or obj.status != LPMarketListing.Status.LISTED:
+            return None
+        from apps.installments.split import schedule, split_terms
+
+        return schedule(split_terms(obj.plan, int(obj.token_amount)))
+
     class Meta:
         model = LPMarketListing
         fields = (
@@ -226,6 +237,7 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
             "token_symbol", "token_amount", "unit_price", "total_value",
             "platform_fee_percent", "platform_fee_amount", "net_amount",
             "pricing", "reference_price", "discount_percent", "expires_at", "status",
+            "plan_id", "assumed_principal", "plan_schedule",
             "listed_at", "purchased_at", "completed_at", "cancelled_at", "notes",
             "created_at", "updated_at",
         )
@@ -243,6 +255,9 @@ class LPListAssetSerializer(serializers.Serializer):
         required=False, max_digits=16, decimal_places=2, min_value=Decimal("0")
     )
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    # Units of an installment plan (apps/installments/split.py): the LP takes them with their
+    # share of the plan.
+    plan_id = serializers.UUIDField(required=False)
 
 
 class LPHoldingSerializer(serializers.ModelSerializer):

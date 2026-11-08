@@ -40,7 +40,7 @@ class TransferSerializer(serializers.ModelSerializer):
             "id", "reference", "kind", "asset", "status", "direction", "counterparty",
             "recipient_email", "recipient_name", "property_slug", "property_name", "property_name_ar", "units",
             "amount", "fee_amount", "message", "occasion", "deliver_on", "expires_at",
-            "delivered_at", "closed_reason", "created_at",
+            "delivered_at", "closed_reason", "created_at", "plan_id",
         )
 
     def get_direction(self, obj):
@@ -71,6 +71,8 @@ class _CreateBase(serializers.Serializer):
     units = serializers.IntegerField(required=False, min_value=0, default=0)
     amount = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, default=0)
     message = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
+    # Units of a running installment plan (the recipient continues their share of it).
+    plan_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
 
 class GiftCreateSerializer(_CreateBase):
@@ -96,6 +98,40 @@ class TransferListView(APIView):
             Q(sender=request.user) | Q(recipient=request.user, status=UnitTransfer.Status.DELIVERED)
         ).select_related("sender", "sender__profile")[:200]
         return Response(TransferSerializer(qs, many=True, context=_ctx(request)).data)
+
+
+def _giftable_plans(user, ar_names) -> list[dict]:
+    from apps.installments.models import InstallmentPlan, InstallmentPlanStatus
+    from apps.installments.position import holder_entry, plan_investment
+    from apps.installments.split import free_units, overdue_rows, split_terms
+
+    out = []
+    plans = (
+        InstallmentPlan.objects.filter(investor=user, status=InstallmentPlanStatus.ACTIVE)
+        .select_related("property").prefetch_related("payments", "investments")
+    )
+    for plan in plans:
+        inv = plan_investment(plan)
+        if inv is None or not inv.tokens_minted:
+            continue
+        free = free_units(plan, inv)
+        if free <= 0:
+            continue
+        units = int(inv.token_amount)
+        entry, _at = holder_entry(plan, inv)
+        remaining = split_terms(plan, units, inv=inv)["remaining"]
+        out.append({
+            "plan_id": str(plan.pk),
+            "property_slug": plan.property.slug,
+            "property_name": plan.property.name,
+            "property_name_ar": plan.property.name_ar or ar_names.get(plan.property.slug) or "",
+            "plan_units": units,
+            "free_units": free,
+            "unit_value": float(entry),
+            "remaining_principal": float(remaining),
+            "overdue_installments": len(overdue_rows(plan)),
+        })
+    return out
 
 
 class GiftableView(APIView):
@@ -126,6 +162,8 @@ class GiftableView(APIView):
 
         return Response({
             "positions": rows,
+            # Running installment plans: their units go with their share of the plan.
+            "plans": _giftable_plans(request.user, ar_names),
             "balance": float(bal.current_balance) if bal else 0.0,
             "gift_fee_percent": settings.GIFT_FEE_PERCENT,
             "family_fee_percent": settings.FAMILY_TRANSFER_FEE_PERCENT,

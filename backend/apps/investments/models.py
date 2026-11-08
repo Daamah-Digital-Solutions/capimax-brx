@@ -32,6 +32,13 @@ class PaymentStatus(models.TextChoices):
 # once already — their rows are the recipient's cost basis only.
 RESALE_PAYMENT_METHODS = ("secondary_market", "lp_market", "gift", "family_transfer", "estate")
 
+# The investment of an installment plan carved out of another one for some of its units
+# (apps/installments/split.py). It takes over its share of the original primary purchase —
+# units, amount, down payment, fee — and the original investment is reduced by the same, so
+# primary sales, availability and owner proceeds are unchanged in total. Like a resale, it
+# carries no platform purchase fee of its own.
+PLAN_SPLIT_METHOD = "plan_split"
+
 
 class Investment(models.Model):
     """A token purchase. Mirrors Supabase `investments` (SPEC §3.2)."""

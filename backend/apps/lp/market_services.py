@@ -335,6 +335,8 @@ def cancel_listing(*, user, listing_id) -> LPMarketListing:
 
 def _release_escrow(listing: LPMarketListing) -> None:
     """Decrement the seller's lock by this listing's amount (floored at 0)."""
+    if listing.plan_id is not None:
+        return  # plan units hold no escrow (apps/installments/split.py)
     wallet = UserWallet.objects.filter(user=listing.seller).first()
     if wallet is None:
         return
@@ -381,6 +383,8 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         if reason:
             close_request(listing, reason)
             return {"completed": False, "closed": True, "reason": reason}
+        if listing.plan_id is not None:
+            return _purchase_plan_part(listing, buyer_user)
 
         # Buyer must be an APPROVED LP (also gated by HasActivatedLP at the view).
         lp = (
@@ -544,6 +548,213 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
         "block_number": block,
         "holding_id": str(holding.id),
         "explorer_tx": result.get("explorer_tx"),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Part of an installment plan sold to an LP (apps/installments/split.py). Platform-priced like
+# any exit request: units × (unit price − discount) − the installments the LP takes over =
+# the cash the LP pays; the liquidity fee comes off the seller's cash. No escrow — the plan's
+# units can't be sold one by one, and units already offered elsewhere are not free.
+# --------------------------------------------------------------------------- #
+def _plan_quote(plan, units: int, prop: Property, *, inv=None) -> dict:
+    from apps.installments.split import part_figures
+
+    q = quote(prop, units)
+    f = part_figures(plan, units, q["unit_price"], inv=inv, fee_percent=q["fee_percent"])
+    return {**q, "cash": f["cash"], "fee": f["fee"], "net": f["seller_net"],
+            "assumed_principal": f["remaining_principal"], "figures": f}
+
+
+def create_plan_listing(*, user, plan_id, units) -> LPMarketListing:
+    """Offer `units` of the caller's ACTIVE installment plan to the LPs."""
+    from apps.installments.models import InstallmentPayment, InstallmentPlan
+    from apps.installments.position import plan_investment
+    from apps.installments.split import check_part
+
+    with transaction.atomic():
+        list(InstallmentPayment.objects.select_for_update().filter(plan_id=plan_id).order_by("sequence"))
+        plan = InstallmentPlan.objects.select_for_update().filter(pk=plan_id, investor=user).first()
+        if plan is None:
+            raise ValidationError({"plan_id": "Installment plan not found."})
+        inv = plan_investment(plan)
+        check_part(plan, units, inv=inv)
+        units = int(units)
+        prop = plan.property
+        q = _plan_quote(plan, units, prop, inv=inv)
+        if q["cash"] <= 0:
+            raise ValidationError({
+                "code": "below_remaining",
+                "detail": "At the liquidity price these units don't cover their remaining installments.",
+            })
+        symbol = (
+            OwnershipToken.objects.filter(wallet__user=user, property_id=prop.slug)
+            .values_list("token_symbol", flat=True).first()
+        ) or inv.token_symbol
+        return LPMarketListing.objects.create(
+            seller=user,
+            property_id=prop.slug,
+            property_name=prop.name,
+            token_symbol=symbol,
+            token_amount=units,
+            unit_price=q["unit_price"],
+            total_value=q["cash"],
+            platform_fee_percent=q["fee_percent"],
+            platform_fee_amount=q["fee"],
+            net_amount=q["net"],
+            pricing=LPMarketListing.Pricing.PLATFORM,
+            reference_price=q["reference_price"],
+            discount_percent=q["discount_percent"],
+            expires_at=timezone.now() + timezone.timedelta(minutes=int(settings.LP_EXIT_TTL_MINUTES)),
+            plan=plan,
+            assumed_principal=q["assumed_principal"],
+            status=LPMarketListing.Status.LISTED,
+        )
+
+
+def refresh_plan_listings(plan, *, closed: bool = False) -> None:
+    """
+    An installment of `plan` was paid (the caller holds the plan's lock): re-quote its open LP
+    requests on the new figures, or close them once the plan is paid off.
+    """
+    for listing in LPMarketListing.objects.select_for_update().filter(
+        plan=plan, status=LPMarketListing.Status.LISTED,
+    ):
+        if closed:
+            listing.status = LPMarketListing.Status.CANCELLED
+            listing.cancelled_at = timezone.now()
+            listing.notes = "Closed: the installment plan was fully paid."
+            listing.save(update_fields=["status", "cancelled_at", "notes", "updated_at"])
+            continue
+        prop = Property.objects.get(slug=listing.property_id)
+        q = _plan_quote(plan, int(listing.token_amount), prop)
+        listing.total_value = q["cash"]
+        listing.platform_fee_amount = q["fee"]
+        listing.net_amount = q["net"]
+        listing.assumed_principal = q["assumed_principal"]
+        listing.save(update_fields=[
+            "total_value", "platform_fee_amount", "net_amount", "assumed_principal", "updated_at",
+        ])
+
+
+def _purchase_plan_part(listing: LPMarketListing, buyer_user) -> dict:
+    """
+    An approved LP buys an open plan-part request (the caller holds the listing lock inside its
+    atomic block and has checked the quote is fresh). Then: plan rows → plan → positions.
+    """
+    from apps.installments.models import InstallmentPayment, InstallmentPlan
+    from apps.installments.position import plan_investment
+    from apps.installments.split import check_part, split_plan
+    from apps.secondary_market.services import PositionChangedError
+
+    list(InstallmentPayment.objects.select_for_update().filter(plan_id=listing.plan_id).order_by("sequence"))
+    plan = InstallmentPlan.objects.select_for_update().get(pk=listing.plan_id)
+    lp = (
+        LiquidityProvider.objects.select_for_update()
+        .filter(user=buyer_user, status=LPStatus.APPROVED).first()
+    )
+    if lp is None:
+        raise PermissionDenied("Only approved LPs can purchase.")
+    if buyer_user == listing.seller:
+        raise ValidationError({"listing": "You cannot buy your own listing."})
+    if plan.investor_id != listing.seller_id:
+        raise ListingUnavailableError(detail="This plan is no longer available.")
+    units = int(listing.token_amount)
+    inv = plan_investment(plan)
+    try:
+        check_part(plan, units, inv=inv, exclude_lp=listing.pk)
+    except ValidationError:
+        raise ListingUnavailableError(
+            detail="This plan can't be sold right now (an installment is overdue or its units moved)."
+        )
+    prop = plan.property
+    q = _plan_quote(plan, units, prop, inv=inv)
+    if q["cash"] != Decimal(listing.total_value) or q["cash"] <= 0:
+        raise PositionChangedError(q["figures"])
+    cash = q["cash"]
+    if lp.current_balance < cash:
+        raise InsufficientBalanceError()
+
+    seller_wallet = UserWallet.objects.filter(user=listing.seller).first()
+    if seller_wallet is None:
+        raise ListingUnavailableError(detail="Seller wallet missing.")
+    contract_address = _deployed_contract(listing.property_id)
+    buyer_wallet, _created = get_or_create_custodial_wallet(lp.user)
+
+    signer = load_custodial_signer(seller_wallet)
+    try:
+        result = chain_service.transfer(contract_address, signer, buyer_wallet.wallet_address, units)
+    except ChainError:
+        log.exception("LP-market on-chain transfer failed for plan listing %s", listing.pk)
+        raise
+    finally:
+        del signer
+    tx_hash, block, chain_id = result["tx_hash"], result.get("block_number"), result.get("chain_id")
+
+    lp.current_balance = lp.current_balance - cash
+    lp.save(update_fields=["current_balance", "updated_at"])
+    LPTransaction.objects.create(
+        lp=lp, tx_type="purchase", amount=cash, currency="USD",
+        status=LPTransaction.TxStatus.COMPLETED,
+        notes=f"LP-market purchase of installment-plan units, listing {listing.pk}",
+        processed_at=timezone.now(),
+    )
+    to_wallet = lp_accounting.book_sale(
+        seller=listing.seller, property_slug=listing.property_id, units=units,
+        proceeds=q["net"], market="lp", reference=f"LP market listing {listing.pk}",
+    )
+    if to_wallet > 0:
+        credit_user_balance(
+            listing.seller, to_wallet, source="lp_market_sale", reference=str(listing.pk),
+            memo=f"Sale of {units} {listing.token_symbol} of an installment plan",
+        )
+
+    new_plan = split_plan(
+        plan, units, lp.user, inv=inv, acquired_price=listing.unit_price, cost_source="lp_market",
+    )
+
+    for w in (seller_wallet, buyer_wallet):
+        WalletTransaction.objects.create(
+            wallet=w, tx_hash=tx_hash, tx_type="transfer", amount=cash,
+            token_symbol=listing.token_symbol, status="confirmed", block_number=block,
+            chain_id=chain_id,
+        )
+    holding = LPHolding.objects.create(
+        lp=lp, listing=listing, property_id=listing.property_id,
+        property_name=listing.property_name, token_symbol=listing.token_symbol,
+        token_amount=units, purchase_price=cash, current_value=cash,
+        status=LPHolding.Status.HELD,
+    )
+    now = timezone.now()
+    listing.status = LPMarketListing.Status.COMPLETED
+    listing.lp = lp
+    listing.purchased_at = now
+    listing.completed_at = now
+    listing.settlement_tx_hash = tx_hash
+    listing.total_value = cash
+    listing.platform_fee_amount = q["fee"]
+    listing.net_amount = q["net"]
+    listing.assumed_principal = q["assumed_principal"]
+    listing.save()
+    lp_accounting.sync_listed(listing.seller, listing.property_id)
+
+    notify(
+        listing.seller, NotificationType.SECONDARY_SALE_SELLER,
+        params={"property": listing.property_name, "tokens": units, "amount": str(q["net"])},
+        action_url="/installments",
+    )
+    notify(
+        lp.user, NotificationType.SECONDARY_SALE_BUYER,
+        params={"property": listing.property_name, "tokens": units},
+        action_url="/installments",
+    )
+    return {
+        "completed": True,
+        "tx_hash": tx_hash,
+        "block_number": block,
+        "holding_id": str(holding.id),
+        "explorer_tx": result.get("explorer_tx"),
+        "plan_id": str(new_plan.pk),
     }
 
 

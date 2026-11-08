@@ -383,9 +383,13 @@ class LPMarketView(APIView):
     def post(self, request):
         serializer = LPListAssetSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        listing = market_services.create_listing(
-            user=request.user, data=serializer.validated_data
-        )
+        data = serializer.validated_data
+        if data.get("plan_id"):
+            listing = market_services.create_plan_listing(
+                user=request.user, plan_id=data["plan_id"], units=data["token_amount"],
+            )
+        else:
+            listing = market_services.create_listing(user=request.user, data=data)
         return Response(
             LPMarketListingSerializer(listing).data, status=status.HTTP_201_CREATED
         )

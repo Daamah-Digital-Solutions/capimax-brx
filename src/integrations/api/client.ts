@@ -1051,15 +1051,21 @@ export const secondaryMarketApi = {
     rawRequest(`/secondary-market/${listingId}/cancel/`, { method: "POST", auth: true }),
   /** Buy a listing (KYC-approved investor) → on-chain transfer + UserBalance settlement. A
    *  position listing also needs the cash + fee the buyer saw (else 409 POSITION_CHANGED). */
-  purchaseListing: (listingId: string, expected?: { expected_cash: number; expected_fee: number }) =>
+  purchaseListing: (
+    listingId: string,
+    expected?: { expected_cash: number; expected_fee: number; units?: number },
+  ) =>
     rawRequest(`/secondary-market/${listingId}/purchase/`, {
       method: "POST",
       auth: true,
       body: expected ?? {},
-    }) as Promise<{ completed: boolean; already?: boolean; tx_hash?: string; explorer_tx?: string }>,
-  /** List a whole active installment plan as one position (off-plan §6). */
-  listPosition: (payload: { plan_id: string; price_per_unit?: number }) =>
+    }) as Promise<{ completed: boolean; already?: boolean; tx_hash?: string; explorer_tx?: string; plan_id?: string }>,
+  /** List a whole active installment plan as one position (off-plan §6), or `units` of it. */
+  listPosition: (payload: { plan_id: string; price_per_unit?: number; units?: number }) =>
     rawRequest("/secondary-market/positions/", { method: "POST", auth: true, body: payload }),
+  /** A buyer's figures for `units` of a part listing: what they pay now and their schedule. */
+  planPartQuote: (listingId: string, units: number) =>
+    rawRequest(`/secondary-market/${listingId}/plan-part/?units=${units}`, { auth: true }) as Promise<PlanPartQuote>,
   /** Completed trades involving the caller (trade history). */
   trades: () => rawRequest("/secondary-market/trades/", { auth: true }) as Promise<any[]>,
 };
@@ -1678,6 +1684,53 @@ export interface PlanPosition {
   listingId: string | null;
   listingPrice: number | null;
   listingCash: number | null;
+  // Part sales / transfers: units not already offered, installments past due (a part sale
+  // waits for them), and whether the open listing is a part listing (and of how many units).
+  freeUnits?: number;
+  overdueInstallments?: number;
+  listingIsPart?: boolean;
+  listingUnits?: number | null;
+}
+
+/** One installment still to pay on a plan someone takes over (or keeps). */
+export interface PlanScheduleRow {
+  sequence: number;
+  due_date: string;
+  amount: number;
+  fee: number;
+  charge: number;
+  overdue: boolean;
+}
+
+/** GET /installments/plans/{id}/part/ — selling or transferring `units` of a plan. */
+export interface PlanPartPreview {
+  units: number;
+  planUnits: number;
+  freeUnits: number;
+  keptUnits: number;
+  taker: { total: number; paid: number; remaining: number; schedule: PlanScheduleRow[] };
+  keeper: { total: number; remaining: number; schedule: PlanScheduleRow[] };
+  market: { pricePerUnit: number; value: number; cash: number; feePercent: number; buyerFee: number; buyerTotal: number };
+  lp: { pricePerUnit: number; discountPercent: number; cash: number; feePercent: number; fee: number; net: number };
+  transfer: { valuePerUnit: number };
+}
+
+/** GET /secondary-market/{id}/plan-part/?units=N — a buyer's figures for N units of a part listing. */
+export interface PlanPartQuote {
+  listing_id: string;
+  units: number;
+  units_offered: number;
+  price_per_unit: number;
+  position_value: number;
+  paid_principal: number;
+  assumed_principal: number;
+  cash: number;
+  fee_percent: number;
+  fee: number;
+  buyer_total: number;
+  remaining_charge: number;
+  frequency: string;
+  schedule: PlanScheduleRow[];
 }
 
 export interface InstallmentsResponse {
@@ -1795,6 +1848,12 @@ export const installmentsApi = {
   /** The caller's own installment plans + schedules. */
   plans: () =>
     rawRequest("/installments/plans/", { auth: true }) as Promise<InstallmentsResponse>,
+  /** Selling / transferring `units` of a plan: both plans and the money, before doing it. */
+  partPreview: (planId: string, units: number, price?: number) =>
+    rawRequest(
+      `/installments/plans/${planId}/part/?units=${units}${price ? `&price=${price}` : ""}`,
+      { auth: true },
+    ) as Promise<PlanPartPreview>,
   /**
    * Wave C: start a GATED charge for the plan's NEXT due installment. Card returns a Stripe
    * client_secret (confirmed in-browser); crypto returns a real NOW deposit address. On the
@@ -2377,8 +2436,22 @@ export interface TransferRow {
   created_at: string;
 }
 
+export interface GiftablePlan {
+  plan_id: string;
+  property_slug: string;
+  property_name: string;
+  property_name_ar?: string;
+  plan_units: number;
+  free_units: number;
+  unit_value: number;
+  remaining_principal: number;
+  overdue_installments: number;
+}
+
 export interface Giftable {
   positions: { property_slug: string; property_name: string; property_name_ar?: string; free_units: number; unit_value: number }[];
+  /** Running installment plans: their units go with the recipient's share of the plan. */
+  plans?: GiftablePlan[];
   balance: number;
   gift_fee_percent: number;
   family_fee_percent: number;
@@ -2412,6 +2485,7 @@ export const transfersApi = {
     deliver_on?: string | null;
     occasion?: string;
     message?: string;
+    plan_id?: string | null;
   }) => rawRequest("/transfers/gifts/", { method: "POST", auth: true, body }) as Promise<TransferRow>,
   family: (body: {
     family_account_id: string;
@@ -2420,6 +2494,7 @@ export const transfersApi = {
     units?: number;
     amount?: number;
     message?: string;
+    plan_id?: string | null;
   }) => rawRequest("/transfers/family/", { method: "POST", auth: true, body }) as Promise<TransferRow>,
   cancel: (id: string) =>
     rawRequest(`/transfers/${id}/cancel/`, { method: "POST", auth: true }) as Promise<TransferRow>,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, Loader2, TrendingDown, TrendingUp, X } from "lucide-react";
+import { Layers, Loader2, Scissors, TrendingDown, TrendingUp, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,8 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { secondaryMarketApi, type InstallmentPlanRow } from "@/integrations/api/client";
 import { cn } from "@/lib/utils";
+import { GiftDialog } from "@/components/transfers/GiftDialog";
+import { PlanPartDialog } from "./PlanPartDialog";
 
 // Off-plan §6.3 (seller): an active plan valued as ONE position at today's unit price — the
 // holder's share of it and their gain from their own entry price — and "Sell this position".
@@ -37,6 +39,10 @@ const BLOCKED: Record<string, { en: string; ar: string }> = {
     en: "This plan's down payment was made with a Nova Sukuk certificate, so its units are pledged to Nova Finance and can't be sold until Nova issues its clearance.",
     ar: "دُفع مقدّم هذه الخطة بشهادة Nova Sukuk، لذا وحداتها مرهونة لصالح Nova Finance ولا يمكن بيعها حتى صدور خطاب إخلاء الطرف.",
   },
+  units_offered: {
+    en: "Part of this plan is offered on a market or in a pending transfer. The whole plan can be listed once that ends.",
+    ar: "جزء من هذه الخطة معروض في سوق أو في تحويل قيد الانتظار. يمكن عرض الخطة كاملة بعد انتهائه.",
+  },
   fully_paid: {
     en: "All installments are paid — these are regular units now; sell them from the secondary market.",
     ar: "تم سداد كل الأقساط — أصبحت وحدات عادية يمكنك بيعها من السوق الثانوي.",
@@ -50,7 +56,11 @@ export function PositionSaleCard({ plan, onChanged }: { plan: InstallmentPlanRow
   const [open, setOpen] = useState(false);
   const [price, setPrice] = useState<number>(pos?.currentPrice ?? 0);
   const [busy, setBusy] = useState(false);
+  const [partOpen, setPartOpen] = useState(false);
+  const [gift, setGift] = useState<{ open: boolean; units: number }>({ open: false, units: 1 });
   if (!pos) return null;
+  const wholeListed = !!pos.listingId && !pos.listingIsPart;
+  const canPart = !wholeListed && (pos.freeUnits ?? 0) > 0;
 
   const value = pos.units * price;
   const cash = Math.max(0, Math.round((value - pos.remainingPrincipal) * 100) / 100);
@@ -110,36 +120,69 @@ export function PositionSaleCard({ plan, onChanged }: { plan: InstallmentPlanRow
         </div>
       </div>
 
-      {pos.listingId ? (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+      {pos.listingId && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 mb-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
           <span>
-            {isAr
-              ? `معروض للبيع بسعر ${money(pos.listingPrice ?? 0)} للوحدة — ستستلم ${money(pos.listingCash ?? 0)}. يزيد المبلغ بأصل كل قسط تسدده أثناء العرض.`
-              : `Listed at ${money(pos.listingPrice ?? 0)} per unit — you'd receive ${money(pos.listingCash ?? 0)}. It rises by each installment you pay while listed.`}
+            {pos.listingIsPart
+              ? isAr
+                ? `${pos.listingUnits} وحدة من الخطة معروضة بسعر ${money(pos.listingPrice ?? 0)} للوحدة — ستستلم ${money(pos.listingCash ?? 0)} لو بيعت كلها. يمكن للمشتري أخذ جزء منها.`
+                : `${pos.listingUnits} unit(s) of the plan listed at ${money(pos.listingPrice ?? 0)} per unit — you'd receive ${money(pos.listingCash ?? 0)} if all sell. A buyer can take some of them.`
+              : isAr
+                ? `معروض للبيع بسعر ${money(pos.listingPrice ?? 0)} للوحدة — ستستلم ${money(pos.listingCash ?? 0)}. يزيد المبلغ بأصل كل قسط تسدده أثناء العرض.`
+                : `Listed at ${money(pos.listingPrice ?? 0)} per unit — you'd receive ${money(pos.listingCash ?? 0)}. It rises by each installment you pay while listed.`}
           </span>
           <Button variant="outline" size="sm" className="gap-1 shrink-0" disabled={busy} onClick={cancel}>
             <X className="w-4 h-4" />
             {isAr ? "إلغاء العرض" : "Cancel listing"}
           </Button>
         </div>
-      ) : pos.blocked ? (
-        <p className="text-xs text-muted-foreground">
-          {(BLOCKED[pos.blocked] ?? BLOCKED.not_active)[isAr ? "ar" : "en"]}
-        </p>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => {
-            setPrice(pos.currentPrice);
-            setOpen(true);
-          }}
-        >
-          <Layers className="w-4 h-4" />
-          {isAr ? "بيع هذا المركز" : "Sell this position"}
-        </Button>
       )}
+      {!wholeListed && (
+        <div className="flex flex-wrap items-center gap-2">
+          {pos.blocked ? (
+            <p className="text-xs text-muted-foreground w-full">
+              {(BLOCKED[pos.blocked] ?? BLOCKED.not_active)[isAr ? "ar" : "en"]}
+            </p>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setPrice(pos.currentPrice);
+                setOpen(true);
+              }}
+            >
+              <Layers className="w-4 h-4" />
+              {isAr ? "بيع هذا المركز" : "Sell this position"}
+            </Button>
+          )}
+          {canPart && (
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setPartOpen(true)}>
+              <Scissors className="w-4 h-4" />
+              {isAr ? "بيع أو تحويل جزء" : "Sell or transfer part"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {canPart && (
+        <PlanPartDialog
+          plan={plan}
+          open={partOpen}
+          onOpenChange={setPartOpen}
+          onChanged={onChanged}
+          onTransfer={(units) => setGift({ open: true, units })}
+        />
+      )}
+      <GiftDialog
+        open={gift.open}
+        onOpenChange={(o) => setGift((g) => ({ ...g, open: o }))}
+        onDone={onChanged}
+        mode="transfer"
+        initialPlanId={plan.id}
+        initialUnits={gift.units}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">

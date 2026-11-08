@@ -337,6 +337,16 @@ class LPMarketListing(models.Model):
     reference_price = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
     discount_percent = models.DecimalField(max_digits=6, decimal_places=3, default=0)
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Part of an installment plan sold to an LP (apps/installments/split.py): the LP takes the
+    # units with their share of the plan. total_value = the cash for the units' paid share
+    # (units × LP price − assumed_principal); the LP continues the assumed installments.
+    plan = models.ForeignKey(
+        "installments.InstallmentPlan", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="lp_listings",
+    )
+    assumed_principal = models.DecimalField(
+        max_digits=18, decimal_places=2, null=True, blank=True
+    )
 
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.LISTED, db_index=True

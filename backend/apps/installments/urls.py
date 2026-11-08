@@ -7,6 +7,7 @@ from .views import (
     InstallmentPreviewView,
     PayNextInstallmentView,
     PayoffInstallmentView,
+    PlanPartPreviewView,
 )
 
 app_name = "installments"
@@ -25,6 +26,8 @@ urlpatterns = [
         PayNextInstallmentView.as_view(),
         name="installment-pay-next",
     ),
+    # Selling / transferring part of a plan: both plans and the money, before doing it.
+    path("plans/<uuid:plan_id>/part/", PlanPartPreviewView.as_view(), name="installment-plan-part"),
     # Early payoff: one gated charge for ALL remaining installments → full unlock + complete.
     path(
         "plans/<uuid:plan_id>/pay-off/",

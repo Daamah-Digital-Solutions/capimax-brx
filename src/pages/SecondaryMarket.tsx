@@ -261,7 +261,9 @@ export default function SecondaryMarket() {
                         {l.is_position ? (
                           <Badge variant="gold" className="gap-1">
                             <Layers className="w-3 h-3" />
-                            {isAr ? "مركز تقسيط" : "Installment position"}
+                            {l.plan_part
+                              ? isAr ? "وحدات من خطة تقسيط" : "Installment plan units"
+                              : isAr ? "مركز تقسيط" : "Installment position"}
                           </Badge>
                         ) : (
                           <Badge variant="success">{isAr ? "متاح" : "Available"}</Badge>
@@ -273,7 +275,9 @@ export default function SecondaryMarket() {
                             <div className="text-center p-2 bg-muted rounded-lg">
                               <div className="text-lg font-bold text-foreground">{l.token_amount}</div>
                               <div className="text-xs text-muted-foreground">
-                                {isAr ? "وحدة (كل وحدات الخطة)" : "units (whole plan)"}
+                                {l.plan_part
+                                  ? isAr ? "وحدة معروضة — اشترِ وحدة أو أكثر" : "units offered — buy 1 or more"
+                                  : isAr ? "وحدة (كل وحدات الخطة)" : "units (whole plan)"}
                               </div>
                             </div>
                             <div className="text-center p-2 bg-muted rounded-lg">
@@ -282,7 +286,11 @@ export default function SecondaryMarket() {
                             </div>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">{isAr ? "تدفع الآن" : "You pay now"}</span>
+                            <span className="text-muted-foreground">
+                              {l.plan_part
+                                ? isAr ? "تدفع الآن (لكل الوحدات)" : "You pay now (all units)"
+                                : isAr ? "تدفع الآن" : "You pay now"}
+                            </span>
                             <span className="font-semibold" dir="ltr">${l.buyer_total.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
@@ -370,7 +378,9 @@ export default function SecondaryMarket() {
                               {localName(l, language)}
                               {l.is_position && (
                                 <span className="ms-2 text-xs font-normal text-muted-foreground">
-                                  {isAr ? "· مركز تقسيط" : "· installment position"}
+                                  {l.plan_part
+                                    ? isAr ? "· جزء من خطة تقسيط" : "· part of an installment plan"
+                                    : isAr ? "· مركز تقسيط" : "· installment position"}
                                 </span>
                               )}
                             </h4>

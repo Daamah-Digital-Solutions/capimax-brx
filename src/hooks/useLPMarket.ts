@@ -1,3 +1,4 @@
+import type { PlanScheduleRow } from "@/integrations/api/client";
 import { useState, useEffect } from "react";
 import { lpApi } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,11 @@ export interface LPMarketListing {
   reference_price?: number | null;
   discount_percent?: number;
   expires_at?: string | null;
+  // Units of an installment plan: the LP pays `total_value` now (the units' paid share) and
+  // continues their share of the plan's installments (`plan_schedule`).
+  plan_id?: string | null;
+  assumed_principal?: number | null;
+  plan_schedule?: PlanScheduleRow[] | null;
   status: "listed" | "pending" | "completed" | "cancelled" | "expired";
   listed_at: string;
   purchased_at: string | null;

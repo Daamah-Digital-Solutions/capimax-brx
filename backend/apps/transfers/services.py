@@ -150,8 +150,23 @@ def _send_invite(t: UnitTransfer, user) -> None:
 # --------------------------------------------------------------------------- #
 # Create + hold
 # --------------------------------------------------------------------------- #
+def _plan_locked(plan_id):
+    """Lock an installment plan's payment rows, then the plan (the settlements' lock order)."""
+    from apps.installments.models import InstallmentPayment, InstallmentPlan
+
+    list(InstallmentPayment.objects.select_for_update().filter(plan_id=plan_id).order_by("sequence"))
+    return InstallmentPlan.objects.select_for_update().get(pk=plan_id)
+
+
 def _hold(t: UnitTransfer) -> None:
-    if t.asset == UnitTransfer.Asset.UNITS:
+    if t.plan_id:
+        # Units of a running installment plan: nothing is escrowed (they can't be sold one by
+        # one); the transfer itself keeps them out of any other sale or transfer.
+        from apps.installments.split import check_part
+
+        check_part(_plan_locked(t.plan_id), t.units, exclude_transfer=t.pk)
+        charge = t.fee_amount
+    elif t.asset == UnitTransfer.Asset.UNITS:
         _w, pos = _wallet_position(t.sender, t.property_slug, lock=True)
         if pos is None or free_units(t.sender, t.property_slug, pos) < t.units:
             raise ValidationError({"code": "not_enough_units",
@@ -170,7 +185,9 @@ def _hold(t: UnitTransfer) -> None:
 
 
 def _release_hold(t: UnitTransfer) -> None:
-    if t.asset == UnitTransfer.Asset.UNITS:
+    if t.plan_id:
+        back = t.fee_amount
+    elif t.asset == UnitTransfer.Asset.UNITS:
         _w, pos = _wallet_position(t.sender, t.property_slug, lock=True)
         if pos is not None:
             pos.locked_amount = max(0, int(pos.locked_amount) - t.units)
@@ -187,7 +204,7 @@ def _release_hold(t: UnitTransfer) -> None:
 def create_transfer(
     *, kind, asset, sender, recipient_email, recipient_name="", property_slug="", units=0,
     amount=0, fee_percent=0.0, deliver_on=None, message="", occasion="",
-    family_account=None, estate_claim=None,
+    family_account=None, estate_claim=None, plan_id=None,
 ) -> UnitTransfer:
     email = (recipient_email or "").strip().lower()
     if not email:
@@ -202,7 +219,29 @@ def create_transfer(
         raise ValidationError({"deliver_on": f"Schedule at most {settings.GIFT_MAX_DAYS_AHEAD} days ahead."})
 
     fields = {}
-    if asset == UnitTransfer.Asset.UNITS:
+    if asset == UnitTransfer.Asset.UNITS and plan_id:
+        # Part (or all) of a running installment plan: the recipient continues its share of the
+        # installments (apps/installments/split.py). Valued at the giver's own entry price.
+        from apps.installments.models import InstallmentPlan
+        from apps.installments.position import holder_entry, plan_investment
+        from apps.installments.split import check_part
+
+        plan = (
+            InstallmentPlan.objects.select_related("property")
+            .filter(pk=plan_id, investor=sender).first()
+        )
+        if plan is None:
+            raise ValidationError({"plan_id": "Installment plan not found."})
+        units = int(units or 0)
+        inv = plan_investment(plan)
+        check_part(plan, units, inv=inv)
+        entry, _at = holder_entry(plan, inv)
+        _w, pos = _wallet_position(sender, plan.property.slug)
+        value = (Decimal(entry) * units).quantize(CENT, ROUND_HALF_UP)
+        fields = {"property_slug": plan.property.slug, "property_name": plan.property.name,
+                  "token_symbol": pos.token_symbol if pos else inv.token_symbol,
+                  "units": units, "amount": value, "plan": plan}
+    elif asset == UnitTransfer.Asset.UNITS:
         units = int(units or 0)
         if units <= 0:
             raise ValidationError({"units": "Enter how many units."})
@@ -235,17 +274,17 @@ def create_transfer(
 
 
 def create_gift(sender, *, recipient_email, recipient_name="", asset, property_slug="", units=0,
-                amount=0, deliver_on=None, message="", occasion="") -> UnitTransfer:
+                amount=0, deliver_on=None, message="", occasion="", plan_id=None) -> UnitTransfer:
     return create_transfer(
         kind=UnitTransfer.Kind.GIFT, asset=asset, sender=sender, recipient_email=recipient_email,
         recipient_name=recipient_name, property_slug=property_slug, units=units, amount=amount,
         fee_percent=settings.GIFT_FEE_PERCENT, deliver_on=deliver_on, message=message,
-        occasion=occasion,
+        occasion=occasion, plan_id=plan_id,
     )
 
 
 def create_family_transfer(owner, *, family_account_id, asset, property_slug="", units=0,
-                           amount=0, message="") -> UnitTransfer:
+                           amount=0, message="", plan_id=None) -> UnitTransfer:
     from apps.family.models import FamilyAccount
     from apps.family.services import log_transaction
 
@@ -261,7 +300,7 @@ def create_family_transfer(owner, *, family_account_id, asset, property_slug="",
             recipient_email=account.member_email, recipient_name=account.member_name,
             property_slug=property_slug, units=units, amount=amount,
             fee_percent=settings.FAMILY_TRANSFER_FEE_PERCENT, message=message,
-            family_account=account,
+            family_account=account, plan_id=plan_id,
         )
         log_transaction(account, "transfer_initiated", amount=t.amount, initiated_by=owner,
                         description=f"{describe(t)} ({t.reference})", reference_number=t.reference)
@@ -271,6 +310,61 @@ def create_family_transfer(owner, *, family_account_id, asset, property_slug="",
 # --------------------------------------------------------------------------- #
 # Deliver
 # --------------------------------------------------------------------------- #
+def _move_plan_units(t: UnitTransfer, recipient) -> str:
+    """
+    Deliver units of an installment plan: the recipient gets a plan of their own for them and
+    continues its installments (apps/installments/split.py). Refused (the transfer fails and
+    everything goes back) while an installment of the plan is overdue. A plan paid off since the
+    transfer was made delivers plain units.
+    """
+    from apps.chain import service as chain_service
+    from apps.installments.models import InstallmentPlanStatus
+    from apps.installments.position import holder_entry, plan_investment
+    from apps.installments.split import check_part, split_plan
+    from apps.lp.market_services import NotDeployedError, _deployed_contract
+    from apps.wallets.services import load_custodial_signer
+
+    plan = _plan_locked(t.plan_id)
+    if plan.investor_id != t.sender_id:
+        raise DeliveryError("The sender no longer holds this installment plan.")
+    if plan.status == InstallmentPlanStatus.COMPLETED:
+        _w, pos = _wallet_position(t.sender, t.property_slug, lock=True)
+        if pos is None or free_units(t.sender, t.property_slug, pos) < t.units:
+            raise DeliveryError("The sender no longer holds these units.")
+        pos.locked_amount = int(pos.locked_amount) + t.units  # what _move_units hands over
+        pos.save(update_fields=["locked_amount", "updated_at"])
+        return _move_units(t, recipient)
+    inv = plan_investment(plan)
+    try:
+        check_part(plan, t.units, inv=inv, exclude_transfer=t.pk)
+    except ValidationError as exc:
+        detail = exc.detail.get("detail") if isinstance(exc.detail, dict) else None
+        raise DeliveryError(str(detail or "The installment plan can't be transferred now."))
+
+    sender_wallet = UserWallet.objects.filter(user=t.sender).first()
+    recipient_wallet, _c = get_or_create_custodial_wallet(recipient)
+    try:
+        contract = _deployed_contract(t.property_slug)
+    except NotDeployedError:
+        tx_hash, block, chain_id = f"offchain:{t.pk}", None, None
+    else:
+        signer = load_custodial_signer(sender_wallet)
+        try:
+            result = chain_service.transfer(contract, signer, recipient_wallet.wallet_address, t.units)
+        finally:
+            del signer
+        tx_hash, block, chain_id = result["tx_hash"], result.get("block_number"), result.get("chain_id")
+
+    entry, _at = holder_entry(plan, inv)
+    split_plan(plan, t.units, recipient, inv=inv, acquired_price=entry, cost_source=COST_SOURCE[t.kind])
+    for w in (sender_wallet, recipient_wallet):
+        WalletTransaction.objects.create(
+            wallet=w, tx_hash=tx_hash, tx_type="transfer", amount=t.amount,
+            token_symbol=t.token_symbol, status="confirmed", block_number=block, chain_id=chain_id,
+        )
+    return tx_hash
+
+
 def _move_units(t: UnitTransfer, recipient) -> str:
     from apps.chain import service as chain_service
     from apps.investments.services import record_acquisition_cost
@@ -357,7 +451,9 @@ def deliver(transfer_id) -> str:
             failed = ""
             try:
                 with transaction.atomic():
-                    if t.asset == UnitTransfer.Asset.UNITS:
+                    if t.plan_id:
+                        t.tx_hash = _move_plan_units(t, recipient)
+                    elif t.asset == UnitTransfer.Asset.UNITS:
                         t.tx_hash = _move_units(t, recipient)
                     else:
                         credit_user_balance(
@@ -382,7 +478,8 @@ def _after_delivery(t: UnitTransfer, recipient) -> None:
               "recipient": t.recipient_name or t.recipient_email, "message": t.message or "",
               "page": page_for(t)}
     notify(recipient, NotificationType.TRANSFER_RECEIVED, params=params,
-           action_url="/portfolio" if t.asset == UnitTransfer.Asset.UNITS else "/wallet")
+           action_url=("/installments" if t.plan_id else
+                       "/portfolio" if t.asset == UnitTransfer.Asset.UNITS else "/wallet"))
     if t.kind != UnitTransfer.Kind.ESTATE:
         notify(t.sender, NotificationType.TRANSFER_DELIVERED, params=params, action_url=page_for(t))
     if t.family_account_id:

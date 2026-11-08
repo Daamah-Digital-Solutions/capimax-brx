@@ -326,7 +326,9 @@ def settle_installment_payment(installment_payment_id) -> dict:
             released_before = _released_for(total_paid_before, total, token_total)
             released_after = _released_for(total_paid_after, total, token_total)
             delta = released_after - released_before
-            if delta > 0 and listing is None:
+            # A whole-position listing keeps the released units in its escrow; a part listing
+            # holds no escrow (apps/installments/split.py), so they are released as usual.
+            if delta > 0 and (listing is None or listing.plan_part):
                 token = (
                     OwnershipToken.objects.select_for_update()
                     .filter(wallet_id=wallet_id, property_id=inv.property.slug)
@@ -346,8 +348,8 @@ def settle_installment_payment(installment_payment_id) -> dict:
                 memo=f"Primary sale ({tag})",
             )
             # The referral commission belongs to the original buyer's broker; installments
-            # paid by someone who bought the position later earn none.
-            if inv.user_id == plan.investor_id:
+            # paid by someone who bought the position (or part of it) later earn none.
+            if inv.user_id == plan.investor_id and plan.split_from_id is None:
                 broker_result = credit_broker_share(
                     inv, gross=ip.amount, reference=str(ip.id),
                     memo=f"Referral commission ({tag})",
@@ -380,6 +382,12 @@ def settle_installment_payment(installment_payment_id) -> dict:
                 close_position_listing(listing)  # plain units now; the escrow is released
             else:
                 refresh_position_listing(listing)
+
+        # Part of the plan offered to an LP: re-quote it on the new figures (or close it once
+        # the plan is paid off — its units are plain units now).
+        from apps.lp.market_services import refresh_plan_listings
+
+        refresh_plan_listings(plan, closed=completed)
 
         # Notifications (same atomic block; only on the newly-settled path).
         if inv is not None:
