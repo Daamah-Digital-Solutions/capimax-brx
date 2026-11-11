@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowDownToLine,
   ArrowRightLeft,
@@ -8,14 +9,16 @@ import {
   Calendar,
   FolderOpen,
   Send,
+  HandCoins,
   HelpCircle,
-  LogOut,
+  Coins,
   RefreshCw,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Action = { ar: string; en: string; icon: LucideIcon; to?: string; onClick?: () => void; tone?: string };
 
@@ -23,6 +26,8 @@ type Action = { ar: string; en: string; icon: LucideIcon; to?: string; onClick?:
 export function QuickActions({ className }: { className?: string }) {
   const { language } = useLanguage();
   const isAr = language === "ar";
+  const navigate = useNavigate();
+  const [sellOpen, setSellOpen] = useState(false);
 
   const actions: Action[] = [
     { ar: "إيداع", en: "Deposit", icon: ArrowDownToLine, to: "/wallet", tone: "text-emerald-500" },
@@ -35,7 +40,8 @@ export function QuickActions({ className }: { className?: string }) {
     { ar: "الأقساط", en: "Installments", icon: Calendar, to: "/installments" },
     { ar: "السوق الثانوي", en: "Secondary market", icon: ArrowRightLeft, to: "/secondary-market" },
     { ar: "إعادة استثمار", en: "Reinvest", icon: RefreshCw, to: "/reinvestment" },
-    { ar: "التخارج", en: "Exits", icon: LogOut, to: "/exits-hub" },
+    // Starts the sale: the investor then picks the secondary market or a liquidity provider.
+    { ar: "بيع", en: "Sell", icon: HandCoins, onClick: () => setSellOpen(true), tone: "text-primary" },
     { ar: "الدعم", en: "Support", icon: HelpCircle, to: "/support" },
   ];
 
@@ -63,6 +69,53 @@ export function QuickActions({ className }: { className?: string }) {
           );
         })}
       </div>
+
+      <Dialog open={sellOpen} onOpenChange={setSellOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isAr ? "بيع حصصك" : "Sell your units"}</DialogTitle>
+            <DialogDescription>{isAr ? "اختر طريقة البيع" : "Choose how to sell"}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {sellRoutes.map((r) => (
+              <button
+                key={r.to}
+                type="button"
+                onClick={() => {
+                  setSellOpen(false);
+                  navigate(r.to);
+                }}
+                className="flex items-start gap-3 rounded-xl border border-border bg-muted/40 p-4 text-start transition-colors hover:border-primary/50 hover:bg-primary/5"
+              >
+                <r.icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">{isAr ? r.ar : r.en}</span>
+                  <span className="block text-xs text-muted-foreground">{isAr ? r.descAr : r.descEn}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+const sellRoutes = [
+  {
+    ar: "السوق الثانوي",
+    en: "Secondary market",
+    descAr: "اعرض حصصك للمستثمرين الآخرين بالسعر الذي تحدده.",
+    descEn: "Offer your units to other investors at the price you set.",
+    icon: ArrowRightLeft,
+    to: "/secondary-market?sell=1",
+  },
+  {
+    ar: "مزود السيولة",
+    en: "Liquidity provider",
+    descAr: "بيع فوري لمزود السيولة بسعر المنصة.",
+    descEn: "Sell instantly to a liquidity provider at the platform price.",
+    icon: Coins,
+    to: "/lp-market",
+  },
+];

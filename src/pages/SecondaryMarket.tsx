@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { localName } from "@/lib/propertyLabels";
 import {
   Building2,
@@ -61,7 +62,9 @@ export default function SecondaryMarket() {
   const [buyingId, setBuyingId] = useState<string | null>(null);
   // Off-plan §6: an installment position opens its breakdown + schedule before buying.
   const [viewPosition, setViewPosition] = useState<typeof listings[0] | null>(null);
-  const [showSell, setShowSell] = useState(false);
+  const [searchParams] = useSearchParams();
+  // ?sell=1 (the dashboard's "Sell" button) opens the sell form straight away.
+  const [showSell, setShowSell] = useState(() => searchParams.get("sell") === "1");
   const [showWithdraw, setShowWithdraw] = useState(false);
 
   // "Add funds & buy" — when the proceeds balance can't cover a listing, fund the shortfall by
