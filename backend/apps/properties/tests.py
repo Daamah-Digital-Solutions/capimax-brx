@@ -474,3 +474,33 @@ class JsonRowsWidgetTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["yield_projection"],
                          [{"year": "Year 1", "value": 8.1}, {"year": "Year 2", "value": 8.6}])
+
+
+class DeveloperProfileTests(TestCase):
+    """Saved developers (client letter 2026-11): a developer typed on a property joins the list,
+    and the admin picker carries each profile's fields for the autofill."""
+
+    def test_a_new_developer_is_saved_and_reused(self):
+        from .admin_widgets import DeveloperPickerSelect
+        from .models import DeveloperInfo, DeveloperProfile
+
+        p1 = Property(**_valid_property_kwargs(slug="dev-p1"))
+        p1.save()
+        info = DeveloperInfo.objects.create(property=p1, name="Acme Builders", name_ar="أكمي", years_experience=12,
+                                            related_projects=[{"en": "Tower A", "ar": "برج أ", "fr": "Tour A"}])
+        prof = DeveloperProfile.objects.get(name="Acme Builders")
+        info.refresh_from_db()
+        self.assertEqual(info.profile_id, prof.pk)
+        self.assertEqual((prof.name_ar, prof.years_experience, prof.related_projects[0]["en"]), ("أكمي", 12, "Tower A"))
+
+        # the same name on another property reuses the profile and never overwrites it
+        p2 = Property(**_valid_property_kwargs(slug="dev-p2"))
+        p2.save()
+        DeveloperInfo.objects.create(property=p2, name="Acme Builders", years_experience=99)
+        self.assertEqual(DeveloperProfile.objects.filter(name="Acme Builders").count(), 1)
+        prof.refresh_from_db()
+        self.assertEqual(prof.years_experience, 12)
+
+        html = DeveloperPickerSelect().render("developer_info-0-profile", None)
+        self.assertIn("developer-picker", html)
+        self.assertIn("Tower A", html)

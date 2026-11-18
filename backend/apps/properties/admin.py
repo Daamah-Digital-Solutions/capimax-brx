@@ -21,6 +21,7 @@ from django.utils.html import format_html
 
 from . import pricing
 from .admin_widgets import (
+    DeveloperPickerSelect,
     JsonRowsWidget,
     DatalistTextInput,
     StickyFileInput,
@@ -34,6 +35,7 @@ from .models import (
     Amenity,
     ConstructionMilestone,
     DeveloperInfo,
+    DeveloperProfile,
     DeveloperReport,
     FutureContract,
     InstallmentSchedule,
@@ -217,6 +219,32 @@ class DeveloperInfoInline(admin.StackedInline):
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         # Related projects as rows (English / Arabic / French name) instead of typed JSON.
+        if db_field.name == "related_projects":
+            kwargs["widget"] = JsonRowsWidget([("en", "English", "text"), ("ar", "العربية", "text"), ("fr", "Français", "text")])
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # Picking a saved developer fills this section from its profile (admin_widgets).
+        if db_field.name == "profile":
+            kwargs["widget"] = DeveloperPickerSelect()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(DeveloperProfile)
+class DeveloperProfileAdmin(admin.ModelAdmin):
+    """Saved developers: the full profile kept once and picked when creating an opportunity."""
+
+    list_display = ("name", "name_ar", "location", "years_experience", "completed_projects", "updated_at")
+    search_fields = ("name", "name_ar", "name_fr", "location")
+    fieldsets = (
+        (None, {"fields": (("name", "name_ar", "name_fr"),)}),
+        ("Overview", {"fields": ("overview", "overview_ar", "overview_fr")}),
+        ("Track record", {"fields": (("years_experience", "completed_projects", "ongoing_projects", "rating"),)}),
+        ("Contact", {"fields": (("location", "location_ar", "location_fr"), ("email", "phone", "website"))}),
+        ("Projects", {"fields": ("related_projects",)}),
+    )
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == "related_projects":
             kwargs["widget"] = JsonRowsWidget([("en", "English", "text"), ("ar", "العربية", "text"), ("fr", "Français", "text")])
         return super().formfield_for_dbfield(db_field, request, **kwargs)

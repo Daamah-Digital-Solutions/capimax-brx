@@ -228,6 +228,15 @@ _JSON_ROWS_SCRIPT = """
     if (!Array.isArray(rows)) { raw.style.display = ""; return; }
     rows.forEach(addRow);
     if (!rows.length) addRow(null);
+    // The developer picker writes new JSON into the textarea and asks for the rows again.
+    raw.addEventListener("json-rows:reload", function () {
+      body.innerHTML = "";
+      var again = [];
+      try { again = JSON.parse(raw.value || "[]"); } catch (e) { again = []; }
+      (Array.isArray(again) ? again : []).forEach(addRow);
+      if (!body.children.length) addRow(null);
+      sync();
+    });
     add.addEventListener("click", function () { addRow(null); });
     sync();
   }
@@ -236,6 +245,54 @@ _JSON_ROWS_SCRIPT = """
   document.addEventListener("formset:added", all);
   if (window.django && django.jQuery) django.jQuery(document).on("formset:added", all);
   all();
+})();
+</script>
+"""
+
+
+class DeveloperPickerSelect(forms.Select):
+    """
+    The 'saved developer' list on a property's Developer section (client letter 2026-11, admin
+    §2): picking one fills the section's fields from that developer's saved profile; the fields
+    stay editable. The profiles ride along as JSON on the select.
+    """
+
+    def render(self, name, value, attrs=None, renderer=None):
+        import json
+
+        from django.utils.safestring import mark_safe
+
+        from .models import DeveloperProfile
+
+        data = {str(p.pk): p.as_fields() for p in DeveloperProfile.objects.all()}
+        attrs = {**(attrs or {}), "data-developer-profiles": json.dumps(data, ensure_ascii=False),
+                 "class": ((attrs or {}).get("class", "") + " developer-picker").strip()}
+        return mark_safe(super().render(name, value, attrs, renderer) + _DEVELOPER_PICKER_SCRIPT)
+
+
+_DEVELOPER_PICKER_SCRIPT = """
+<script>
+(function () {
+  if (window.__devPicker) return; window.__devPicker = true;
+  document.addEventListener("change", function (ev) {
+    var sel = ev.target;
+    if (!sel.classList || !sel.classList.contains("developer-picker") || !sel.value) return;
+    var all = JSON.parse(sel.dataset.developerProfiles || "{}"), prof = all[sel.value];
+    if (!prof) return;
+    var prefix = sel.name.slice(0, sel.name.length - "profile".length);
+    Object.keys(prof).forEach(function (field) {
+      var el = document.querySelector('[name="' + prefix + field + '"]');
+      if (!el) return;
+      var v = prof[field];
+      if (field === "related_projects") {
+        el.value = JSON.stringify(v || []);
+        el.dispatchEvent(new Event("json-rows:reload"));
+        return;
+      }
+      el.value = v == null ? "" : v;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  });
 })();
 </script>
 """

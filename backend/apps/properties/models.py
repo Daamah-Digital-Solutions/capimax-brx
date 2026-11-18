@@ -1023,11 +1023,70 @@ class PendingUpload(models.Model):
 # Data-room section content — admin-managed per property so every tab shows real,
 # editable data instead of the frontend's old hardcoded placeholders.
 # --------------------------------------------------------------------------- #
+# The developer fields, shared by a property's Developer tab and a saved developer profile.
+DEVELOPER_FIELDS = (
+    "name", "name_ar", "name_fr", "overview", "overview_ar", "overview_fr", "years_experience",
+    "completed_projects", "ongoing_projects", "rating", "location", "location_ar", "location_fr",
+    "email", "phone", "website", "related_projects",
+)
+
+
+class DeveloperProfile(models.Model):
+    """
+    A saved developer (client letter 2026-11, admin §2): the full profile shown in a property's
+    Developer tab, kept once and picked when a new opportunity is created — picking it fills the
+    property's developer fields (they stay editable per property).
+    """
+
+    name = models.CharField(max_length=200, unique=True)
+    name_ar = models.CharField(max_length=200, blank=True, verbose_name="name (Arabic)")
+    name_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="name (French)")
+    overview = models.TextField(blank=True)
+    overview_ar = models.TextField(blank=True, verbose_name="overview (Arabic)")
+    overview_fr = models.TextField(blank=True, default="", verbose_name="overview (French)")
+    years_experience = models.PositiveIntegerField(default=0)
+    completed_projects = models.PositiveIntegerField(default=0)
+    ongoing_projects = models.PositiveIntegerField(default=0)
+    rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)  # 0..5
+    location = models.CharField(max_length=200, blank=True)
+    location_ar = models.CharField(max_length=200, blank=True, verbose_name="location (Arabic)")
+    location_fr = models.CharField(max_length=200, blank=True, default="", verbose_name="location (French)")
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    website = models.URLField(max_length=300, blank=True)
+    related_projects = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = _("developer")
+        verbose_name_plural = _("developers")
+
+    def __str__(self):
+        return self.name
+
+    def as_fields(self) -> dict:
+        """The profile as the property's developer fields (JSON-safe), for the admin autofill."""
+        out = {}
+        for f in DEVELOPER_FIELDS:
+            v = getattr(self, f)
+            out[f] = float(v) if f == "rating" else v
+        return out
+
+
 class DeveloperInfo(models.Model):
     """The 'Developer' tab (bilingual). One per property."""
 
     property = models.OneToOneField(
         Property, on_delete=models.CASCADE, related_name="developer_info"
+    )
+    # The saved developer this tab was filled from (admin autofill); the fields below stay the
+    # property's own copy, so editing a profile later never rewrites a published property.
+    profile = models.ForeignKey(
+        DeveloperProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        verbose_name="saved developer",
+        help_text="Pick a saved developer to fill the fields below; you can still edit them.",
     )
     name = models.CharField(max_length=200)
     name_ar = models.CharField(max_length=200, blank=True, verbose_name="name (Arabic)")
@@ -1057,6 +1116,20 @@ class DeveloperInfo(models.Model):
             from django.core.exceptions import ValidationError
 
             raise ValidationError({"related_projects": 'Use a list like [{"en": "Name", "ar": "الاسم", "fr": "Nom"}].'})
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # A developer typed straight on a property is saved to the developers list too (never
+        # overwriting a saved profile), so it can be picked for the next opportunity.
+        name = (self.name or "").strip()
+        if self.profile_id is None and name:
+            profile = DeveloperProfile.objects.filter(name=name).first()
+            if profile is None:
+                profile = DeveloperProfile.objects.create(
+                    **{f: getattr(self, f) for f in DEVELOPER_FIELDS if f != "name"}, name=name,
+                )
+            type(self).objects.filter(pk=self.pk).update(profile=profile)
+            self.profile_id = profile.pk
 
     def __str__(self):
         return f"Developer · {self.property.slug}"
