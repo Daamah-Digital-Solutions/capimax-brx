@@ -70,6 +70,15 @@ def _seller_with_tokens(email, prop, amount):
     return user, wallet
 
 
+
+# These tests cover the settlement mechanics; they pin the fee rates in force before the
+# 2026-11 schedule (apps/secondary_market/fees.py is tested in apps/secondary_market/tests_fees.py).
+LEGACY_FEES = dict(
+    SECONDARY_MARKET_FEE_PERCENT=1.0, SECONDARY_MARKET_SELLER_FEE_PERCENT=0.0,
+    LP_MARKET_FEE_PERCENT=2.0, LP_FEE_SHARE_PERCENT=0.0, LP_EXIT_DISCOUNT_PERCENT=3.0,
+)
+
+@override_settings(**LEGACY_FEES)
 class PeerListingTests(APITestCase):
     def setUp(self):
         self.prop = _deployed_property()
@@ -90,7 +99,7 @@ class PeerListingTests(APITestCase):
         self.assertEqual(resp.data["platform_fee_amount"], 3.0)
         self.assertEqual(resp.data["net_amount"], 300.0)
         self.assertEqual(resp.data["buyer_total"], 303.0)
-        self.assertEqual(resp.data["fee_payer"], "buyer")
+        self.assertEqual(resp.data["fee_payer"], "both")  # 2026-11 schedule (seller fee 0 here)
         pos = OwnershipToken.objects.get(wallet=self.wallet, property_id=self.prop.slug)
         self.assertEqual(pos.locked_amount, 3)
 
@@ -138,6 +147,7 @@ class PeerListingTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
+@override_settings(**LEGACY_FEES)
 @mock.patch("apps.secondary_market.services.chain_service.transfer", return_value=_FAKE_TRANSFER)
 class PeerPurchaseTests(APITestCase):
     def setUp(self):
@@ -273,6 +283,7 @@ class PeerPurchaseTests(APITestCase):
         self.assertEqual(total_amt / total_tok, Decimal("112"))
 
 
+@override_settings(**LEGACY_FEES)
 @mock.patch("apps.secondary_market.services.chain_service.transfer", return_value=_FAKE_TRANSFER)
 class PeerPurchaseOffChainTests(APITestCase):
     """

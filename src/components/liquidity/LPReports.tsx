@@ -39,7 +39,7 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
         monthlyData[key].deposits += tx.amount;
       } else if (tx.tx_type === "withdrawal") {
         monthlyData[key].withdrawals += tx.amount;
-      } else if (tx.tx_type === "earning") {
+      } else if (tx.tx_type === "earning" || tx.tx_type === "fee_share") {
         monthlyData[key].earnings += tx.amount;
       }
     });
@@ -68,7 +68,7 @@ export function LPReports({ lpProfile, transactions, isRTL }: LPReportsProps) {
       (acc, tx) => {
         if (tx.tx_type === "deposit") acc.deposits += tx.amount;
         else if (tx.tx_type === "withdrawal") acc.withdrawals += tx.amount;
-        else if (tx.tx_type === "earning") acc.earnings += tx.amount;
+        else if (tx.tx_type === "earning" || tx.tx_type === "fee_share") acc.earnings += tx.amount;
         return acc;
       },
       { deposits: 0, withdrawals: 0, earnings: 0 }

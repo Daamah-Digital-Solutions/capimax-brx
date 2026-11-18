@@ -33,7 +33,7 @@ interface ResaleFormProps {
   holding: LPHolding;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirmResale: (holdingId: string, target: "lp" | "secondary", price: number) => Promise<{ success: boolean; error?: string }>;
+  onConfirmResale: (holdingId: string, target: "lp" | "secondary", price: number, units: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 export function ResaleForm({
@@ -55,21 +55,26 @@ export function ResaleForm({
   // the liquidity fee is deducted; the seller's own price doesn't apply.
   // Secondary market (decision 5): the seller's price, received in full; the buyer pays the fee on top.
   const terms = useExitTerms();
+  // 2026-11 fee schedule (apps/secondary_market/fees.py). LP market: the seller (you) pays the
+  // LP-market fee out of the amount. Secondary market: you pay no fee on your LP units, the
+  // buyer pays its fee on top and you get a share of it.
   const lpDiscountPercent = terms.discount_percent;
-  const lpFeePercent = terms.fee_percent;
-  const secondaryFeePercent = terms.secondary_fee_percent;
+  const lpFeePercent = terms.lp_market_seller_fee_percent ?? terms.fee_percent;
+  const buyerFeePercent = terms.secondary_buyer_fee_percent ?? terms.secondary_fee_percent;
+  const sharePercent = terms.lp_fee_share_percent ?? 0.5;
   const unitNow = holding.token_amount > 0 ? holding.current_value / holding.token_amount : 0;
   const lpPrice = Math.round(unitNow * tokens * (100 - lpDiscountPercent)) / 100;
   const price = targetMarket === "lp" ? lpPrice : parseFloat(salePrice) || 0;
   const totalValue = price;
-  const feePercent = targetMarket === "lp" ? lpFeePercent : secondaryFeePercent;
+  const feePercent = targetMarket === "lp" ? lpFeePercent : 0;
   const feeAmount = Math.round(totalValue * feePercent) / 100;
-  // LP: the fee comes out of the proceeds; secondary: the buyer pays it on top.
-  const netAmount = targetMarket === "lp" ? totalValue - feeAmount : totalValue;
+  const netAmount = totalValue - feeAmount;
+  const buyerFee = Math.round(totalValue * buyerFeePercent) / 100;
+  const lpShare = targetMarket === "secondary" ? Math.round(totalValue * sharePercent) / 100 : 0;
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
-    const result = await onConfirmResale(holding.id, targetMarket, price);
+    const result = await onConfirmResale(holding.id, targetMarket, price, Math.floor(tokens));
     setIsSubmitting(false);
 
     if (result.success) {
@@ -137,7 +142,7 @@ export function ResaleForm({
                   <div className="text-center">
                     <p className="font-medium">{language === "ar" ? "سوق LP" : "LP Market"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {language === "ar" ? `سعر المنصة −${lpDiscountPercent}% · رسوم ${lpFeePercent}%` : `Platform price −${lpDiscountPercent}% · ${lpFeePercent}% fee`}
+                      {language === "ar" ? `سعر الوحدة الحالي · رسوم ${lpFeePercent}% على البائع` : `Current unit price · ${lpFeePercent}% seller fee`}
                     </p>
                   </div>
                   {targetMarket === "lp" && (
@@ -155,7 +160,7 @@ export function ResaleForm({
                   <div className="text-center">
                     <p className="font-medium">{language === "ar" ? "السوق الثانوي" : "Secondary Market"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {language === "ar" ? `رسوم ${secondaryFeePercent}% على المشتري` : `${secondaryFeePercent}% fee paid by the buyer`}
+                      {language === "ar" ? `بدون رسوم بيع · رسوم ${buyerFeePercent}% على المشتري` : `No selling fee · ${buyerFeePercent}% buyer fee`}
                     </p>
                   </div>
                   {targetMarket === "secondary" && (
@@ -214,17 +219,37 @@ export function ResaleForm({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
                     {targetMarket === "lp"
-                      ? language === "ar" ? `رسوم السيولة (${feePercent}%)` : `Liquidity fee (${feePercent}%)`
-                      : language === "ar" ? `رسوم إعادة البيع (${feePercent}%) — على المشتري` : `Resale fee (${feePercent}%) — paid by the buyer`}
+                      ? language === "ar" ? `رسوم البائع (${feePercent}%)` : `Seller fee (${feePercent}%)`
+                      : language === "ar" ? "رسوم البائع (معفاة لحصص مزود السيولة)" : "Seller fee (none on your LP units)"}
                   </span>
-                  <span className={targetMarket === "lp" ? "text-destructive" : "text-muted-foreground"}>
-                    {targetMarket === "lp" ? "-" : ""}${feeAmount.toLocaleString()}
+                  <span className={feeAmount > 0 ? "text-destructive" : "text-muted-foreground"}>
+                    -${feeAmount.toLocaleString()}
                   </span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="font-medium">{language === "ar" ? "المبلغ الصافي" : "Net Amount"}</span>
                   <span className="text-lg font-bold text-success">${netAmount.toLocaleString()}</span>
                 </div>
+                {lpShare > 0 && (
+                  <div className="flex justify-between rounded-md bg-success/10 px-2 py-1">
+                    <span className="text-success">
+                      {language === "ar"
+                        ? `حصتك من رسوم المشتري (${sharePercent}%)، تُضاف إلى رصيدك بعد التسوية`
+                        : `Your share of the buyer's fee (${sharePercent}%), added to your balance after settlement`}
+                    </span>
+                    <span className="font-semibold text-success">+${lpShare.toLocaleString()}</span>
+                  </div>
+                )}
+                {targetMarket === "secondary" && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>
+                      {language === "ar"
+                        ? `يدفع المشتري القيمة + رسوم ${buyerFeePercent}%`
+                        : `The buyer pays the value + a ${buyerFeePercent}% fee`}
+                    </span>
+                    <span>${(totalValue + buyerFee).toLocaleString()}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

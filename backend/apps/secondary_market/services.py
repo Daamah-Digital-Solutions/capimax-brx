@@ -131,7 +131,16 @@ def create_listing(*, user, data: dict) -> SecondaryMarketListing:
         total_value = (Decimal(token_amount) * unit_price).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
-        fee_pct, fee_amount, net_amount = compute_fees(total_value)
+        # 2026-11 fee schedule: the buyer pays its fee on top, the seller its own fee out of
+        # the price — none on an LP's LP-market units, where the LP gets a share of the
+        # buyer's fee instead. Worked out again at settlement from the units sold then.
+        from apps.lp import accounting as lp_accounting
+
+        from . import fees
+
+        split = fees.secondary(
+            total_value, token_amount, lp_accounting.lp_units_held(user, property_id),
+        )
 
         position.locked_amount = int(position.locked_amount) + token_amount
         position.save(update_fields=["locked_amount", "updated_at"])
@@ -145,10 +154,14 @@ def create_listing(*, user, data: dict) -> SecondaryMarketListing:
             token_amount=token_amount,
             unit_price=unit_price,
             total_value=total_value,
-            platform_fee_percent=fee_pct,
-            platform_fee_amount=fee_amount,
-            net_amount=net_amount,
-            fee_payer=SecondaryMarketListing.FeePayer.BUYER,
+            platform_fee_percent=split["buyer_fee_percent"],
+            platform_fee_amount=split["buyer_fee"],
+            net_amount=split["seller_net"],
+            fee_payer=SecondaryMarketListing.FeePayer.BOTH,
+            seller_fee_percent=split["seller_fee_percent"],
+            seller_fee_amount=split["seller_fee"],
+            lp_units=split["lp_units"],
+            lp_fee_share_amount=split["lp_share"],
             status=SecondaryMarketListing.Status.LISTED,
             notes=data.get("notes") or None,
         )
@@ -276,17 +289,21 @@ def purchase_listing(*, buyer_user, listing_id, expected_cash=None, expected_fee
         # balance, apps/lp/accounting.py).
         from apps.lp import accounting as lp_accounting
 
-        to_wallet = lp_accounting.book_sale(
-            seller=listing.seller, property_slug=listing.property_id,
-            units=listing.token_amount, proceeds=listing.net_amount, market="secondary",
-            reference=f"secondary listing {listing.pk}",
-        )
-        if to_wallet > 0:
-            credit_user_balance(
-                listing.seller, to_wallet, source="secondary_market_sale",
-                reference=str(listing.pk),
-                memo=f"Sale of {listing.token_amount} {listing.token_symbol}",
+        if listing.fee_payer == SecondaryMarketListing.FeePayer.BOTH:
+            _settle_seller(listing, lp_accounting)
+        else:
+            # A listing made before the 2026-11 fee schedule settles on its own terms.
+            to_wallet = lp_accounting.book_sale(
+                seller=listing.seller, property_slug=listing.property_id,
+                units=listing.token_amount, proceeds=listing.net_amount, market="secondary",
+                reference=f"secondary listing {listing.pk}",
             )
+            if to_wallet > 0:
+                credit_user_balance(
+                    listing.seller, to_wallet, source="secondary_market_sale",
+                    reference=str(listing.pk),
+                    memo=f"Sale of {listing.token_amount} {listing.token_symbol}",
+                )
 
         # Move OwnershipToken positions to match the chain.
         seller_pos.token_amount = int(seller_pos.token_amount) - int(listing.token_amount)
@@ -371,6 +388,49 @@ def purchase_listing(*, buyer_user, listing_id, expected_cash=None, expected_fee
         "explorer_tx": explorer_tx,
         "on_chain": on_chain,
     }
+
+
+def _settle_seller(listing, lp_accounting) -> None:
+    """
+    Pay the seller of a 2026-11 listing (fees.secondary): the fee split is worked out again from
+    the LP units the seller holds now. LP units are paid back to the LP balance at their full
+    value plus the LP's share of the buyer's fee; the seller's own units go to the wallet less
+    the seller's fee. The buyer's fee was fixed when the listing was made and is not touched.
+    """
+    from . import fees
+
+    units = int(listing.token_amount)
+    lp_units = min(units, lp_accounting.lp_units_held(listing.seller, listing.property_id))
+    split = fees.secondary(listing.total_value, units, lp_units)
+    split_buyer_fee = Decimal(listing.platform_fee_amount)
+    if lp_units:
+        lp_accounting.book_sale(
+            seller=listing.seller, property_slug=listing.property_id, units=lp_units,
+            proceeds=split["lp_value"], market="secondary",
+            reference=f"secondary listing {listing.pk}",
+        )
+        lp_accounting.book_fee_share(
+            user=listing.seller, amount=split["lp_share"],
+            note=f"Share of the buyer's fee on {lp_units} {listing.token_symbol} "
+                 f"(secondary listing {listing.pk})",
+        )
+    to_wallet = split["total"] - split["lp_value"] - split["seller_fee"]
+    if to_wallet > 0:
+        credit_user_balance(
+            listing.seller, to_wallet, source="secondary_market_sale",
+            reference=str(listing.pk),
+            memo=f"Sale of {units - lp_units} {listing.token_symbol}",
+        )
+    listing.seller_fee_percent = split["seller_fee_percent"]
+    listing.seller_fee_amount = split["seller_fee"]
+    listing.net_amount = split["seller_net"]
+    listing.lp_units = lp_units
+    listing.lp_fee_share_amount = split["lp_share"]
+    listing.platform_fee_amount = split_buyer_fee
+    listing.save(update_fields=[
+        "seller_fee_percent", "seller_fee_amount", "net_amount", "lp_units",
+        "lp_fee_share_amount", "updated_at",
+    ])
 
 
 def _transfer(listing, seller_wallet, buyer_wallet, amount: int):
@@ -497,8 +557,7 @@ def create_position_listing(*, user, plan_id, price_per_unit=None) -> SecondaryM
             total_value=figures["cash"],
             platform_fee_percent=figures["fee_percent"],
             platform_fee_amount=figures["fee"],
-            net_amount=figures["cash"],
-            fee_payer=SecondaryMarketListing.FeePayer.BUYER,
+            **_plan_seller_terms(figures["cash"], units),
             plan=plan,
             position_value=figures["position_value"],
             paid_principal=figures["paid_principal"],
@@ -517,6 +576,19 @@ def _plan_locked_units(plan, units: int) -> int:
     return units - _released_for(paid, Decimal(plan.total_amount), units)
 
 
+def _plan_seller_terms(cash, units: int) -> dict:
+    """The seller's side of a plan listing under the 2026-11 schedule (fees.plan_sale)."""
+    from . import fees
+
+    split = fees.plan_sale(cash, units)
+    return {
+        "fee_payer": SecondaryMarketListing.FeePayer.BOTH,
+        "seller_fee_percent": split["seller_fee_percent"],
+        "seller_fee_amount": split["seller_fee"],
+        "net_amount": split["seller_net"],
+    }
+
+
 def refresh_position_listing(listing: SecondaryMarketListing) -> None:
     """Re-derive an open position listing's figures (after an installment was paid)."""
     from apps.installments.position import position_figures
@@ -530,11 +602,17 @@ def refresh_position_listing(listing: SecondaryMarketListing) -> None:
     listing.net_amount = figures["cash"]
     listing.platform_fee_percent = figures["fee_percent"]
     listing.platform_fee_amount = figures["fee"]
+    if listing.fee_payer == SecondaryMarketListing.FeePayer.BOTH:
+        terms = _plan_seller_terms(figures["cash"], int(listing.token_amount))
+        listing.seller_fee_percent = terms["seller_fee_percent"]
+        listing.seller_fee_amount = terms["seller_fee_amount"]
+        listing.net_amount = terms["net_amount"]
     listing.position_value = figures["position_value"]
     listing.paid_principal = figures["paid_principal"]
     listing.assumed_principal = figures["remaining_principal"]
     listing.save(update_fields=[
         "total_value", "net_amount", "platform_fee_percent", "platform_fee_amount",
+        "seller_fee_percent", "seller_fee_amount",
         "position_value", "paid_principal", "assumed_principal", "updated_at",
     ])
 
@@ -624,12 +702,19 @@ def buy_position(*, buyer_user, listing_id, expected_cash=None, expected_fee=Non
             except InsufficientBalance:
                 raise InsufficientBalanceError()
 
+        from . import fees
+
+        split = fees.plan_sale(figures["cash"], units)
+        new_terms = listing.fee_payer == SecondaryMarketListing.FeePayer.BOTH
+        seller_fee = split["seller_fee"] if new_terms else Decimal("0")
+
         def _credit():
-            credit_user_balance(
-                listing.seller, figures["cash"], source="secondary_market_sale",
-                reference=str(listing.pk),
-                memo=f"Sale of installment position: {units} {listing.token_symbol}",
-            )
+            if figures["cash"] - seller_fee > 0:
+                credit_user_balance(
+                    listing.seller, figures["cash"] - seller_fee, source="secondary_market_sale",
+                    reference=str(listing.pk),
+                    memo=f"Sale of installment position: {units} {listing.token_symbol}",
+                )
 
         for step in (sorted([(str(buyer_user.pk), _debit), (str(listing.seller_id), _credit)])):
             step[1]()
@@ -686,9 +771,11 @@ def buy_position(*, buyer_user, listing_id, expected_cash=None, expected_fee=Non
         listing.completed_at = now
         listing.settlement_tx_hash = tx_hash
         listing.total_value = figures["cash"]
-        listing.net_amount = figures["cash"]
+        listing.net_amount = figures["cash"] - seller_fee
         listing.platform_fee_percent = figures["fee_percent"]
         listing.platform_fee_amount = figures["fee"]
+        listing.seller_fee_percent = split["seller_fee_percent"] if new_terms else 0
+        listing.seller_fee_amount = seller_fee
         listing.position_value = figures["position_value"]
         listing.paid_principal = figures["paid_principal"]
         listing.assumed_principal = figures["remaining_principal"]
@@ -770,8 +857,7 @@ def create_part_listing(*, user, plan_id, units, price_per_unit=None) -> Seconda
             total_value=figures["cash"],
             platform_fee_percent=figures["fee_percent"],
             platform_fee_amount=figures["fee"],
-            net_amount=figures["cash"],
-            fee_payer=SecondaryMarketListing.FeePayer.BUYER,
+            **_plan_seller_terms(figures["cash"], units),
             plan=plan,
             plan_part=True,
             position_value=figures["position_value"],
@@ -894,12 +980,38 @@ def buy_plan_part(*, buyer_user, listing_id, units, expected_cash=None, expected
             except InsufficientBalance:
                 raise InsufficientBalanceError()
 
+        from . import fees
+
+        new_terms = listing.fee_payer == SecondaryMarketListing.FeePayer.BOTH
+        lp_units = (
+            min(units, lp_accounting.lp_units_held(listing.seller, listing.property_id))
+            if new_terms else 0
+        )
+        split = fees.plan_sale(figures["cash"], units, lp_units)
+        seller_fee = split["seller_fee"] if new_terms else Decimal("0")
+        lp_share = split["lp_share"] if new_terms else Decimal("0")
+
         def _credit():
+            # LP units at their full value to the LP balance (+ the LP's share of the buyer's
+            # fee); the seller's own units to the wallet less the seller's fee.
             to_wallet = lp_accounting.book_sale(
                 seller=listing.seller, property_slug=listing.property_id, units=units,
                 proceeds=figures["cash"], market="secondary",
                 reference=f"secondary listing {listing.pk}",
-            )
+            ) if not new_terms else Decimal("0")
+            if new_terms:
+                if lp_units:
+                    lp_accounting.book_sale(
+                        seller=listing.seller, property_slug=listing.property_id, units=lp_units,
+                        proceeds=split["lp_value"], market="secondary",
+                        reference=f"secondary listing {listing.pk}",
+                    )
+                    lp_accounting.book_fee_share(
+                        user=listing.seller, amount=lp_share,
+                        note=f"Share of the buyer's fee on {lp_units} {listing.token_symbol} "
+                             f"(secondary listing {listing.pk})",
+                    )
+                to_wallet = split["total"] - split["lp_value"] - seller_fee
             if to_wallet > 0:
                 credit_user_balance(
                     listing.seller, to_wallet, source="secondary_market_sale",
@@ -931,7 +1043,9 @@ def buy_plan_part(*, buyer_user, listing_id, units, expected_cash=None, expected
         sale = dict(
             buyer=buyer_user, buyer_type=_party_type(buyer_user), purchased_at=now,
             completed_at=now, settlement_tx_hash=tx_hash, total_value=figures["cash"],
-            net_amount=figures["cash"], platform_fee_percent=figures["fee_percent"],
+            net_amount=figures["cash"] - seller_fee, platform_fee_percent=figures["fee_percent"],
+            seller_fee_percent=split["seller_fee_percent"] if new_terms else 0,
+            seller_fee_amount=seller_fee, lp_units=lp_units, lp_fee_share_amount=lp_share,
             platform_fee_amount=figures["fee"], position_value=figures["position_value"],
             paid_principal=figures["paid_principal"],
             assumed_principal=figures["remaining_principal"],

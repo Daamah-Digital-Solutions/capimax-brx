@@ -90,12 +90,16 @@ def compute_fees(total_value: Decimal) -> tuple[Decimal, Decimal, Decimal]:
 
 def exit_terms() -> dict:
     """The platform's LP exit terms (decision 6), for the API and the UI."""
+    from apps.secondary_market import fees
+
     return {
         "discount_percent": float(settings.LP_EXIT_DISCOUNT_PERCENT),
         "fee_percent": float(settings.LP_MARKET_FEE_PERCENT),
         "ttl_minutes": int(settings.LP_EXIT_TTL_MINUTES),
         # The peer secondary market's resale fee, paid by the buyer on top of the price.
         "secondary_fee_percent": float(settings.SECONDARY_MARKET_FEE_PERCENT),
+        # The full 2026-11 schedule (seller / buyer / platform / LP share per deal).
+        **fees.schedule(),
     }
 
 
@@ -108,6 +112,8 @@ def quote(prop: Property, token_amount: int) -> dict:
     )
     total = (Decimal(token_amount) * unit_price).quantize(Decimal("0.01"), ROUND_HALF_UP)
     fee_pct, fee, net = compute_fees(total)
+    from apps.secondary_market import fees
+
     return {
         "reference_price": reference,
         "discount_percent": discount,
@@ -116,6 +122,9 @@ def quote(prop: Property, token_amount: int) -> dict:
         "fee_percent": fee_pct,
         "fee": fee,
         "net": net,
+        # 2026-11: the buying LP's share of the seller's fee.
+        "lp_share_percent": fees.lp_share_pct(),
+        "lp_share": fees.lp_market(total)["lp_share"],
     }
 
 
@@ -299,6 +308,8 @@ def create_listing(*, user, data: dict) -> LPMarketListing:
             platform_fee_percent=q["fee_percent"],
             platform_fee_amount=q["fee"],
             net_amount=q["net"],
+            lp_fee_share_percent=q["lp_share_percent"],
+            lp_fee_share_amount=q["lp_share"],
             pricing=LPMarketListing.Pricing.PLATFORM,
             reference_price=q["reference_price"],
             discount_percent=q["discount_percent"],
@@ -516,6 +527,12 @@ def purchase_listing(*, buyer_user, listing_id) -> dict:
             purchase_price=total, current_value=total,
             status=LPHolding.Status.HELD,
         )
+        # The buying LP's share of the seller's fee (2026-11 schedule; 0 on older requests).
+        lp_accounting.book_fee_share(
+            user=lp.user, amount=listing.lp_fee_share_amount,
+            note=f"Share of the seller's fee on {listing.token_amount} {listing.token_symbol} "
+                 f"(LP market listing {listing.pk})",
+        )
         now = timezone.now()
         listing.status = LPMarketListing.Status.COMPLETED
         listing.lp = lp
@@ -561,8 +578,11 @@ def _plan_quote(plan, units: int, prop: Property, *, inv=None) -> dict:
     from apps.installments.split import part_figures
 
     q = quote(prop, units)
+    from apps.secondary_market import fees
+
     f = part_figures(plan, units, q["unit_price"], inv=inv, fee_percent=q["fee_percent"])
     return {**q, "cash": f["cash"], "fee": f["fee"], "net": f["seller_net"],
+            "lp_share": fees.lp_market(f["cash"])["lp_share"],
             "assumed_principal": f["remaining_principal"], "figures": f}
 
 
@@ -602,6 +622,8 @@ def create_plan_listing(*, user, plan_id, units) -> LPMarketListing:
             platform_fee_percent=q["fee_percent"],
             platform_fee_amount=q["fee"],
             net_amount=q["net"],
+            lp_fee_share_percent=q["lp_share_percent"],
+            lp_fee_share_amount=q["lp_share"],
             pricing=LPMarketListing.Pricing.PLATFORM,
             reference_price=q["reference_price"],
             discount_percent=q["discount_percent"],
@@ -631,9 +653,12 @@ def refresh_plan_listings(plan, *, closed: bool = False) -> None:
         listing.total_value = q["cash"]
         listing.platform_fee_amount = q["fee"]
         listing.net_amount = q["net"]
+        if Decimal(listing.lp_fee_share_percent):
+            listing.lp_fee_share_amount = q["lp_share"]
         listing.assumed_principal = q["assumed_principal"]
         listing.save(update_fields=[
-            "total_value", "platform_fee_amount", "net_amount", "assumed_principal", "updated_at",
+            "total_value", "platform_fee_amount", "net_amount", "lp_fee_share_amount",
+            "assumed_principal", "updated_at",
         ])
 
 
@@ -725,6 +750,13 @@ def _purchase_plan_part(listing: LPMarketListing, buyer_user) -> dict:
         token_amount=units, purchase_price=cash, current_value=cash,
         status=LPHolding.Status.HELD,
     )
+    if Decimal(listing.lp_fee_share_percent):
+        listing.lp_fee_share_amount = q["lp_share"]
+        lp_accounting.book_fee_share(
+            user=lp.user, amount=q["lp_share"],
+            note=f"Share of the seller's fee on {units} {listing.token_symbol} "
+                 f"(LP market listing {listing.pk})",
+        )
     now = timezone.now()
     listing.status = LPMarketListing.Status.COMPLETED
     listing.lp = lp

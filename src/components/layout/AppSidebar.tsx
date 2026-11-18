@@ -186,6 +186,7 @@ const menuSections: MenuSection[] = [
     items: [
       { titleKey: "nav.lpDashboard", icon: LayoutDashboard, href: "/liquidity-provider" },
       { titleKey: "nav.lpMarket", icon: Store, href: "/lp-market" },
+      { titleKey: "nav.lpAssets", icon: Building2, href: "/lp-assets" },
       { titleKey: "nav.lpOperations", icon: TrendingUp, href: "/liquidity-provider#operations" },
       { titleKey: "nav.lpReports", icon: BarChart3, href: "/liquidity-provider#reports" },
       { titleKey: "nav.lpDeposit", icon: ArrowDownToLine, href: "/liquidity-provider#deposits" },

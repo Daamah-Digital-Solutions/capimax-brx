@@ -7,6 +7,9 @@ open request on the property, and a request quoted at an older price is never fu
 
 Client example: 10 units at $105 → $1,050 − 3% = $1,018.50 − 2% fee ($20.37) = $998.13.
 """
+from django.test import override_settings
+
+from apps.secondary_market.tests import LEGACY_FEES  # rates before the 2026-11 schedule
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
@@ -31,6 +34,7 @@ def _price(prop, value):
     prop.refresh_from_db()
 
 
+@override_settings(**LEGACY_FEES)
 @mock.patch("apps.lp.market_services.chain_service.transfer", return_value=_FAKE_TRANSFER)
 class PlatformPricedExitTests(APITestCase):
     def setUp(self):
@@ -65,8 +69,10 @@ class PlatformPricedExitTests(APITestCase):
 
     def test_terms_are_published_with_the_market(self, m_transfer):
         terms = self.client.get("/api/lp/market/").data["exit_terms"]
-        self.assertEqual(terms, {"discount_percent": 3.0, "fee_percent": 2.0, "ttl_minutes": 1440,
-                                 "secondary_fee_percent": 1.0})
+        self.assertEqual({k: terms[k] for k in ("discount_percent", "fee_percent", "ttl_minutes",
+                                                 "secondary_fee_percent")},
+                         {"discount_percent": 3.0, "fee_percent": 2.0, "ttl_minutes": 1440,
+                          "secondary_fee_percent": 1.0})
 
     def test_funded_at_the_quote(self, m_transfer):
         lid = self._request().data["id"]

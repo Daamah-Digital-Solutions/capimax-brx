@@ -207,6 +207,9 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
     platform_fee_percent = serializers.FloatField(read_only=True)
     platform_fee_amount = _Money(read_only=True)
     net_amount = _Money(read_only=True)
+    # 2026-11: the buying LP's share of the seller's fee, paid into its LP balance on settlement.
+    lp_fee_share_percent = serializers.FloatField(read_only=True)
+    lp_fee_share_amount = _Money(read_only=True)
     # Decision 6: platform-priced exit request — the unit price it was quoted at, the
     # discount applied, and when it lapses ("seller" = a listing from before the rule).
     reference_price = _Money(read_only=True, allow_null=True)
@@ -236,6 +239,7 @@ class LPMarketListingSerializer(serializers.ModelSerializer):
             "id", "investor_id", "lp_id", "property_id", "property_name", "property_name_ar",
             "token_symbol", "token_amount", "unit_price", "total_value",
             "platform_fee_percent", "platform_fee_amount", "net_amount",
+            "lp_fee_share_percent", "lp_fee_share_amount",
             "pricing", "reference_price", "discount_percent", "expires_at", "status",
             "plan_id", "assumed_principal", "plan_schedule",
             "listed_at", "purchased_at", "completed_at", "cancelled_at", "notes",

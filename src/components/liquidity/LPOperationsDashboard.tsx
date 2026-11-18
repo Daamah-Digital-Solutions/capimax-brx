@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { LiquidityProvider, LPTransaction } from "@/hooks/useLiquidityProvider";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Wallet,
   TrendingUp,
@@ -29,6 +30,22 @@ export function LPOperationsDashboard({
   isRTL,
   showDetails = false,
 }: LPOperationsDashboardProps) {
+  const { language } = useLanguage();
+  // The LP statement lines by kind; "fee_share" is the LP's share of a deal's fees (2026-11).
+  const typeLabel = (type: string) => {
+    const ar = language === "ar";
+    const labels: Record<string, [string, string]> = {
+      deposit: ["Deposit", "إيداع"],
+      withdrawal: ["Withdrawal", "سحب"],
+      earning: ["Earning", "أرباح"],
+      purchase: ["Purchase", "شراء"],
+      sale: ["Sale", "بيع"],
+      fee_share: ["Fee share", "حصة من الرسوم"],
+    };
+    const l = labels[type];
+    return l ? l[ar ? 1 : 0] : type;
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -92,6 +109,7 @@ export function LPOperationsDashboard({
       case "withdrawal":
         return <ArrowUpRight className="w-4 h-4 text-orange-500" />;
       case "earning":
+      case "fee_share":
         return <TrendingUp className="w-4 h-4 text-blue-500" />;
       default:
         return <DollarSign className="w-4 h-4 text-muted-foreground" />;
@@ -198,7 +216,7 @@ export function LPOperationsDashboard({
                       {getTypeIcon(tx.tx_type)}
                     </div>
                     <div>
-                      <p className="font-medium capitalize">{tx.tx_type}</p>
+                      <p className="font-medium">{typeLabel(tx.tx_type)}</p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(tx.created_at).toLocaleDateString()}
                       </p>

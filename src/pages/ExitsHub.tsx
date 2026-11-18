@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRightLeft, Zap, Store, TrendingUp, XCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpExitFees, secondaryFees } from "@/lib/feeTexts";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -143,8 +144,8 @@ export default function ExitsHub() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               {isAr
-                ? `تنفيذ فوري · سعر الوحدة −${pct(terms.discount_percent)} · رسوم ${pct(terms.fee_percent)} · تحويل خلال دقائق`
-                : `Instant fill · unit price −${pct(terms.discount_percent)} · ${pct(terms.fee_percent)} fee · settlement in minutes`}
+                ? `تنفيذ فوري · ${lpExitFees(terms, true)} · تحويل خلال دقائق`
+                : `Instant fill · ${lpExitFees(terms, false)} · settlement in minutes`}
             </CardContent>
           </Card>
           <Card className="border-accent/20">
@@ -156,8 +157,8 @@ export default function ExitsHub() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               {isAr
-                ? `أعلى عائد محتمل · رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري · بانتظار مشتري`
-                : `Higher net proceeds · ${pct(terms.secondary_fee_percent)} fee paid by the buyer · awaits a buyer`}
+                ? `أعلى عائد محتمل · ${secondaryFees(terms, true)} · بانتظار مشتري`
+                : `Higher net proceeds · ${secondaryFees(terms, false)} · awaits a buyer`}
             </CardContent>
           </Card>
         </div>

@@ -6,6 +6,7 @@ Client example A: 10 units at $100 = $1,000, $200 paid, the price rises to $110 
 position value $1,100, remaining $800, the buyer pays the seller $300 (+ 1% fee = $3) and
 takes over the remaining $800 of installments.
 """
+from django.test import override_settings
 from decimal import Decimal
 
 from django.test import TestCase
@@ -56,6 +57,15 @@ def _rows(plan):
     return list(plan.payments.order_by("sequence"))
 
 
+
+# These tests cover the settlement mechanics; they pin the fee rates in force before the
+# 2026-11 schedule (apps/secondary_market/fees.py is tested in apps/secondary_market/tests_fees.py).
+LEGACY_FEES = dict(
+    SECONDARY_MARKET_FEE_PERCENT=1.0, SECONDARY_MARKET_SELLER_FEE_PERCENT=0.0,
+    LP_MARKET_FEE_PERCENT=2.0, LP_FEE_SHARE_PERCENT=0.0, LP_EXIT_DISCOUNT_PERCENT=3.0,
+)
+
+@override_settings(**LEGACY_FEES)
 class PositionListingTests(TestCase):
     def setUp(self):
         self.prop = _prop("pos-a")
@@ -139,6 +149,7 @@ class PositionListingTests(TestCase):
         self.assertEqual(_token(self.seller, self.prop).locked_amount, 0)
 
 
+@override_settings(**LEGACY_FEES)
 class PositionPurchaseTests(TestCase):
     def setUp(self):
         self.prop = _prop("pos-b")
@@ -251,6 +262,7 @@ class PositionPurchaseTests(TestCase):
         self.assertEqual(view["equity"], 410.0)
 
 
+@override_settings(**LEGACY_FEES)
 class PositionApiTests(APITestCase):
     def setUp(self):
         self.prop = _prop("pos-api")

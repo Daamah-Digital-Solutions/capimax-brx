@@ -65,6 +65,7 @@ import PlatformRules from "./pages/PlatformRules";
 import WhitePaper from "./pages/WhitePaper";
 import VerifyCertificate from "./pages/VerifyCertificate";
 import LiquidityProvider from "./pages/LiquidityProvider";
+import LPAssets from "./pages/LPAssets";
 import FamilyInvestment from "./pages/FamilyInvestment";
 import LPMarket from "./pages/LPMarket";
 import Reinvestment from "./pages/Reinvestment";
@@ -174,6 +175,7 @@ const App = () => (
           <Route path="/liquidity-provider" element={<LiquidityProvider />} />
           <Route path="/family-investment" element={<FamilyInvestment />} />
           <Route path="/lp-market" element={<LPMarket />} />
+          <Route path="/lp-assets" element={<LPAssets />} />
           <Route path="/exits-hub" element={<ExitsHub />} />
           <Route path="/institutional" element={<InstitutionalPackages />} />
           <Route path="/developers" element={<DeveloperHub />} />

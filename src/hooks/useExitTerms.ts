@@ -3,7 +3,16 @@ import { lpApi, type ExitTerms } from "@/integrations/api/client";
 
 // The exit fees the pages quote come from the server (apps/lp exit_terms), so the text always
 // matches what is charged. The fallback is the server's default, shown until the answer lands.
-const FALLBACK: ExitTerms = { discount_percent: 3, fee_percent: 2, ttl_minutes: 1440, secondary_fee_percent: 1 };
+const FALLBACK: ExitTerms = {
+  discount_percent: 0,
+  fee_percent: 1.5,
+  ttl_minutes: 1440,
+  secondary_fee_percent: 1.5,
+  secondary_buyer_fee_percent: 1.5,
+  secondary_seller_fee_percent: 0.5,
+  lp_market_seller_fee_percent: 1.5,
+  lp_fee_share_percent: 0.5,
+};
 
 let cached: ExitTerms | null = null;
 let pending: Promise<ExitTerms> | null = null;

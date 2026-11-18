@@ -19,6 +19,7 @@ import {
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpSellerPct, secondarySellerPct } from "@/lib/feeTexts";
 
 export default function Fees() {
   const { t, isRTL } = useLanguage();
@@ -56,8 +57,8 @@ export default function Fees() {
     {
       name: t("fees.exitFee"),
       nameEn: "Exit Fee",
-      // Secondary market (paid by the buyer) – LP market (after its price discount).
-      rate: `${pct(terms.secondary_fee_percent)} – ${pct(terms.fee_percent)}`,
+      // Seller's fee: secondary market – LP market (2026-11 schedule; the buyer's side is below).
+      rate: `${pct(secondarySellerPct(terms))} – ${pct(lpSellerPct(terms))}`,
       description: t("fees.exitFeeDesc"),
       category: "investor",
     },

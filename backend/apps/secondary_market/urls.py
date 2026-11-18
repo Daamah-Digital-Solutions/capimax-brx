@@ -2,6 +2,7 @@
 from django.urls import path
 
 from .views import (
+    SecondaryMarketFeePreviewView,
     SecondaryMarketCancelView,
     SecondaryMarketPlanPartQuoteView,
     SecondaryMarketPositionView,
@@ -14,6 +15,7 @@ app_name = "secondary_market"
 
 urlpatterns = [
     path("", SecondaryMarketView.as_view(), name="secondary-market"),
+    path("fee-preview/", SecondaryMarketFeePreviewView.as_view(), name="secondary-market-fee-preview"),
     path("positions/", SecondaryMarketPositionView.as_view(), name="secondary-market-positions"),
     path("trades/", SecondaryMarketTradesView.as_view(), name="secondary-market-trades"),
     path("<uuid:listing_id>/cancel/", SecondaryMarketCancelView.as_view(), name="secondary-market-cancel"),

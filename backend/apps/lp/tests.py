@@ -65,6 +65,14 @@ _KYB = {
 # --------------------------------------------------------------------------- #
 # Apply + profile
 # --------------------------------------------------------------------------- #
+
+# These tests cover the settlement mechanics; they pin the fee rates in force before the
+# 2026-11 schedule (apps/secondary_market/fees.py is tested in apps/secondary_market/tests_fees.py).
+LEGACY_FEES = dict(
+    SECONDARY_MARKET_FEE_PERCENT=1.0, SECONDARY_MARKET_SELLER_FEE_PERCENT=0.0,
+    LP_MARKET_FEE_PERCENT=2.0, LP_FEE_SHARE_PERCENT=0.0, LP_EXIT_DISCOUNT_PERCENT=3.0,
+)
+
 class LPApplyTests(APITestCase):
     def test_get_profile_404_when_none(self):
         user = _mk_user()
@@ -423,6 +431,7 @@ def _approved_lp_buyer(email, balance):
     return user, lp
 
 
+@override_settings(**LEGACY_FEES)
 class LPMarketListingEscrowTests(APITestCase):
     def setUp(self):
         self.prop = _deployed_property()
@@ -495,6 +504,7 @@ class LPMarketListingEscrowTests(APITestCase):
         self.assertEqual(resp.data["net_amount"], 495.0)
 
 
+@override_settings(**LEGACY_FEES)
 @mock.patch("apps.lp.market_services.chain_service.transfer", return_value=_FAKE_TRANSFER)
 class LPMarketPurchaseTests(APITestCase):
     def setUp(self):
@@ -593,6 +603,7 @@ class LPMarketPurchaseTests(APITestCase):
         m_transfer.assert_not_called()
 
 
+@override_settings(**LEGACY_FEES)
 class LPMarketVisibilityTests(APITestCase):
     def test_inventory_visible_only_to_approved_lps(self):
         prop = _deployed_property()

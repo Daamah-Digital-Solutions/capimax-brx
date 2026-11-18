@@ -116,8 +116,8 @@ export function InvestorAssetsView({
       : 0;
   // Decision 6: the platform quotes the exit — today's unit price minus the discount, then
   // the liquidity fee is deducted (the server recomputes the same figures).
-  const discountPct = exitTerms?.discount_percent ?? 3;
-  const liquidityFeePct = exitTerms?.fee_percent ?? 2;
+  const discountPct = exitTerms?.discount_percent ?? 0;
+  const liquidityFeePct = exitTerms?.fee_percent ?? 1.5;
   const ttlHours = Math.round((exitTerms?.ttl_minutes ?? 1440) / 60);
   const quotePrice = Math.round(unitPrice * (100 - discountPct)) / 100;
   const sellUnits = parseFloat(sellAmount) || 0;
@@ -239,8 +239,8 @@ export function InvestorAssetsView({
               </p>
               <p className="text-sm text-muted-foreground">
                 {language === "ar"
-                  ? "عند إدراج أصولك، ستكون متاحة لمزودي السيولة المعتمدين للشراء الفوري. رسوم المنصة 1% فقط."
-                  : "When you list your assets, they become available to approved LPs for instant purchase. Platform fee is only 1%."}
+                  ? `عند إدراج أصولك، ستكون متاحة لمزودي السيولة المعتمدين للشراء الفوري بسعر الوحدة الحالي، مع رسوم ${liquidityFeePct}% على البائع تُخصم من المبلغ.`
+                  : `When you list your assets, they become available to approved LPs for instant purchase at the current unit price, with a ${liquidityFeePct}% seller fee taken from the amount.`}
               </p>
             </div>
           </div>
@@ -498,16 +498,20 @@ export function InvestorAssetsView({
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
-                        {language === "ar"
-                          ? `سعر السيولة (خصم ${discountPct}%) × ${sellUnits}`
-                          : `Liquidity price (−${discountPct}%) × ${sellUnits}`}
+                        {discountPct > 0
+                          ? language === "ar"
+                            ? `سعر السيولة (خصم ${discountPct}%) × ${sellUnits}`
+                            : `Liquidity price (−${discountPct}%) × ${sellUnits}`
+                          : language === "ar"
+                            ? `قيمة الحصص (${sellUnits} × سعر الوحدة)`
+                            : `Value of the units (${sellUnits} × unit price)`}
                       </span>
                       <span className="font-medium">${quoteTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <Percent className="h-3 w-3" />
-                        {language === "ar" ? `رسوم السيولة (${liquidityFeePct}%)` : `Liquidity fee (${liquidityFeePct}%)`}
+                        {language === "ar" ? `رسوم البائع (${liquidityFeePct}%)` : `Seller fee (${liquidityFeePct}%)`}
                       </span>
                       <span className="text-destructive">
                         -${quoteFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}

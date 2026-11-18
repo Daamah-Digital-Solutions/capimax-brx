@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpSharePct } from "@/lib/feeTexts";
 
 type RoleId =
   | "investor"
@@ -144,12 +145,12 @@ const ROLES: RoleDef[] = [
     taglineEn: "Provide capital, earn from market flow",
     taglineAr: "وفّر رأس المال واكسب من حركة السوق",
     bulletsEn: [
-      "Buy from the LP Market at {lp} below the unit price",
+      "Buy from the LP Market with no buying fee, and earn {lp} of each deal from the seller's fee",
       "Institutional onboarding (KYB)",
       "Bank, IBAN, or crypto settlement",
     ],
     bulletsAr: [
-      "الشراء من سوق LP بسعر أقل من سعر الوحدة بـ {lp}",
+      "الشراء من سوق LP دون رسوم شراء، مع {lp} من قيمة كل صفقة من رسوم البائع",
       "تأهيل مؤسسي (KYB)",
       "تسوية بنكية أو IBAN أو عملات رقمية",
     ],
@@ -356,7 +357,7 @@ export default function RegisterRole() {
 
                 {/* Bullets */}
                 <ul className="space-y-2 mb-5">
-                  {(language === "ar" ? role.bulletsAr : role.bulletsEn).map((b) => b.replace("{lp}", pct(terms.discount_percent))).map(
+                  {(language === "ar" ? role.bulletsAr : role.bulletsEn).map((b) => b.replace("{lp}", pct(lpSharePct(terms)))).map(
                     (b, i) => (
                       <li
                         key={i}

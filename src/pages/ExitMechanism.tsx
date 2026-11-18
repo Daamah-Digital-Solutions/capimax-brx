@@ -18,6 +18,7 @@ import {
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpFeesShort, secondaryFeesShort } from "@/lib/feeTexts";
 
 export default function ExitMechanism() {
   const { isRTL } = useLanguage();
@@ -111,7 +112,7 @@ export default function ExitMechanism() {
                 </div>
               </div>
               <Badge variant="outline" className="text-lg font-bold px-4 py-2 border-primary/30">
-                {pct(terms.fee_percent)} {isRTL ? "رسوم" : "Fee"}
+                {lpFeesShort(terms, isRTL)}
               </Badge>
             </div>
           </CardHeader>
@@ -193,7 +194,7 @@ export default function ExitMechanism() {
                 </div>
               </div>
               <Badge variant="outline" className="text-lg font-bold px-4 py-2 border-emerald-500/30 text-emerald-600">
-                {pct(terms.secondary_fee_percent)} {isRTL ? "رسوم" : "Fee"}
+                {secondaryFeesShort(terms, isRTL)}
               </Badge>
             </div>
           </CardHeader>
@@ -283,15 +284,15 @@ export default function ExitMechanism() {
                       {isRTL ? "الرسوم" : "Fee"}
                     </td>
                     <td className="py-3 px-4 text-center font-semibold text-foreground">
-                      {pct(terms.fee_percent)}
+                      {lpFeesShort(terms, isRTL)}
                       <span className="block text-xs font-normal text-muted-foreground">
-                        {isRTL ? `بسعر أقل من سعر الوحدة بـ ${pct(terms.discount_percent)}` : `at ${pct(terms.discount_percent)} below the unit price`}
+                        {isRTL ? "بسعر الوحدة الحالي، والمشتري لا يدفع رسومًا" : "at the current unit price; the buyer pays no fee"}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center font-semibold text-emerald-500">
-                      {pct(terms.secondary_fee_percent)}
+                      {secondaryFeesShort(terms, isRTL)}
                       <span className="block text-xs font-normal text-muted-foreground">
-                        {isRTL ? "يدفعها المشتري" : "paid by the buyer"}
+                        {isRTL ? "على قيمة الحصص المبيعة" : "of the value of the units sold"}
                       </span>
                     </td>
                   </tr>

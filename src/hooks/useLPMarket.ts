@@ -25,6 +25,9 @@ export interface LPMarketListing {
   platform_fee_percent: number;
   platform_fee_amount: number;
   net_amount: number;
+  /** 2026-11: the buying LP's share of the seller's fee, paid into the LP balance on settlement. */
+  lp_fee_share_percent?: number;
+  lp_fee_share_amount?: number;
   // Decision 6: "platform" = an exit request priced by the platform (current unit price
   // minus the discount) that lapses at expires_at; "seller" = a listing from before the rule.
   pricing?: "platform" | "seller";

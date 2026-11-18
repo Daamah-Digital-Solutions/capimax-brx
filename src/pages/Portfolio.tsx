@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpSellerPct, secondarySellerPct } from "@/lib/feeTexts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -391,14 +392,14 @@ export default function Portfolio() {
                                           <Link to={`/secondary-market?asset=${holding.id}`}>
                                             <TrendingUp className="w-4 h-4 mr-2" />
                                             {t("portfolio.sellSecondary")}
-                                            <span className="ml-auto text-xs text-muted-foreground">{pct(exitTerms.secondary_fee_percent)}</span>
+                                            <span className="ml-auto text-xs text-muted-foreground">{pct(secondarySellerPct(exitTerms))}</span>
                                           </Link>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem asChild>
                                           <Link to={`/lp-market?asset=${holding.id}`}>
                                             <Coins className="w-4 h-4 mr-2" />
                                             {language === "ar" ? "بيع فوري (LP)" : "Instant Sale (LP)"}
-                                            <span className="ml-auto text-xs text-muted-foreground">{pct(exitTerms.fee_percent)}</span>
+                                            <span className="ml-auto text-xs text-muted-foreground">{pct(lpSellerPct(exitTerms))}</span>
                                           </Link>
                                         </DropdownMenuItem>
                                       </>

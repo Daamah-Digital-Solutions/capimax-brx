@@ -4,6 +4,7 @@ back to the LP balance with the profit as earnings, the LP units' rental returns
 holdings are valued at today's unit price, "sold" is set only by a real sale, and the public
 exit terms carry the real fees.
 """
+from django.test import override_settings
 from decimal import Decimal
 from unittest import mock
 
@@ -25,8 +26,18 @@ def _wallet(user):
     return b.current_balance if b else Decimal("0")
 
 
+
+# These tests cover the settlement mechanics; they pin the fee rates in force before the
+# 2026-11 schedule (apps/secondary_market/fees.py is tested in apps/secondary_market/tests_fees.py).
+LEGACY_FEES = dict(
+    SECONDARY_MARKET_FEE_PERCENT=1.0, SECONDARY_MARKET_SELLER_FEE_PERCENT=0.0,
+    LP_MARKET_FEE_PERCENT=2.0, LP_FEE_SHARE_PERCENT=0.0, LP_EXIT_DISCOUNT_PERCENT=3.0,
+)
+
+
 @mock.patch("apps.secondary_market.services.chain_service.transfer", return_value=_FAKE_TRANSFER)
 @mock.patch("apps.lp.market_services.chain_service.transfer", return_value=_FAKE_TRANSFER)
+@override_settings(**LEGACY_FEES)
 class LPBookTests(APITestCase):
     def setUp(self):
         self.prop = _deployed_property("book-1")  # unit price $100
@@ -183,7 +194,8 @@ class LPBookTests(APITestCase):
 
     def test_public_exit_terms(self, *_m):
         self.client.force_authenticate(None)
-        self.assertEqual(self.client.get("/api/lp/exit-terms/").json(), {
-            "discount_percent": 3.0, "fee_percent": 2.0, "ttl_minutes": 1440,
-            "secondary_fee_percent": 1.0,
-        })
+        terms = self.client.get("/api/lp/exit-terms/").json()
+        self.assertEqual(
+            {k: terms[k] for k in ("discount_percent", "fee_percent", "ttl_minutes", "secondary_fee_percent")},
+            {"discount_percent": 3.0, "fee_percent": 2.0, "ttl_minutes": 1440, "secondary_fee_percent": 1.0},
+        )

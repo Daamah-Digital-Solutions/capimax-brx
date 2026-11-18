@@ -22,6 +22,11 @@ export interface SecondaryListing {
   unit_price: number;
   total_value: number;
   platform_fee_percent: number;
+  /** 2026-11 fee schedule: the seller's own fee, the LP units sold and the LP's share. */
+  seller_fee_percent?: number;
+  seller_fee_amount?: number;
+  lp_units?: number;
+  lp_fee_share_amount?: number;
   platform_fee_amount: number;
   net_amount: number;
   // Decision 5: the buyer pays the resale fee on top; older rows were seller-paid.

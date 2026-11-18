@@ -58,7 +58,7 @@ export function LPAnalyticsCharts({ lpProfile, transactions, isRTL }: LPAnalytic
       if (monthlyData[key]) {
         if (tx.tx_type === "deposit") {
           monthlyData[key].deposits += tx.amount;
-        } else if (tx.tx_type === "earning") {
+        } else if (tx.tx_type === "earning" || tx.tx_type === "fee_share") {
           monthlyData[key].earnings += tx.amount;
         }
       }

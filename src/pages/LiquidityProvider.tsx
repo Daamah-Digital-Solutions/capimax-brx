@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { LPFeeBenefitsCard } from "@/components/liquidity/LPFeeBenefitsCard";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -348,7 +349,9 @@ export default function LiquidityProvider() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="mt-6">
+            <TabsContent value="overview" className="mt-6 space-y-6">
+              {/* How the LP gains from the fee schedule (client fee document, 2026-11). */}
+              <LPFeeBenefitsCard />
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                   <LPOperationsDashboard

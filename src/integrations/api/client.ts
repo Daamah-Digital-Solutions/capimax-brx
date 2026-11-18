@@ -1034,7 +1034,30 @@ export interface PayoutOptions {
 // Investor PEER secondary market (Phase 6 Wave 3) — one-shot listings, on-chain
 // settlement server-side. SPEC §2.8/§3.9. (NOT the bid/ask order book — deferred.)
 // --------------------------------------------------------------------------- //
+/** The fees and net for each side of a secondary sale (GET /secondary-market/fee-preview/). */
+export interface SecondaryFeePreview {
+  total: number;
+  units: number;
+  lp_units: number;
+  lp_value: number;
+  buyer_fee_percent: number;
+  buyer_fee: number;
+  buyer_total: number;
+  seller_fee_percent: number;
+  seller_fee: number;
+  seller_net: number;
+  lp_share_percent: number;
+  lp_share: number;
+  platform: number;
+}
+
 export const secondaryMarketApi = {
+  /** What selling `units` at `price` means for each side now (2026-11 fee schedule). */
+  feePreview: (propertyId: string, units: number, price: number) =>
+    rawRequest(
+      `/secondary-market/fee-preview/?property_id=${encodeURIComponent(propertyId)}&units=${units}&price=${price}`,
+      { auth: true },
+    ) as Promise<SecondaryFeePreview>,
   /** Browse: `my_listings` (own) + `listings` (others' listed inventory) + the resale fee %
    *  (paid by the buyer on top of the price). */
   market: () =>
@@ -1181,6 +1204,13 @@ export interface ExitTerms {
   fee_percent: number;
   ttl_minutes: number;
   secondary_fee_percent: number;
+  // The 2026-11 fee schedule (apps/secondary_market/fees.py).
+  secondary_buyer_fee_percent?: number;
+  secondary_seller_fee_percent?: number;
+  lp_market_seller_fee_percent?: number;
+  lp_fee_share_percent?: number;
+  platform_secondary_percent?: number;
+  platform_lp_percent?: number;
 }
 
 export const lpApi = {

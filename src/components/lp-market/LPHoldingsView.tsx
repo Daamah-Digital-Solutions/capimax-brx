@@ -44,7 +44,7 @@ interface LPHoldingsViewProps {
     totalInvested: number;
     listedCount: number;
   };
-  onResale: (holdingId: string, target: "lp" | "secondary", price: number) => Promise<{ success: boolean; error?: string }>;
+  onResale: (holdingId: string, target: "lp" | "secondary", price: number, units: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 export function LPHoldingsView({

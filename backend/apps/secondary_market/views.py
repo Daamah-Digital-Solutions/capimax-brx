@@ -10,6 +10,8 @@ Peer secondary-market API — Phase 6 Wave 3 (SPEC §2.8 / §3.9).
   POST /api/secondary-market/positions/   List a whole installment plan as one position
                                           { plan_id, price_per_unit? } (off-plan §6), or part
                                           of it { plan_id, units, price_per_unit? }.
+  GET  /api/secondary-market/fee-preview/?property_id=&units=&price=  The fees and net for each
+                                          side of selling those units now (2026-11 schedule).
   GET  /api/secondary-market/{id}/plan-part/?units=N  What buying N units of a part listing
                                           costs now and the installments that come with them.
 
@@ -47,6 +49,7 @@ class SecondaryMarketView(APIView):
             "listings": SecondaryMarketListingSerializer(market, many=True).data,
             # Resale fee %, paid by the buyer on top of the price.
             "fee_percent": float(settings.SECONDARY_MARKET_FEE_PERCENT),
+            "seller_fee_percent": float(settings.SECONDARY_MARKET_SELLER_FEE_PERCENT),
         })
 
     def post(self, request):
@@ -132,3 +135,34 @@ class SecondaryMarketTradesView(APIView):
             status=SecondaryMarketListing.Status.COMPLETED,
         )
         return Response(SecondaryMarketListingSerializer(trades, many=True).data)
+
+
+class SecondaryMarketFeePreviewView(APIView):
+    """
+    What selling `units` of a property at `price` would mean for each side right now (2026-11
+    fee schedule, fees.secondary): the units' value, the buyer's fee and total, the seller's fee
+    and net, and — when the caller is an LP selling its LP-market units — the LP's share. The
+    listing is priced with the same function, so the preview equals what is booked.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from decimal import Decimal, InvalidOperation
+
+        from apps.lp import accounting as lp_accounting
+
+        from . import fees
+
+        slug = request.query_params.get("property_id") or ""
+        try:
+            units = int(request.query_params.get("units") or 0)
+            price = Decimal(request.query_params.get("price") or "0")
+        except (ValueError, InvalidOperation):
+            return Response({"detail": "Invalid units or price."}, status=status.HTTP_400_BAD_REQUEST)
+        if not slug or units < 1 or price <= 0:
+            return Response({"detail": "property_id, units and price are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        lp_units = min(units, lp_accounting.lp_units_held(request.user, slug))
+        split = fees.secondary(Decimal(units) * price, units, lp_units)
+        return Response({k: (float(v) if isinstance(v, Decimal) else v) for k, v in split.items()})

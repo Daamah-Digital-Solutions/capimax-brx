@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpExitFees, lpFeesShort, secondaryFeesShort } from "@/lib/feeTexts";
 
 interface ExitOptionsCardProps {
   assetId?: string;
@@ -60,7 +61,7 @@ export function ExitOptionsCard({
       description: language === "ar" 
         ? "أدرج أصولك للبيع للمستثمرين الآخرين بالسعر الذي تحدده"
         : "List your assets for sale to other investors at your chosen price",
-      fee: pct(terms.secondary_fee_percent),
+      fee: secondaryFeesShort(terms, language === "ar"),
       feeLabel: language === "ar" ? "رسوم" : "Fee",
       icon: TrendingUp,
       href: assetId ? `/secondary-market?asset=${assetId}` : "/secondary-market",
@@ -77,9 +78,9 @@ export function ExitOptionsCard({
       id: "lp",
       title: language === "ar" ? "بيع فوري عبر مزود السيولة" : "Instant Sale via LP",
       description: language === "ar"
-        ? `بع أصولك فوراً بسعر المنصة (أقل من سعر الوحدة بـ ${pct(terms.discount_percent)}) مع سيولة مضمونة`
-        : `Sell your assets instantly at the platform price (${pct(terms.discount_percent)} below the unit price) with guaranteed liquidity`,
-      fee: pct(terms.fee_percent),
+        ? `بع أصولك فوراً لمزود السيولة ${lpExitFees(terms, true)}، مع سيولة مضمونة`
+        : `Sell your assets instantly to a liquidity provider ${lpExitFees(terms, false)}, with guaranteed liquidity`,
+      fee: lpFeesShort(terms, language === "ar"),
       feeLabel: language === "ar" ? "رسوم" : "Fee",
       icon: Coins,
       href: assetId ? `/lp-market?asset=${assetId}` : "/lp-market",

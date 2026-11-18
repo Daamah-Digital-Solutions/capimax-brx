@@ -74,7 +74,7 @@ export default function LPMarket() {
   }, [isApprovedLP, preselectedAssetId]);
 
   // Handle resale from LP holdings
-  const handleResale = async (holdingId: string, target: "lp" | "secondary", price: number) => {
+  const handleResale = async (holdingId: string, target: "lp" | "secondary", price: number, units: number) => {
     if (!lpProfile) {
       return { success: false, error: "LP profile required" };
     }
@@ -89,8 +89,9 @@ export default function LPMarket() {
         property_id: holding.property_id,
         property_name: holding.property_name,
         token_symbol: holding.token_symbol,
-        token_amount: holding.token_amount,
-        unit_price: price / holding.token_amount,
+        // The units typed in the form (it used to list the whole holding whatever was typed).
+        token_amount: Math.min(holding.token_amount, Math.max(1, units || holding.token_amount)),
+        unit_price: Math.round((price / Math.min(holding.token_amount, Math.max(1, units || holding.token_amount))) * 100) / 100,
       };
       // Both markets escrow-lock the LP's tokens server-side + compute the
       // (backend-configurable) fee — see the server's exit terms.

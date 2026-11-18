@@ -773,6 +773,10 @@ class PlanPartPreviewView(APIView):
                 "feePercent": money(market["fee_percent"]),
                 "buyerFee": money(market["fee"]),
                 "buyerTotal": money(market["buyer_total"]),
+                # 2026-11: the seller pays its own fee out of the cash.
+                "sellerFeePercent": money(_seller_split(market["cash"], units)["seller_fee_percent"]),
+                "sellerFee": money(_seller_split(market["cash"], units)["seller_fee"]),
+                "sellerNet": money(_seller_split(market["cash"], units)["seller_net"]),
             },
             "lp": {
                 "pricePerUnit": money(lp["unit_price"]),
@@ -784,6 +788,12 @@ class PlanPartPreviewView(APIView):
             },
             "transfer": {"valuePerUnit": money(holder_entry_price(plan, inv))},
         })
+
+
+def _seller_split(cash, units):
+    from apps.secondary_market import fees
+
+    return fees.plan_sale(cash, units)
 
 
 def holder_entry_price(plan, inv) -> Decimal:

@@ -332,6 +332,10 @@ class LPMarketListing(models.Model):
     platform_fee_percent = models.DecimalField(max_digits=6, decimal_places=3, default=1)
     platform_fee_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     net_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    # The buying LP's share of the seller's fee (apps/secondary_market/fees.py), paid into its
+    # LP balance when the deal settles. 0 on requests made before the 2026-11 fee schedule.
+    lp_fee_share_percent = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    lp_fee_share_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     pricing = models.CharField(max_length=10, choices=Pricing.choices, default=Pricing.PLATFORM)
     # The unit price the quote was made at, the discount applied, and when it lapses.
     reference_price = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)

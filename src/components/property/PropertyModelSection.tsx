@@ -1,5 +1,6 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpExitFees, secondaryFees } from "@/lib/feeTexts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -177,13 +178,11 @@ export function PropertyModelSection({ property }: PropertyModelSectionProps) {
     text
       .replace(
         "{lp}",
-        isAr
-          ? `بسعر أقل من سعر الوحدة بـ ${pct(terms.discount_percent)} ثم رسوم ${pct(terms.fee_percent)}`
-          : `${pct(terms.discount_percent)} below the unit price, then a ${pct(terms.fee_percent)} fee`,
+        lpExitFees(terms, isAr),
       )
       .replace(
         "{sec}",
-        isAr ? `رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري` : `${pct(terms.secondary_fee_percent)} fee paid by the buyer`,
+        secondaryFees(terms, isAr),
       );
   const meta = propertyModelMeta[property.model];
   const copy = educationalCopy[property.model];

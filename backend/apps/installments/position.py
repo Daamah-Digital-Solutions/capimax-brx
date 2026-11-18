@@ -6,6 +6,8 @@ Off-plan model §6 — an active installment plan valued (and sold) as ONE posit
     cash to seller  = position value − remaining      (never below 0: an under-water
                                                        position is worth 0, not a debt)
     resale fee      = SECONDARY_MARKET_FEE_PERCENT of the cash, paid by the BUYER on top
+    seller's fee    = SECONDARY_MARKET_SELLER_FEE_PERCENT of the cash, out of the seller's cash
+                      (2026-11 fee schedule, apps/secondary_market/fees.py)
 
 The installment fee the seller already paid is not refunded: "paid" means principal only.
 Every holder is measured from their OWN entry price (the plan price for whoever started it,
@@ -68,7 +70,12 @@ def position_figures(plan, price_per_unit, *, inv=None) -> dict:
     cash = max(Decimal("0"), _q(value - remaining))
     pct = resale_fee_percent()
     fee = _q(cash * pct / Decimal("100"))
+    seller_pct = Decimal(str(getattr(settings, "SECONDARY_MARKET_SELLER_FEE_PERCENT", 0)))
+    seller_fee = _q(cash * seller_pct / Decimal("100"))
     return {
+        "seller_fee_percent": seller_pct,
+        "seller_fee": seller_fee,
+        "seller_net": _q(cash - seller_fee),
         "units": units,
         "price_per_unit": price,
         "position_value": value,
@@ -156,6 +163,7 @@ def holder_view(plan, current_price, inv=None) -> dict:
         "gain": float(gain),
         "acquiredAt": acquired_at.isoformat() if acquired_at else None,
         "feePercent": float(figures["fee_percent"]),
+        "sellerFeePercent": float(figures["seller_fee_percent"]),
         "blocked": None if whole else block_reason(plan, inv, figures),
         "listingId": str(listing.pk) if listing else None,
         "listingPrice": float(listing.unit_price) if listing else None,

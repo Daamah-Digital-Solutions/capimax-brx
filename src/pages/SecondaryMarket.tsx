@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { secondaryMarketApi, type SecondaryFeePreview } from "@/integrations/api/client";
 import { useSearchParams } from "react-router-dom";
 import { localName } from "@/lib/propertyLabels";
 import {
@@ -78,6 +79,27 @@ export default function SecondaryMarket() {
   const [sellUnits, setSellUnits] = useState(1);
   const [sellPrice, setSellPrice] = useState(100);
   const [submitting, setSubmitting] = useState(false);
+  // The server's figures for this sale (fees.secondary) — what the listing will book.
+  const [preview, setPreview] = useState<SecondaryFeePreview | null>(null);
+  // A plain listing the buyer is about to buy: shown with its value, fee and total first.
+  const [confirmBuy, setConfirmBuy] = useState<(typeof listings)[0] | null>(null);
+  useEffect(() => {
+    if (!selectedToken || sellUnits < 1 || sellPrice <= 0) {
+      setPreview(null);
+      return;
+    }
+    let alive = true;
+    const id = setTimeout(() => {
+      secondaryMarketApi
+        .feePreview(selectedToken.property_id, sellUnits, sellPrice)
+        .then((p) => alive && setPreview(p))
+        .catch(() => alive && setPreview(null));
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
+  }, [selectedToken, sellUnits, sellPrice]);
 
   // Withdraw-modal state
   const [wdAmount, setWdAmount] = useState("");
@@ -107,7 +129,12 @@ export default function SecondaryMarket() {
       return;
     }
     // Enough proceeds balance → settle straight from balance (unchanged path). The buyer pays
-    // the price + the resale fee (buyer_total).
+    // the price + the resale fee (buyer_total). A plain listing is confirmed first.
+    if (balance >= listing.buyer_total && !listing.is_position && confirmBuy?.id !== listing.id) {
+      setConfirmBuy(listing);
+      return;
+    }
+    setConfirmBuy(null);
     if (balance >= listing.buyer_total) {
       setBuyingId(listing.id);
       const res = await buyListing(listing);
@@ -161,10 +188,7 @@ export default function SecondaryMarket() {
     }
   };
 
-  // Decision 5: the buyer pays the resale fee on top; the seller receives the full price
-  // (display; the server is the source of truth).
-  const fee = (sellUnits * sellPrice) * feePercent / 100;
-  const youReceive = sellUnits * sellPrice;
+  const money = (n: number) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <MainLayout>
@@ -553,21 +577,43 @@ export default function SecondaryMarket() {
 
                 <div className="p-4 bg-muted rounded-xl space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{isAr ? "الإجمالي" : "Total"}</span>
-                    <span className="font-semibold" dir="ltr">${(sellUnits * sellPrice).toLocaleString()}</span>
+                    <span className="text-muted-foreground">{isAr ? "قيمة الحصص" : "Value of the units"}</span>
+                    <span className="font-semibold" dir="ltr">{money(preview?.total ?? sellUnits * sellPrice)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {isAr
-                        ? `رسوم إعادة البيع (${feePercent}%) — يدفعها المشتري`
-                        : `Resale fee (${feePercent}%) — paid by the buyer`}
-                    </span>
-                    <span className="text-muted-foreground" dir="ltr">${fee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-border">
-                    <span className="font-medium">{isAr ? "ستستلم" : "You Receive"}</span>
-                    <span className="font-bold text-success" dir="ltr">${youReceive.toFixed(2)}</span>
-                  </div>
+                  {preview && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {preview.lp_units > 0 && preview.lp_units === preview.units
+                            ? isAr ? "رسوم البائع (معفاة لحصص مزود السيولة)" : "Seller fee (none on your LP units)"
+                            : isAr ? `رسوم البائع (${preview.seller_fee_percent}%)` : `Seller fee (${preview.seller_fee_percent}%)`}
+                        </span>
+                        <span className="text-destructive" dir="ltr">−{money(preview.seller_fee)}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-border">
+                        <span className="font-medium">{isAr ? "ستستلم" : "You receive"}</span>
+                        <span className="font-bold text-success" dir="ltr">{money(preview.seller_net)}</span>
+                      </div>
+                      {preview.lp_share > 0 && (
+                        <div className="flex justify-between text-sm rounded-md bg-success/10 px-2 py-1">
+                          <span className="text-success">
+                            {isAr
+                              ? `حصتك كمزود سيولة من رسوم المشتري (${preview.lp_share_percent}%)، تُضاف إلى رصيدك بعد التسوية`
+                              : `Your LP share of the buyer's fee (${preview.lp_share_percent}%), added to your balance after settlement`}
+                          </span>
+                          <span className="font-semibold text-success" dir="ltr">+{money(preview.lp_share)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                        <span>
+                          {isAr
+                            ? `يدفع المشتري القيمة + رسوم ${preview.buyer_fee_percent}%`
+                            : `The buyer pays the value + a ${preview.buyer_fee_percent}% fee`}
+                        </span>
+                        <span dir="ltr">{money(preview.buyer_total)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <Button
@@ -585,6 +631,47 @@ export default function SecondaryMarket() {
       </Dialog>
 
       {/* Withdraw proceeds */}
+      {/* Buyer confirmation: the units' value, the buyer's fee and the total before buying. */}
+      <Dialog open={!!confirmBuy} onOpenChange={(o) => !o && setConfirmBuy(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isAr ? "تأكيد الشراء" : "Confirm purchase"}</DialogTitle>
+          </DialogHeader>
+          {confirmBuy && (
+            <div className="space-y-4">
+              <div className="font-medium">{localName(confirmBuy, language)}</div>
+              <div className="p-4 bg-muted rounded-xl space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {isAr ? "قيمة الحصص" : "Value of the units"}{" "}
+                    <span dir="ltr">({confirmBuy.token_amount} × ${confirmBuy.unit_price})</span>
+                  </span>
+                  <span className="font-semibold" dir="ltr">{money(confirmBuy.total_value)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {isAr ? `رسوم المشتري (${confirmBuy.platform_fee_percent}%)` : `Buyer fee (${confirmBuy.platform_fee_percent}%)`}
+                  </span>
+                  <span dir="ltr">+{money(confirmBuy.buyer_total - confirmBuy.total_value)}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <span className="font-medium">{isAr ? "الإجمالي المخصوم من رصيدك" : "Total charged to your balance"}</span>
+                  <span className="font-bold text-primary" dir="ltr">{money(confirmBuy.buyer_total)}</span>
+                </div>
+              </div>
+              <Button
+                variant="hero" className="w-full gap-2"
+                disabled={buyingId === confirmBuy.id}
+                onClick={() => handleBuy(confirmBuy)}
+              >
+                {buyingId === confirmBuy.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {isAr ? "تأكيد الشراء" : "Confirm purchase"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

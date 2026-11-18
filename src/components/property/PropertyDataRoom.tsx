@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/accordion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { pct, useExitTerms } from "@/hooks/useExitTerms";
+import { lpExitFees, secondaryFees } from "@/lib/feeTexts";
 import type { Property } from "@/data/properties";
 import { DynamicInstallmentPlanner } from "@/components/property/DynamicInstallmentPlanner";
 import type { InstallmentPreview } from "@/integrations/api/client";
@@ -1449,8 +1450,8 @@ function FaqSection({ p, isAr }: { p: Property; isAr: boolean }) {
     {
       q: "Can I sell before maturity?",
       qAr: "هل يمكنني البيع قبل الاستحقاق؟",
-      a: `Depending on availability, you may sell via the LP Market (${pct(terms.discount_percent)} below the unit price, then a ${pct(terms.fee_percent)} fee) or the Secondary Market (${pct(terms.secondary_fee_percent)} fee paid by the buyer).`,
-      aAr: `حسب التوفر، يمكنك البيع عبر سوق LP (بسعر أقل من سعر الوحدة بـ ${pct(terms.discount_percent)} ثم رسوم ${pct(terms.fee_percent)}) أو السوق الثانوي (رسوم ${pct(terms.secondary_fee_percent)} يدفعها المشتري).`,
+      a: `Depending on availability, you may sell via the LP Market (${lpExitFees(terms, false)}) or the Secondary Market (${secondaryFees(terms, false)}).`,
+      aAr: `حسب التوفر، يمكنك البيع عبر سوق LP (${lpExitFees(terms, true)}) أو السوق الثانوي (${secondaryFees(terms, true)}).`,
     },
     {
       q: "What protects investors legally?",

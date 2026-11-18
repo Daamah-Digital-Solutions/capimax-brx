@@ -113,6 +113,41 @@ def book_sale(*, seller, property_slug: str, units: int, proceeds, market: str,
     return proceeds - share
 
 
+def lp_units_held(user, property_slug: str, *, exclude_listed_lp: bool = True) -> int:
+    """How many of the user's units of the property are LP units (open LP-market holdings).
+    Units listed on the LP market are left out by default: they are escrowed there."""
+    lp = LiquidityProvider.objects.filter(user=user).first()
+    if lp is None:
+        return 0
+    statuses = [st for st in OPEN if not (exclude_listed_lp and st == LPHolding.Status.LISTED_LP)]
+    return int(
+        LPHolding.objects.filter(lp=lp, property_id=property_slug, status__in=statuses)
+        .aggregate(n=Sum("token_amount"))["n"] or 0
+    )
+
+
+def book_fee_share(*, user, amount, note: str) -> Decimal:
+    """
+    Pay the LP's share of a deal's fees into its LP balance as earnings (2026-11 fee schedule,
+    apps/secondary_market/fees.py). Runs inside the deal's settlement, so it is booked once per
+    settled deal and rolls back with it. Returns what was booked (0 when the user is no LP).
+    """
+    amount = _cents(amount)
+    if amount <= 0:
+        return Decimal("0")
+    lp = _locked_lp(user)
+    if lp is None:
+        return Decimal("0")
+    lp.current_balance = Decimal(lp.current_balance) + amount
+    lp.total_earnings = Decimal(lp.total_earnings) + amount
+    lp.save(update_fields=["current_balance", "total_earnings", "updated_at"])
+    LPTransaction.objects.create(
+        lp=lp, tx_type="fee_share", amount=amount, currency="USD",
+        status=LPTransaction.TxStatus.COMPLETED, notes=note[:500], processed_at=timezone.now(),
+    )
+    return amount
+
+
 def book_distribution(*, user, property_slug: str, earning_units: int, amount, label: str) -> Decimal:
     """
     Pay the LP units' share of a distribution `amount` (earned by `earning_units` of the user's

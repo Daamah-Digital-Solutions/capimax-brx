@@ -160,12 +160,40 @@ export function PurchaseForm({
             </div>
 
             <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">{language === "ar" ? "المبلغ الإجمالي" : "Total Amount"}</span>
+              <CardContent className="p-4 space-y-2">
+                {/* What each side gets before confirming (2026-11 fee schedule): the LP pays the
+                    units' value with no buying fee and gets its share of the seller's fee. */}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{language === "ar" ? "قيمة الحصص" : "Value of the units"}</span>
+                  <span className="font-medium">${Number(listing.total_value).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{language === "ar" ? "رسوم الشراء" : "Buying fee"}</span>
+                  <span className="font-medium">$0</span>
+                </div>
+                <div className="flex justify-between items-center border-t pt-2">
+                  <span className="font-medium">{language === "ar" ? "تدفع الآن" : "You pay now"}</span>
                   <span className="text-2xl font-bold text-primary">
                     ${calculatedTotal.toLocaleString()}
                   </span>
+                </div>
+                {Number(listing.lp_fee_share_amount ?? 0) > 0 && (
+                  <div className="flex justify-between text-sm rounded-md bg-success/10 px-2 py-1">
+                    <span className="text-success">
+                      {language === "ar"
+                        ? `حصتك من رسوم البائع (${listing.lp_fee_share_percent}%) تُضاف إلى رصيدك بعد التسوية`
+                        : `Your share of the seller's fee (${listing.lp_fee_share_percent}%), added to your balance after settlement`}
+                    </span>
+                    <span className="font-semibold text-success">+${Number(listing.lp_fee_share_amount).toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    {language === "ar"
+                      ? `يستلم البائع بعد رسومه (${listing.platform_fee_percent}%)`
+                      : `The seller receives, after its fee (${listing.platform_fee_percent}%)`}
+                  </span>
+                  <span>${Number(listing.net_amount).toLocaleString()}</span>
                 </div>
               </CardContent>
             </Card>

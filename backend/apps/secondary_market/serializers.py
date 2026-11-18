@@ -24,6 +24,11 @@ class SecondaryMarketListingSerializer(serializers.ModelSerializer):
     net_amount = _Money(read_only=True)
     # The buyer pays the price + the resale fee (decision 5); legacy seller-paid rows: price.
     buyer_total = _Money(read_only=True)
+    # 2026-11 fee schedule: the seller's own fee (out of the price), the LP units among the units
+    # sold and the LP's share of the buyer's fee on them (apps/secondary_market/fees.py).
+    seller_fee_percent = serializers.FloatField(read_only=True)
+    seller_fee_amount = _Money(read_only=True)
+    lp_fee_share_amount = _Money(read_only=True)
     plan_id = serializers.UUIDField(read_only=True, allow_null=True)
     is_position = serializers.BooleanField(read_only=True)
     plan_part = serializers.BooleanField(read_only=True)
@@ -46,6 +51,7 @@ class SecondaryMarketListingSerializer(serializers.ModelSerializer):
             "property_id", "property_name", "property_name_ar", "token_symbol", "token_amount",
             "unit_price", "total_value", "platform_fee_percent",
             "platform_fee_amount", "net_amount", "fee_payer", "buyer_total",
+            "seller_fee_percent", "seller_fee_amount", "lp_units", "lp_fee_share_amount",
             "plan_id", "is_position", "plan_part", "position_value", "paid_principal",
             "assumed_principal", "position", "status",
             "listed_at", "purchased_at", "completed_at", "cancelled_at", "notes",

@@ -38,6 +38,10 @@ class SecondaryMarketListing(models.Model):
         # listed with (history stays true).
         BUYER = "buyer", _("Buyer")
         SELLER = "seller", _("Seller")
+        # The 2026-11 fee schedule (apps/secondary_market/fees.py): the buyer pays its fee on
+        # top (platform_fee_*), the seller pays its own fee out of the price (seller_fee_*),
+        # and on an LP's LP-market units the LP gets a share of the buyer's fee.
+        BOTH = "both", _("Buyer and seller")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     seller = models.ForeignKey(
@@ -67,6 +71,12 @@ class SecondaryMarketListing(models.Model):
     fee_payer = models.CharField(
         max_length=8, choices=FeePayer.choices, default=FeePayer.BUYER
     )
+    # fee_payer "both": the seller's fee (out of the price; net_amount = total − it), how many
+    # of the units were the seller's LP units, and the LP's share of the buyer's fee on them.
+    seller_fee_percent = models.DecimalField(max_digits=6, decimal_places=3, default=0)
+    seller_fee_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    lp_units = models.PositiveIntegerField(default=0)
+    lp_fee_share_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
 
     # Off-plan §6 — POSITION listing: a whole active installment plan is sold as one
     # position and the buyer takes over the remaining installments. token_amount = all the
@@ -121,7 +131,7 @@ class SecondaryMarketListing(models.Model):
 
     @property
     def buyer_fee(self):
-        return self.platform_fee_amount if self.fee_payer == self.FeePayer.BUYER else 0
+        return self.platform_fee_amount if self.fee_payer in (self.FeePayer.BUYER, self.FeePayer.BOTH) else 0
 
     @property
     def buyer_total(self):

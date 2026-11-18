@@ -4,6 +4,9 @@ Selling / transferring PART of an installment plan (apps/installments/split.py).
 The plan used throughout is deliberately awkward so every rounding path is exercised:
 7 units at $103.33 ($723.31), 23% down paid, 6 monthly installments with a 4% fee.
 """
+from django.test import override_settings
+
+from apps.secondary_market.tests import LEGACY_FEES  # rates before the 2026-11 schedule
 from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
@@ -65,6 +68,7 @@ def _inv(plan):
     return Investment.objects.get(installment_plan=plan)
 
 
+@override_settings(**LEGACY_FEES)
 class SplitArithmeticTests(TestCase):
     def setUp(self):
         self.prop = _prop("split-a", token_price=D("103.33"))
@@ -310,6 +314,7 @@ class SplitTransferTests(TestCase):
         self.assertFalse(InstallmentPlan.objects.filter(investor=self.kid).exists())
 
 
+@override_settings(**LEGACY_FEES)
 @mock.patch("apps.lp.market_services.chain_service.transfer", return_value=_FAKE_TRANSFER)
 class SplitLPTests(TestCase):
     def setUp(self):
@@ -344,6 +349,7 @@ class SplitLPTests(TestCase):
         self.assertEqual(LPMarketListing.objects.get(pk=listing.pk).status, "completed")
 
 
+@override_settings(**LEGACY_FEES)
 class PlanPartPreviewApiTests(APITestCase):
     def test_preview(self):
         prop = _prop("split-api", token_price=D("103.33"))
