@@ -195,7 +195,7 @@ export function BankAccountsManager() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                    <span dir="ltr" className="break-all">{account.account_number_masked}</span>
+                    <span dir="ltr" className="whitespace-nowrap">•••• {String(account.account_number_masked || "").slice(-4)}</span>
                     <span>•</span>
                     <span>{account.currency}</span>
                     <span>•</span>
