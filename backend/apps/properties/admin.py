@@ -21,6 +21,7 @@ from django.utils.html import format_html
 
 from . import pricing
 from .admin_widgets import (
+    JsonRowsWidget,
     DatalistTextInput,
     StickyFileInput,
     StickyFormFileField,
@@ -125,6 +126,12 @@ class PropertyFinancialsInline(admin.StackedInline):
     model = PropertyFinancials
     extra = 0
 
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # The 5-year yield projection as rows (year + %) instead of typed JSON.
+        if db_field.name == "yield_projection":
+            kwargs["widget"] = JsonRowsWidget([("year", "Year / السنة", "text"), ("value", "Yield % / العائد %", "number")], max_rows=5)
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
 
 # --- repeating detail (tabular) ------------------------------------------ #
 class PropertyPhaseInline(admin.TabularInline):
@@ -208,6 +215,12 @@ class DeveloperInfoInline(admin.StackedInline):
     model = DeveloperInfo
     extra = 0
 
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # Related projects as rows (English / Arabic / French name) instead of typed JSON.
+        if db_field.name == "related_projects":
+            kwargs["widget"] = JsonRowsWidget([("en", "English", "text"), ("ar", "العربية", "text"), ("fr", "Français", "text")])
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
 
 class InsuranceInfoInline(admin.StackedInline):
     model = InsuranceInfo
@@ -217,6 +230,12 @@ class InsuranceInfoInline(admin.StackedInline):
 class MarketDataInline(admin.StackedInline):
     model = MarketData
     extra = 0
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # The yearly price index as rows (year + value) instead of typed JSON.
+        if db_field.name == "price_index_history":
+            kwargs["widget"] = JsonRowsWidget([("year", "Year / السنة", "text"), ("value", "Index / المؤشر", "number")])
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
 class AmenityInline(admin.TabularInline):

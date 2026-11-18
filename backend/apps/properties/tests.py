@@ -447,3 +447,30 @@ class MalformedGalleryTests(APITestCase):
                 Property(**_valid_property_kwargs(images=bad)).full_clean()
             self.assertIn("images", ctx.exception.message_dict)
         Property(**_valid_property_kwargs(images=["/a.jpg", "https://x.y/b.jpg"])).full_clean()
+
+
+class JsonRowsWidgetTests(TestCase):
+    """Admin JSON fields typed as rows (client letter 2026-11): the widget posts the JSON under
+    the field's own name, so the model field and its validation are unchanged."""
+
+    def test_rows_round_trip_through_the_form(self):
+        from django import forms as dj_forms
+
+        from .admin_widgets import JsonRowsWidget
+        from .models import PropertyFinancials
+
+        class F(dj_forms.ModelForm):
+            class Meta:
+                model = PropertyFinancials
+                fields = ("yield_projection",)
+                widgets = {"yield_projection": JsonRowsWidget(
+                    [("year", "Year", "text"), ("value", "Yield %", "number")], max_rows=5)}
+
+        html = F(initial={"yield_projection": [{"year": "Year 1", "value": 8.1}]}).as_p()
+        self.assertIn('class="json-rows"', html)
+        self.assertIn('name="yield_projection"', html)
+        self.assertIn("Year 1", html)
+        form = F(data={"yield_projection": '[{"year":"Year 1","value":8.1},{"year":"Year 2","value":8.6}]'})
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["yield_projection"],
+                         [{"year": "Year 1", "value": 8.1}, {"year": "Year 2", "value": 8.6}])

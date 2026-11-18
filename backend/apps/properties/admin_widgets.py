@@ -127,3 +127,115 @@ class StickyFormFileField(_KeepsPending, forms.FileField):
 
 class StickyFormImageField(_KeepsPending, forms.ImageField):
     pass
+
+
+class JsonRowsWidget(forms.Widget):
+    """
+    A JSON list typed as table rows (client letter 2026-11, admin §1): one input per column, with
+    Add row / Remove buttons, and the JSON the model stores is written behind the scenes into a
+    hidden textarea under the field's own name — so the field, its validation and the property
+    page are unchanged. `columns` = [(key, label, "text" | "number"), ...]. Without JavaScript the
+    textarea shows and the JSON can still be typed.
+    """
+
+    def __init__(self, columns, max_rows=None, attrs=None):
+        super().__init__(attrs)
+        self.columns = list(columns)
+        self.max_rows = max_rows
+
+    def format_value(self, value):
+        import json
+
+        if value in (None, ""):
+            return "[]"
+        if isinstance(value, str):
+            return value
+        return json.dumps(value, ensure_ascii=False)
+
+    def value_from_datadict(self, data, files, name):
+        return data.get(name)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        import json
+
+        from django.utils.safestring import mark_safe
+
+        attrs = self.build_attrs(self.attrs, attrs or {})
+        field_id = attrs.get("id") or f"id_{name}"
+        raw = self.format_value(value)
+        cols = json.dumps([{"key": k, "label": str(lbl), "type": t} for k, lbl, t in self.columns])
+        head = "".join(format_html('<th style="text-align:start;padding:4px 6px">{}</th>', lbl) for _k, lbl, _t in self.columns)
+        return mark_safe(
+            format_html(
+                '<div class="json-rows" data-for="{}" data-max="{}" data-cols="{}">'
+                '<table style="border-collapse:collapse;margin-bottom:6px"><thead><tr>{}<th></th></tr></thead>'
+                '<tbody></tbody></table>'
+                '<button type="button" class="button json-rows-add">+ Add row / إضافة صف</button>'
+                '<textarea name="{}" id="{}" class="json-rows-raw" rows="3" cols="60" '
+                'style="margin-top:6px;font-family:monospace">{}</textarea>'
+                "</div>",
+                field_id, self.max_rows or "", cols, mark_safe(head), name, field_id, raw,
+            )
+            + _JSON_ROWS_SCRIPT
+        )
+
+
+# Inline once per widget; idempotent (window flag). Builds the rows from the textarea's JSON,
+# keeps the textarea in step on every edit, hides it when JS runs, and handles inlines added
+# later (django:formset:added) — their prefix is renamed by the admin, so rows are found by class.
+_JSON_ROWS_SCRIPT = """
+<script>
+(function () {
+  if (window.__jsonRows) return; window.__jsonRows = true;
+  function init(box) {
+    if (box.dataset.ready) return; box.dataset.ready = "1";
+    var cols = JSON.parse(box.dataset.cols), max = parseInt(box.dataset.max || "0", 10);
+    var raw = box.querySelector(".json-rows-raw"), body = box.querySelector("tbody");
+    var add = box.querySelector(".json-rows-add");
+    raw.style.display = "none";
+    function sync() {
+      var out = [];
+      body.querySelectorAll("tr").forEach(function (tr) {
+        var row = {}, empty = true;
+        cols.forEach(function (c, i) {
+          var v = tr.querySelectorAll("input")[i].value.trim();
+          if (v !== "") empty = false;
+          row[c.key] = c.type === "number" ? (v === "" ? null : Number(v)) : v;
+        });
+        if (!empty) out.push(row);
+      });
+      raw.value = JSON.stringify(out);
+      add.disabled = max > 0 && body.querySelectorAll("tr").length >= max;
+    }
+    function addRow(data) {
+      var tr = document.createElement("tr");
+      cols.forEach(function (c) {
+        var td = document.createElement("td"), inp = document.createElement("input");
+        inp.type = c.type === "number" ? "number" : "text";
+        if (c.type === "number") inp.step = "any";
+        inp.value = data && data[c.key] != null ? data[c.key] : "";
+        inp.style.width = c.type === "number" ? "8em" : "14em";
+        inp.addEventListener("input", sync);
+        td.style.padding = "2px 6px"; td.appendChild(inp); tr.appendChild(td);
+      });
+      var td = document.createElement("td"), del = document.createElement("button");
+      del.type = "button"; del.className = "button"; del.textContent = "Remove / حذف";
+      del.addEventListener("click", function () { tr.remove(); sync(); });
+      td.appendChild(del); tr.appendChild(td); body.appendChild(tr); sync();
+    }
+    var rows = [];
+    try { rows = JSON.parse(raw.value || "[]"); } catch (e) { raw.style.display = ""; return; }
+    if (!Array.isArray(rows)) { raw.style.display = ""; return; }
+    rows.forEach(addRow);
+    if (!rows.length) addRow(null);
+    add.addEventListener("click", function () { addRow(null); });
+    sync();
+  }
+  function all() { document.querySelectorAll(".json-rows").forEach(init); }
+  document.addEventListener("DOMContentLoaded", all);
+  document.addEventListener("formset:added", all);
+  if (window.django && django.jQuery) django.jQuery(document).on("formset:added", all);
+  all();
+})();
+</script>
+"""
