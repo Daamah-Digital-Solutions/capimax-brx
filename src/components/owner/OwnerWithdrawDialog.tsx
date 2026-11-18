@@ -114,13 +114,15 @@ export function OwnerWithdrawDialog({
       method === "bank"
         ? accounts.map((a) => ({
             id: a.id,
-            label: `${a.bank_name} · ${a.account_number_masked}`,
+            label: `${a.bank_name} · •••• ${String(a.account_number_masked || "").slice(-4)}`,
             isDefault: a.is_default,
+            incomplete: a.has_full_details === false,
           }))
         : wallets.map((w) => ({
             id: w.id,
             label: `${w.network} · ${w.wallet_label || maskAddress(w.wallet_address)}`,
             isDefault: w.is_default,
+            incomplete: false,
           })),
     [method, accounts, wallets],
   );
@@ -174,6 +176,22 @@ export function OwnerWithdrawDialog({
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {
+      if (err?.data?.code === "kyc_required") {
+        toast.error(
+          isAr
+            ? "أكمل التحقق من هويتك (KYC) من صفحة التحقق أولًا، ثم أعد طلب السحب."
+            : "Complete your identity verification (KYC) first, then request the withdrawal again.",
+        );
+        return;
+      }
+      if (err?.code === "bank_details_incomplete" || err?.data?.code === "bank_details_incomplete") {
+        toast.error(
+          isAr
+            ? "عدّل الحساب البنكي من «طرق الدفع والسحب» وأدخل رقم الحساب كاملًا، ثم أعد الطلب."
+            : "Edit the bank account in Payment Methods and enter the full account number, then try again.",
+        );
+        return;
+      }
       toast.error(err?.message || (isAr ? "تعذّر السحب" : "Withdrawal failed"));
     } finally {
       setBusy(false);
@@ -356,6 +374,7 @@ export function OwnerWithdrawDialog({
           <div className="space-y-1.5">
             <Label>{isAr ? "الوجهة" : "Destination"}</Label>
             {destinations.length > 0 ? (
+              <>
               <Select value={destId} onValueChange={setDestId}>
                 <SelectTrigger>
                   <SelectValue
@@ -371,6 +390,14 @@ export function OwnerWithdrawDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {destinations.find((d) => d.id === destId)?.incomplete && (
+                <p className="text-xs text-amber-600 mt-1">
+                  {isAr
+                    ? "يحتاج هذا الحساب إلى إعادة إدخال رقمه كاملًا من «طرق الدفع والسحب» قبل السحب البنكي."
+                    : "This account needs its full number again before a bank withdrawal."}
+                </p>
+              )}
+              </>
             ) : (
               <div className="flex items-start gap-2 p-3 rounded-lg border border-warning/30 bg-warning/5 text-sm">
                 <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />

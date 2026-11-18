@@ -123,6 +123,9 @@ class AutoWithdrawalApiTests(APITestCase):
         self.user = User.objects.create_user(email="auto-api@ex.com", password="pw-12345-strong")
         self.user.is_email_verified = True
         self.user.save()
+        from apps.kyc.services import approve_kyc, get_or_create_kyc
+
+        approve_kyc(get_or_create_kyc(self.user), source="dev")  # withdrawing needs a verified identity
         credit_user_balance(self.user, Decimal("1000"), source="test")
         self.client.force_authenticate(self.user)
 

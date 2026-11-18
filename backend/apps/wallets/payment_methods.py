@@ -41,6 +41,16 @@ def mask_iban(raw: str) -> str:
     return raw[:4] + "*" * (len(raw) - 8) + raw[-4:]
 
 
+def _seal(raw) -> str:
+    """The full value encrypted for the payout team (empty stays empty). Spaces are dropped."""
+    value = "".join(str(raw or "").split())
+    if not value:
+        return ""
+    from .keys import get_key_manager
+
+    return get_key_manager().encrypt(value)
+
+
 def _log_audit(user, action, method_type, method_id, details=None):
     PaymentMethodAuditLog.objects.create(
         user=user, action=action, method_type=method_type,
@@ -62,6 +72,8 @@ def _set_only_default(model, user, obj):
 # --- serializers (mirror the frontend interfaces exactly) ------------------- #
 class BankAccountSerializer(serializers.ModelSerializer):
     user_id = serializers.UUIDField(read_only=True)
+    # False for an account saved before the full number was kept: the investor re-enters it.
+    has_full_details = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = InvestorBankAccount
@@ -69,7 +81,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "id", "user_id", "bank_name", "bank_code", "account_holder_name",
             "account_number_masked", "iban_masked", "swift_code", "country",
             "currency", "is_verified", "is_default", "verified_at",
-            "created_at", "updated_at",
+            "created_at", "updated_at", "has_full_details",
         )
         read_only_fields = fields
 
@@ -132,6 +144,8 @@ class BankAccountListCreateView(APIView):
             account_holder_name=str(d["account_holder_name"]).strip(),
             account_number_masked=mask_account_number(str(d["account_number"])),
             iban_masked=(mask_iban(str(d["iban"])) if str(d.get("iban") or "").strip() else None),
+            account_number_encrypted=_seal(d["account_number"]),
+            iban_encrypted=_seal(d.get("iban")),
             swift_code=(str(d.get("swift_code") or "").strip() or None),
             country=str(d["country"]).strip(),
             currency=str(d["currency"]).strip(),
@@ -159,8 +173,10 @@ class BankAccountDetailView(APIView):
             obj.account_holder_name = str(d["account_holder_name"]).strip()
         if d.get("account_number"):
             obj.account_number_masked = mask_account_number(str(d["account_number"]))
+            obj.account_number_encrypted = _seal(d["account_number"])
         if "iban" in d:
             obj.iban_masked = mask_iban(str(d["iban"])) if str(d.get("iban") or "").strip() else None
+            obj.iban_encrypted = _seal(d.get("iban"))
         if "swift_code" in d:
             obj.swift_code = str(d.get("swift_code") or "").strip() or None
         if d.get("country"):

@@ -129,11 +129,65 @@ class WithdrawalAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "reference")
     fields = (
         "id", "user", "amount", "currency", "method", "provider", "speed", "fee_amount",
-        "reference", "status", "destination_label", "bank_account", "crypto_wallet", "notes",
-        "payout_reference", "failure_reason", "processed_at", "created_at",
+        "reference", "status", "destination_label", "beneficiary", "bank_account", "crypto_wallet",
+        "notes", "payout_reference", "failure_reason", "processed_at", "created_at",
     )
     # Only the operator's notes are editable: the payout reference, or why it failed.
     readonly_fields = tuple(f for f in fields if f not in ("payout_reference", "failure_reason"))
+
+    # --- the full beneficiary details (client letter 2026-11): a manual bank withdrawal is paid
+    # from them. Decrypted only on request, only for staff with "Can view full payout details",
+    # and every look is written to this withdrawal's history.
+    def get_urls(self):
+        from django.urls import path
+
+        return [
+            path("<uuid:object_id>/beneficiary/", self.admin_site.admin_view(self.beneficiary_view),
+                 name="wallets_withdrawal_beneficiary"),
+        ] + super().get_urls()
+
+    @admin.display(description="Beneficiary details")
+    def beneficiary(self, obj):
+        from django.urls import reverse
+        from django.utils.html import format_html
+
+        if obj is None or obj.pk is None:
+            return "—"
+        if not obj.destination_encrypted:
+            return "Not on file (requested before full details were kept, or a Stripe payout)."
+        url = reverse("admin:wallets_withdrawal_beneficiary", args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}">Show full beneficiary details</a> '
+            '<span style="color:#666">(staff with the payout-details permission; each view is logged)</span>',
+            url,
+        )
+
+    def beneficiary_view(self, request, object_id):
+        from django.core.exceptions import PermissionDenied
+        from django.shortcuts import get_object_or_404
+        from django.template.response import TemplateResponse
+
+        from .services import open_destination
+
+        if not request.user.has_perm("wallets.view_payout_details"):
+            raise PermissionDenied
+        wd = get_object_or_404(Withdrawal, pk=object_id)
+        details = open_destination(wd)
+        self.log_change(request, wd, "Viewed the full beneficiary details.")
+        labels = {
+            "account_holder_name": "Account holder", "bank_name": "Bank", "bank_code": "Bank code",
+            "account_number": "Account number", "iban": "IBAN", "swift_code": "SWIFT / BIC",
+            "country": "Country", "currency": "Currency", "network": "Network",
+            "wallet_address": "Wallet address", "label": "Label",
+        }
+        rows = [(labels.get(k, k), v) for k, v in (details or {}).items() if k != "type" and v]
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Beneficiary details — {wd.reference}",
+            "wd": wd, "rows": rows, "opts": self.model._meta,
+            "missing_number": bool(details and details.get("type") == "bank" and not details.get("account_number")),
+        }
+        return TemplateResponse(request, "admin/wallets/withdrawal_beneficiary.html", context)
     actions = ("action_pay_stripe", "action_processing", "action_paid", "action_failed")
 
     @admin.action(description="Approve and pay via Stripe (automatic bank withdrawals)")

@@ -231,6 +231,26 @@ class EmailVerifiedPermission(BasePermission):
         return not needs_email_verification(request.user)
 
 
+def identity_verified(user) -> bool:
+    """
+    The account holder's identity is verified: an approved personal KYC, or an approved entity
+    verification (KYB) for an owner, developer, broker or partner account. Required before money
+    leaves the platform (withdrawals; client letter 2026-11).
+    """
+    from apps.kyc.models import UserKYC
+
+    if UserKYC.objects.filter(user=user, status="approved").exists():
+        return True
+    for rel in ("owner_profile", "developer_profile", "broker_profile", "partner_profile"):
+        try:
+            prof = getattr(user, rel, None)
+        except Exception:  # noqa: BLE001 — a missing reverse one-to-one
+            prof = None
+        if prof is not None and getattr(prof, "status", "") == "approved":
+            return True
+    return False
+
+
 class KYCApprovedPermission(BasePermission):
     """
     Gate requiring an APPROVED KYC record before sensitive actions (wallet creation,

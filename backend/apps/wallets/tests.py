@@ -32,6 +32,13 @@ _KNOWN_PRIVATE_KEY = "0x" + "11" * 32
 _KNOWN_ACCOUNT = Account.from_key(_KNOWN_PRIVATE_KEY)
 
 
+
+def _seal_number(last4):
+    """A saved bank account's full number, encrypted the way the payment-methods API stores it."""
+    from apps.wallets.payment_methods import _seal
+
+    return _seal("40000000" + last4)
+
 class _CaptureHandler(logging.Handler):
     """Collects every log message emitted while attached (to scan for leaks)."""
 
@@ -277,8 +284,11 @@ class WithdrawalDestinationTests(APITestCase):
         credit_user_balance(self.user, Decimal("1000.00"), source="test")
         self.bank = InvestorBankAccount.objects.create(
             user=self.user, bank_name="CIB", account_holder_name="A B",
-            account_number_masked="****4321", country="EG", currency="USD",
+            account_number_masked="****4321", account_number_encrypted=_seal_number("4321"), country="EG", currency="USD",
         )
+        from apps.kyc.services import approve_kyc, get_or_create_kyc
+
+        approve_kyc(get_or_create_kyc(self.user), source="dev")  # withdrawing needs a verified identity
         self.client.force_authenticate(self.user)
 
     def _post(self, payload):
@@ -304,7 +314,7 @@ class WithdrawalDestinationTests(APITestCase):
     def test_cannot_target_another_users_method(self):
         others = self.InvestorBankAccount.objects.create(
             user=self.other, bank_name="Other", account_holder_name="X",
-            account_number_masked="****9999", country="EG", currency="USD",
+            account_number_masked="****9999", account_number_encrypted=_seal_number("9999"), country="EG", currency="USD",
         )
         resp = self._post(
             {"amount": "100", "method": "bank", "bank_account_id": str(others.id)}

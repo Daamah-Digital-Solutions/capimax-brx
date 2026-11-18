@@ -1,0 +1,24 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+  <a href="{% url 'admin:wallets_withdrawal_changelist' %}">Withdrawals</a> &rsaquo;
+  <a href="{% url 'admin:wallets_withdrawal_change' wd.pk %}">{{ wd.reference }}</a> &rsaquo; Beneficiary details
+</div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p style="color:#a15c00"><b>Confidential.</b> Use these details only to make this payout. This view is recorded in the withdrawal's history.</p>
+  <table>
+    <tr><th style="text-align:start;padding:6px 12px">Withdrawal</th><td style="padding:6px 12px">{{ wd.reference }} · {{ wd.amount }} {{ wd.currency }} · {{ wd.get_method_display }} · {{ wd.get_status_display }}</td></tr>
+    <tr><th style="text-align:start;padding:6px 12px">Investor</th><td style="padding:6px 12px">{{ wd.user.email }}</td></tr>
+    {% for label, value in rows %}
+    <tr><th style="text-align:start;padding:6px 12px">{{ label }}</th><td style="padding:6px 12px;font-family:monospace;font-size:14px">{{ value }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if missing_number %}
+  <p style="color:#b42318;margin-top:12px">The full account number is not on file for this request (the account was saved before full details were kept). Ask the investor to edit the bank account and enter the full number, then make a new request.</p>
+  {% endif %}
+  <p style="margin-top:16px"><a class="button" href="{% url 'admin:wallets_withdrawal_change' wd.pk %}">Back to the withdrawal</a></p>
+</div>
+{% endblock %}

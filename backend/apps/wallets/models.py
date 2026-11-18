@@ -291,6 +291,11 @@ class Withdrawal(models.Model):
         on_delete=models.SET_NULL, related_name="withdrawals",
     )
     destination_label = models.CharField(max_length=255, blank=True, default="")
+    # The full beneficiary details at request time (bank: holder, bank, number, IBAN, SWIFT,
+    # country, currency; crypto: network + address), encrypted. Shown only to staff with the
+    # "view_payout_details" permission, on the admin page; editing or deleting the saved
+    # method later never changes where a pending withdrawal goes.
+    destination_encrypted = models.TextField(blank=True, default="")
     # Set by the operator when closing it (apps/wallets/payouts.py): the bank / chain
     # reference of the payout, or why it failed (a failed withdrawal is refunded).
     payout_reference = models.CharField(max_length=120, blank=True, default="")
@@ -308,6 +313,7 @@ class Withdrawal(models.Model):
         verbose_name = _("withdrawal")
         verbose_name_plural = _("withdrawals")
         ordering = ("-created_at",)
+        permissions = [("view_payout_details", "Can view full payout (beneficiary) details")]
 
     def __str__(self):
         return f"withdraw {self.amount} {self.currency} [{self.status}] ({self.user_id})"
@@ -379,11 +385,12 @@ class Deposit(models.Model):
 # with Django JWT, so the old `supabase.auth` calls returned null and every "add"
 # silently failed). Real, self-scoped Django models now back them.
 #
-# SAFETY (real money): these store ONLY masked / non-sensitive references. A full
-# bank account number / IBAN is masked SERVER-SIDE (apps/wallets/services.py) and the
-# raw value is NEVER persisted; saved cards store only brand + last four + expiry +
-# holder name — NO PAN, ever (the frontend never sends one). Crypto addresses are
-# public by nature. Mirrors the KYC/withdrawal "no sensitive data at rest" posture.
+# SAFETY (real money): screens and lists only ever see masked references. A bank account's
+# full number / IBAN is kept ENCRYPTED (Fernet, apps/wallets/keys.py) so the operations team can
+# actually pay a manual bank withdrawal (client letter 2026-11): it is decrypted only on the
+# withdrawal's admin page by staff holding "Can view full payout details", and every look is
+# recorded in that withdrawal's history. Saved cards store only brand + last four + expiry +
+# holder name — NO PAN, ever. Crypto addresses are public by nature.
 # --------------------------------------------------------------------------- #
 class InvestorBankAccount(models.Model):
     """A user's saved bank account for payouts (frontend `InvestorBankAccount`)."""
@@ -397,6 +404,10 @@ class InvestorBankAccount(models.Model):
     account_holder_name = models.CharField(max_length=255)
     account_number_masked = models.CharField(max_length=64)
     iban_masked = models.CharField(max_length=64, blank=True, null=True)
+    # The full values, encrypted at rest (empty for accounts saved before they were kept: the
+    # investor is asked to save the account again before a manual bank withdrawal).
+    account_number_encrypted = models.TextField(blank=True, default="")
+    iban_encrypted = models.TextField(blank=True, default="")
     swift_code = models.CharField(max_length=64, blank=True, null=True)
     country = models.CharField(max_length=120)
     currency = models.CharField(max_length=8)
@@ -413,6 +424,10 @@ class InvestorBankAccount(models.Model):
 
     def __str__(self):
         return f"{self.bank_name} {self.account_number_masked} ({self.user_id})"
+
+    @property
+    def has_full_details(self) -> bool:
+        return bool(self.account_number_encrypted)
 
 
 class InvestorCryptoWallet(models.Model):

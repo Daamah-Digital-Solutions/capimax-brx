@@ -202,6 +202,17 @@ export function BankAccountsManager() {
                     <MapPin className="w-3 h-3" />
                     <span>{countries.find(c => c.code === account.country)?.[isAr ? "nameAr" : "nameEn"] || account.country}</span>
                   </div>
+                  {account.has_full_details === false && (
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(account)}
+                      className="mt-1 text-xs text-amber-600 underline underline-offset-2 text-start"
+                    >
+                      {isAr
+                        ? "أعد إدخال رقم الحساب كاملًا لتستلم السحب البنكي"
+                        : "Re-enter the full account number to receive bank withdrawals"}
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">

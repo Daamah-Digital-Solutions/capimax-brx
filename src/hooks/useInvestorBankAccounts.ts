@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 
 export interface InvestorBankAccount {
   id: string;
+  /** False for an account saved before the full number was kept: it must be re-entered. */
+  has_full_details?: boolean;
   user_id: string;
   bank_name: string;
   bank_code: string | null;

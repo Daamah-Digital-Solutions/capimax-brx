@@ -149,6 +149,44 @@ def _withdrawal_destination_label(method, bank_account, crypto_wallet) -> str:
     return ""
 
 
+def _sealed_destination(method, bank_account, crypto_wallet) -> str:
+    """The full beneficiary details for the payout team, encrypted (JSON inside)."""
+    import json
+
+    from .keys import get_key_manager
+
+    km = get_key_manager()
+    if method == "bank" and bank_account is not None:
+        data = {
+            "type": "bank",
+            "account_holder_name": bank_account.account_holder_name,
+            "bank_name": bank_account.bank_name,
+            "bank_code": bank_account.bank_code or "",
+            "account_number": km.decrypt(bank_account.account_number_encrypted) if bank_account.account_number_encrypted else "",
+            "iban": km.decrypt(bank_account.iban_encrypted) if bank_account.iban_encrypted else "",
+            "swift_code": bank_account.swift_code or "",
+            "country": bank_account.country,
+            "currency": bank_account.currency,
+        }
+    elif method == "crypto" and crypto_wallet is not None:
+        data = {"type": "crypto", "network": crypto_wallet.network,
+                "wallet_address": crypto_wallet.wallet_address, "label": crypto_wallet.wallet_label or ""}
+    else:
+        return ""
+    return km.encrypt(json.dumps(data, ensure_ascii=False))
+
+
+def open_destination(withdrawal) -> dict | None:
+    """The decrypted beneficiary details of a withdrawal (admin page only), or None."""
+    import json
+
+    from .keys import get_key_manager
+
+    if not withdrawal.destination_encrypted:
+        return None
+    return json.loads(get_key_manager().decrypt(withdrawal.destination_encrypted))
+
+
 def request_withdrawal(
     user, amount, *, method: str, notes: str = "", bank_account=None, crypto_wallet=None
 ):
@@ -177,6 +215,7 @@ def request_withdrawal(
             bank_account=bank_account,
             crypto_wallet=crypto_wallet,
             destination_label=_withdrawal_destination_label(method, bank_account, crypto_wallet),
+            destination_encrypted=_sealed_destination(method, bank_account, crypto_wallet),
             reference="WD-" + _uuid.uuid4().hex[:10].upper(),
             status=Withdrawal.Status.PENDING,
         )

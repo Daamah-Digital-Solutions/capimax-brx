@@ -145,5 +145,9 @@
   "Request: ": "Demande : ",
   "Requested: ": "Demandé le : ",
   "Transfer reference: ": "Référence du virement : ",
-  "Reason: ": "Motif : "
+  "Reason: ": "Motif : ",
+  "Re-enter the full account number to receive bank withdrawals": "Saisissez à nouveau le numéro de compte complet pour recevoir les retraits bancaires",
+  "Edit the bank account in Payment Methods and enter the full account number, then try again.": "Modifiez le compte bancaire dans Moyens de paiement, saisissez le numéro complet, puis réessayez.",
+  "This account needs its full number again before a bank withdrawal.": "Ce compte nécessite à nouveau son numéro complet avant un retrait bancaire.",
+  "Complete your identity verification (KYC) first, then request the withdrawal again.": "Terminez d'abord la vérification de votre identité (KYC), puis refaites la demande de retrait."
 }

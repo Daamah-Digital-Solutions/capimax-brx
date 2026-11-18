@@ -33,6 +33,13 @@ _FAKE_TRANSFER = {
 }
 
 
+
+def _seal_number(last4):
+    """A saved bank account's full number, encrypted the way the payment-methods API stores it."""
+    from apps.wallets.payment_methods import _seal
+
+    return _seal("40000000" + last4)
+
 def _deployed_property(slug="1"):
     p = Property(**_valid_property_kwargs(slug=slug, total_value=Decimal("5000000")))
     p.save()
@@ -339,7 +346,7 @@ class InvestorWithdrawalTests(APITestCase):
         # Withdrawals now require a saved, owned payout destination.
         return InvestorBankAccount.objects.create(
             user=self.user, bank_name="Test Bank", account_holder_name="WD User",
-            account_number_masked="****1234", country="US", currency="USD",
+            account_number_masked="****1234", account_number_encrypted=_seal_number("1234"), country="US", currency="USD",
         )
 
     def test_withdraw_debits_balance_and_records(self):

@@ -160,6 +160,14 @@ class WithdrawalsView(APIView):
 
         if needs_email_verification(request.user):
             return Response(EMAIL_UNVERIFIED, status=status.HTTP_403_FORBIDDEN)
+        from apps.core.permissions import identity_verified
+
+        if not (request.user.is_staff or identity_verified(request.user)):
+            return Response(
+                {"detail": "Complete your identity verification (KYC) before withdrawing.",
+                 "code": "kyc_required"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = WithdrawalCreateSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         method = serializer.validated_data["method"]
@@ -200,6 +208,14 @@ class WithdrawalsView(APIView):
                 return Response(
                     {"detail": "Select a saved bank account to withdraw to.",
                      "code": "destination_required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not bank_account.has_full_details:
+                # Saved before full details were kept: the team could not pay it.
+                return Response(
+                    {"detail": "Please edit this bank account and enter its full account number "
+                               "again, so the transfer can be made.",
+                     "code": "bank_details_incomplete"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:  # crypto

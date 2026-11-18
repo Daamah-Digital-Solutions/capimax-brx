@@ -35,6 +35,13 @@ from .models import DeveloperKYBStatus, DeveloperProfile, DeveloperStatus
 from .services import get_or_create_developer
 
 
+
+def _seal_number(last4):
+    """A saved bank account's full number, encrypted the way the payment-methods API stores it."""
+    from apps.wallets.payment_methods import _seal
+
+    return _seal("40000000" + last4)
+
 def _mk_user(email="dev@example.com", *, role=Profile.Role.DEVELOPER):
     user = User.objects.create_user(email=email, password="pw-12345-strong")
     # The signal creates the profile as investor/active; set the developer role parked
@@ -742,7 +749,7 @@ class DeveloperEarningsTests(APITestCase):
         self.assertEqual(self.client.get("/api/wallets/balance/").data["current_balance"], 1000.0)
         ba = InvestorBankAccount.objects.create(
             user=dev, bank_name="Test Bank", account_holder_name="Dev",
-            account_number_masked="****1234", country="US", currency="USD",
+            account_number_masked="****1234", account_number_encrypted=_seal_number("1234"), country="US", currency="USD",
         )
         wd = self.client.post(
             "/api/wallets/withdrawals/",
