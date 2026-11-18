@@ -16,7 +16,6 @@ import {
   Users,
   Send,
   MessageSquare,
-  Settings,
   Info,
   ShieldCheck,
   ExternalLink,
@@ -219,7 +218,6 @@ const menuSections: MenuSection[] = [
       { titleKey: "nav.investorRelations", icon: Newspaper, href: "/investor-relations" },
       { titleKey: "nav.fees", icon: DollarSign, href: "/fees" },
       { titleKey: "nav.exitMechanism", icon: LogOut, href: "/exit-mechanism" },
-      { titleKey: "nav.settings", icon: Settings, href: "/settings" },
       { titleKey: "nav.auditLog", icon: ShieldCheck, href: "/audit-log" },
     ],
   },
@@ -1019,18 +1017,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
               </NavLink>
               {user ? (
                 <div className="grid grid-cols-1 gap-1.5">
-                  <Button variant="outline" size="sm" className="w-full justify-start gap-2" asChild>
-                    <NavLink to="/settings?tab=profile">
-                      <UserCircle className="w-4 h-4" />
-                      {isAr ? "الحساب" : "Account"}
-                    </NavLink>
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full justify-start gap-2" asChild>
-                    <NavLink to="/settings?tab=preferences">
-                      <Settings className="w-4 h-4" />
-                      {isAr ? "الإعدادات" : "Settings"}
-                    </NavLink>
-                  </Button>
+                  {/* Account and Settings are reached from the profile above and the header's account menu. */}
                   <Button
                     variant="outline"
                     size="sm"
