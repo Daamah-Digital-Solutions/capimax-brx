@@ -390,14 +390,26 @@ TEXT: dict[str, tuple[str, str]] = {
         "certificat provisoire devient définitif une fois l'achat entièrement réglé.",
     ),
     "This certifies that": ("تشهد هذه الوثيقة بأن", "Le présent certificat atteste que"),
-    "is the registered holder of 1 unit of {0}, representing {1}% ownership.": (
-        "هو المالك المسجل لوحدة واحدة من {0}، بما يمثل {1}% من الملكية.",
-        "est le détenteur enregistré de 1 part de {0}, représentant {1}% de propriété.",
+    # the percentage is a share of the SPV that owns the property, named in full
+    "is the registered holder of 1 unit of {0}, representing {1}% of the total issued interests in {2}.": (
+        "هو المالك المسجل لوحدة واحدة من {0}، بما يمثل {1}% من إجمالي الحصص المصدرة في {2}.",
+        "est le détenteur enregistré de 1 part de {0}, soit {1}% de l'ensemble des parts émises par {2}.",
     ),
-    "is the registered holder of {0} units of {1}, representing {2}% ownership.": (
-        "هو المالك المسجل لعدد {0} وحدة من {1}، بما يمثل {2}% من الملكية.",
-        "est le détenteur enregistré de {0} parts de {1}, représentant {2}% de propriété.",
+    "is the registered holder of {0} units of {1}, representing {2}% of the total issued interests in {3}.": (
+        "هو المالك المسجل لعدد {0} وحدة من {1}، بما يمثل {2}% من إجمالي الحصص المصدرة في {3}.",
+        "est le détenteur enregistré de {0} parts de {1}, soit {2}% de l'ensemble des parts émises par {3}.",
     ),
+    # no SPV name recorded for the property
+    "is the registered holder of 1 unit of {0}, representing {1}% of the total issued interests in the issuing SPV.": (
+        "هو المالك المسجل لوحدة واحدة من {0}، بما يمثل {1}% من إجمالي الحصص المصدرة في الشركة ذات الغرض الخاص المُصدِرة.",
+        "est le détenteur enregistré de 1 part de {0}, soit {1}% de l'ensemble des parts émises par la SPV émettrice.",
+    ),
+    "is the registered holder of {0} units of {1}, representing {2}% of the total issued interests in the issuing SPV.": (
+        "هو المالك المسجل لعدد {0} وحدة من {1}، بما يمثل {2}% من إجمالي الحصص المصدرة في الشركة ذات الغرض الخاص المُصدِرة.",
+        "est le détenteur enregistré de {0} parts de {1}, soit {2}% de l'ensemble des parts émises par la SPV émettrice.",
+    ),
+    "the issuing SPV": ("الشركة ذات الغرض الخاص المُصدِرة", "la SPV émettrice"),
+    "Share of the SPV": ("الحصة في الشركة ذات الغرض الخاص", "Part de la SPV"),
     "Holder": ("المالك", "Détenteur"),
     "Name": ("الاسم", "Nom"),
     "Investor ID": ("معرّف المستثمر", "ID investisseur"),

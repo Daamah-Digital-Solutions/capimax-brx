@@ -14,5 +14,6 @@
   "1 unit of {0}": "1 part de {0}",
   "${0} wallet balance": "${0} du portefeuille",
   "{0} units · {1}": "{0} parts · {1}",
-  "1 unit · {0}": "1 part · {0}"
+  "1 unit · {0}": "1 part · {0}",
+  "Share of the SPV": "Part de la SPV"
 }

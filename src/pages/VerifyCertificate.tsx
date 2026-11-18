@@ -254,7 +254,7 @@ const VerifyCertificate = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{L("Ownership Percentage", "نسبة الملكية")}</p>
+                  <p className="text-sm text-muted-foreground">{L("Share of the SPV", "الحصة في الشركة ذات الغرض الخاص")}</p>
                   <p className="font-semibold text-foreground">
                     {Number(certificate.ownership_percentage).toFixed(4)}%
                   </p>

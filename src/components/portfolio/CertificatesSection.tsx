@@ -188,7 +188,7 @@ export function CertificatesSection() {
                         </div>
                         <div className="text-xs">
                           <span className="text-muted-foreground">
-                            {isArabic ? "الملكية" : "Ownership"}:
+                            {isArabic ? "الحصة في الشركة ذات الغرض الخاص" : "Share of the SPV"}:
                           </span>
                           <span className="font-semibold ml-1">
                             {Number(cert.ownership_percentage).toFixed(4)}%
@@ -321,7 +321,7 @@ export function CertificatesSection() {
                   </div>
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <p className="text-xs text-muted-foreground">
-                      {isArabic ? "الملكية" : "Ownership"}
+                      {isArabic ? "الحصة في الشركة ذات الغرض الخاص" : "Share of the SPV"}
                     </p>
                     <p className="font-semibold">
                       {Number(selectedCert.ownership_percentage).toFixed(4)}%

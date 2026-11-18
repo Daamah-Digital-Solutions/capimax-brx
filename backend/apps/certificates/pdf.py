@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from apps.reports.brand import (
     CONTENT_W, CX, GOLD, GREEN_D, INK, LEFT, MUTED, PANEL, RIGHT, Doc, day, divider, draw, fit_centred,
-    holder_for, mbox, money, mx, qr_image, wrap,
+    holder_for, mbox, money, mx, qr_image, width, wrap,
 )
 from apps.reports.doc_lang import tr, tr_value
 
@@ -46,6 +46,28 @@ def _panel(d: Doc, x: float, top: float, w: float, title: str, rows: list[tuple[
     return top - h
 
 
+NO_SPV = "the issuing SPV"
+
+
+def _holder_lines(cert, units: str) -> list[str]:
+    """The holder statement, wrapped. The percentage is a share of the SPV that owns the
+    property (named in full), not of the property itself. When the sentence needs more than
+    one line, the SPV's name starts a new line whole instead of being split mid-name."""
+    spv = (cert.spv_name or "").strip() or NO_SPV
+    line = tr(f"is the registered holder of {units} unit{'s' if cert.units_purchased != 1 else ''} "
+              f"of {cert.property_name or 'the property'}, representing "
+              f"{float(cert.ownership_percentage):.4f}% of the total issued interests in {spv}.")
+    max_w = CONTENT_W - 60
+    if spv == NO_SPV or width(line, "Helvetica", 10.5) <= max_w:
+        return wrap(line, "Helvetica", 10.5, max_w)
+    name = tr(spv)
+    at = line.rfind(name)
+    if at <= 0:
+        return wrap(line, "Helvetica", 10.5, max_w)
+    head, tail = line[:at].rstrip(), line[at:]
+    return wrap(head, "Helvetica", 10.5, max_w) + wrap(tail, "Helvetica", 10.5, max_w)
+
+
 def render_certificate_pdf(cert) -> bytes:
     """Render `cert` (a Certificate) to PDF bytes."""
     status = (cert.status or "provisional").lower()
@@ -68,11 +90,8 @@ def render_certificate_pdf(cert) -> bytes:
     fit_centred(c, CX, y - 28, name, "Helvetica-Bold", 22, CONTENT_W - 40, INK)
     divider(c, CX, y - 42, 120)
     units = f"{cert.units_purchased:,}"
-    line = tr(f"is the registered holder of {units} unit{'s' if cert.units_purchased != 1 else ''} "
-              f"of {cert.property_name or 'the property'}, representing "
-              f"{float(cert.ownership_percentage):.4f}% ownership.")
     yy = y - 62
-    for ln in wrap(line, "Helvetica", 10.5, CONTENT_W - 60):
+    for ln in _holder_lines(cert, units):
         draw(c, CX, yy, ln, "Helvetica", 10.5, INK, "center")
         yy -= 15
 
@@ -104,7 +123,7 @@ def render_certificate_pdf(cert) -> bytes:
         ("Units / tokens", units),
         ("Unit price", f"{money(cert.unit_price)} USD"),
         ("Investment amount", f"{money(cert.investment_amount)} USD"),
-        ("Ownership", f"{float(cert.ownership_percentage):.4f}%"),
+        ("Share of the SPV", f"{float(cert.ownership_percentage):.4f}%"),
     ])
     right2 = _panel(d, LEFT + w + gap, top2, w, "On-chain record", [
         ("Holder wallet", holder.wallet_address if holder and holder.wallet_address else "—"),
