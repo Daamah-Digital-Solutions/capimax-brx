@@ -34,10 +34,28 @@ interface Section {
   bodyAr: string;
 }
 
+// What happens after KYC and after a purchase — the same for every model.
+const accountSteps: Section[] = [
+  {
+    icon: Wallet,
+    title: "Your wallet",
+    titleAr: "محفظتك",
+    body: "As soon as your identity verification (KYC) is completed successfully, the system creates an internal blockchain wallet for you, and it appears in your dashboard under Wallet.",
+    bodyAr: "فور إتمام التحقق من الهوية KYC بنجاح، ينشئ النظام لك محفظة داخلية عبر تقنية البلوكتشين، وتظهر في لوحة تحكمك ضمن قسم المحفظة Wallet.",
+  },
+  {
+    icon: FileText,
+    title: "Your units certificate",
+    titleAr: "شهادة الحصص",
+    body: "As soon as your purchase is complete, the system issues a certificate for the units you bought, and it appears in the Certificates section of your dashboard.",
+    bodyAr: "فور اكتمال عملية الشراء، يصدر النظام شهادة بالحصص المشتراة، وتظهر الشهادة في قسم الشهادات في لوحة تحكمك.",
+  },
+];
+
 // Educational copy per model — kept here so wording stays consistent
 const educationalCopy: Record<
   Property["model"],
-  { education: Section; workflow: Section; timeline: Section; returns: Section; ownership: Section; exit: Section }
+  { education: Section; workflow: Section; timeline: Section; returns: Section; ownership: Section; exit: Section; valuation?: Section }
 > = {
   ready: {
     education: {
@@ -49,8 +67,21 @@ const educationalCopy: Record<
     },
     workflow: { icon: Workflow, title: "How it works", titleAr: "آلية العمل", body: "Buy tokens → Receive periodic rental distributions → Hold or exit via LP / Secondary Market.", bodyAr: "اشترِ الرموز ← استلم توزيعات إيجارية دورية ← احتفظ أو اخرج عبر سوق LP أو السوق الثانوي." },
     timeline: { icon: Clock, title: "Timeline", titleAr: "الجدول الزمني", body: "Income begins from the first distribution period after purchase. Hold horizon defined by the offering.", bodyAr: "يبدأ الدخل من أول فترة توزيع بعد الشراء. أفق الاحتفاظ محدد في العرض." },
-    returns: { icon: LineChart, title: "Returns", titleAr: "العوائد", body: "Annualised rental yield distributed pro-rata to ownership.", bodyAr: "عائد إيجاري سنوي يوزَّع بالتناسب مع نسبة الملكية." },
+    returns: {
+      icon: LineChart,
+      title: "Returns",
+      titleAr: "العوائد",
+      body: "The total return of a ready, rented property is made up of the net rental return plus the change in the unit's market price. Your share of the net rent is deposited into your wallet every month, and you can request to withdraw the balance through the approved withdrawal process.",
+      bodyAr: "يتكوّن العائد الإجمالي للعقار الجاهز المؤجَّر من صافي العائد الإيجاري والتغيّر في سعر الوحدة في السوق. تُودَع حصتك من صافي الإيجار شهريًا في محفظتك، ويمكنك طلب سحب الرصيد وفق مسار السحب المعتمد.",
+    },
     ownership: { icon: PieChart, title: "Ownership", titleAr: "الملكية", body: "Direct fractional ownership via SPV. Each token represents the same beneficial interest.", bodyAr: "ملكية جزئية مباشرة عبر شركة ذات غرض خاص. كل رمز يمثل نفس الحق الانتفاعي." },
+    valuation: {
+      icon: TrendingUp,
+      title: "Unit price & valuation",
+      titleAr: "سعر الرمز والتقييم",
+      body: "The token price is updated based on the property's valuation, and the update shows in your dashboard, including your investment value and the token price. You are informed of every update by email and by an in-platform notification. On exit, the latest updated price shown on the platform is the pricing reference, and the sale price is fixed when the deal completes according to the market mechanism.",
+      bodyAr: "يُحدَّث سعر الرمز العقاري بناءً على تقييم العقار، ويظهر أثر التحديث في لوحة التحكم، بما يشمل قيمة الاستثمار وسعر الرمز. ويُبلَّغ المستثمر بالتحديث عبر البريد الإلكتروني والتنبيهات داخل المنصة. عند التخارج، يُستخدم آخر سعر محدَّث ظاهر على المنصة مرجعًا للتسعير، ويُثبَت سعر البيع عند إتمام الصفقة وفق آلية السوق.",
+    },
     exit: { icon: LogOut, title: "Exit", titleAr: "التخارج", body: "Available via Liquidity Provider ({lp}) or Secondary Market ({sec}).", bodyAr: "متاح عبر مزود السيولة ({lp}) أو السوق الثانوي ({sec})." },
   },
   ready_portfolio: {
@@ -157,7 +188,11 @@ export function PropertyModelSection({ property }: PropertyModelSectionProps) {
   const meta = propertyModelMeta[property.model];
   const copy = educationalCopy[property.model];
 
-  const sections = [copy.education, copy.workflow, copy.timeline, copy.returns, copy.ownership, copy.exit];
+  const sections = [
+    copy.education, copy.workflow, copy.timeline, copy.returns,
+    ...(copy.valuation ? [copy.valuation] : []),
+    copy.ownership, copy.exit, ...accountSteps,
+  ];
 
   return (
     <div className="space-y-6">

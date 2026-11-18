@@ -22,5 +22,14 @@
   "Provisional · Awaiting on-chain record": "Provisoire · En attente d'enregistrement on-chain",
   "Final": "Définitif",
   "Provisional": "Provisoire",
-  "Revoked": "Révoqué"
+  "Revoked": "Révoqué",
+  "The total return of a ready, rented property is made up of the net rental return plus the change in the unit's market price. Your share of the net rent is deposited into your wallet every month, and you can request to withdraw the balance through the approved withdrawal process.": "Le rendement total d'un bien prêt et loué se compose du rendement locatif net et de la variation du prix de marché de la part. Votre part du loyer net est versée chaque mois dans votre portefeuille, et vous pouvez demander le retrait du solde selon le processus de retrait approuvé.",
+  "Unit price & valuation": "Prix du jeton et évaluation",
+  "The token price is updated based on the property's valuation, and the update shows in your dashboard, including your investment value and the token price. You are informed of every update by email and by an in-platform notification. On exit, the latest updated price shown on the platform is the pricing reference, and the sale price is fixed when the deal completes according to the market mechanism.": "Le prix du jeton est mis à jour selon l'évaluation du bien, et la mise à jour apparaît dans votre tableau de bord, y compris la valeur de votre investissement et le prix du jeton. Vous êtes informé de chaque mise à jour par e-mail et par une notification sur la plateforme. À la sortie, le dernier prix mis à jour affiché sur la plateforme sert de référence, et le prix de vente est fixé à la conclusion de la transaction selon le mécanisme du marché.",
+  "Your wallet": "Votre portefeuille",
+  "As soon as your identity verification (KYC) is completed successfully, the system creates an internal blockchain wallet for you, and it appears in your dashboard under Wallet.": "Dès que la vérification de votre identité (KYC) est réussie, le système vous crée un portefeuille interne sur la blockchain, qui apparaît dans votre tableau de bord sous Portefeuille.",
+  "Your units certificate": "Votre certificat de parts",
+  "As soon as your purchase is complete, the system issues a certificate for the units you bought, and it appears in the Certificates section of your dashboard.": "Dès que votre achat est finalisé, le système émet un certificat pour les parts achetées, qui apparaît dans la section Certificats de votre tableau de bord.",
+  "Timeline": "Calendrier",
+  "Exit": "Sortie"
 }
