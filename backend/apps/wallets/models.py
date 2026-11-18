@@ -21,8 +21,9 @@ from apps.core.private_media import PrivateUpload
 
 
 class WalletNetwork(models.TextChoices):
-    # TESTNET ONLY for Wave 1. Mainnet is a separate, audited cutover.
     BSC_TESTNET = "bsc-testnet", _("BSC Testnet")
+    # Mainnet cutover (client letter 2026-11): the same custodial addresses on BNB Smart Chain.
+    BSC_MAINNET = "bsc-mainnet", _("BNB Smart Chain")
 
 
 class WalletType(models.TextChoices):

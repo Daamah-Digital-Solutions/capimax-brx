@@ -135,6 +135,7 @@ export function useUserWallet() {
       polygon: "https://polygonscan.com/address/",
       bsc: "https://bscscan.com/address/",
       "bsc-testnet": "https://testnet.bscscan.com/address/",
+      "bsc-mainnet": "https://bscscan.com/address/",
     };
     return `${explorers[network] || explorers["bsc-testnet"]}${address}`;
   }

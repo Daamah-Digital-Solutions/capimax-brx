@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from .client import deployer_address, get_deployer_account, get_web3
 from .contracts import get_abi, get_bytecode, load_artifact
 from .exceptions import ChainConfigError, ContractArtifactError
+from . import service
 from .service import _token_symbol
 
 # A fixed funded-style key (value only used to derive a deterministic address).
@@ -104,3 +105,75 @@ class TransferGuardTests(TestCase):
 
         self.assertTrue(callable(getattr(service, "transfer", None)))
         self.assertTrue(callable(getattr(service, "_fund_gas_if_needed", None)))
+
+
+class CrossChainRedeployTests(TestCase):
+    """Mainnet cutover: a property whose contract is on BSC Testnet gets a new contract on the
+    current chain; the testnet one is kept in previous_deployments. Same chain = refused."""
+
+    def _prop(self, chain_id):
+        from apps.properties.models import Property, TokenMetadata
+        from apps.properties.tests import _valid_property_kwargs
+
+        p = Property(**_valid_property_kwargs(slug=f"cutover-{chain_id}"))
+        p.save()
+        meta, _ = TokenMetadata.objects.get_or_create(property=p)
+        meta.deployed_contract_address = "0x" + "11" * 20
+        meta.deployment_chain_id = chain_id
+        meta.deployment_network = "bsc-testnet"
+        meta.deployment_tx = "0x" + "aa" * 32
+        meta.save()
+        p.refresh_from_db()
+        return p
+
+    def _factory(self, new_addr):
+        from unittest import mock
+
+        calls = {"n": 0}
+
+        def token_for_slug(_slug):
+            m = mock.Mock()
+            calls["n"] += 1
+            m.call.return_value = service.ZERO_ADDRESS if calls["n"] == 1 else new_addr
+            return m
+
+        f = mock.Mock()
+        f.address = "0x" + "fa" * 20
+        f.functions.tokenForSlug.side_effect = token_for_slug
+        return f
+
+    def test_redeploys_on_another_chain_and_keeps_the_old_one(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        p = self._prop(97)
+        new_addr = "0x" + "22" * 20
+        with override_settings(CHAIN_ID=56, WALLET_NETWORK="bsc-mainnet"), \
+                mock.patch.object(service, "require_connection"), \
+                mock.patch.object(service, "get_deployer_account"), \
+                mock.patch.object(service, "_get_factory", return_value=self._factory(new_addr)), \
+                mock.patch.object(service, "_transact", return_value={"transactionHash": b"\xbb" * 32}), \
+                mock.patch.object(service, "_build"):
+            service.deploy_property_token(p)
+        meta = p.token_metadata
+        meta.refresh_from_db()
+        self.assertEqual((meta.deployed_contract_address, meta.deployment_chain_id, meta.deployment_network),
+                         (new_addr, 56, "bsc-mainnet"))
+        self.assertEqual(meta.previous_deployments[0]["address"], "0x" + "11" * 20)
+        self.assertEqual(meta.previous_deployments[0]["chain_id"], 97)
+
+    def test_same_chain_is_refused(self):
+        from django.test import override_settings
+
+        from apps.chain.exceptions import AlreadyDeployedError
+
+        p = self._prop(97)
+        with override_settings(CHAIN_ID=97), \
+                self.assertRaises(AlreadyDeployedError):
+            from unittest import mock
+
+            with mock.patch.object(service, "require_connection"), \
+                    mock.patch.object(service, "get_deployer_account"), \
+                    mock.patch.object(service, "_get_factory", return_value=self._factory("0x" + "33" * 20)):
+                service.deploy_property_token(p)

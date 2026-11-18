@@ -22,16 +22,25 @@ from .exceptions import ChainConfigError, ChainConnectionError
 
 
 @functools.lru_cache(maxsize=1)
+def rpc_endpoint() -> str:
+    """The RPC for CHAIN_ID: BSC_RPC_URL when set, else the testnet one."""
+    return getattr(settings, "BSC_RPC_URL", "") or getattr(settings, "BSC_TESTNET_RPC_URL", "")
+
+
+def is_mainnet() -> bool:
+    return int(getattr(settings, "CHAIN_ID", 97)) == 56
+
+
 def get_web3() -> Web3:
     """
-    Return a Web3 connected to the configured BSC Testnet RPC.
+    Return a Web3 connected to the configured BSC RPC (BSC_RPC_URL, else the testnet one).
 
     BSC is a Proof-of-Authority chain whose block `extraData` exceeds the Ethereum
     default, so the POA middleware is injected to let web3 parse blocks/receipts.
     """
-    rpc_url = getattr(settings, "BSC_TESTNET_RPC_URL", "")
+    rpc_url = rpc_endpoint()
     if not rpc_url:
-        raise ChainConfigError("BSC_TESTNET_RPC_URL is not configured.")
+        raise ChainConfigError("BSC_RPC_URL / BSC_TESTNET_RPC_URL is not configured.")
     w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 30}))
     w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     return w3
@@ -44,11 +53,11 @@ def require_connection() -> Web3:
         connected = w3.is_connected()
     except Exception as exc:  # network/transport errors
         raise ChainConnectionError(
-            f"Could not reach BSC Testnet RPC ({settings.BSC_TESTNET_RPC_URL}): {exc}"
+            f"Could not reach the BSC RPC ({rpc_endpoint()}): {exc}"
         ) from exc
     if not connected:
         raise ChainConnectionError(
-            f"Not connected to BSC Testnet RPC ({settings.BSC_TESTNET_RPC_URL})."
+            f"Not connected to the BSC RPC ({rpc_endpoint()})."
         )
     # Guard against pointing at the wrong network (e.g. mainnet) by mistake.
     expected_chain_id = int(getattr(settings, "CHAIN_ID", 97))

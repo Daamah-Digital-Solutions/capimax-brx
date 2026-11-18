@@ -158,7 +158,9 @@ def _hexstr(value) -> str:
 
 
 def _explorer(path: str) -> str:
-    return f"https://testnet.bscscan.com/{path}"
+    from .client import is_mainnet
+
+    return f"https://{'' if is_mainnet() else 'testnet.'}bscscan.com/{path}"
 
 
 # --------------------------------------------------------------------------- #
@@ -244,9 +246,10 @@ def deploy_property_token(property_obj) -> dict:
     account = get_deployer_account()
     factory = _get_factory(w3)
 
-    # Off-chain idempotency: already linked?
+    # Off-chain idempotency: already linked ON THIS CHAIN? A contract recorded on another network
+    # (BSC Testnet before the mainnet cutover) is moved to previous_deployments below instead.
     meta = getattr(property_obj, "token_metadata", None)
-    if meta and meta.deployed_contract_address:
+    if meta and meta.deployed_contract_address and meta.deployment_chain_id in (None, int(settings.CHAIN_ID)):
         raise AlreadyDeployedError(
             f"Property '{slug}' already linked to {meta.deployed_contract_address}."
         )
@@ -284,7 +287,14 @@ def deploy_property_token(property_obj) -> dict:
     factory_address = factory.address
     chain_id = int(settings.CHAIN_ID)
     with transaction.atomic():
-        meta, _ = TokenMetadata.objects.get_or_create(property=property_obj)
+        meta, _ = TokenMetadata.objects.select_for_update().get_or_create(property=property_obj)
+        if meta.deployed_contract_address and meta.deployment_chain_id != chain_id:
+            meta.previous_deployments = list(meta.previous_deployments or []) + [{
+                "chain_id": meta.deployment_chain_id, "network": meta.deployment_network,
+                "address": meta.deployed_contract_address, "tx": meta.deployment_tx,
+                "factory": meta.factory_address,
+                "deployed_at": meta.deployed_at.isoformat() if meta.deployed_at else None,
+            }]
         meta.deployed_contract_address = token_address
         meta.deployment_tx = tx_hash
         meta.deployed_at = timezone.now()
@@ -293,7 +303,7 @@ def deploy_property_token(property_obj) -> dict:
         meta.factory_address = factory_address
         meta.save(update_fields=[
             "deployed_contract_address", "deployment_tx", "deployed_at",
-            "deployment_chain_id", "deployment_network", "factory_address",
+            "deployment_chain_id", "deployment_network", "factory_address", "previous_deployments",
         ])
 
     return {

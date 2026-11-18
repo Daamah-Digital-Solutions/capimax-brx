@@ -791,6 +791,9 @@ class TokenMetadata(models.Model):
     deployment_chain_id = models.PositiveIntegerField(null=True, blank=True)
     deployment_network = models.CharField(max_length=24, blank=True)
     factory_address = models.CharField(max_length=42, blank=True)
+    # Contracts this property had on another network before (e.g. BSC Testnet before the
+    # mainnet cutover): [{"chain_id", "network", "address", "tx", "factory", "deployed_at"}].
+    previous_deployments = models.JSONField(default=list, blank=True)
 
     # Token economics allocation (data-room "Structure" tab) — admin-editable, sensible
     # defaults that sum to 100. Shown as the allocation chips.

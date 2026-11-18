@@ -293,6 +293,10 @@ BSC_TESTNET_RPC_URL = env(
     "BSC_TESTNET_RPC_URL", default="https://bsc-testnet-dataseed.bnbchain.org"
 )
 CHAIN_ID = env.int("CHAIN_ID", default=97)
+# The RPC the platform uses for CHAIN_ID. Mainnet cutover (client letter 2026-11): set
+# BSC_RPC_URL to a BNB Smart Chain mainnet endpoint, CHAIN_ID=56 and WALLET_NETWORK=bsc-mainnet.
+# Empty = the testnet RPC above (unchanged behaviour on testnet).
+BSC_RPC_URL = env("BSC_RPC_URL", default="")
 # Platform deployer/signer key — env only, NEVER hardcoded or stored in the DB.
 DEPLOYER_PRIVATE_KEY = env("DEPLOYER_PRIVATE_KEY", default="")
 # Address of the deployed PropertyTokenFactory (set after the JS deploy script runs).
