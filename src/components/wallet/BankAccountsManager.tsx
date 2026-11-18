@@ -172,15 +172,15 @@ export function BankAccountsManager() {
           {accounts.map((account) => (
             <div
               key={account.id}
-              className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border"
+              className="flex items-center justify-between gap-2 p-4 bg-muted/30 rounded-xl border border-border"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 shrink-0 bg-primary/10 rounded-lg flex items-center justify-center">
                   <Building2 className="w-5 h-5 text-primary" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{account.bank_name}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-foreground break-words">{account.bank_name}</span>
                     {account.is_default && (
                       <Badge variant="outline" className="text-xs">
                         <Star className="w-3 h-3 mr-1" />
@@ -194,8 +194,8 @@ export function BankAccountsManager() {
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{account.account_number_masked}</span>
+                  <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                    <span dir="ltr" className="break-all">{account.account_number_masked}</span>
                     <span>•</span>
                     <span>{account.currency}</span>
                     <span>•</span>
@@ -204,7 +204,7 @@ export function BankAccountsManager() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 {!account.is_default && (
                   <Button
                     variant="ghost"

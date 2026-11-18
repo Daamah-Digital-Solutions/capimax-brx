@@ -160,15 +160,15 @@ export function CryptoWalletsManager() {
             return (
               <div
                 key={wallet.id}
-                className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border"
+                className="flex items-center justify-between gap-2 p-4 bg-muted/30 rounded-xl border border-border"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 shrink-0 bg-primary/10 rounded-lg flex items-center justify-center">
                     <Bitcoin className="w-5 h-5 text-primary" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-foreground">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground break-words">
                         {wallet.wallet_label || (isAr ? "محفظة" : "Wallet")}
                       </span>
                       {wallet.is_default && (
@@ -207,7 +207,7 @@ export function CryptoWalletsManager() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   {!wallet.is_default && (
                     <Button
                       variant="ghost"
