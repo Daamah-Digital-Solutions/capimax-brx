@@ -19,6 +19,7 @@ import {
   Settings,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { WithdrawalsList } from "@/components/wallet/WithdrawalsList";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -148,7 +149,10 @@ export default function Wallet() {
   const totalDeposited = ledger
     .filter((tx) => tx.entry_type === "credit")
     .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-  const totalWithdrawn = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+  // A returned (failed) withdrawal is back in the balance, so it is not counted as withdrawn.
+  const totalWithdrawn = withdrawals
+    .filter((w) => w.status !== "failed")
+    .reduce((sum, w) => sum + Number(w.amount || 0), 0);
   const pendingWithdrawals = withdrawals
     .filter((w) => w.status === "pending" || w.status === "processing")
     .reduce((sum, w) => sum + Number(w.amount || 0), 0);
@@ -364,6 +368,9 @@ export default function Wallet() {
                   )}
                 </div>
               </div>
+
+              {/* Each withdrawal with its status and references, to follow it to the account. */}
+              <WithdrawalsList rows={withdrawals} />
 
               {/* Receipts for purchases / installments paid directly by card or crypto. */}
               <PaymentReceipts />

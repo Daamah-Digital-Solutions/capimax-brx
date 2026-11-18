@@ -126,6 +126,9 @@ class WithdrawalSerializer(serializers.ModelSerializer):
             "id", "amount", "currency", "method", "status", "reference",
             "notes", "destination_label", "bank_account", "crypto_wallet",
             "provider", "speed", "fee_amount", "processed_at", "created_at",
+            # The investor follows the transfer: the bank / chain reference once paid, and
+            # why it was returned when it failed (client letter 2026-11, withdrawal §5).
+            "payout_reference", "failure_reason",
         )
         read_only_fields = fields
 

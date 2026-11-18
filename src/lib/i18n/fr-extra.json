@@ -129,5 +129,21 @@
   "When you resell these units on the secondary market you pay no selling fee, you receive the full sale value, and {0} of the deal value from the buyer's fee ({1}) is added to your balance.": "Lorsque vous revendez ces parts sur le marché secondaire, vous ne payez aucuns frais de vente, vous recevez la totalité du prix de vente, et {0} de la valeur de la transaction, prélevés sur les frais de l'acheteur ({1}), sont ajoutés à votre solde.",
   "You buy units worth {0} (the seller receives {1} after its {2} fee) and {3} is added to your balance. You then resell them on the secondary market for {4} (the buyer pays {5}), and {6} is credited to you.": "Vous achetez des parts pour {0} (le vendeur reçoit {1} après ses frais de {2}) et {3} sont ajoutés à votre solde. Vous les revendez ensuite sur le marché secondaire pour {4} (l'acheteur paie {5}), et {6} vous sont crédités.",
   "Your total gain is {0}: {1} price difference and {2} your share of the fees, plus any returns due while you hold the units.": "Votre gain total est de {0} : {1} de différence de prix et {2} de votre part des frais, en plus des rendements dus pendant la détention.",
-  "No selling fee · {0}% buyer fee": "Aucuns frais de vente · {0} % de frais acheteur"
+  "No selling fee · {0}% buyer fee": "Aucuns frais de vente · {0} % de frais acheteur",
+  "My withdrawals": "Mes retraits",
+  "Received": "Reçu",
+  "Processing": "En cours",
+  "Paid": "Payé",
+  "Returned": "Retourné",
+  "Your request is received and waiting to be processed.": "Votre demande est reçue et en attente de traitement.",
+  "The transfer is being made to your account.": "Le virement vers votre compte est en cours.",
+  "The amount was sent to your account.": "Le montant a été envoyé sur votre compte.",
+  "The transfer could not be made; the amount is back in your balance.": "Le virement n'a pas pu être effectué ; le montant est revenu sur votre solde.",
+  "To: ": "Vers : ",
+  "Crypto wallet": "Portefeuille crypto",
+  "Bank account": "Compte bancaire",
+  "Request: ": "Demande : ",
+  "Requested: ": "Demandé le : ",
+  "Transfer reference: ": "Référence du virement : ",
+  "Reason: ": "Motif : "
 }
