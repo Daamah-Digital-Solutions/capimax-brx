@@ -29,20 +29,51 @@ def _contract(cert) -> tuple[str, str, str]:
     return (getattr(tm, "standard", "") or "—"), addr, ("BSC Testnet" if "test" in net else "BSC Mainnet")
 
 
-def _panel(d: Doc, x: float, top: float, w: float, title: str, rows: list[tuple[str, str]]) -> float:
+def _row_lines(value, w: float, max_lines: int) -> list[str]:
+    """A panel value's lines: each "\n"-separated part starts its own line (wrapped), at most
+    `max_lines` in all; the last line shows "…" when the text is longer."""
+    out: list[str] = []
+    for part in str(value).split("\n"):
+        room = max_lines - len(out)
+        if room <= 0:
+            break
+        out += wrap(tr_value(part), "Helvetica-Bold", 8.6, w - 24, max_lines=room)
+    return out or ["—"]
+
+
+def _panel_rows(rows, w: float) -> list[tuple[str, list[str]]]:
+    return [(r[0], _row_lines(r[1], w, r[2] if len(r) > 2 else 1)) for r in rows]
+
+
+def _panel_height(rows) -> float:
+    return 26 + sum(14 + 10 * len(lines) for _, lines in rows)
+
+
+def _panel(d: Doc, x: float, top: float, w: float, title: str, rows, h: float | None = None) -> float:
+    """A titled panel of label / value rows; `rows` come from _panel_rows. `h` lets the two
+    panels side by side share one height."""
     c = d.c
-    h = 26 + 24 * len(rows)
+    h = h or _panel_height(rows)
     c.setFillColor(PANEL)
     c.setStrokeColor(GOLD)
     c.setLineWidth(0.7)
     c.roundRect(mbox(x, w), top - h, w, h, 6, stroke=1, fill=1)
     draw(c, x + 12, top - 15, tr(title).upper(), "Helvetica-Bold", 8, GREEN_D)
     yy = top - 34
-    for label, value in rows:
+    for label, lines in rows:
         draw(c, x + 12, yy, tr(label).upper(), "Helvetica", 6.4, MUTED)
-        lines = wrap(tr_value(value), "Helvetica-Bold", 8.6, w - 24, max_lines=1)
-        draw(c, x + 12, yy - 10, lines[0], "Helvetica-Bold", 8.6, INK)
-        yy -= 24
+        for i, ln in enumerate(lines):
+            draw(c, x + 12, yy - 10 - 10 * i, ln, "Helvetica-Bold", 8.6, INK)
+        yy -= 14 + 10 * len(lines)
+    return top - h
+
+
+def _panel_pair(d: Doc, top: float, w: float, gap: float, left, right) -> float:
+    """Two panels side by side at the same height; returns the y under them."""
+    lrows, rrows = _panel_rows(left[1], w), _panel_rows(right[1], w)
+    h = max(_panel_height(lrows), _panel_height(rrows))
+    _panel(d, LEFT, top, w, left[0], lrows, h)
+    _panel(d, LEFT + w + gap, top, w, right[0], rrows, h)
     return top - h
 
 
@@ -108,30 +139,29 @@ def render_certificate_pdf(cert) -> bytes:
     gap = 12
     w = (CONTENT_W - gap) / 2
     standard, contract, network = _contract(cert)
-    left1 = _panel(d, LEFT, top, w, "Holder", [
+    spv = cert.spv_name or "—"
+    if cert.spv_registration_ref:
+        spv += ("\n" if cert.spv_name else "  ") + f"({cert.spv_registration_ref})"
+    top2 = _panel_pair(d, top, w, gap, ("Holder", [
         ("Name", name),
         ("Email", holder.email if holder and holder.email else "—"),
         ("Investor ID", cert.investor_id_masked or "—"),
-    ])
-    right1 = _panel(d, LEFT + w + gap, top, w, "Property & SPV", [
+    ]), ("Property & SPV", [
         ("Property", cert.property_name or "—"),
         ("Location", cert.property_location or "—"),
-        ("SPV", f"{cert.spv_name or '—'}" + (f"  ({cert.spv_registration_ref})" if cert.spv_registration_ref else "")),
-    ])
-    top2 = min(left1, right1) - gap
-    left2 = _panel(d, LEFT, top2, w, "Investment", [
+        ("SPV", spv, 3),  # the full legal name (up to two lines), then the registration number
+    ])) - gap
+    y = _panel_pair(d, top2, w, gap, ("Investment", [
         ("Units / tokens", units),
         ("Unit price", f"{money(cert.unit_price)} USD"),
         ("Investment amount", f"{money(cert.investment_amount)} USD"),
         ("Share of the SPV", f"{float(cert.ownership_percentage):.4f}%"),
-    ])
-    right2 = _panel(d, LEFT + w + gap, top2, w, "On-chain record", [
+    ]), ("On-chain record", [
         ("Holder wallet", holder.wallet_address if holder and holder.wallet_address else "—"),
         ("Token contract", contract),
         ("Standard / network", f"{standard} · {network}"),
         ("Listing ID", cert.listing_id or "—"),
-    ])
-    y = min(left2, right2) - 18
+    ])) - 18
 
     # --- verification + dates + signature ----------------------------------- #
     qr_size = 92
