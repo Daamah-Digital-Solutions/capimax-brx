@@ -22,6 +22,8 @@ import Wallet from "./pages/Wallet";
 import Distributions from "./pages/Distributions";
 import Installments from "./pages/Installments";
 import OwnerDashboard from "./pages/OwnerDashboard";
+import OwnerAssets from "./pages/OwnerAssets";
+import OwnerAssetDetail from "./pages/OwnerAssetDetail";
 import OwnerReports from "./pages/OwnerReports";
 import Reports from "./pages/Reports";
 import Documents from "./pages/Documents";
@@ -117,6 +119,8 @@ const App = () => (
           {/* Broker referral landing (Phase 12 Wave A): stash code → registration. */}
           <Route path="/ref/:code" element={<ReferralCapture />} />
           <Route path="/my-assets" element={<OwnerDashboard />} />
+          <Route path="/owner-assets" element={<OwnerAssets />} />
+          <Route path="/owner-assets/:slug" element={<OwnerAssetDetail />} />
           <Route path="/owner-reports" element={<OwnerReports />} />
           <Route path="/owner-wallet" element={<OwnerWallet />} />
           <Route path="/owner-documents" element={<OwnerDocuments />} />

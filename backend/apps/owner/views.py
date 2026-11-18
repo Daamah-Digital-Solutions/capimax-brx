@@ -631,3 +631,114 @@ class OwnerInvestorsView(APIView):
             "investors": investors,
             "by_property": by_property,
         })
+
+
+# --------------------------------------------------------------------------- #
+# My assets: the owner's own properties, each with its live figures and a detail view
+# --------------------------------------------------------------------------- #
+def _asset_row(prop) -> dict:
+    """One owned property with its real figures (primary sales only — resales are holders
+    trading units already sold; paid distributions only). Never invented."""
+    from decimal import Decimal
+
+    from django.db.models import Count, Max, Sum
+
+    from apps.distributions.models import Distribution
+    from apps.investments.models import RESALE_PAYMENT_METHODS, Investment, PaymentStatus
+
+    sales = Investment.objects.filter(
+        property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
+    ).exclude(payment_method__in=RESALE_PAYMENT_METHODS)
+    agg = sales.aggregate(
+        units=Sum("token_amount"), raised=Sum("amount_invested"),
+        investors=Count("user", distinct=True), last_sale=Max("created_at"),
+    )
+    paid = Distribution.objects.filter(property_id=prop.slug, status=Distribution.Status.PAID)
+    dist = paid.aggregate(total=Sum("pool_amount_usd"), last=Max("pay_date"), count=Count("id"))
+    supply = int(prop.token_supply or 0)
+    units = int(agg["units"] or 0)
+    return {
+        "slug": prop.slug,
+        "name": prop.name,
+        "name_ar": prop.name_ar or "",
+        "location": prop.location or "",
+        "location_ar": prop.location_ar or "",
+        "image": prop.image or "",
+        "model": prop.model or "",
+        "status": prop.status or "",
+        "is_published": bool(prop.is_published),
+        "token_price": float(prop.token_price or 0),
+        "total_value": float(prop.total_value or 0),
+        "token_supply": supply,
+        "units_sold": units,
+        "units_available": max(supply - units, 0),
+        "funded_pct": round(units * 100 / supply, 2) if supply else 0,
+        "raised": float(Decimal(agg["raised"] or 0)),
+        "investors": int(agg["investors"] or 0),
+        "last_sale_at": agg["last_sale"].isoformat() if agg["last_sale"] else None,
+        "distributions_paid": float(Decimal(dist["total"] or 0)),
+        "distributions_count": int(dist["count"] or 0),
+        "last_distribution_date": dist["last"].isoformat() if dist["last"] else None,
+    }
+
+
+class OwnerAssetsView(APIView):
+    """GET /api/owner/assets/ — the caller's own properties (submitted_by) with their figures."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.properties.models import Property
+
+        props = Property.objects.filter(submitted_by=request.user).order_by("-created_at")
+        return Response([_asset_row(p) for p in props])
+
+
+class OwnerAssetDetailView(APIView):
+    """GET /api/owner/assets/<slug>/ — one of the caller's properties in detail: figures,
+    unit-price history, paid distributions, investors (masked) and data-room documents.
+    Another owner's property is a 404."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, slug):
+        from decimal import Decimal
+
+        from django.db.models import Count, Sum
+
+        from apps.distributions.models import Distribution
+        from apps.investments.models import RESALE_PAYMENT_METHODS, Investment, PaymentStatus
+        from apps.properties.models import Property
+
+        prop = Property.objects.filter(submitted_by=request.user, slug=slug).first()
+        if prop is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        row = _asset_row(prop)
+        row["prices"] = [
+            {"date": p.created_at.isoformat(), "previous_price": float(p.previous_price),
+             "price": float(p.price), "label": p.label}
+            for p in prop.price_history.order_by("-created_at")[:24]
+        ]
+        row["distributions"] = [
+            {"pay_date": d.pay_date.isoformat() if d.pay_date else None,
+             "amount": float(Decimal(d.pool_amount_usd or 0)),
+             "period": d.period_label or ""}
+            for d in Distribution.objects.filter(
+                property_id=prop.slug, status=Distribution.Status.PAID,
+            ).order_by("-pay_date", "-created_at")[:24]
+        ]
+        sales = Investment.objects.filter(
+            property=prop, payment_status=PaymentStatus.COMPLETED, tokens_minted=True,
+        ).exclude(payment_method__in=RESALE_PAYMENT_METHODS)
+        row["investors_list"] = [
+            {"investor": _mask_investor(r["user__email"]), "units": int(r["units"] or 0),
+             "value": float(Decimal(r["value"] or 0))}
+            for r in sales.values("user_id", "user__email").annotate(
+                units=Sum("token_amount"), value=Sum("amount_invested"), n=Count("id"),
+            ).order_by("-units")[:50]
+        ]
+        row["documents"] = [
+            {"title": d.name_en, "title_ar": d.name or "", "type": d.doc_type}
+            for d in prop.documents.all()[:50]
+        ]
+        return Response(row)

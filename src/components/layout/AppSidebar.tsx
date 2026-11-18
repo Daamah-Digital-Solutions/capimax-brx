@@ -152,7 +152,8 @@ const menuSections: MenuSection[] = [
     color: "text-emerald-500",
     roles: ["owner"],
     items: [
-      { titleKey: "nav.myAssets", icon: Building, href: "/my-assets" },
+      { titleKey: "nav.ownerDashboard", icon: LayoutDashboard, href: "/my-assets" },
+      { titleKey: "nav.myAssets", icon: Building, href: "/owner-assets" },
       { titleKey: "nav.submitProperty", icon: Send, href: "/submit-property" },
       { titleKey: "nav.assetValidation", icon: PieChart, href: "/asset-validation" },
       { titleKey: "nav.ownerWallet", icon: Wallet, href: "/owner-wallet" },

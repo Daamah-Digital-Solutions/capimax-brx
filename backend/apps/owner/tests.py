@@ -1221,3 +1221,39 @@ class OwnerKYBDocumentTests(APITestCase):
         resp = self.client.get(reverse("admin:owner_ownerprofile_change", args=[self.owner.pk]))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Trade Licence")
+
+
+class OwnerAssetsTests(APITestCase):
+    """My Assets: the owner sees their own properties with real figures, and only their own."""
+
+    def setUp(self):
+        from apps.investments.services import create_investment
+        from apps.investments.tests import COMPLETING_METHOD, _make_property
+        from apps.wallets.services import get_or_create_custodial_wallet
+
+        self.owner = User.objects.create_user(email="assets-owner@example.com", password="pw12345!")
+        self.other = User.objects.create_user(email="assets-other@example.com", password="pw12345!")
+        self.prop = _make_property("owned-asset", total_value=1_000_000, token_price=100)
+        self.prop.submitted_by = self.owner
+        self.prop.save()
+        self.foreign = _make_property("foreign-asset", total_value=1_000_000, token_price=100)
+        self.foreign.submitted_by = self.other
+        self.foreign.save()
+        buyer = User.objects.create_user(email="assets-buyer@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(buyer)
+        create_investment(user=buyer, prop=self.prop, token_amount=5, payment_method=COMPLETING_METHOD)
+        self.client.force_authenticate(self.owner)
+
+    def test_list_shows_only_my_properties_with_their_figures(self):
+        rows = self.client.get("/api/owner/assets/").json()
+        self.assertEqual([r["slug"] for r in rows], ["owned-asset"])
+        self.assertEqual(rows[0]["units_sold"], 5)
+        self.assertEqual(rows[0]["investors"], 1)
+        self.assertEqual(rows[0]["raised"], 500.0)
+        self.assertEqual(rows[0]["units_available"], rows[0]["token_supply"] - 5)
+
+    def test_detail_is_mine_only_and_masks_investors(self):
+        d = self.client.get("/api/owner/assets/owned-asset/").json()
+        self.assertEqual(d["investors_list"][0]["investor"], "a***@example.com")
+        self.assertEqual(d["investors_list"][0]["units"], 5)
+        self.assertEqual(self.client.get("/api/owner/assets/foreign-asset/").status_code, 404)

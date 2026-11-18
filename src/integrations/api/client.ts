@@ -1296,7 +1296,44 @@ export interface OwnerKybAccessToken {
   code?: string;
 }
 
+/** One of the owner's own properties with its real figures (GET /owner/assets/). */
+export interface OwnerAsset {
+  slug: string;
+  name: string;
+  name_ar: string;
+  location: string;
+  location_ar: string;
+  image: string;
+  model: string;
+  status: string;
+  is_published: boolean;
+  token_price: number;
+  total_value: number;
+  token_supply: number;
+  units_sold: number;
+  units_available: number;
+  funded_pct: number;
+  raised: number;
+  investors: number;
+  last_sale_at: string | null;
+  distributions_paid: number;
+  distributions_count: number;
+  last_distribution_date: string | null;
+}
+
+export interface OwnerAssetDetail extends OwnerAsset {
+  prices: { date: string; previous_price: number; price: number; label: string }[];
+  distributions: { pay_date: string | null; amount: number; period: string }[];
+  investors_list: { investor: string; units: number; value: number }[];
+  documents: { title: string; title_ar: string; type: string }[];
+}
+
 export const ownerApi = {
+  /** My Assets: the caller's own properties with their figures. */
+  assets: () => rawRequest("/owner/assets/", { auth: true }) as Promise<OwnerAsset[]>,
+  /** One of the caller's own properties in detail (404 for anyone else's). */
+  asset: (slug: string) =>
+    rawRequest(`/owner/assets/${encodeURIComponent(slug)}/`, { auth: true }) as Promise<OwnerAssetDetail>,
   /** The caller's owner profile, or null when none exists yet (404). */
   profile: async (): Promise<any | null> => {
     try {

@@ -2,6 +2,8 @@
 from django.urls import path
 
 from .views import (
+    OwnerAssetDetailView,
+    OwnerAssetsView,
     OwnerDistributionsView,
     OwnerEarningsView,
     OwnerInvestorsView,
@@ -35,6 +37,9 @@ urlpatterns = [
     path("earnings/", OwnerEarningsView.as_view(), name="owner-earnings"),
     path("distributions/", OwnerDistributionsView.as_view(), name="owner-distributions"),
     path("investors/", OwnerInvestorsView.as_view(), name="owner-investors"),
+    # My assets (the owner's own properties + one in detail).
+    path("assets/", OwnerAssetsView.as_view(), name="owner-assets"),
+    path("assets/<slug:slug>/", OwnerAssetDetailView.as_view(), name="owner-asset-detail"),
     # Property submission intake (Wave B) — gated to approved owners.
     path("submissions/", SubmissionsView.as_view(), name="owner-submissions"),
     path("submissions/<uuid:submission_id>/", SubmissionDetailView.as_view(), name="owner-submission-detail"),
