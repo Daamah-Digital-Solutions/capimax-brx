@@ -96,7 +96,8 @@ def notify(user, notif_type, *, params: dict | None = None, action_url: str = ""
 
 # Security emails go out even if the user turned email copies off.
 ALWAYS_EMAIL = {"password_changed", "two_factor_changed", "account_deactivated", "withdrawal_requested",
-                "withdrawal_completed", "withdrawal_failed"}
+                "withdrawal_completed", "withdrawal_failed", "lp_withdrawal_requested",
+                "lp_withdrawal_processing", "lp_withdrawal_completed", "lp_withdrawal_failed"}
 
 
 def _email_enabled(user) -> bool:

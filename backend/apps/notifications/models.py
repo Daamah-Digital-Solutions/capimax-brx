@@ -86,6 +86,12 @@ class Notification(models.Model):
         CRYPTO_OVERPAID = "crypto_overpaid", _("Crypto payment above amount due — extra to wallet")
         # Not paid out → the amount is back in the wallet. params.amount/reference/reason.
         WITHDRAWAL_FAILED = "withdrawal_failed", _("Withdrawal failed (refunded)")
+        # Liquidity-provider withdrawals (client letter 2026-11): the LP is told at every step.
+        # params.amount/reference(/reason); the money moves on the LP balance, not the wallet.
+        LP_WITHDRAWAL_REQUESTED = "lp_withdrawal_requested", _("LP withdrawal requested")
+        LP_WITHDRAWAL_PROCESSING = "lp_withdrawal_processing", _("LP withdrawal being paid")
+        LP_WITHDRAWAL_COMPLETED = "lp_withdrawal_completed", _("LP withdrawal paid out")
+        LP_WITHDRAWAL_FAILED = "lp_withdrawal_failed", _("LP withdrawal failed (refunded)")
         # Submission review.
         SUBMISSION_PUBLISHED = "submission_published", _("Property submission published")
         SUBMISSION_REJECTED = "submission_rejected", _("Property submission rejected")

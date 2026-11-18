@@ -23,6 +23,22 @@ class LPWithdrawalError(Exception):
     """Not enough balance, or the withdrawal is not in a state that allows this step."""
 
 
+def reference_of(tx) -> str:
+    """The withdrawal's short reference shown to the LP and the team (LP-XXXXXXXX)."""
+    return "LP-" + str(tx.pk).replace("-", "")[:8].upper()
+
+
+def _tell(tx, lp, kind, **extra):
+    """Tell the LP about its withdrawal (in-app + email), inside the step's transaction."""
+    from apps.notifications.services import NotificationType, notify
+
+    notify(
+        lp.user, getattr(NotificationType, kind),
+        params={"amount": str(tx.amount), "reference": reference_of(tx), **extra},
+        action_url="/liquidity-provider#withdrawals",
+    )
+
+
 def request_lp_withdrawal(lp_id, amount, *, method: str, notes: str = "") -> LPTransaction:
     amount = Decimal(amount)
     with transaction.atomic():
@@ -31,11 +47,13 @@ def request_lp_withdrawal(lp_id, amount, *, method: str, notes: str = "") -> LPT
             raise LPWithdrawalError("Insufficient balance.")
         lp.current_balance = lp.current_balance - amount
         lp.save(update_fields=["current_balance", "updated_at"])
-        return LPTransaction.objects.create(
+        tx = LPTransaction.objects.create(
             lp=lp, tx_type="withdrawal", amount=amount, currency="USD",
             status=LPTransaction.TxStatus.PENDING, withdrawal_method=method,
             notes=notes or None,
         )
+        _tell(tx, lp, "LP_WITHDRAWAL_REQUESTED")
+        return tx
 
 
 def _lock(tx_id):
@@ -46,11 +64,12 @@ def _lock(tx_id):
 
 def mark_processing(tx_id) -> LPTransaction:
     with transaction.atomic():
-        tx, _lp = _lock(tx_id)
+        tx, lp = _lock(tx_id)
         if tx.status != LPTransaction.TxStatus.PENDING:
             raise LPWithdrawalError(f"Withdrawal is {tx.status}, not pending.")
         tx.status = LPTransaction.TxStatus.PROCESSING
         tx.save(update_fields=["status"])
+        _tell(tx, lp, "LP_WITHDRAWAL_PROCESSING")
         return tx
 
 
@@ -74,6 +93,7 @@ def complete_lp_withdrawal(tx_id, *, payout_reference: str = "") -> LPTransactio
         tx.save(update_fields=["status", "processed_at", "bank_reference", "balance_debited"])
         lp.total_withdrawn = lp.total_withdrawn + tx.amount
         lp.save(update_fields=["current_balance", "total_withdrawn", "updated_at"])
+        _tell(tx, lp, "LP_WITHDRAWAL_COMPLETED", payout_reference=tx.bank_reference or "—")
         return tx
 
 
@@ -93,4 +113,5 @@ def fail_lp_withdrawal(tx_id, *, reason: str = "") -> LPTransaction:
         if tx.balance_debited:
             lp.current_balance = lp.current_balance + tx.amount
             lp.save(update_fields=["current_balance", "updated_at"])
+        _tell(tx, lp, "LP_WITHDRAWAL_FAILED", reason=tx.failure_reason or "—")
         return tx

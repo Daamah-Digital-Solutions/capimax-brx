@@ -83,6 +83,8 @@ export interface LPTransaction {
   withdrawal_method: string | null;
   bank_reference: string | null;
   crypto_tx_hash: string | null;
+  /** Why a withdrawal was returned to the LP balance. */
+  failure_reason?: string;
   notes: string | null;
   created_at: string;
   processed_at: string | null;

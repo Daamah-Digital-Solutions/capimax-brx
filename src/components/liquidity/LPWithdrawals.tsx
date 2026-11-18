@@ -99,10 +99,18 @@ export function LPWithdrawals({
       failed: { variant: "destructive", icon: XCircle },
     };
     const { variant, icon: Icon } = config[status] || config.pending;
+    // The same plain words as the investor's withdrawals list.
+    const labels: Record<string, [string, string]> = {
+      pending: ["Received", "تم الاستلام"],
+      processing: ["Processing", "قيد التنفيذ"],
+      completed: ["Paid", "تم التحويل"],
+      failed: ["Returned", "مُعاد"],
+    };
+    const label = labels[status]?.[isRTL ? 1 : 0] ?? status;
     return (
       <Badge variant={variant} className="gap-1">
         <Icon className="w-3 h-3" />
-        {status}
+        {label}
       </Badge>
     );
   };
@@ -407,8 +415,22 @@ export function LPWithdrawals({
                           : isRTL ? "تحويل بنكي" : "Bank Transfer"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(tx.created_at).toLocaleDateString()}
+                        <span dir="ltr">{new Date(tx.created_at).toLocaleDateString("en-GB")}</span>
+                        {" · "}
+                        <span dir="ltr" className="font-mono">LP-{String(tx.id).replace(/-/g, "").slice(0, 8).toUpperCase()}</span>
                       </p>
+                      {tx.status === "completed" && (tx.bank_reference || tx.crypto_tx_hash) && (
+                        <p className="text-xs text-muted-foreground">
+                          {isRTL ? "مرجع التحويل: " : "Transfer reference: "}
+                          <span dir="ltr" className="font-mono break-all">{tx.bank_reference || tx.crypto_tx_hash}</span>
+                        </p>
+                      )}
+                      {tx.status === "failed" && tx.failure_reason && (
+                        <p className="text-xs text-red-600">
+                          {isRTL ? "السبب: " : "Reason: "}
+                          {tx.failure_reason}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">

@@ -24,6 +24,10 @@ const TYPE_CATEGORY: Record<string, NotificationCategory> = {
   secondary_sale_buyer: "investment",
   secondary_sale_seller: "financial",
   withdrawal_requested: "financial",
+  lp_withdrawal_requested: "financial",
+  lp_withdrawal_processing: "financial",
+  lp_withdrawal_completed: "financial",
+  lp_withdrawal_failed: "financial",
   submission_published: "investment",
   submission_rejected: "alert",
   // Partner assignment workflow (Phase 11 Wave B).

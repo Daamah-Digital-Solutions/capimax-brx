@@ -170,7 +170,7 @@ class LPTransactionSerializer(serializers.ModelSerializer):
         fields = (
             "id", "lp_id", "tx_type", "amount", "currency", "status",
             "withdrawal_method", "bank_reference", "crypto_tx_hash", "notes",
-            "created_at", "processed_at",
+            "created_at", "processed_at", "failure_reason",
         )
         read_only_fields = fields
 
