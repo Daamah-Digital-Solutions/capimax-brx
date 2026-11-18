@@ -12,8 +12,18 @@ from rest_framework import serializers
 from .models import Certificate
 
 
-class CertificateSerializer(serializers.ModelSerializer):
+class _StatusReason:
+    """`status_reason`: why the certificate has its status (see services.status_reason)."""
+
+    def get_status_reason(self, obj):
+        from .services import status_reason
+
+        return status_reason(obj)
+
+
+class CertificateSerializer(_StatusReason, serializers.ModelSerializer):
     property_name_ar = serializers.SerializerMethodField()
+    status_reason = serializers.SerializerMethodField()
 
     def get_property_name_ar(self, obj):
         inv = getattr(obj, "investment", None)
@@ -28,6 +38,7 @@ class CertificateSerializer(serializers.ModelSerializer):
             "id",
             "certificate_id",
             "status",
+            "status_reason",
             "issue_date",
             "subscription_date",
             "finalized_at",
@@ -55,7 +66,7 @@ class CertificateSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class CertificatePublicSerializer(serializers.ModelSerializer):
+class CertificatePublicSerializer(_StatusReason, serializers.ModelSerializer):
     """
     CURATED public projection (SPEC §4.2 verify_certificate). PUBLIC — must NEVER
     leak the internal id, the owning user / email, pdf storage paths, the QR payload,
@@ -63,6 +74,7 @@ class CertificatePublicSerializer(serializers.ModelSerializer):
     """
 
     property_name_ar = serializers.SerializerMethodField()
+    status_reason = serializers.SerializerMethodField()
 
     def get_property_name_ar(self, obj):
         inv = getattr(obj, "investment", None)
@@ -74,6 +86,7 @@ class CertificatePublicSerializer(serializers.ModelSerializer):
         fields = (
             "certificate_id",
             "status",
+            "status_reason",
             "issue_date",
             "subscription_date",
             "finalized_at",

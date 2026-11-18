@@ -127,9 +127,15 @@ def render_certificate_pdf(cert) -> bytes:
         yy -= 15
 
     # status badge
+    from .services import STATUS_REASONS, status_reason
+
     label, color = _STATUS.get(status, (status, MUTED))
-    label = tr_value(label).upper()
-    bw = 92
+    label = tr_value(label)
+    reason = STATUS_REASONS.get(status_reason(cert))
+    if reason:
+        label = f"{label} · {tr(reason)}"
+    label = label.upper()
+    bw = max(92, width(label, "Helvetica-Bold", 8.5) + 28)  # sized to its text
     c.setFillColor(color)
     c.roundRect(CX - bw / 2, yy - 18, bw, 18, 9, stroke=0, fill=1)
     draw(c, CX, yy - 12, label, "Helvetica-Bold", 8.5, PANEL, "center")

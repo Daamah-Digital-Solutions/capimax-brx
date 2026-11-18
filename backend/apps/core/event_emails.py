@@ -328,8 +328,8 @@ EVENT_EMAIL_COPY: dict[str, dict] = {
     },
     "certificate_final": {
         "subject": "Your ownership certificate for {property} is now final",
-        "heading": "Ownership certificate final",
-        "intro": "Your purchase of {tokens} unit(s) of {property} is fully settled, so your ownership certificate {certificate_id} is now final. You can download it from your portfolio.",
+        "heading": "Ownership certificate: Final · Fully paid",
+        "intro": "Your purchase of {tokens} unit(s) of {property} is fully settled, so your ownership certificate {certificate_id} is now FINAL · FULLY PAID. You can download it from your portfolio.",
         "cta_label": "View your certificates",
         "cta_path": "/portfolio?tab=certificates",
         "outro": "",

@@ -20,6 +20,7 @@ import {
 import { format } from "date-fns";
 import { ar as arLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { certificateStatusLabel } from "@/lib/certificateStatus";
 
 const VerifyCertificate = () => {
   const { code } = useParams<{ code: string }>();
@@ -39,27 +40,28 @@ const VerifyCertificate = () => {
     enabled: !!code,
   });
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, reason?: string) => {
+    const label = certificateStatusLabel(status, reason, language);
     switch (status) {
       case 'final':
         return (
-          <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-lg px-4 py-2">
+          <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-lg px-4 py-2 uppercase tracking-wide whitespace-normal text-center">
             <CheckCircle className="w-5 h-5 mr-2" />
-            {L("Final - Verified", "نهائية - موثّقة")}
+            {label}
           </Badge>
         );
       case 'provisional':
         return (
-          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-lg px-4 py-2">
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-lg px-4 py-2 uppercase tracking-wide whitespace-normal text-center">
             <Clock className="w-5 h-5 mr-2" />
-            {L("Provisional", "مبدئية")}
+            {label}
           </Badge>
         );
       case 'revoked':
         return (
-          <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-lg px-4 py-2">
+          <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-lg px-4 py-2 uppercase tracking-wide whitespace-normal text-center">
             <XCircle className="w-5 h-5 mr-2" />
-            {L("Revoked", "ملغاة")}
+            {label}
           </Badge>
         );
       default:
@@ -133,7 +135,7 @@ const VerifyCertificate = () => {
                 <XCircle className="w-20 h-20 text-red-400 mb-4" />
               )}
               
-              {getStatusBadge(certificate.status)}
+              {getStatusBadge(certificate.status, certificate.status_reason)}
               
               <p className="mt-4 text-muted-foreground">
                 {certificate.status === 'final' && L("This certificate has been verified and is authentic.", "تم التحقق من هذه الشهادة وهي أصلية.")}

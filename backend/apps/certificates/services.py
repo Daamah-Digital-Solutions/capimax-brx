@@ -118,6 +118,54 @@ def is_settled(investment) -> bool:
     return True
 
 
+# Why a certificate has its status, shown next to it ("FINAL · FULLY PAID",
+# "PROVISIONAL · INSTALLMENTS OUTSTANDING", ...). English here; translated where shown.
+STATUS_REASONS = {
+    "fully_paid": "Fully paid",
+    "installments_outstanding": "Installments outstanding",
+    "pledged_nova": "Pledged to Nova Finance",
+    "awaiting_record": "Awaiting on-chain record",
+}
+
+
+def status_reason(cert) -> str:
+    """
+    The reason code for `cert`'s status, from the real state of the purchase (the same
+    checks as is_settled): final → "fully_paid"; provisional → the first that is still open
+    of an unfinished installment plan, a Nova Finance pledge, units not yet minted; "" when
+    revoked or nothing is open (the next sync makes it final).
+    """
+    status = (cert.status or "").lower()
+    if status == CertificateStatus.FINAL:
+        return "fully_paid"
+    if status != CertificateStatus.PROVISIONAL:
+        return ""
+    inv = getattr(cert, "investment", None)
+    if inv is None:
+        return ""
+    if inv.is_installment and inv.installment_plan_id:
+        from apps.installments.models import InstallmentPlanStatus
+
+        if inv.installment_plan.status != InstallmentPlanStatus.COMPLETED:
+            return "installments_outstanding"
+    if inv.payment_method == "sukuk":
+        from apps.payments.nova_pledge import active_pledge
+
+        if active_pledge(inv) is not None:
+            return "pledged_nova"
+    if not inv.tokens_minted:
+        return "awaiting_record"
+    return ""
+
+
+def status_label(cert) -> str:
+    """'Final · Fully paid' / 'Provisional · Installments outstanding' / 'Revoked' (English)."""
+    base = {"final": "Final", "provisional": "Provisional", "revoked": "Revoked"}.get(
+        (cert.status or "").lower(), (cert.status or "").capitalize())
+    reason = STATUS_REASONS.get(status_reason(cert))
+    return f"{base} · {reason}" if reason else base
+
+
 def sync_certificate(investment, *, notify_holder: bool = True):
     """
     Keep an investment's certificate in step with its settlement: issued (provisional) once

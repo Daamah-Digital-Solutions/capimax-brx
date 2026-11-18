@@ -15,5 +15,12 @@
   "${0} wallet balance": "${0} du portefeuille",
   "{0} units · {1}": "{0} parts · {1}",
   "1 unit · {0}": "1 part · {0}",
-  "Share of the SPV": "Part de la SPV"
+  "Share of the SPV": "Part de la SPV",
+  "Final · Fully paid": "Définitif · Entièrement payé",
+  "Provisional · Installments outstanding": "Provisoire · Échéances en cours",
+  "Provisional · Pledged to Nova Finance": "Provisoire · Nanti au profit de Nova Finance",
+  "Provisional · Awaiting on-chain record": "Provisoire · En attente d'enregistrement on-chain",
+  "Final": "Définitif",
+  "Provisional": "Provisoire",
+  "Revoked": "Révoqué"
 }

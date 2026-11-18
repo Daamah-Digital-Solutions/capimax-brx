@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useCertificates, Certificate } from "@/hooks/useCertificates";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { certificateStatusLabel } from "@/lib/certificateStatus";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -63,27 +64,28 @@ export function CertificatesSection() {
     }
   };
 
-  const getStatusBadge = (status: Certificate["status"]) => {
+  const getStatusBadge = (status: Certificate["status"], reason?: string) => {
+    const label = certificateStatusLabel(status, reason, language);
     switch (status) {
       case "final":
         return (
-          <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1">
+          <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1 uppercase tracking-wide whitespace-normal text-start">
             <CheckCircle className="h-3 w-3" />
-            {isArabic ? "نهائي" : "Final"}
+            {label}
           </Badge>
         );
       case "provisional":
         return (
-          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 gap-1">
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 gap-1 uppercase tracking-wide whitespace-normal text-start">
             <Clock className="h-3 w-3" />
-            {isArabic ? "مؤقت" : "Provisional"}
+            {label}
           </Badge>
         );
       case "revoked":
         return (
-          <Badge className="bg-red-500/20 text-red-400 border-red-500/30 gap-1">
+          <Badge className="bg-red-500/20 text-red-400 border-red-500/30 gap-1 uppercase tracking-wide whitespace-normal text-start">
             <XCircle className="h-3 w-3" />
-            {isArabic ? "ملغي" : "Revoked"}
+            {label}
           </Badge>
         );
     }
@@ -155,7 +157,7 @@ export function CertificatesSection() {
                         <span className="font-mono text-sm font-semibold text-foreground">
                           {cert.certificate_id}
                         </span>
-                        {getStatusBadge(cert.status)}
+                        {getStatusBadge(cert.status, cert.status_reason)}
                       </div>
 
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -257,7 +259,7 @@ export function CertificatesSection() {
                 <span className="font-mono text-lg font-bold">
                   {selectedCert.certificate_id}
                 </span>
-                {getStatusBadge(selectedCert.status)}
+                {getStatusBadge(selectedCert.status, selectedCert.status_reason)}
               </div>
 
               {/* Investor */}

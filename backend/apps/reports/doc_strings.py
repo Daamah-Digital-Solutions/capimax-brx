@@ -351,6 +351,11 @@ TEXT: dict[str, tuple[str, str]] = {
     "Final": ("نهائية", "Définitif"),
     "Provisional": ("مؤقتة", "Provisoire"),
     "Revoked": ("ملغاة", "Révoqué"),
+    # why a certificate has its status (certificates.services.STATUS_REASONS)
+    "Fully paid": ("مدفوعة بالكامل", "Entièrement payé"),
+    "Installments outstanding": ("أقساط مستحقة", "Échéances en cours"),
+    "Pledged to Nova Finance": ("مرهونة لدى Nova Finance", "Nanti au profit de Nova Finance"),
+    "Awaiting on-chain record": ("بانتظار التسجيل على البلوكتشين", "En attente d'enregistrement on-chain"),
     "Credited": ("مُضاف", "Crédité"),
     "Succeeded": ("ناجح", "Réussi"),
     "Upcoming": ("قادم", "À venir"),

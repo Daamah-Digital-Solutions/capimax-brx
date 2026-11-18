@@ -170,7 +170,7 @@ class CertificateVerifyPublicTests(APITestCase):
         self.assertEqual(
             set(body.keys()),
             {
-                "certificate_id", "status", "issue_date", "subscription_date",
+                "certificate_id", "status", "status_reason", "issue_date", "subscription_date",
                 "finalized_at", "investor_name", "investor_id_masked", "spv_name",
                 "spv_registration_ref", "property_name", "property_name_ar", "property_location",
                 "listing_id", "investment_amount", "units_purchased", "unit_price",

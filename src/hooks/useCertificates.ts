@@ -8,6 +8,8 @@ export interface Certificate {
   id: string;
   certificate_id: string;
   status: "provisional" | "final" | "revoked";
+  /** Why it has this status: fully_paid | installments_outstanding | pledged_nova | awaiting_record | "" */
+  status_reason?: string;
   issue_date: string;
   finalized_at: string | null;
   investor_name: string;

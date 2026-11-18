@@ -113,6 +113,85 @@ class CertificateFinalityTests(TestCase):
         self.assertEqual(notices.first().action_url, "/portfolio?tab=certificates")
 
 
+class CertificateStatusReasonTests(TestCase):
+    """The badge says why: FINAL · FULLY PAID, or PROVISIONAL · <the first thing still open>."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="reason@example.com", password="pw12345!")
+        get_or_create_custodial_wallet(self.user)
+        self.prop = _make_property("reason", total_value=1_000_000, token_price=100)
+        self.api = APIClient()
+        self.api.force_authenticate(self.user)
+        self.inv = create_investment(user=self.user, prop=self.prop, token_amount=3,
+                                     payment_method=COMPLETING_METHOD)["investment"]
+        self.cert = Certificate.objects.get(investment=self.inv)
+
+    def _provisional(self, **inv_fields):
+        Investment.objects.filter(pk=self.inv.pk).update(**inv_fields)
+        Certificate.objects.filter(pk=self.cert.pk).update(status="provisional", finalized_at=None)
+        return Certificate.objects.select_related("investment").get(pk=self.cert.pk)
+
+    def _plan(self):
+        from apps.installments.models import InstallmentPlan
+
+        return InstallmentPlan.objects.create(
+            investor=self.user, property=self.prop, property_name=self.prop.name,
+            total_amount=Decimal("300"), down_payment_amount=Decimal("75"),
+            down_payment_percent=Decimal("25"), number_of_installments=3,
+            installment_amount=Decimal("75"), duration_months=4, status="active",
+        )
+
+    def test_final_is_fully_paid(self):
+        from .services import status_label, status_reason
+
+        self.assertEqual(status_reason(self.cert), "fully_paid")
+        self.assertEqual(status_label(self.cert), "Final · Fully paid")
+        data = self.api.get("/api/certificates/").json()[0]
+        self.assertEqual(data["status_reason"], "fully_paid")
+        public = self.api.get(f"/api/certificates/verify/{self.cert.verification_code}/").json()
+        self.assertEqual(public["status_reason"], "fully_paid")
+
+    def test_each_reason_comes_from_the_real_state(self):
+        from apps.payments.models import NovaPledge
+
+        from .services import status_label, status_reason
+
+        cert = self._provisional(tokens_minted=False)
+        self.assertEqual(status_reason(cert), "awaiting_record")
+        self.assertEqual(status_label(cert), "Provisional · Awaiting on-chain record")
+
+        cert = self._provisional(tokens_minted=True, payment_method="sukuk")
+        self.inv.refresh_from_db()
+        NovaPledge.objects.create(investment=self.inv, wallet=self.inv.wallet,
+                                  property_slug=self.prop.slug, units=3)
+        self.assertEqual(status_reason(cert), "pledged_nova")
+
+        # installments come first when several apply
+        cert = self._provisional(is_installment=True, installment_plan=self._plan(), tokens_minted=False)
+        self.assertEqual(status_reason(cert), "installments_outstanding")
+        self.assertEqual(status_label(cert), "Provisional · Installments outstanding")
+
+    def test_no_reason_is_invented(self):
+        from .services import status_label, status_reason
+
+        cert = self._provisional()  # nothing open: the next sync makes it final
+        self.assertEqual(status_reason(cert), "")
+        self.assertEqual(status_label(cert), "Provisional")
+        self.cert.refresh_from_db()
+        self.cert.revoke("test")
+        self.assertEqual(status_label(self.cert), "Revoked")
+
+    def test_the_pdf_badge_carries_the_reason(self):
+        from apps.reports.doc_lang import doc_language
+
+        from .pdf import render_certificate_pdf
+
+        cert = self._provisional(is_installment=True, installment_plan=self._plan())
+        for lang in ("en", "ar", "fr"):
+            with doc_language(lang):
+                self.assertTrue(render_certificate_pdf(cert).startswith(b"%PDF"))
+
+
 class ReceivedUnitsCertificateTests(TestCase):
     """Units received by a market purchase, transfer or gift get their certificate at once."""
 
