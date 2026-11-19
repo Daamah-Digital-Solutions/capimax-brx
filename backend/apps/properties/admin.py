@@ -162,6 +162,7 @@ class TokenMetadataInline(LanguageRowsMixin, admin.StackedInline):
         "deployment_chain_id",
         "deployment_network",
         "factory_address",
+        "previous_deployments",  # older contracts (e.g. BSC Testnet) — written by the chain layer
     )
 
 
