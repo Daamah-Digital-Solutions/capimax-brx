@@ -12,6 +12,9 @@ import {
   Coins,
   FileText,
   RefreshCw,
+  Briefcase,
+  Blocks,
+  ChevronRight,
 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -162,6 +165,50 @@ export default function Dashboard() {
         <div className="container py-8">
           {/* Identity verification prompt — only until KYC is approved */}
           <KycStatusCard hideWhenVerified className="mb-8" />
+
+          {/* Three separate shortcuts, each straight to its own place (client letter
+              2026-11-19): the investment portfolio, the balance wallet, and the blockchain
+              wallet card (address, explorer link, verification). */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            {[
+              {
+                to: "/portfolio",
+                icon: Briefcase,
+                tone: "bg-primary/10 text-primary",
+                title: language === "ar" ? "المحفظة الاستثمارية" : "My Portfolio",
+                desc: language === "ar" ? "أصولك وشهاداتك وعوائدك" : "Your holdings, certificates and returns",
+              },
+              {
+                to: "/wallet",
+                icon: Wallet,
+                tone: "bg-success/10 text-success",
+                title: language === "ar" ? "محفظة الرصيد" : "Wallet",
+                desc: language === "ar" ? "الرصيد والإيداع والسحب" : "Balance, deposits and withdrawals",
+              },
+              {
+                to: "/portfolio?tab=wallet#blockchain-wallet",
+                icon: Blocks,
+                tone: "bg-info/10 text-info",
+                title: language === "ar" ? "محفظة البلوكتشين" : "Blockchain Wallet",
+                desc: language === "ar" ? "العنوان ورابط المستكشف والتحقق" : "Address, explorer link and verification",
+              },
+            ].map((s) => (
+              <Link
+                key={s.to}
+                to={s.to}
+                className="group flex items-center gap-4 p-5 bg-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-md transition-all animate-fade-in min-w-0"
+              >
+                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", s.tone)}>
+                  <s.icon className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-foreground">{s.title}</div>
+                  <div className="text-sm text-muted-foreground leading-snug">{s.desc}</div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
 
           {/* Every service first, with the exit options beside it (client review: the
               shortcuts lead the dashboard; reinvesting is one of them, not a banner). */}

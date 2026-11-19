@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,6 +38,17 @@ export function WalletSection() {
     getExplorerUrl,
     getTxExplorerUrl,
   } = useUserWallet();
+
+  // /portfolio?tab=wallet#blockchain-wallet (the dashboard's Blockchain Wallet shortcut)
+  // lands on the blockchain wallet card: its address, explorer link and verification.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (loading || hash !== "#blockchain-wallet") return;
+    const id = window.requestAnimationFrame(() =>
+      document.getElementById("blockchain-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+    return () => window.cancelAnimationFrame(id);
+  }, [loading, hash]);
 
   const copyAddress = async () => {
     if (!wallet) return;
@@ -120,7 +132,7 @@ export function WalletSection() {
       </Card>
 
       {/* Wallet Card */}
-      <Card>
+      <Card id="blockchain-wallet" className="scroll-mt-24">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
