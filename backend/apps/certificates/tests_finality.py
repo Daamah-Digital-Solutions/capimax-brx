@@ -211,7 +211,8 @@ class CertificateStatusReasonTests(TestCase):
         self.assertIn("is the registered holder of 3 units in Long Legal Name Holdings", text)
         self.assertIn("Associated property", text)
         self.assertIn("On behalf of Long Legal Name Holdings Special Purpose Vehicle Company Limited", text)
-        self.assertIn("Capimax PropShare", text)
+        self.assertIn("Capimax BRX — Digital Administration and Verification", text)
+        self.assertNotIn("PropShare", text)
         self.assertNotIn("representing", text)
 
 

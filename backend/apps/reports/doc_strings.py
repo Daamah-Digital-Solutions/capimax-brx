@@ -439,9 +439,9 @@ TEXT: dict[str, tuple[str, str]] = {
         "Parts de la SPV propriétaire d'un bien tokenisé",
     ),
     "On behalf of {0}": ("نيابة عن {0}", "Pour le compte de {0}"),
-    "Capimax PropShare — Digital Administration and Verification": (
-        "كابيماكس بروبشير — الإدارة الرقمية والتحقق",
-        "Capimax PropShare — Administration numérique et vérification",
+    "Capimax BRX — Digital Administration and Verification": (
+        "كابيماكس BRX — الإدارة الرقمية والتحقق",
+        "Capimax BRX — Administration numérique et vérification",
     ),
     "the issuing SPV": ("الشركة ذات الغرض الخاص المُصدِرة", "la SPV émettrice"),
     "Share of the SPV": ("الحصة في الشركة ذات الغرض الخاص", "Part de la SPV"),

@@ -219,6 +219,6 @@ def render_certificate_pdf(cert) -> bytes:
     for ln in wrap(behalf, "Helvetica", 7.4, RIGHT - LEFT - qr_size - 20):
         draw(c, LEFT, ly, ln, "Helvetica", 7.4, INK)
         ly -= 10
-    draw(c, LEFT, ly, tr("Capimax PropShare — Digital Administration and Verification"), "Helvetica", 7.4, MUTED)
+    draw(c, LEFT, ly, tr("Capimax BRX — Digital Administration and Verification"), "Helvetica", 7.4, MUTED)
     d.y = ly - 7
     return d.finish()
