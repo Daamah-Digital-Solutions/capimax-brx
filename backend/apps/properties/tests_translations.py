@@ -99,3 +99,29 @@ class PropertyTranslationTests(APITestCase):
         for box in ("description_ar", "description_fr", "developer_info-0-overview_ar", "developer_info-0-overview_fr",
                     "faqs-0-answer_fr", "amenities-0-name_fr", "spv-0-jurisdiction_fr"):
             self.assertIn(f'name="{box}"', html, box)
+
+    def test_the_editor_shows_each_text_in_three_languages_side_by_side(self):
+        # Client letter 2026-11: English / Arabic / French of the same text on one line, and
+        # every admin page loads the stylesheet that types Arabic boxes right to left.
+        admin = get_user_model().objects.create_superuser(email="side@ex.com", password="pw-12345-strong")
+        client = Client()
+        client.force_login(admin)
+        html = client.get(f"/admin/properties/property/{self.prop.pk}/change/").content.decode()
+        self.assertIn("core/admin_languages.css", html)
+        for base in ("name", "location", "description", "duration", "expected_completion", "overview"):
+            self.assertIn(f"field-{base} field-{base}_ar field-{base}_fr", html, base)
+        self.assertNotIn("Arabic and French versions", html)
+
+
+class LanguageRowsTests(APITestCase):
+    def test_grouping_puts_the_three_languages_on_one_line(self):
+        from .admin import group_language_fields
+
+        sets = group_language_fields([
+            (None, {"fields": ("name", "name_ar", "name_fr", "rating", "text_en", "text_ar", "text_fr",
+                               ("location", "location_ar"), "location_fr", "solo_ar")}),
+        ])
+        self.assertEqual(sets[0][1]["fields"], (
+            ("name", "name_ar", "name_fr"), "rating", ("text_en", "text_ar", "text_fr"),
+            ("location", "location_ar"), "location_fr", "solo_ar",
+        ))

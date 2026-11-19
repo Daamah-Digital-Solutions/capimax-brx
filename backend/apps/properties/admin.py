@@ -75,33 +75,74 @@ UPLOAD_MAX_BYTES = UPLOAD_MAX_MB * 1024 * 1024
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 
+# --- English / Arabic / French side by side -------------------------------- #
+def group_language_fields(fieldsets):
+    """
+    Put the English, Arabic and French versions of the same text on ONE line of the form
+    (e.g. "overview", "overview_ar", "overview_fr" -> ("overview", "overview_ar",
+    "overview_fr")), so the editor types and compares them together instead of finding
+    each language in a different place. The admin stylesheet (core/admin_languages.css)
+    shows such a line as equal columns, Arabic right to left. Lines already grouped by
+    hand are kept as they are; a field with no language sibling is left alone.
+    """
+    grouped = []
+    for name, opts in fieldsets:
+        fields = list(opts.get("fields", ()))
+        plain = {f for f in fields if isinstance(f, str)}
+        used, out = set(), []
+        for f in fields:
+            if not isinstance(f, str):
+                out.append(f)
+                continue
+            if f in used:
+                continue
+            base = f[:-3] if f[-3:] in ("_en", "_ar", "_fr") else f
+            trio = [c for c in (base, base + "_en", base + "_ar", base + "_fr") if c in plain and c not in used]
+            has_ar_or_fr = any(c.endswith(("_ar", "_fr")) for c in trio)
+            if len(trio) > 1 and has_ar_or_fr and f in trio:
+                out.append(tuple(trio))
+                used.update(trio)
+            else:
+                out.append(f)
+                used.add(f)
+        grouped.append((name, {**opts, "fields": tuple(out)}))
+    return grouped
+
+
+class LanguageRowsMixin:
+    """English / Arabic / French of each text on one line (see group_language_fields)."""
+
+    def get_fieldsets(self, request, obj=None):
+        return group_language_fields(super().get_fieldsets(request, obj))
+
+
 # --- OneToOne detail (stacked) ------------------------------------------- #
-class InstallmentScheduleInline(admin.StackedInline):
+class InstallmentScheduleInline(LanguageRowsMixin, admin.StackedInline):
     model = InstallmentSchedule
     extra = 0
 
 
-class FutureContractInline(admin.StackedInline):
+class FutureContractInline(LanguageRowsMixin, admin.StackedInline):
     model = FutureContract
     extra = 0
 
 
-class OptionContractInline(admin.StackedInline):
+class OptionContractInline(LanguageRowsMixin, admin.StackedInline):
     model = OptionContract
     extra = 0
 
 
-class SharedOwnershipInline(admin.StackedInline):
+class SharedOwnershipInline(LanguageRowsMixin, admin.StackedInline):
     model = SharedOwnership
     extra = 0
 
 
-class SPVRecordInline(admin.StackedInline):
+class SPVRecordInline(LanguageRowsMixin, admin.StackedInline):
     model = SPVRecord
     extra = 0
 
 
-class TokenMetadataInline(admin.StackedInline):
+class TokenMetadataInline(LanguageRowsMixin, admin.StackedInline):
     model = TokenMetadata
     extra = 0
     # total_supply / tokenized_units are forced to equal the property's authoritative
@@ -124,7 +165,7 @@ class TokenMetadataInline(admin.StackedInline):
     )
 
 
-class PropertyFinancialsInline(admin.StackedInline):
+class PropertyFinancialsInline(LanguageRowsMixin, admin.StackedInline):
     model = PropertyFinancials
     extra = 0
 
@@ -213,7 +254,7 @@ class PropertySitePhotoInline(admin.TabularInline):
 
 
 # --- data-room section content (admin-managed per property) --------------- #
-class DeveloperInfoInline(admin.StackedInline):
+class DeveloperInfoInline(LanguageRowsMixin, admin.StackedInline):
     model = DeveloperInfo
     extra = 0
 
@@ -231,14 +272,14 @@ class DeveloperInfoInline(admin.StackedInline):
 
 
 @admin.register(DeveloperProfile)
-class DeveloperProfileAdmin(admin.ModelAdmin):
+class DeveloperProfileAdmin(LanguageRowsMixin, admin.ModelAdmin):
     """Saved developers: the full profile kept once and picked when creating an opportunity."""
 
     list_display = ("name", "name_ar", "location", "years_experience", "completed_projects", "updated_at")
     search_fields = ("name", "name_ar", "name_fr", "location")
     fieldsets = (
         (None, {"fields": (("name", "name_ar", "name_fr"),)}),
-        ("Overview", {"fields": ("overview", "overview_ar", "overview_fr")}),
+        ("Overview", {"fields": (("overview", "overview_ar", "overview_fr"),)}),
         ("Track record", {"fields": (("years_experience", "completed_projects", "ongoing_projects", "rating"),)}),
         ("Contact", {"fields": (("location", "location_ar", "location_fr"), ("email", "phone", "website"))}),
         ("Projects", {"fields": ("related_projects",)}),
@@ -250,12 +291,12 @@ class DeveloperProfileAdmin(admin.ModelAdmin):
         return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
-class InsuranceInfoInline(admin.StackedInline):
+class InsuranceInfoInline(LanguageRowsMixin, admin.StackedInline):
     model = InsuranceInfo
     extra = 0
 
 
-class MarketDataInline(admin.StackedInline):
+class MarketDataInline(LanguageRowsMixin, admin.StackedInline):
     model = MarketData
     extra = 0
 
@@ -667,8 +708,9 @@ class PropertyAdmin(admin.ModelAdmin):
     ]
     def get_fieldsets(self, request, obj=None):
         """
-        Essentials first (only they are needed to publish), Arabic and French optional,
-        everything else optional with defaults (client review §3, §10). The older link
+        Essentials first (only they are needed to publish), each text with its optional
+        Arabic and French boxes beside the English, everything else optional with defaults
+        (client review §3, §10; client letter 2026-11: languages side by side). The older link
         fields appear only on properties that already use them.
         """
         sets = []
@@ -681,18 +723,19 @@ class PropertyAdmin(admin.ModelAdmin):
                     "description": (
                         "Fields marked * are needed to publish — nothing else is. Everything "
                         "below is optional or filled in automatically. Save a draft any time "
-                        "and finish later."
+                        "and finish later. Each text has its English, Arabic and French boxes "
+                        "side by side; leave the Arabic or French box empty to show the English."
                     ),
                     "fields": (
-                        "name",
+                        ("name", "name_ar", "name_fr"),
                         "property_link",
-                        "location",
+                        ("location", "location_ar", "location_fr"),
                         ("country", "city"),
                         "model",
                         ("total_value", "token_price", "token_supply"),
                         "price_lock_note",
                         ("image_file", "hero_preview"),
-                        "description",
+                        ("description", "description_ar", "description_fr"),
                     ),
                 },
             ),
@@ -705,24 +748,6 @@ class PropertyAdmin(admin.ModelAdmin):
                         "platform, not taken from the fees; installments earn it on each payment."
                     ),
                     "fields": (("broker_commission_rate", "open_for_promotion"),),
-                },
-            ),
-            (
-                "Arabic and French versions",
-                {
-                    "description": (
-                        "What visitors read when the site is in Arabic or French. The site's own "
-                        "labels translate by themselves; this text doesn't. Leave a box empty to "
-                        "show the English instead. The sections below (developer, FAQ, risks, "
-                        "amenities…) have their own Arabic and French boxes."
-                    ),
-                    "fields": (
-                        ("name_ar", "name_fr"),
-                        ("location_ar", "location_fr"),
-                        ("description_ar", "description_fr"),
-                        ("duration_ar", "duration_fr"),
-                        ("expected_completion_ar", "expected_completion_fr"),
-                    ),
                 },
             ),
             (
@@ -749,8 +774,8 @@ class PropertyAdmin(admin.ModelAdmin):
                         ("future_token_price", "min_investment"),
                         ("expected_yield", "expected_growth"),
                         ("funded", "investors"),
-                        "duration",
-                        "expected_completion",
+                        ("duration", "duration_ar", "duration_fr"),
+                        ("expected_completion", "expected_completion_ar", "expected_completion_fr"),
                         "offplan_payment",
                     ),
                 },

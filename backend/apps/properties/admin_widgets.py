@@ -215,6 +215,7 @@ _JSON_ROWS_SCRIPT = """
         if (c.type === "number") inp.step = "any";
         inp.value = data && data[c.key] != null ? data[c.key] : "";
         inp.style.width = c.type === "number" ? "8em" : "14em";
+        if (c.key === "ar") { inp.dir = "rtl"; inp.lang = "ar"; }
         inp.addEventListener("input", sync);
         td.style.padding = "2px 6px"; td.appendChild(inp); tr.appendChild(td);
       });

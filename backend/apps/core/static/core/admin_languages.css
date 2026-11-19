@@ -1,0 +1,70 @@
+/*
+ * Admin language boxes (every admin page, via templates/admin/base_site.html).
+ *
+ * 1. Every Arabic box is typed right to left: any input or textarea whose field name
+ *    ends in "_ar" (inline rows included, e.g. "faqs-0-answer_ar"), so new forms and
+ *    rows added later get it with no extra code.
+ * 2. A line that holds the same text in English / Arabic / French shows the boxes side by
+ *    side in equal columns, label on top, each box the full width of its column, so the
+ *    three versions are typed and compared together. Narrow screens stack them.
+ */
+input[name$="_ar"],
+textarea[name$="_ar"] {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+  font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Noto Naskh Arabic", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.form-row:has(.form-multiline [name$="_ar"]) .form-multiline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.form-row:has(.form-multiline [name$="_ar"]) .form-multiline > div {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.form-row:has(.form-multiline [name$="_ar"]) .fieldBox {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  width: auto;
+}
+.form-row:has(.form-multiline [name$="_ar"]) .fieldBox label {
+  float: none;
+  width: auto;
+  min-width: 0;
+  padding: 0 0 4px;
+  display: block;
+}
+.form-row:has(.form-multiline [name$="_ar"]) .fieldBox:has([name$="_ar"]) label {
+  text-align: right;
+}
+.form-row:has(.form-multiline [name$="_ar"]) .fieldBox input[type="text"],
+.form-row:has(.form-multiline [name$="_ar"]) .fieldBox input:not([type]),
+.form-row:has(.form-multiline [name$="_ar"]) .fieldBox textarea {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+.form-row:has(.form-multiline [name$="_ar"]) .help {
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+@media (max-width: 1024px) {
+  .form-row:has(.form-multiline [name$="_ar"]) .form-multiline {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
