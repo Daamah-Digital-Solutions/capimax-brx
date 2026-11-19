@@ -1,21 +1,29 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { CreditCard, Plus } from "lucide-react";
+import { CheckCircle2, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { CreateCardDialog } from "@/components/wallet/CreateCardDialog";
+import { CardWaitlistDialog, waitlistLabel } from "@/components/wallet/CardWaitlistDialog";
+import { useCardWaitlist } from "@/hooks/useCardWaitlist";
 
 interface CreateVirtualCardButtonProps {
   roleLabel?: string;
   variant?: "icon" | "full";
 }
 
-/** Header CTA that opens the smart family/dependent card issuance flow. */
-export function CreateVirtualCardButton({ roleLabel, variant = "full" }: CreateVirtualCardButtonProps) {
+/**
+ * Header card CTA. BRX Visa cards are not issued yet (client letter 2026-11-19), so it reads
+ * "Coming soon · Join the Waitlist" and opens the waitlist instead of card issuance; once
+ * joined it says so. Same button, same place, same look.
+ */
+export function CreateVirtualCardButton({ variant = "full" }: CreateVirtualCardButtonProps) {
   const { language } = useLanguage();
   const isAr = language === "ar";
-  const t = (en: string, ar: string) => (isAr ? ar : en);
   const [open, setOpen] = useState(false);
+  const { joined } = useCardWaitlist();
+  const label = joined
+    ? (isAr ? "قريباً · أنت في قائمة الانتظار" : "Coming soon · You're on the waitlist")
+    : waitlistLabel(isAr);
 
   if (variant === "icon") {
     return (
@@ -28,20 +36,15 @@ export function CreateVirtualCardButton({ roleLabel, variant = "full" }: CreateV
                 variant="hero"
                 onClick={() => setOpen(true)}
                 className="relative shadow-lg"
-                aria-label={t("Issue New Card", "إصدار بطاقة جديدة")}
+                aria-label={label}
               >
                 <CreditCard className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] flex items-center justify-center border-2 border-background">
-                  <Plus className="h-2.5 w-2.5" />
-                </span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              {t("Issue New Card", "إصدار بطاقة جديدة")}
-            </TooltipContent>
+            <TooltipContent>{label}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <CreateCardDialog open={open} onOpenChange={setOpen} roleLabel={roleLabel} />
+        <CardWaitlistDialog open={open} onOpenChange={setOpen} />
       </>
     );
   }
@@ -49,13 +52,10 @@ export function CreateVirtualCardButton({ roleLabel, variant = "full" }: CreateV
   return (
     <>
       <Button onClick={() => setOpen(true)} variant="hero" className="gap-2 shadow-lg">
-        <span className="relative inline-flex">
-          <CreditCard className="h-4 w-4" />
-          <Plus className="h-3 w-3 absolute -top-1 -right-1.5" />
-        </span>
-        {t("Issue New Card", "إصدار بطاقة جديدة")}
+        {joined ? <CheckCircle2 className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
+        {label}
       </Button>
-      <CreateCardDialog open={open} onOpenChange={setOpen} roleLabel={roleLabel} />
+      <CardWaitlistDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }

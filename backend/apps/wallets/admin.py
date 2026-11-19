@@ -9,6 +9,7 @@ from django.contrib import admin, messages
 
 from .models import (
     BalanceTransaction,
+    CardWaitlistEntry,
     Deposit,
     OwnershipToken,
     UserBalance,
@@ -292,3 +293,17 @@ class DepositAdmin(admin.ModelAdmin):
         self.message_user(
             request, f"Rejected {rejected} bank deposit(s).", level=messages.WARNING
         )
+
+
+@admin.register(CardWaitlistEntry)
+class CardWaitlistEntryAdmin(admin.ModelAdmin):
+    """Investors waiting for a BRX Visa card (cards are 'Coming soon'). Read only."""
+
+    list_display = ("user", "card_type", "created_at")
+    list_filter = ("card_type",)
+    search_fields = ("user__email",)
+    readonly_fields = ("user", "card_type", "created_at", "updated_at")
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False

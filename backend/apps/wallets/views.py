@@ -288,3 +288,38 @@ class PayoutConnectView(APIView):
         except StripeError as exc:
             return Response({"detail": str(exc), "code": "stripe_error"}, status=status.HTTP_502_BAD_GATEWAY)
         return Response({"url": url})
+
+
+class CardWaitlistView(APIView):
+    """
+    GET  /api/wallets/card-waitlist/  -> {"joined": bool, "card_type": str|null, "joined_at": iso|null}
+    POST /api/wallets/card-waitlist/  {"card_type": "personal"|"family"|"dependent"} -> joins
+    (or updates the card choice). BRX Visa cards are 'Coming soon' (client letter 2026-11-19).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _body(entry):
+        return {
+            "joined": entry is not None,
+            "card_type": entry.card_type if entry else None,
+            "joined_at": entry.created_at.isoformat() if entry else None,
+        }
+
+    def get(self, request):
+        from .models import CardWaitlistEntry
+
+        return Response(self._body(CardWaitlistEntry.objects.filter(user=request.user).first()))
+
+    def post(self, request):
+        from .models import CardWaitlistEntry
+
+        card_type = str(request.data.get("card_type") or CardWaitlistEntry.CardType.PERSONAL)
+        if card_type not in CardWaitlistEntry.CardType.values:
+            return Response({"detail": "Unknown card type.", "code": "invalid_card_type"},
+                            status=status.HTTP_400_BAD_REQUEST)
+        entry, created = CardWaitlistEntry.objects.update_or_create(
+            user=request.user, defaults={"card_type": card_type}
+        )
+        return Response(self._body(entry), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

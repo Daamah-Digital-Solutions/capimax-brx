@@ -699,14 +699,16 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                         !isOpen && "lg:justify-center lg:px-0"
                       )
                     }
-                    title={!isOpen ? (language === "ar" ? "بطاقاتي" : "My Cards") : undefined}
+                    title={!isOpen ? (language === "ar" ? "قريباً · انضم إلى قائمة الانتظار" : "Coming soon · Join the Waitlist") : undefined}
                   >
                     <CreditCard className={cn("w-5 h-5 shrink-0", isActive("/cards") && "text-primary")} />
                     {isOpen && (
                       <>
-                        <span className="flex-1">{language === "ar" ? "بطاقاتي" : "My Cards"}</span>
-                        <span className="px-2 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full">
-                          {t("nav.new")}
+                        {/* Cards are not issued yet (client letter 2026-11-19): the item invites
+                            to the waitlist instead of promising a card. */}
+                        <span className="flex-1">{language === "ar" ? "انضم إلى قائمة الانتظار" : "Join the Waitlist"}</span>
+                        <span className="px-2 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full whitespace-nowrap">
+                          {language === "ar" ? "قريباً" : "Coming soon"}
                         </span>
                       </>
                     )}

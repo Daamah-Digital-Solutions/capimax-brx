@@ -543,3 +543,32 @@ class PaymentMethodAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.method_type} ({self.user_id})"
+
+
+class CardWaitlistEntry(models.Model):
+    """
+    BRX Visa cards are not issued yet (client letter 2026-11-19: "Coming soon — Join the
+    Waitlist"). An investor who asks for a card is recorded here, once, with the card they
+    want; staff see the list in the admin. Joining again only updates the card choice.
+    """
+
+    class CardType(models.TextChoices):
+        PERSONAL = "personal", _("Personal card")
+        FAMILY = "family", _("Family investment card")
+        DEPENDENT = "dependent", _("Dependent card")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="card_waitlist"
+    )
+    card_type = models.CharField(max_length=16, choices=CardType.choices, default=CardType.PERSONAL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("card waitlist request")
+        verbose_name_plural = _("card waitlist")
+        ordering = ("created_at",)
+
+    def __str__(self):
+        return f"{self.user} — {self.get_card_type_display()}"

@@ -16,6 +16,7 @@ from .payment_methods import (
 )
 from .views import (
     BalanceTransactionsView,
+    CardWaitlistView,
     MyWalletView,
     PayoutConnectView,
     PayoutOptionsView,
@@ -36,6 +37,7 @@ urlpatterns = [
     # Read-only internal-balance ledger history (self-scoped). Phase 12 finishing.
     path("balance/transactions/", BalanceTransactionsView.as_view(), name="wallet-balance-transactions"),
     path("withdrawals/", WithdrawalsView.as_view(), name="wallet-withdrawals"),
+    path("card-waitlist/", CardWaitlistView.as_view(), name="wallet-card-waitlist"),
     path("payouts/options/", PayoutOptionsView.as_view(), name="wallet-payout-options"),
     path("payouts/connect/", PayoutConnectView.as_view(), name="wallet-payout-connect"),
     # Payout instruments (client note 11) — real Django-backed bank accounts, crypto

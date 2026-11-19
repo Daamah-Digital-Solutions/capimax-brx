@@ -149,5 +149,21 @@
   "Re-enter the full account number to receive bank withdrawals": "Saisissez à nouveau le numéro de compte complet pour recevoir les retraits bancaires",
   "Edit the bank account in Payment Methods and enter the full account number, then try again.": "Modifiez le compte bancaire dans Moyens de paiement, saisissez le numéro complet, puis réessayez.",
   "This account needs its full number again before a bank withdrawal.": "Ce compte nécessite à nouveau son numéro complet avant un retrait bancaire.",
-  "Complete your identity verification (KYC) first, then request the withdrawal again.": "Terminez d'abord la vérification de votre identité (KYC), puis refaites la demande de retrait."
+  "Complete your identity verification (KYC) first, then request the withdrawal again.": "Terminez d'abord la vérification de votre identité (KYC), puis refaites la demande de retrait.",
+  "My Portfolio": "Mon portefeuille",
+  "Your holdings, certificates and returns": "Vos actifs, certificats et rendements",
+  "Balance, deposits and withdrawals": "Solde, dépôts et retraits",
+  "Address, explorer link and verification": "Adresse, lien vers l'explorateur et vérification",
+  "Coming soon · Join the Waitlist": "Bientôt · Rejoindre la liste d'attente",
+  "Coming soon · You're on the waitlist": "Bientôt · Vous êtes sur la liste d'attente",
+  "Capimax BRX Visa Cards": "Cartes Visa Capimax BRX",
+  "Cards are not issued yet. Join the waitlist with the card you want and we'll let you know as soon as you can request it.": "Les cartes ne sont pas encore émises. Rejoignez la liste d'attente avec la carte souhaitée et nous vous préviendrons dès que vous pourrez la demander.",
+  "You're on the waitlist for the": "Vous êtes sur la liste d'attente pour la",
+  "Linked to your wallet.": "Liée à votre portefeuille.",
+  "Join the Waitlist": "Rejoindre la liste d'attente",
+  "You're on the waitlist": "Vous êtes sur la liste d'attente",
+  "Update my request": "Mettre à jour ma demande",
+  "Sign in to join the waitlist": "Connectez-vous pour rejoindre la liste d'attente",
+  "You're on the waitlist — we'll let you know when cards open.": "Vous êtes sur la liste d'attente — nous vous préviendrons à l'ouverture des cartes.",
+  "Could not join the waitlist. Please try again.": "Impossible de rejoindre la liste d'attente. Veuillez réessayer."
 }

@@ -969,6 +969,9 @@ export interface BalanceTransactionRow {
   created_at: string;
 }
 
+export type CardWaitlistType = "personal" | "family" | "dependent";
+export type CardWaitlistStatus = { joined: boolean; card_type: CardWaitlistType | null; joined_at: string | null };
+
 export const walletsApi = {
   /** The caller's custodial wallet, or null when none exists yet (404). */
   me: async (): Promise<Wallet | null> => {
@@ -996,6 +999,12 @@ export const walletsApi = {
   /** The caller's internal-balance ledger history (credits/debits, self-scoped). */
   balanceTransactions: () =>
     rawRequest("/wallets/balance/transactions/", { auth: true }) as Promise<BalanceTransactionRow[]>,
+  /** BRX Visa cards are "Coming soon": the caller's place on the card waitlist. */
+  cardWaitlist: () =>
+    rawRequest("/wallets/card-waitlist/", { auth: true }) as Promise<CardWaitlistStatus>,
+  /** Join the card waitlist (or change the card asked for). */
+  joinCardWaitlist: (card_type: CardWaitlistType) =>
+    rawRequest("/wallets/card-waitlist/", { method: "POST", auth: true, body: { card_type } }) as Promise<CardWaitlistStatus>,
   /** The caller's withdrawal history. */
   withdrawals: () => rawRequest("/wallets/withdrawals/", { auth: true }) as Promise<any[]>,
   /** Request a withdrawal of internal balance (debits it + records a pending request). The

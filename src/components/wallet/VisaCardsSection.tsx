@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useVisaCards, type VisaCard } from "@/hooks/useVisaCards";
-import { CreateCardDialog } from "@/components/wallet/CreateCardDialog";
+import { CardWaitlistDialog, waitlistLabel } from "@/components/wallet/CardWaitlistDialog";
+import type { CardWaitlistType } from "@/integrations/api/client";
 import { BackendPendingNotice } from "@/components/wallet/BackendPendingNotice";
 import { Users, Baby, User as UserIcon } from "lucide-react";
 
@@ -41,7 +42,8 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
   const [payMerchant, setPayMerchant] = useState("");
   const [topUpAmount, setTopUpAmount] = useState("");
   const [topUpOpen, setTopUpOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
+  // Cards are "Coming soon" (client letter 2026-11-19): the card buttons open the waitlist.
+  const [waitFor, setWaitFor] = useState<CardWaitlistType | null>(null);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat(isAr ? "ar-SA" : "en-US", {
@@ -100,7 +102,12 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
               <CreditCard className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-lg">{t("Visa Cards", "بطاقات فيزا")}</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
+                {t("Visa Cards", "بطاقات فيزا")}
+                <button type="button" onClick={() => setWaitFor("personal")}>
+                  <Badge className="bg-primary/15 text-primary hover:bg-primary/25 border-0">{waitlistLabel(isAr)}</Badge>
+                </button>
+              </CardTitle>
               <CardDescription>
                 {t("Spend your wallet balance anywhere — no bank withdrawal needed",
                    "اصرف رصيد محفظتك في أي مكان — دون الحاجة للسحب إلى البنك")}
@@ -148,30 +155,33 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
         {/* Issue card buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2 whitespace-normal"
-            onClick={() => setCreateOpen(true)}>
+            onClick={() => setWaitFor("personal")}>
             <div className="flex items-center gap-2 w-full">
               <UserIcon className="h-4 w-4" />
               <span className="font-semibold">{t("Personal Card", "بطاقة شخصية")}</span>
+              <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary whitespace-nowrap">{t("Coming soon", "قريباً")}</span>
             </div>
             <span className="text-xs text-muted-foreground text-start">
               {t("Issue a card linked to your wallet.", "أصدر بطاقة مرتبطة بمحفظتك.")}
             </span>
           </Button>
           <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2 whitespace-normal"
-            onClick={() => setCreateOpen(true)}>
+            onClick={() => setWaitFor("family")}>
             <div className="flex items-center gap-2 w-full">
               <Users className="h-4 w-4" />
               <span className="font-semibold">{t("Family Investment Card", "بطاقة استثمار عائلي")}</span>
+              <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary whitespace-nowrap">{t("Coming soon", "قريباً")}</span>
             </div>
             <span className="text-xs text-muted-foreground text-start">
               {t("Linked to a family member's allocation.", "مرتبطة بحصة فرد من العائلة.")}
             </span>
           </Button>
           <Button variant="outline" className="h-auto py-4 flex-col items-start gap-2 whitespace-normal"
-            onClick={() => setCreateOpen(true)}>
+            onClick={() => setWaitFor("dependent")}>
             <div className="flex items-center gap-2 w-full">
               <Baby className="h-4 w-4" />
               <span className="font-semibold">{t("Dependent Card", "بطاقة معال")}</span>
+              <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary whitespace-nowrap">{t("Coming soon", "قريباً")}</span>
             </div>
             <span className="text-xs text-muted-foreground text-start">
               {t("Controlled card for a child or dependent.", "بطاقة بضوابط لطفل أو معال.")}
@@ -400,10 +410,10 @@ export function VisaCardsSection({ roleLabel }: VisaCardsSectionProps) {
         </DialogContent>
       </Dialog>
 
-      <CreateCardDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        roleLabel={roleLabel?.en}
+      <CardWaitlistDialog
+        open={waitFor !== null}
+        onOpenChange={(o) => { if (!o) setWaitFor(null); }}
+        initialType={waitFor ?? undefined}
       />
     </Card>
     </>
