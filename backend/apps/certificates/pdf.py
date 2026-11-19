@@ -13,7 +13,7 @@ from apps.reports.brand import (
     CONTENT_W, CX, GOLD, GREEN_D, INK, LEFT, MUTED, PANEL, RIGHT, Doc, day, divider, draw, fit_centred,
     holder_for, mbox, money, mx, qr_image, width, wrap,
 )
-from apps.reports.doc_lang import tr, tr_value
+from apps.reports.doc_lang import is_rtl, tr, tr_value
 
 _STATUS = {"final": ("Final", GREEN_D), "provisional": ("Provisional", GOLD), "revoked": ("Revoked", INK)}
 
@@ -81,13 +81,12 @@ NO_SPV = "the issuing SPV"
 
 
 def _holder_lines(cert, units: str) -> list[str]:
-    """The holder statement, wrapped. The percentage is a share of the SPV that owns the
-    property (named in full), not of the property itself. When the sentence needs more than
-    one line, the SPV's name starts a new line whole instead of being split mid-name."""
+    """The holder statement, wrapped (client letter 2026-11-19): the units are held IN the
+    SPV, named by its full legal name, not in the property ("This certifies that [Investor]
+    is the registered holder of [N] units in [SPV]."). When the sentence needs more than one
+    line, the SPV's name starts a new line whole instead of being split mid-name."""
     spv = (cert.spv_name or "").strip() or NO_SPV
-    line = tr(f"is the registered holder of {units} unit{'s' if cert.units_purchased != 1 else ''} "
-              f"of {cert.property_name or 'the property'}, representing "
-              f"{float(cert.ownership_percentage):.4f}% of the total issued interests in {spv}.")
+    line = tr(f"is the registered holder of {units} unit{'s' if cert.units_purchased != 1 else ''} in {spv}.")
     max_w = CONTENT_W - 60
     if spv == NO_SPV or width(line, "Helvetica", 10.5) <= max_w:
         return wrap(line, "Helvetica", 10.5, max_w)
@@ -99,13 +98,22 @@ def _holder_lines(cert, units: str) -> list[str]:
     return wrap(head, "Helvetica", 10.5, max_w) + wrap(tail, "Helvetica", 10.5, max_w)
 
 
+def _property_line(cert) -> str:
+    """'Associated property — [name and details]': the property stays named, as the
+    asset the SPV owns."""
+    parts = [tr(x) for x in ((cert.property_name or "").strip(), (cert.property_location or "").strip()) if x]
+    if not parts:
+        return tr("Associated property — the property")
+    return tr("Associated property — {0}").replace("{0}", ("، " if is_rtl() else ", ").join(parts))
+
+
 def render_certificate_pdf(cert) -> bytes:
     """Render `cert` (a Certificate) to PDF bytes."""
     status = (cert.status or "provisional").lower()
     d = Doc(
         title="Certificate of Ownership",
         ref=cert.certificate_id,
-        subtitle="Fractional ownership of a tokenised property",
+        subtitle="Units in the SPV that owns a tokenised property",
         note=("This certificate records fractional ownership held through the property's SPV and "
               "recorded on-chain. Verify it at any time with the QR code or the verification code. "
               "A provisional certificate becomes final when the purchase is fully settled."),
@@ -125,6 +133,10 @@ def render_certificate_pdf(cert) -> bytes:
     for ln in _holder_lines(cert, units):
         draw(c, CX, yy, ln, "Helvetica", 10.5, INK, "center")
         yy -= 15
+    yy -= 2
+    for ln in wrap(_property_line(cert), "Helvetica-Oblique", 9.4, CONTENT_W - 60):
+        draw(c, CX, yy, ln, "Helvetica-Oblique", 9.4, MUTED, "center")
+        yy -= 13
 
     # status badge
     from .services import STATUS_REASONS, status_reason
@@ -199,6 +211,14 @@ def render_certificate_pdf(cert) -> bytes:
     c.setLineWidth(0.6)
     c.line(mx(LEFT), sig_y, mx(LEFT + 190), sig_y)
     draw(c, LEFT, sig_y - 12, tr(cert.authorized_signatory or "Authorized Signatory"), "Helvetica-Bold", 8.6, INK)
-    draw(c, LEFT, sig_y - 23, tr("For and on behalf of Capimax BRX"), "Helvetica", 7.4, MUTED)
-    d.y = sig_y - 30
+    # Signing for the issuing SPV, its full legal name never cut (wrapped over as many lines
+    # as it needs), then the platform's role (client letter 2026-11-19).
+    spv_name = (cert.spv_name or "").strip()
+    behalf = tr(f"On behalf of {spv_name}") if spv_name else tr("For and on behalf of Capimax BRX")
+    ly = sig_y - 23
+    for ln in wrap(behalf, "Helvetica", 7.4, RIGHT - LEFT - qr_size - 20):
+        draw(c, LEFT, ly, ln, "Helvetica", 7.4, INK)
+        ly -= 10
+    draw(c, LEFT, ly, tr("Capimax PropShare — Digital Administration and Verification"), "Helvetica", 7.4, MUTED)
+    d.y = ly - 7
     return d.finish()

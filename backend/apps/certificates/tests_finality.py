@@ -192,6 +192,29 @@ class CertificateStatusReasonTests(TestCase):
                 self.assertTrue(render_certificate_pdf(cert).startswith(b"%PDF"))
 
 
+    def test_the_pdf_names_the_spv_as_what_is_held(self):
+        # Client letter 2026-11-19: units IN the SPV (full legal name), the property as the
+        # associated asset, and the signature on behalf of the SPV.
+        import io
+
+        try:
+            from pypdf import PdfReader
+        except ImportError:  # dev-only reader; the wording is checked where it is installed
+            self.skipTest("pypdf not installed")
+
+        from .pdf import render_certificate_pdf
+
+        cert = self._provisional()
+        cert.spv_name = "Long Legal Name Holdings Special Purpose Vehicle Company Limited"
+        cert.units_purchased = 3
+        text = " ".join(PdfReader(io.BytesIO(render_certificate_pdf(cert))).pages[0].extract_text().split())
+        self.assertIn("is the registered holder of 3 units in Long Legal Name Holdings", text)
+        self.assertIn("Associated property", text)
+        self.assertIn("On behalf of Long Legal Name Holdings Special Purpose Vehicle Company Limited", text)
+        self.assertIn("Capimax PropShare", text)
+        self.assertNotIn("representing", text)
+
+
 class ReceivedUnitsCertificateTests(TestCase):
     """Units received by a market purchase, transfer or gift get their certificate at once."""
 

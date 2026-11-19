@@ -414,6 +414,35 @@ TEXT: dict[str, tuple[str, str]] = {
         "هو المالك المسجل لعدد {0} وحدة من {1}، بما يمثل {2}% من إجمالي الحصص المصدرة في الشركة ذات الغرض الخاص المُصدِرة.",
         "est le détenteur enregistré de {0} parts de {1}, soit {2}% de l'ensemble des parts émises par la SPV émettrice.",
     ),
+    # client letter 2026-11-19: the units are held in the SPV (full legal name); the property is
+    # named on its own line as the associated asset
+    "is the registered holder of 1 unit in {0}.": (
+        "هو المالك المسجّل لوحدة واحدة في {0}.",
+        "est le détenteur enregistré de 1 part de {0}.",
+    ),
+    "is the registered holder of {0} units in {1}.": (
+        "هو المالك المسجّل لعدد {0} وحدة في {1}.",
+        "est le détenteur enregistré de {0} parts de {1}.",
+    ),
+    "is the registered holder of 1 unit in the issuing SPV.": (
+        "هو المالك المسجّل لوحدة واحدة في الشركة ذات الغرض الخاص المُصدِرة.",
+        "est le détenteur enregistré de 1 part de la SPV émettrice.",
+    ),
+    "is the registered holder of {0} units in the issuing SPV.": (
+        "هو المالك المسجّل لعدد {0} وحدة في الشركة ذات الغرض الخاص المُصدِرة.",
+        "est le détenteur enregistré de {0} parts de la SPV émettrice.",
+    ),
+    "Associated property — {0}": ("العقار المرتبط — {0}", "Bien associé — {0}"),
+    "Associated property — the property": ("العقار المرتبط — العقار", "Bien associé — le bien"),
+    "Units in the SPV that owns a tokenised property": (
+        "حصص في الشركة ذات الغرض الخاص المالكة لعقار مرمّز",
+        "Parts de la SPV propriétaire d'un bien tokenisé",
+    ),
+    "On behalf of {0}": ("نيابة عن {0}", "Pour le compte de {0}"),
+    "Capimax PropShare — Digital Administration and Verification": (
+        "كابيماكس بروبشير — الإدارة الرقمية والتحقق",
+        "Capimax PropShare — Administration numérique et vérification",
+    ),
     "the issuing SPV": ("الشركة ذات الغرض الخاص المُصدِرة", "la SPV émettrice"),
     "Share of the SPV": ("الحصة في الشركة ذات الغرض الخاص", "Part de la SPV"),
     "Holder": ("المالك", "Détenteur"),
